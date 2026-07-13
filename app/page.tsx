@@ -22,10 +22,12 @@ export default function StartPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: cleanName, age: ageNum }),
       })
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(json.error ?? '문제가 생겼어요. 다시 시도해 주세요.'); return }
       sessionStorage.setItem('survey', JSON.stringify({ sessionId: json.sessionId, questions: json.questions, name: cleanName }))
       router.push('/survey')
+    } catch {
+      setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally { setBusy(false) }
   }
 
