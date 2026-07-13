@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-cream: #fff8f0;
+  --color-peach: #ffd9c0;
+  --color-peach-deep: #ff9e7d;
+  --color-mint: #bde8ca;
+  --color-sky: #bfdcf7;
+  --color-berry: #f49cbb;
+  --color-ink: #4a4458;
+  --font-cute: var(--font-jua), sans-serif;
+}
+
+body { background: var(--color-cream); color: var(--color-ink); font-family: var(--font-cute); }
