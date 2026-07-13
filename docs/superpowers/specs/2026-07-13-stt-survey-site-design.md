@@ -57,7 +57,7 @@
 |---|---|---|---|
 | 프레임워크 | Next.js (App Router) | 16.2.10 | 프론트+API 단일 프로젝트 |
 | UI | React | 19.2.7 | Next 16 동봉 |
-| 언어 | TypeScript | 7.0.2 | 네이티브(tsgo) 세대. Next 16 툴링과 충돌 시 5.9.x로 폴백 (구현 초기 확인 항목) |
+| 언어 | TypeScript | 7.0.2 | 네이티브(tsgo) 세대. Next 16의 빌드 내장 타입체크는 클래식 TS API 의존이라 TS7과 비호환 → `next.config.ts`에서 `typescript.ignoreBuildErrors=true`로 Next 타입체크를 끄고, 타입 안전성은 `npm run typecheck`(=`tsc --noEmit`, tsgo)로 분리 보장 |
 | 스타일 | Tailwind CSS | 4.3.2 | 반응형 (태블릿/폰/PC) |
 | 저장소 SDK | @supabase/supabase-js | 2.110.2 | 서버 전용 사용 |
 | 오디오 변환 | ffmpeg-static | 5.3.0 | Safari mp4/aac → wav 트랜스코딩용, OS 무관 바이너리 동봉 |

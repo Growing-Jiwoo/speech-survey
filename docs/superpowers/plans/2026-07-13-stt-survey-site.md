@@ -6,7 +6,9 @@
 
 **Architecture:** Next.js 16 App Router 단일 프로젝트. 클라이언트는 MediaRecorder로 녹음 후 `/api/transcribe`에 업로드, 서버가 Storage 저장→포맷 변환(ffmpeg-static)→Azure Short Audio REST 호출→attempt 기록. 모든 키는 서버 전용. 관리자 화면은 서버 컴포넌트가 DB를 직접 조회(HMAC 쿠키 보호).
 
-**Tech Stack:** Next.js 16.2.10 / React 19.2.7 / TypeScript 7.0.2(폴백 5.9.x) / Tailwind CSS 4.3.2 / @supabase/supabase-js 2.110.2 / ffmpeg-static 5.3.0 / Vitest 4.1.10 / Node 22
+**Tech Stack:** Next.js 16.2.10 / React 19.2.7 / TypeScript 7.0.2(네이티브 tsgo 유지) / Tailwind CSS 4.3.2 / @supabase/supabase-js 2.110.2 / ffmpeg-static 5.3.0 / Vitest 4.1.10 / Node 22
+
+**TypeScript 7 결정 (Task 3-6 중 확정):** TS7(tsgo)을 유지한다. Next 16의 빌드 내장 타입체크는 클래식 TS 컴파일러 API에 의존해 TS7과 비호환(build 크래시) → `next.config.ts`에 `typescript.ignoreBuildErrors=true` 설정해 Next 타입체크를 끄고, 타입 안전성은 `npm run typecheck`(=`tsc --noEmit`, tsgo)로 분리 보장한다. **검증 시 항상 `npm run typecheck`를 함께 실행할 것.** (package.json에 `type: module`도 추가됨 — tsx 스크립트 top-level await용.)
 
 **Spec:** `docs/superpowers/specs/2026-07-13-stt-survey-site-design.md`
 
@@ -881,7 +883,7 @@ export async function exportRows() {
 
 - [ ] **Step 3: 타입체크 + Commit**
 
-Run: `npx tsc --noEmit` → 에러 없음 (TS7에서 실패 시 typescript@5.9 폴백 후 재시도)
+Run: `npm run typecheck` (= `tsc --noEmit`, tsgo 7.0.2) → 에러 없음
 ```bash
 git add -A && git commit -m "feat: Supabase 클라이언트 + db 접근 계층"
 ```
@@ -1872,6 +1874,7 @@ try {
 ## 테스트
 
 - `npm test` — 단위 + 라우트 테스트
+- `npm run typecheck` — 타입체크 (tsgo 7.0.2. Next 빌드 타입체크는 꺼져 있으니 반드시 별도 실행)
 - 수동 E2E 체크리스트 (릴리스 전 실기기):
   - [ ] Chrome(PC): 시작→마이크테스트→녹음→변환표시→재생→재시도→건너뛰기→완료
   - [ ] Safari(iPhone): 동일 흐름 (mp4 녹음 경로 — wav 트랜스코딩 확인)
@@ -1890,8 +1893,8 @@ try {
 - [ ] **Step 3: 전체 검증**
 
 Run: `npm test` → 전체 PASS
-Run: `npx tsc --noEmit` → 에러 없음
-Run: `npm run build` → 빌드 성공
+Run: `npm run typecheck` → 에러 없음
+Run: `npm run build` → 빌드 성공 (Next 타입체크는 꺼져 있고 tsgo가 별도로 담당)
 수동: README의 E2E 체크리스트 중 Chrome(PC) 전 과정 1회 수행.
 
 - [ ] **Step 4: Commit**
