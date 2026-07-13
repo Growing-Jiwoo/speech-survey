@@ -135,9 +135,9 @@ create table attempts (
 | 메서드/경로 | 동작 |
 |---|---|
 | `POST /api/admin/login` | 비밀번호 검증 → httpOnly 쿠키 발급 (서명된 토큰, 12시간 유효) |
-| `GET /api/admin/sessions` | 세션 목록 (이름·나이·일시·완료여부·건너뜀 수) |
-| `GET /api/admin/sessions/[id]` | 세션 상세 (문항별 최종+이력 시도, 각 오디오의 서명 URL 포함) |
 | `GET /api/admin/export` | CSV 다운로드 (UTF-8 BOM) |
+
+목록/상세 화면은 서버 컴포넌트가 `lib/db.ts`를 직접 호출한다(별도 GET API 없음 — DRY). API는 login/export만 유지.
 
 - 오디오 재생: 서버가 Supabase Storage **서명 URL**(1시간 만료) 생성해 내려줌. 버킷은 비공개 유지.
 - CSV 컬럼(1행=1시도): 참여자 이름, 나이, 세션 시작일시, 문항 번호, 난이도, 목표 문장,
