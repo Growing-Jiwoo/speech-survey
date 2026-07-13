@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>v3 — 설문 톤 · 전체 여정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Lexend:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#2F6BFF; --blue-deep:#1E4FCC;
+    --red:#E5484D; --red-deep:#C13A3E;
+    --mint:#0BA37A; --amber:#B97F10;
+    --ink:#0E1526; --ink-soft:#3A4256; --ink-mute:#8A94AD;
+    --bg:#F4F6FB; --card:#fff; --line:#E3E8F3; --well:#F7F9FE;
+    --kr:'Noto Sans KR',sans-serif; --read:'Lexend',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--kr);color:var(--ink);min-height:100vh;padding:30px 16px 80px;background:var(--bg)}
+  .caption{max-width:1080px;margin:0 auto 24px;text-align:center;color:var(--ink-soft);font-size:13px}
+  .caption b{color:var(--blue)}
+
+  .flow{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;gap:26px;justify-content:center}
+  .unit{width:312px}
+  .plabel{display:flex;align-items:center;gap:8px;margin:0 4px 10px}
+  .plabel .n{width:22px;height:22px;border-radius:50%;background:var(--ink);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .plabel .t{font-size:13px;font-weight:700;color:var(--ink-soft)}
+  .plabel .d{font-size:11.5px;color:var(--ink-mute)}
+
+  .ph{border-radius:42px;padding:11px;background:linear-gradient(160deg,#242b3d,#0c1120);
+      box-shadow:0 28px 54px -28px rgba(14,21,38,.45)}
+  .sc{position:relative;overflow:hidden;border-radius:32px;height:648px;padding:26px 20px 22px;
+      display:flex;flex-direction:column;align-items:center;background:#FCFDFF}
+  .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:104px;height:22px;border-radius:14px;background:#0c1120}
+
+  .brand{margin-top:20px;display:flex;align-items:center;gap:8px}
+  .brand span{font-size:13px;font-weight:700;color:var(--ink-soft);letter-spacing:.02em}
+
+  h1.t1{font-size:24px;font-weight:700;text-align:center;letter-spacing:-.02em}
+  .sub{font-size:13.5px;font-weight:400;color:var(--ink-soft);text-align:center;line-height:1.65}
+
+  .pupils{transform-box:fill-box;transform-origin:center;animation:blink 4.6s infinite}
+  @keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
+  .antpulse{transform-box:fill-box;transform-origin:center;animation:antp 1.3s ease-in-out infinite}
+  @keyframes antp{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.28);opacity:.85}}
+
+  .card{width:100%;background:var(--card);border-radius:18px;border:1px solid var(--line);
+        box-shadow:0 10px 24px -18px rgba(30,79,204,.25)}
+
+  .flabel{font-size:12.5px;font-weight:700;color:var(--ink-soft);margin:0 0 6px}
+  .field{position:relative;margin-bottom:12px}
+  .field input{width:100%;height:50px;border-radius:13px;border:1.5px solid var(--line);background:var(--well);
+    padding:0 14px 0 42px;font-family:var(--kr);font-weight:500;font-size:16px;color:var(--ink);outline:none}
+  .field.focus input{border-color:var(--blue);background:#fff;box-shadow:0 0 0 3.5px rgba(47,107,255,.13)}
+  .field .ico{position:absolute;left:14px;bottom:15px;width:19px;height:19px;color:var(--ink-mute)}
+  .field.focus .ico{color:var(--blue)}
+  .hint{font-size:11px;color:var(--ink-mute);margin-top:5px;line-height:1.5}
+
+  .cta{width:100%;height:54px;border:none;border-radius:15px;cursor:pointer;
+    font-family:var(--kr);font-weight:700;font-size:16.5px;color:#fff;
+    background:var(--blue);
+    box-shadow:0 3px 0 var(--blue-deep), 0 12px 20px -10px rgba(30,79,204,.45);
+    display:flex;align-items:center;justify-content:center;gap:8px}
+  .ghostlink{font-size:13px;color:var(--ink-mute);text-decoration:underline;cursor:pointer;background:none;border:none;font-family:var(--kr)}
+
+  .micbtn{position:relative;width:92px;height:92px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--blue);
+    box-shadow:0 4px 0 var(--blue-deep), 0 16px 24px -12px rgba(30,79,204,.5);
+    display:flex;align-items:center;justify-content:center;color:#fff}
+  .micbtn svg{width:38px;height:38px}
+  .ripple::before{content:"";position:absolute;inset:-12px;border-radius:50%;
+    border:2.5px solid rgba(47,107,255,.3);animation:rip 2s ease-out infinite}
+  @keyframes rip{0%{transform:scale(.88);opacity:1}100%{transform:scale(1.3);opacity:0}}
+
+  .eq{display:flex;align-items:flex-end;gap:5px;height:30px}
+  .eq i{width:6px;border-radius:3px;background:var(--blue);display:block;transform-origin:bottom;animation:eqb 1s ease-in-out infinite}
+  .eq i:nth-child(1){height:10px}.eq i:nth-child(2){height:19px;animation-delay:.15s}
+  .eq i:nth-child(3){height:28px;animation-delay:.3s}.eq i:nth-child(4){height:17px;animation-delay:.45s}
+  .eq i:nth-child(5){height:12px;animation-delay:.6s}
+  @keyframes eqb{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1)}}
+
+  .prog{width:100%;margin-top:22px}
+  .prog .num{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-mute);margin-bottom:6px}
+  .prog .num b{color:var(--ink-soft);font-family:var(--read)}
+  .prog .bar{height:6px;border-radius:4px;background:#E7ECF8;overflow:hidden}
+  .prog .bar i{display:block;height:100%;width:33%;border-radius:4px;background:var(--blue)}
+
+  .qcard{padding:18px 17px}
+  .qtag{font-size:12px;font-weight:700;color:var(--blue)}
+  .qtext{font-family:var(--read);font-weight:500;font-size:22px;line-height:1.45;margin-top:9px}
+
+  .recrow{display:flex;align-items:center;gap:12px;margin-top:18px}
+  .recdot{width:9px;height:9px;border-radius:50%;background:var(--red);animation:antp 1.3s ease-in-out infinite}
+  .rectext{font-size:13px;font-weight:700;color:var(--red-deep)}
+
+  .stopbtn{position:relative;width:92px;height:92px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--red);
+    box-shadow:0 4px 0 var(--red-deep), 0 16px 24px -12px rgba(197,58,62,.45);
+    display:flex;align-items:center;justify-content:center}
+  .stopbtn .sq{width:28px;height:28px;border-radius:8px;background:#fff}
+  .ring{position:absolute;inset:-8px;transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:4.5;stroke-linecap:round}
+  .ring .track{stroke:rgba(197,58,62,.15)}
+  .ring .val{stroke:var(--red);stroke-dasharray:339;animation:cnt 20s linear infinite;animation-delay:-8s}
+  @keyframes cnt{from{stroke-dashoffset:0}to{stroke-dashoffset:339}}
+
+  .okrow{display:flex;align-items:center;gap:10px;background:var(--well);border:1px solid var(--line);
+    border-radius:14px;padding:13px 15px;width:100%}
+  .okrow .ic{width:26px;height:26px;border-radius:50%;background:#E8EFFF;color:var(--blue);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .okrow .ic svg{width:14px;height:14px}
+  .okrow p{font-size:13.5px;font-weight:500;color:var(--ink-soft)}
+
+  .admin{max-width:1080px;margin:40px auto 0;background:#fff;border:1px solid var(--line);border-radius:20px;
+    box-shadow:0 20px 44px -28px rgba(14,21,38,.35);overflow:hidden}
+  .abar{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--line)}
+  .abar .aname{font-weight:700;font-size:15px}
+  .abar .aname small{display:block;font-size:11px;color:var(--ink-mute);font-weight:500}
+  .abar .sp{flex:1}
+  .kpi{display:flex;gap:8px}
+  .kpi span{background:var(--well);border:1px solid var(--line);border-radius:11px;padding:7px 13px;font-size:12px;color:var(--ink-soft)}
+  .kpi b{color:var(--ink);font-family:var(--read)}
+  .csv{background:var(--ink);color:#fff;border:none;border-radius:11px;padding:9px 16px;font-family:var(--kr);font-weight:700;font-size:12.5px;cursor:pointer}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{padding:11px 22px;text-align:left;color:var(--ink-mute);font-weight:500;font-size:12px;border-bottom:1px solid var(--line)}
+  td{padding:12px 22px;border-bottom:1px solid #EFF3FB;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  .en{font-family:var(--read);font-size:13px}
+  .en.dim{color:var(--ink-mute)}
+  .pill{display:inline-block;border-radius:14px;padding:3px 11px;font-size:11.5px;font-weight:700}
+  .pill.ok{background:#E3F7F0;color:var(--mint)}
+  .pill.diff{background:#FFF4DC;color:var(--amber)}
+  .pill.none{background:#EEF1F7;color:var(--ink-mute)}
+  .mini{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:var(--well);color:var(--ink-soft);
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+  .mini svg{width:11px;height:11px;margin-left:1.5px}
+  .anote{padding:12px 22px;font-size:11.5px;color:var(--ink-mute);border-top:1px solid var(--line);background:var(--well)}
+
+  .why{max-width:1080px;margin:26px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .why div{background:#fff;border:1px solid var(--line);border-radius:15px;padding:13px 15px;font-size:12px;color:var(--ink-soft);line-height:1.6}
+  .why b{display:block;color:var(--ink);font-size:12.5px;margin-bottom:3px}
+
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="bodyG" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5A90FF"/><stop offset="1" stop-color="#2454DB"/>
+    </linearGradient>
+    <radialGradient id="eyeG" cx="38%" cy="32%" r="75%">
+      <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#DCE6FF"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<p class="caption">최종 검토판 <b>v3</b> — 설문 톤 · 칭찬/보상/판정 비노출 · 평가는 선생님 결과지에서</p>
+
+<div class="flow">
+
+  <!-- ═══════ 1. 시작 ═══════ -->
+  <div class="unit">
+    <div class="plabel"><span class="n">1</span><span class="t">시작</span><span class="d">이름·나이 입력</span></div>
+    <div class="ph"><div class="sc">
+      <div class="notch"></div>
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 56 60" aria-label="블립">
+          <line x1="28" y1="12" x2="28" y2="5" stroke="#22335c" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="28" cy="4" r="3.5" fill="#2F6BFF"/>
+          <rect x="4" y="13" width="48" height="42" rx="15" fill="url(#bodyG)"/>
+          <circle cx="20" cy="31" r="7" fill="url(#eyeG)"/><circle cx="36" cy="31" r="7" fill="url(#eyeG)"/>
+          <g class="pupils"><circle cx="21" cy="32" r="3.5" fill="#0E1526"/><circle cx="37" cy="32" r="3.5" fill="#0E1526"/></g>
+          <path d="M21 43 Q28 48 35 43" fill="none" stroke="#0E1526" stroke-width="2.6" stroke-linecap="round"/>
+        </svg>
+        <span>말하기 설문</span>
+      </div>
+      <div style="margin-top:60px"></div>
+      <h1 class="t1">안녕하세요!</h1>
+      <p class="sub" style="margin-top:10px">화면에 나오는 영어 문장을<br/>소리 내어 읽는 설문이에요.</p>
+      <div class="card" style="margin-top:26px;padding:18px 16px 20px">
+        <div class="field focus">
+          <div class="flabel">이름</div>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          <input value="김도연" />
+        </div>
+        <div class="field" style="margin-bottom:4px">
+          <div class="flabel">나이</div>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4M16 3v4M4 11h16"/></svg>
+          <input value="8" inputmode="numeric" />
+        </div>
+        <p class="hint" style="margin-bottom:14px">이름은 한글·영어만, 나이는 숫자만 쓸 수 있어요.</p>
+        <button class="cta">시작하기</button>
+      </div>
+      <p class="hint" style="margin-top:auto;padding-bottom:2px;text-align:center">녹음된 목소리는 설문 확인 용도로만 사용돼요.</p>
+    </div></div>
+  </div>
+
+  <!-- ═══════ 2. 마이크 확인 ═══════ -->
+  <div class="unit">
+    <div class="plabel"><span class="n">2</span><span class="t">마이크 확인</span><span class="d">기능 점검 — 게임 아님</span></div>
+    <div class="ph"><div class="sc">
+      <div class="notch"></div>
+      <div class="brand">
+        <svg width="30" height="30" viewBox="0 0 56 60" aria-label="블립">
+          <line x1="28" y1="12" x2="28" y2="5" stroke="#22335c" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="28" cy="4" r="3.5" fill="#2F6BFF"/>
+          <rect x="4" y="13" width="48" height="42" rx="15" fill="url(#bodyG)"/>
+          <circle cx="20" cy="31" r="7" fill="url(#eyeG)"/><circle cx="36" cy="31" r="7" fill="url(#eyeG)"/>
+          <g class="pupils"><circle cx="21" cy="32" r="3.5" fill="#0E1526"/><circle cx="37" cy="32" r="3.5" fill="#0E1526"/></g>
+          <path d="M21 43 Q28 48 35 43" fill="none" stroke="#0E1526" stroke-width="2.6" stroke-linecap="round"/>
+        </svg>
+        <span>말하기 설문</span>
+      </div>
+      <div style="margin-top:58px"></div>
+      <h1 class="t1">마이크 확인</h1>
+      <p class="sub" style="margin-top:10px">버튼을 누르고<br/><b>"안녕하세요"</b>라고 말해 주세요.</p>
+      <div style="margin-top:36px">
+        <button class="micbtn ripple" aria-label="마이크 확인 시작">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>
+        </button>
+      </div>
+      <div style="margin-top:24px" class="eq"><i></i><i></i><i></i><i></i><i></i></div>
+      <p class="hint" style="margin-top:8px">목소리가 들리면 막대가 움직여요.</p>
+      <div style="margin-top:auto;width:100%;padding-bottom:2px">
+        <button class="cta">설문 시작</button>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══════ 3. 문항 · 녹음 중 ═══════ -->
+  <div class="unit">
+    <div class="plabel"><span class="n">3</span><span class="t">문항 · 녹음 중</span><span class="d">읽어주기 없음 — 검사 타당도</span></div>
+    <div class="ph"><div class="sc">
+      <div class="notch"></div>
+      <div class="prog">
+        <div class="num"><span>문항 <b>4 / 12</b></span></div>
+        <div class="bar"><i></i></div>
+      </div>
+      <div class="card qcard" style="margin-top:18px">
+        <p class="qtag">아래 문장을 소리 내어 읽어 주세요</p>
+        <p class="qtext">The cat sits on the mat.</p>
+      </div>
+      <div class="recrow">
+        <svg width="54" height="52" viewBox="0 0 140 132" aria-label="듣는 중">
+          <line x1="70" y1="30" x2="70" y2="15" stroke="#22335c" stroke-width="4.5" stroke-linecap="round"/>
+          <circle class="antpulse" cx="70" cy="11" r="7.5" fill="#E5484D"/>
+          <rect x="28" y="32" width="84" height="76" rx="27" fill="url(#bodyG)"/>
+          <circle cx="54" cy="66" r="13" fill="url(#eyeG)"/><circle cx="86" cy="66" r="13" fill="url(#eyeG)"/>
+          <circle cx="56" cy="67" r="6.5" fill="#0E1526"/><circle cx="88" cy="67" r="6.5" fill="#0E1526"/>
+          <ellipse cx="70" cy="92" rx="7" ry="9" fill="#0E1526"/>
+          <rect x="46" y="108" width="18" height="11" rx="5.5" fill="#2454DB"/><rect x="76" y="108" width="18" height="11" rx="5.5" fill="#2454DB"/>
+        </svg>
+        <span class="recdot"></span><span class="rectext">녹음 중</span>
+        <div class="eq" style="height:24px"><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;align-items:center;padding-bottom:2px">
+        <button class="stopbtn" aria-label="녹음 끝내기">
+          <svg class="ring" width="108" height="108" viewBox="0 0 116 116">
+            <circle class="track" cx="58" cy="58" r="54"/>
+            <circle class="val" cx="58" cy="58" r="54"/>
+          </svg>
+          <span class="sq"></span>
+        </button>
+        <p class="hint" style="margin-top:12px;font-weight:700;color:var(--ink-soft)">다 읽었으면 버튼을 눌러 주세요</p>
+        <button class="ghostlink" style="margin-top:6px">이 문장 건너뛰기</button>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══════ 4. 문항 · 녹음 후 ═══════ -->
+  <div class="unit">
+    <div class="plabel"><span class="n">4</span><span class="t">문항 · 녹음 후</span><span class="d">결과 비노출 — 저장 확인만</span></div>
+    <div class="ph"><div class="sc">
+      <div class="notch"></div>
+      <div class="prog">
+        <div class="num"><span>문항 <b>4 / 12</b></span></div>
+        <div class="bar"><i></i></div>
+      </div>
+      <div class="card qcard" style="margin-top:18px">
+        <p class="qtag">아래 문장을 소리 내어 읽어 주세요</p>
+        <p class="qtext">The cat sits on the mat.</p>
+      </div>
+      <div class="okrow" style="margin-top:16px">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>
+        <p>목소리가 잘 담겼어요.</p>
+      </div>
+      <div style="margin-top:auto;width:100%;display:flex;flex-direction:column;gap:10px;padding-bottom:2px">
+        <button class="cta">다음 문장</button>
+        <div style="text-align:center"><button class="ghostlink">다시 녹음하기</button></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ═══════ 5. 완료 ═══════ -->
+  <div class="unit">
+    <div class="plabel"><span class="n">5</span><span class="t">완료</span><span class="d">중립적 마무리 — 축하 아님</span></div>
+    <div class="ph"><div class="sc">
+      <div class="notch"></div>
+      <div style="margin-top:110px"></div>
+      <svg width="118" height="112" viewBox="0 0 140 132" aria-label="블립">
+        <ellipse cx="70" cy="124" rx="40" ry="7" fill="#1E3A86" opacity=".12"/>
+        <line x1="70" y1="30" x2="70" y2="15" stroke="#22335c" stroke-width="4.5" stroke-linecap="round"/>
+        <circle cx="70" cy="11" r="7.5" fill="#2F6BFF"/>
+        <rect x="28" y="32" width="84" height="76" rx="27" fill="url(#bodyG)"/>
+        <rect x="38" y="41" width="48" height="17" rx="8.5" fill="#fff" opacity=".14"/>
+        <circle cx="54" cy="68" r="13" fill="url(#eyeG)"/><circle cx="86" cy="68" r="13" fill="url(#eyeG)"/>
+        <g class="pupils"><circle cx="56" cy="70" r="6.5" fill="#0E1526"/><circle cx="88" cy="70" r="6.5" fill="#0E1526"/></g>
+        <path d="M58 89 Q70 96 82 89" fill="none" stroke="#0E1526" stroke-width="4" stroke-linecap="round"/>
+        <rect x="46" y="108" width="18" height="11" rx="5.5" fill="#2454DB"/><rect x="76" y="108" width="18" height="11" rx="5.5" fill="#2454DB"/>
+      </svg>
+      <h1 class="t1" style="margin-top:20px">설문이 끝났어요</h1>
+      <p class="sub" style="margin-top:10px">참여해 줘서 고마워요.<br/>이제 화면을 선생님께 보여 주세요.</p>
+      <div style="margin-top:auto;width:100%;padding-bottom:2px">
+        <button class="cta">처음 화면으로</button>
+      </div>
+    </div></div>
+  </div>
+
+</div>
+
+<!-- ═══════ 선생님 결과지 ═══════ -->
+<div class="admin">
+  <div class="abar">
+    <svg width="32" height="32" viewBox="0 0 56 60" aria-label="로고">
+      <line x1="28" y1="12" x2="28" y2="5" stroke="#22335c" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="28" cy="4" r="3.5" fill="#2F6BFF"/>
+      <rect x="4" y="13" width="48" height="42" rx="15" fill="url(#bodyG)"/>
+      <circle cx="20" cy="31" r="7" fill="#fff"/><circle cx="36" cy="31" r="7" fill="#fff"/>
+      <circle cx="21" cy="32" r="3.5" fill="#0E1526"/><circle cx="37" cy="32" r="3.5" fill="#0E1526"/>
+      <path d="M21 43 Q28 48 35 43" fill="none" stroke="#0E1526" stroke-width="2.6" stroke-linecap="round"/>
+    </svg>
+    <div class="aname">결과지 — 김도연 (8세)<small>평가는 여기서만 · 아이 화면에는 어떤 판정도 표시되지 않음</small></div>
+    <div class="sp"></div>
+    <div class="kpi"><span>완료 <b>12 / 12</b></span><span>자동 일치 <b>9</b></span><span>건너뜀 <b>1</b></span></div>
+    <button class="csv">CSV 내보내기</button>
+  </div>
+  <table>
+    <thead><tr><th style="width:44px">#</th><th>제시 문장</th><th>들린 말 (STT)</th><th style="width:110px">자동 비교</th><th style="width:70px">듣기</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td><td class="en">The cat sits on the mat.</td><td class="en">The cat sits on the mat.</td>
+        <td><span class="pill ok">일치</span></td>
+        <td><button class="mini" aria-label="재생"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></td>
+      </tr>
+      <tr>
+        <td>2</td><td class="en">I like apples and oranges.</td><td class="en">I like apple and orange.</td>
+        <td><span class="pill diff">불일치</span></td>
+        <td><button class="mini" aria-label="재생"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></td>
+      </tr>
+      <tr>
+        <td>3</td><td class="en">Where is my blue pencil?</td><td class="en dim">(인식되지 않음)</td>
+        <td><span class="pill none">인식 안 됨</span></td>
+        <td><button class="mini" aria-label="재생"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></td>
+      </tr>
+      <tr>
+        <td>4</td><td class="en">She has two little dogs.</td><td class="en dim">— 건너뜀 —</td>
+        <td><span class="pill none">건너뜀</span></td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="anote">자동 비교는 참고용입니다 — 최종 평가는 녹음을 직접 듣고 판단해 주세요. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.</p>
+</div>
+
+<!-- ═══════ 설계 근거 ═══════ -->
+<div class="why">
+  <div><b>평가 신호 0</b>아이 화면에는 정오·점수·칭찬·별이 없어요. "읽는다 → 담겼다 → 다음"만 경험합니다.</div>
+  <div><b>읽어주기 제거</b>발음을 먼저 들려주면 읽기가 아니라 따라하기를 측정하게 됩니다. 검사 타당도를 위해 TTS 버튼 삭제.</div>
+  <div><b>기능 피드백만 유지</b>EQ 막대·녹음 중 표시는 "기계가 듣고 있다"는 확인일 뿐, 잘했다는 신호가 아닙니다.</div>
+  <div><b>캐릭터 = 안내자</b>블립은 응원단이 아니라 차분한 진행자. 긴장 완화용 존재감만 남기고 감정 연출은 제거.</div>
+</div>
+
+</body>
+</html>
