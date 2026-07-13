@@ -1,13 +1,16 @@
 'use client'
-/** 녹음 중 목소리 크기를 토끼 귀 바 5개로 표시 */
+/** 목소리 크기 막대 5개 — "기계가 듣고 있다"는 기능 피드백 (칭찬 신호 아님) */
+const BARS = [
+  { h: 10, t: 0.05 }, { h: 19, t: 0.15 }, { h: 28, t: 0.3 }, { h: 17, t: 0.5 }, { h: 12, t: 0.7 },
+]
+
 export function LevelMeter({ level }: { level: number }) {
-  const bars = [0.05, 0.15, 0.3, 0.5, 0.7]
   return (
-    <div className="flex h-10 items-end justify-center gap-1.5" aria-label="목소리 크기">
-      {bars.map((t, i) => (
+    <div className="flex h-8 items-end justify-center gap-[5px]" aria-label="목소리 크기">
+      {BARS.map((b, i) => (
         <div key={i}
-          className={`w-3 rounded-full transition-all duration-75 ${level > t ? 'bg-mint' : 'bg-ink/10'}`}
-          style={{ height: `${(i + 1) * 8}px` }} />
+          className={`w-1.5 rounded-[3px] transition-colors duration-75 ${level > b.t ? 'bg-blue' : 'bg-line'}`}
+          style={{ height: b.h }} />
       ))}
     </div>
   )
