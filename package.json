@@ -6,8 +6,8 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "seed": "tsx scripts/seed.ts",
-    "smoke:azure": "tsx scripts/smoke-azure.ts",
+    "seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "smoke:azure": "tsx --env-file=.env.local scripts/smoke-azure.ts",
     "hash-password": "tsx scripts/hash-password.ts"
   },
   "dependencies": {

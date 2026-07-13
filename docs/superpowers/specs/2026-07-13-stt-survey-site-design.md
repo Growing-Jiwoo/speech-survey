@@ -95,7 +95,8 @@ create table responses (
   id               uuid primary key default gen_random_uuid(),
   session_id       uuid not null references sessions(id),
   question_id      int  not null references questions(id),
-  status           text not null check (status in ('completed','skipped')),
+  status           text not null check (status in ('in_progress','completed','skipped')),
+  -- in_progress: 시도는 있으나 성공(비어있지 않은 STT)이 아직 없는 상태
   retry_count      int  not null default 0,   -- 총 시도 횟수 (1 = 재시도 없음)
   final_attempt_id uuid,                      -- attempts.id, skipped면 null
   unique (session_id, question_id)
