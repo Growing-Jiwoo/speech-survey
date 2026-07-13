@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "smoke:azure": "tsx --env-file=.env.local scripts/smoke-azure.ts",
