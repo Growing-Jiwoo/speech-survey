@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { LevelMeter } from '@/components/LevelMeter'
@@ -31,14 +31,15 @@ export default function SurveyPage() {
     setSurvey(JSON.parse(raw))
   }, [router])
 
+  // 언마운트 시 마지막 blob URL 정리(누수 방지). 최신 값은 ref로 추적.
+  const audioUrlRef = useRef('')
+  audioUrlRef.current = audioUrl
+  useEffect(() => () => { if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current) }, [])
+
   const q = survey?.questions[qIdx]
 
-  async function handleComplete(rec: Recording) {
-    setLastRec(rec)
-    if (phase === 'mic') {
-      setMicOk(rec.peak > 0.1 ? 'ok' : 'quiet')
-      return
-    }
+  // 녹음 완료 blob을 서버로 전송(변환 요청). 최초 녹음과 "다시 시도"(재녹음 없음) 양쪽에서 호출.
+  async function sendForTranscription(rec: Recording) {
     if (!survey || !q) return
     setBusy(true); setErr('')
     try {
@@ -57,6 +58,15 @@ export default function SurveyPage() {
     } catch {
       setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally { setBusy(false) }
+  }
+
+  async function handleComplete(rec: Recording) {
+    setLastRec(rec)
+    if (phase === 'mic') {
+      setMicOk(rec.peak > 0.1 ? 'ok' : 'quiet')
+      return
+    }
+    await sendForTranscription(rec)
   }
 
   const recorder = useRecorder(20, handleComplete)
@@ -140,7 +150,17 @@ export default function SurveyPage() {
       <RecordButton state={recorder.state} onStart={startRecording} onStop={recorder.stop} disabled={busy} />
       {recorder.state === 'recording' && <LevelMeter level={recorder.level} />}
       {busy && <p className="animate-pulse text-ink/60">듣고 있어요… ⏳</p>}
-      {err && <p className="text-center text-berry">{err}</p>}
+      {err && !busy && (
+        <div className="flex flex-col items-center gap-2">
+          <p className="text-center text-berry">{err}</p>
+          {lastRec && (
+            <button onClick={() => sendForTranscription(lastRec)}
+              className="rounded-full bg-peach-deep px-6 py-3 text-white shadow-md active:scale-95">
+              ⚠️ 다시 시도
+            </button>
+          )}
+        </div>
+      )}
 
       {sttText !== null && !busy && (
         <div className="w-full rounded-3xl bg-sky/30 p-5 text-center">
