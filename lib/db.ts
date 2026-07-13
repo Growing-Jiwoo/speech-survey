@@ -38,10 +38,10 @@ export async function getOrCreateResponse(sessionId: string, questionId: number)
 export async function insertAttempt(a: {
   responseId: string; attemptNo: number; sttText: string; audioPath: string; durationSec: number
 }): Promise<string> {
-  const { data, error } = await sb().from('attempts').insert({
+  const { data, error } = await sb().from('attempts').upsert({
     response_id: a.responseId, attempt_no: a.attemptNo, stt_text: a.sttText,
     audio_path: a.audioPath, duration_sec: a.durationSec,
-  }).select('id').single()
+  }, { onConflict: 'response_id,attempt_no' }).select('id').single()
   fail(error)
   const patch: Record<string, unknown> = { retry_count: a.attemptNo }
   if (a.sttText.trim()) { patch.status = 'completed'; patch.final_attempt_id = data!.id }
@@ -119,14 +119,15 @@ export async function sessionDetail(sessionId: string): Promise<{ session: Sessi
   return { session: s as unknown as SessionRow, rows }
 }
 
-/** CSV용: 전체 시도 플랫 조회 (1행=1시도) */
+/** CSV용: 응답 기준 조회 (시도 0건인 건너뜀/진행중 응답도 포함, 세션 시작시각→문항순번 정렬) */
 export async function exportRows() {
-  const { data, error } = await sb().from('attempts')
-    .select(`attempt_no, stt_text, audio_path, duration_sec, created_at,
-      responses!inner(status, retry_count,
-        sessions!inner(child_name, child_age, started_at),
-        questions!inner(order_no, difficulty, text))`)
-    .order('created_at')
+  const { data, error } = await sb().from('responses')
+    .select(`status, retry_count,
+      sessions!inner(child_name, child_age, started_at),
+      questions!inner(order_no, difficulty, text),
+      attempts(attempt_no, stt_text, audio_path, duration_sec, created_at)`)
+    .order('started_at', { ascending: true, referencedTable: 'sessions' })
+    .order('order_no', { ascending: true, referencedTable: 'questions' })
   fail(error)
   return data!
 }

@@ -18,6 +18,7 @@ export default function SurveyPage() {
   const [qIdx, setQIdx] = useState(0)
   const [attemptNo, setAttemptNo] = useState(1)
   const [sttText, setSttText] = useState<string | null>(null) // null=시도 전
+  const [succeeded, setSucceeded] = useState(false) // 이 문항에서 성공한 시도가 하나라도 있으면 true (Next 활성 래치)
   const [audioUrl, setAudioUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -54,6 +55,7 @@ export default function SurveyPage() {
       const json = await res.json()
       if (!res.ok) { setErr(json.error ?? '변환에 실패했어요. 다시 시도해 주세요.'); return }
       setSttText(json.sttText)
+      if (json.sttText) setSucceeded(true)
       setAudioUrl(old => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(rec.blob) })
     } catch {
       setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
@@ -78,7 +80,7 @@ export default function SurveyPage() {
   }
 
   function resetForQuestion() {
-    setSttText(null); setErr(''); setConfirmSkip(false); setLastRec(null)
+    setSttText(null); setErr(''); setConfirmSkip(false); setLastRec(null); setSucceeded(false)
     setAudioUrl(old => { if (old) URL.revokeObjectURL(old); return '' })
   }
 
@@ -178,7 +180,7 @@ export default function SurveyPage() {
             🔁 다시 말하기
           </button>
         )}
-        {!!sttText && !busy && (
+        {succeeded && !busy && (
           <button onClick={next} className="rounded-full bg-peach-deep px-8 py-3 text-white shadow-md active:scale-95">
             다음 →
           </button>
