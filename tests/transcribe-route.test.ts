@@ -13,6 +13,7 @@ vi.mock('@/lib/azure-stt', () => ({ transcribeShortAudio: vi.fn().mockResolvedVa
 
 import { POST } from '@/app/api/transcribe/route'
 import * as db from '@/lib/db'
+import * as conv from '@/lib/audio-convert'
 import * as azure from '@/lib/azure-stt'
 
 function makeReq(overrides: Record<string, string> = {}) {
@@ -27,30 +28,35 @@ function makeReq(overrides: Record<string, string> = {}) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('POST /api/transcribe', () => {
-  it('성공: 업로드→변환→STT→attempt 저장→텍스트 반환', async () => {
+  it('성공: 업로드→STT→attempt 저장. 응답에 sttText 없음 (아이에게 결과 비노출)', async () => {
     const res = await POST(makeReq())
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ sttText: 'i like apples', attemptId: 'att-1' })
+    expect(await res.json()).toEqual({ ok: true })
     expect(db.uploadRecording).toHaveBeenCalledWith('s-1/5_1.webm', expect.any(Buffer), 'audio/webm;codecs=opus')
     expect(db.insertAttempt).toHaveBeenCalledWith(expect.objectContaining({ responseId: 'resp-1', attemptNo: 1, sttText: 'i like apples' }))
   })
-  it('빈 STT 결과도 200으로 저장·반환 (재시도 유도는 클라이언트 몫)', async () => {
-    vi.mocked(azure.transcribeShortAudio).mockResolvedValueOnce('')
+  it('STT 실패해도 200 — 빈 STT로 attempt 저장 (진행 무차단)', async () => {
+    vi.mocked(azure.transcribeShortAudio).mockRejectedValueOnce(new Error('timeout'))
     const res = await POST(makeReq())
-    expect((await res.json()).sttText).toBe('')
-    expect(db.insertAttempt).toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(db.insertAttempt).toHaveBeenCalledWith(expect.objectContaining({ sttText: '' }))
   })
-  it('업로드 실패면 502, STT 진행 안 함(녹음 없는 텍스트 방지)', async () => {
+  it('오디오 변환 실패해도 200 — 빈 STT로 attempt 저장', async () => {
+    vi.mocked(conv.toAzureFormat).mockRejectedValueOnce(new Error('ffmpeg fail'))
+    const res = await POST(makeReq())
+    expect(res.status).toBe(200)
+    expect(db.insertAttempt).toHaveBeenCalledWith(expect.objectContaining({ sttText: '' }))
+  })
+  it('업로드 실패면 502, STT 진행 안 함 (녹음 없는 텍스트 방지)', async () => {
     vi.mocked(db.uploadRecording).mockRejectedValueOnce(new Error('storage down'))
     const res = await POST(makeReq())
     expect(res.status).toBe(502)
     expect(azure.transcribeShortAudio).not.toHaveBeenCalled()
   })
-  it('Azure 실패면 502 + 저장된 오디오 경로 안내', async () => {
-    vi.mocked(azure.transcribeShortAudio).mockRejectedValueOnce(new Error('timeout'))
+  it('DB 저장 실패면 502 (클라이언트가 재시도 안내)', async () => {
+    vi.mocked(db.insertAttempt).mockRejectedValueOnce(new Error('db down'))
     const res = await POST(makeReq())
     expect(res.status).toBe(502)
-    expect((await res.json()).error).toContain('변환')
   })
   it('필수 필드 누락이면 400', async () => {
     const fd = new FormData(); fd.set('sessionId', 's-1')

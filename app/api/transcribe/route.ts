@@ -28,15 +28,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `녹음 저장 실패: ${(e as Error).message}` }, { status: 502 })
   }
 
+  // STT·변환 실패는 진행을 막지 않는다 — 오디오는 저장됐고 판단은 선생님 결과지에서.
+  let sttText = ''
   try {
     const converted = await toAzureFormat(bytes, mime)
-    const sttText = await transcribeShortAudio(converted.data, converted.contentType)
-    const responseId = await getOrCreateResponse(sessionId, questionId)
-    const attemptId = await insertAttempt({ responseId, attemptNo, sttText, audioPath, durationSec })
-    return NextResponse.json({ sttText, attemptId })
+    sttText = await transcribeShortAudio(converted.data, converted.contentType)
   } catch (e) {
-    return NextResponse.json(
-      { error: `음성 변환에 실패했어요. 다시 시도해 주세요. (${(e as Error).message})`, audioPath },
-      { status: 502 })
+    console.error('[transcribe] STT/변환 실패 — 빈 텍스트로 진행:', (e as Error).message)
+    sttText = ''
   }
+  try {
+    const responseId = await getOrCreateResponse(sessionId, questionId)
+    await insertAttempt({ responseId, attemptNo, sttText, audioPath, durationSec })
+  } catch (e) {
+    return NextResponse.json({ error: `응답 저장 실패: ${(e as Error).message}` }, { status: 502 })
+  }
+  // 아이 기기로 STT 결과를 보내지 않는다 (평가 비노출 — 네트워크 탭에서도 안 보이게).
+  return NextResponse.json({ ok: true })
 }

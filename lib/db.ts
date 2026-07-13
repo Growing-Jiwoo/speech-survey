@@ -43,8 +43,10 @@ export async function insertAttempt(a: {
     audio_path: a.audioPath, duration_sec: a.durationSec,
   }, { onConflict: 'response_id,attempt_no' }).select('id').single()
   fail(error)
-  const patch: Record<string, unknown> = { retry_count: a.attemptNo }
-  if (a.sttText.trim()) { patch.status = 'completed'; patch.final_attempt_id = data!.id }
+  // 시도가 저장되면 STT 인식 여부와 무관하게 문항 완료 (진행 게이트 = 업로드 성공)
+  const patch: Record<string, unknown> = {
+    retry_count: a.attemptNo, status: 'completed', final_attempt_id: data!.id,
+  }
   const { error: e2 } = await sb().from('responses').update(patch).eq('id', a.responseId)
   fail(e2)
   return data!.id
