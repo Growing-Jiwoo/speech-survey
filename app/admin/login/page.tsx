@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Blip } from '@/components/Blip'
 
 export default function AdminLogin() {
   const router = useRouter()
@@ -18,13 +19,18 @@ export default function AdminLogin() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-center text-2xl">관리자 로그인</h1>
-      <input type="password" value={pw} onChange={e => setPw(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && login()} placeholder="비밀번호"
-        className="rounded-2xl border-2 border-ink/20 px-4 py-3 outline-none focus:border-sky" />
-      {err && <p className="text-sm text-berry">{err}</p>}
-      <button onClick={login} className="rounded-full bg-ink px-6 py-3 text-white">로그인</button>
+    <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center p-6">
+      <div className="card p-6">
+        <div className="flex items-center gap-2">
+          <Blip variant="logo" className="h-8 w-8" />
+          <span className="text-sm font-bold text-ink-soft">말하기 설문 · 관리자</span>
+        </div>
+        <input type="password" value={pw} onChange={e => setPw(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && login()} placeholder="비밀번호"
+          className="mt-5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15" />
+        {err && <p role="alert" className="mt-2 text-sm text-rec-deep">{err}</p>}
+        <button onClick={login} className="cta mt-4">로그인</button>
+      </div>
     </main>
   )
 }
