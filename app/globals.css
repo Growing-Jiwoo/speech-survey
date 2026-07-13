@@ -1,14 +1,60 @@
 @import "tailwindcss";
 
 @theme {
-  --color-cream: #fff8f0;
-  --color-peach: #ffd9c0;
-  --color-peach-deep: #ff9e7d;
-  --color-mint: #bde8ca;
-  --color-sky: #bfdcf7;
-  --color-berry: #f49cbb;
-  --color-ink: #4a4458;
-  --font-cute: var(--font-jua), sans-serif;
+  --color-blue: #2F6BFF;
+  --color-blue-deep: #1E4FCC;
+  --color-rec: #E5484D;
+  --color-rec-deep: #C13A3E;
+  --color-mint: #0BA37A;
+  --color-amber: #B97F10;
+  --color-ink: #0E1526;
+  --color-ink-soft: #3A4256;
+  --color-ink-mute: #8A94AD;
+  --color-bg: #F4F6FB;
+  --color-line: #E3E8F3;
+  --color-well: #F7F9FE;
+  --font-read: var(--font-lexend), sans-serif;
 }
 
-body { background: var(--color-cream); color: var(--color-ink); font-family: var(--font-cute); }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-noto), sans-serif;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px -18px rgb(30 79 204 / .25);
+}
+.cta {
+  display: flex; height: 54px; width: 100%; align-items: center; justify-content: center;
+  border-radius: 15px; background: var(--color-blue);
+  font-size: 16px; font-weight: 700; color: #fff;
+  box-shadow: 0 3px 0 var(--color-blue-deep), 0 12px 20px -10px rgb(30 79 204 / .45);
+  transition: transform .08s, box-shadow .08s, opacity .15s;
+}
+.cta:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--color-blue-deep); }
+.cta:disabled { opacity: .4; pointer-events: none; }
+.kpi {
+  background: var(--color-well); border: 1px solid var(--color-line);
+  border-radius: 11px; padding: 7px 13px; font-size: 12px; color: var(--color-ink-soft);
+}
+.kpi b { color: var(--color-ink); font-family: var(--font-read), sans-serif; }
+
+@keyframes blip-blink { 0%, 93%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
+@keyframes blip-antp { 0%, 100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.28); opacity: .85 } }
+@keyframes rip { 0% { transform: scale(.88); opacity: 1 } 100% { transform: scale(1.3); opacity: 0 } }
+
+.blip-blink { transform-box: fill-box; transform-origin: center; animation: blip-blink 4.6s infinite; }
+.blip-antpulse { transform-box: fill-box; transform-origin: center; animation: blip-antp 1.3s ease-in-out infinite; }
+.ripple { position: relative; }
+.ripple::before {
+  content: ""; position: absolute; inset: -12px; border-radius: 9999px;
+  border: 2.5px solid rgb(47 107 255 / .3); animation: rip 2s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
