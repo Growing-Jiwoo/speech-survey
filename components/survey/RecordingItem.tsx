@@ -62,8 +62,8 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
         <p className="text-xs font-bold text-blue">
           {word ? '아래 낱말을 소리 내어 읽어 주세요' : '아래 문장을 소리 내어 읽어 주세요'}
         </p>
-        <p className={`font-read mt-2 whitespace-pre-line font-medium leading-snug ${
-          word ? 'text-center text-[38px]' : 'text-[22px]'}`}>
+        <p className={`font-read mt-2 break-keep font-medium leading-relaxed ${
+          word ? 'text-center text-[38px]' : 'whitespace-pre-line text-[22px]'}`}>
           {item.text}
         </p>
       </div>
@@ -74,15 +74,7 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
         </p>
       )}
 
-      {recording && (
-        <div className="mt-4 flex items-center gap-3">
-          <span className="blip-antpulse inline-block h-2 w-2 rounded-full bg-rec" />
-          <span className="whitespace-nowrap text-[13px] font-bold text-rec-deep">남은 시간 {remaining}초</span>
-          <LevelMeter level={recorder.level} />
-        </div>
-      )}
-
-      {busy && <p className="mt-4 text-sm text-ink-mute">저장하고 있어요…</p>}
+      {busy && <p className="mt-4 text-center text-sm text-ink-mute">저장하고 있어요…</p>}
 
       {saved && !recording && !busy && !err && (
         <div className="mt-4 flex items-center gap-2.5 rounded-[14px] border border-line bg-well px-4 py-3">
@@ -105,13 +97,22 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
         </div>
       )}
 
-      <div className="mt-6 flex flex-col items-center gap-2.5">
+      <div className="mt-8 flex flex-col items-center gap-5">
         <RecordButton state={recorder.state} onStart={startRecording} onStop={recorder.stop}
           disabled={busy} maxSec={item.maxSec} />
-        <p className="text-xs font-bold text-ink-soft">
+        <p className="text-sm font-bold text-ink-soft">
           {recording ? '다 읽었으면 버튼을 눌러 주세요'
             : saved ? '다시 녹음하려면 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
         </p>
+        {recording && (
+          <div className="flex flex-col items-center gap-2.5">
+            <LevelMeter level={recorder.level} />
+            <div className="flex items-center gap-2">
+              <span className="blip-antpulse inline-block h-2 w-2 rounded-full bg-rec" />
+              <span className="text-[13px] font-bold text-rec-deep">남은 시간 {remaining}초</span>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

@@ -38,11 +38,11 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
         버튼을 누르고<br /><b>&ldquo;안녕하세요&rdquo;</b>라고 말해 주세요.
       </p>
-      <div className="mt-9">
+      <div className="mt-12">
         <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop} maxSec={MAX_SEC} />
       </div>
-      <div className="mt-6"><LevelMeter level={recorder.level} /></div>
-      <p className="mt-2 text-[11px] text-ink-mute">목소리가 들리면 막대가 움직여요.</p>
+      <div className="mt-8"><LevelMeter level={recorder.level} /></div>
+      <p className="mt-3 text-[11px] text-ink-mute">목소리가 들리면 막대가 움직여요.</p>
       {micOk === 'quiet' && (
         <p className="mt-3 text-sm text-ink-soft">목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.</p>
       )}
