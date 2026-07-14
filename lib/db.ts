@@ -78,12 +78,17 @@ export interface WritingRow { item_code: string; can_write: boolean }
 
 const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at'
 
-export async function listSessions(): Promise<(SessionRow & { recordings: { item_code: string }[] })[]> {
+export type SessionListRow = SessionRow & {
+  recordings: { item_code: string }[]
+  writing_answers: { item_code: string }[]
+}
+
+export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code)`)
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code)`)
     .order('started_at', { ascending: false })
   fail(error)
-  return data as unknown as (SessionRow & { recordings: { item_code: string }[] })[]
+  return data as unknown as SessionListRow[]
 }
 
 export async function sessionDetail(sessionId: string): Promise<{

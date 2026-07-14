@@ -49,8 +49,15 @@ describe('POST /api/recordings', () => {
   })
   it('durationSec 비숫자 400', async () =>
     expect((await POST(makeReq({ durationSec: 'abc' }))).status).toBe(400))
-  it('attemptNo 0 이하 400', async () =>
-    expect((await POST(makeReq({ attemptNo: '0' }))).status).toBe(400))
+  it('attemptNo 0 이하·상한(10) 초과 400', async () => {
+    expect((await POST(makeReq({ attemptNo: '0' }))).status).toBe(400)
+    expect((await POST(makeReq({ attemptNo: '11' }))).status).toBe(400)
+  })
+  it('5MB 초과 파일 413, 업로드 안 함', async () => {
+    const big = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'audio/webm' })
+    expect((await POST(makeReq({ audio: big }))).status).toBe(413)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
   it('업로드 실패 시 502, 기록 저장 안 함', async () => {
     vi.mocked(db.uploadRecording).mockRejectedValueOnce(new Error('storage down'))
     expect((await POST(makeReq())).status).toBe(502)

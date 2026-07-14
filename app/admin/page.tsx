@@ -1,13 +1,12 @@
-import Link from 'next/link'
 import { listSessions } from '@/lib/db'
-import { RECORDING_ITEMS } from '@/lib/items'
+import { RECORDING_ITEMS, WRITING_ITEMS } from '@/lib/items'
 import { Blip } from '@/components/Blip'
+import { SessionTable } from '@/components/admin/SessionTable'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminList() {
   const sessions = await listSessions()
-  const totalRec = RECORDING_ITEMS.length
   const submitted = sessions.filter(s => s.submitted_at).length
   const todayKey = new Date().toDateString()
   const today = sessions.filter(s => new Date(s.started_at).toDateString() === todayKey).length
@@ -27,42 +26,7 @@ export default async function AdminList() {
             <span className="kpi">오늘 <b>{today}</b></span>
           </div>
         </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-ink-mute">
-              <th scope="col" className="px-5 py-3 font-medium">이름</th>
-              <th scope="col" className="font-medium">학교</th>
-              <th scope="col" className="font-medium">학년/반</th>
-              <th scope="col" className="font-medium">생년월일</th>
-              <th scope="col" className="font-medium">시작</th>
-              <th scope="col" className="font-medium">녹음</th>
-              <th scope="col" className="pr-5 font-medium">상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sessions.map(s => {
-              const recorded = new Set(s.recordings.map(r => r.item_code)).size
-              return (
-                <tr key={s.id} className="border-t border-line/60 hover:bg-well">
-                  <td className="px-5 py-3">
-                    <Link href={`/admin/${s.id}`} className="font-bold text-blue">{s.child_name}</Link>
-                  </td>
-                  <td>{s.school_name}</td>
-                  <td>{s.grade}-{s.class_no}</td>
-                  <td className="text-ink-soft">{s.birth_ymd}</td>
-                  <td className="text-ink-soft">{new Date(s.started_at).toLocaleString('ko-KR')}</td>
-                  <td className="font-read">{recorded} / {totalRec}</td>
-                  <td className="pr-5">
-                    {s.submitted_at
-                      ? <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-bold text-mint">제출</span>
-                      : <span className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">진행 중</span>}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {sessions.length === 0 && <p className="p-8 text-center text-sm text-ink-mute">아직 참여한 세션이 없습니다.</p>}
+        <SessionTable sessions={sessions} totalRec={RECORDING_ITEMS.length} totalWrite={WRITING_ITEMS.length} />
       </div>
     </main>
   )

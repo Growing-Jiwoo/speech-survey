@@ -21,6 +21,7 @@ export default async function AdminDetail({ params }: { params: Promise<{ id: st
   }
   const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
   const recordedCount = recItems.filter(i => byItem.has(i.code)).length
+  const missingCount = (recItems.length - recordedCount) + (writeItems.length - writing.length)
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -38,11 +39,24 @@ export default async function AdminDetail({ params }: { params: Promise<{ id: st
                 {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'}
               </p>
             </div>
-            <div className="ml-auto flex flex-wrap gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
               <span className="kpi">녹음 <b>{recordedCount} / {recItems.length}</b></span>
               <span className="kpi">낱말쓰기 <b>{writing.length} / {writeItems.length}</b></span>
+              {missingCount > 0 && (
+                <span className="rounded-full bg-rec/10 px-3 py-1.5 text-xs font-bold text-rec-deep">
+                  미완료 {missingCount}건
+                </span>
+              )}
             </div>
           </div>
+          {s.checklist.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-ink-soft">확인 필요 영역:</span>
+              {s.checklist.map(c => (
+                <span key={c} className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">{areaLabel(c)}</span>
+              ))}
+            </div>
+          )}
         </div>
 
         <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
@@ -62,7 +76,7 @@ export default async function AdminDetail({ params }: { params: Promise<{ id: st
                 ? `낱말 (${KIND_LABEL[item.kind!]})` : '문장'
               const views = byItem.get(item.code) ?? []
               if (views.length === 0) return [(
-                <tr key={item.code} className="border-t border-line/60">
+                <tr key={item.code} className="border-t border-line/60 bg-rec/5">
                   <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
                   <td className="text-xs text-ink-mute">{label}</td>
                   <td className="font-read whitespace-pre-line">{item.text}</td>
@@ -99,7 +113,7 @@ export default async function AdminDetail({ params }: { params: Promise<{ id: st
             {writeItems.map(item => {
               const v = writingByCode.get(item.code)
               return (
-                <tr key={item.code} className="border-t border-line/60">
+                <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
                   <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
                   <td className="text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
                   <td className="font-read">{item.text}</td>
