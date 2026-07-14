@@ -1,4 +1,4 @@
-// lib/items.ts — KODYS-G1 초등 1학년 선별검사지 문항 (출처: [최종] 초등 1학년 선별검사지.pdf)
+// lib/items.ts — 읽기 선별검사 문항 (출처: [최종] 초등 1학년 선별검사지.pdf)
 export type Section = 'word_reading' | 'sentence_reading' | 'word_writing' | 'checklist'
 export type WordKind = 'meaning' | 'nonsense' | null
 

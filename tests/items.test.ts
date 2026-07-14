@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { ITEMS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS, itemByCode, toggleChecklistArea } from '@/lib/items'
 
-describe('ITEMS (KODYS-G1)', () => {
+describe('ITEMS', () => {
   it('총 29문항, orderNo 1~29 연속', () => {
     expect(ITEMS).toHaveLength(29)
     ITEMS.forEach((item, i) => expect(item.orderNo).toBe(i + 1))
