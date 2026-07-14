@@ -6,6 +6,8 @@ import { itemByCode } from '@/lib/items'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function POST(req: Request) {
   const fd = await req.formData().catch(() => null)
   const audio = fd?.get('audio')
@@ -14,8 +16,9 @@ export async function POST(req: Request) {
   const attemptNo = Number(fd?.get('attemptNo'))
   const durationSec = Number(fd?.get('durationSec') ?? 0)
   const item = itemByCode.get(itemCode)
-  if (!(audio instanceof File) || !sessionId || !item || item.maxSec === 0
-    || !Number.isInteger(attemptNo) || attemptNo < 1)
+  if (!(audio instanceof File) || !UUID_RE.test(sessionId) || !item || item.maxSec === 0
+    || !Number.isInteger(attemptNo) || attemptNo < 1
+    || !Number.isFinite(durationSec) || durationSec < 0)
     return NextResponse.json({ error: '필수 항목 누락' }, { status: 400 })
 
   const bytes = Buffer.from(await audio.arrayBuffer())
