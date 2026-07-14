@@ -6,11 +6,6 @@ export function validName(name: unknown): name is string {
   return typeof name === 'string' && name.length > 0 && name.length <= 30 && NAME_RE.test(name)
 }
 
-/** 나이: 정수 1~999 (숫자 1~3자리). 기존 3~19 범위 제한은 폐기됨. */
-export function validAge(age: unknown): age is number {
-  return typeof age === 'number' && Number.isInteger(age) && age >= 1 && age <= 999
-}
-
 /** 생년월일: YYMMDD 6자리. YY만으로 윤년 판단이 불가하므로 2월은 29일까지 허용. */
 export function validBirthYmd(v: unknown): v is string {
   if (typeof v !== 'string' || !/^\d{6}$/.test(v)) return false

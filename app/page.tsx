@@ -2,61 +2,120 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
-import { validAge, validName } from '@/lib/validate'
+import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
+import { newState, saveState } from '@/lib/survey-state'
+import { validBirthYmd, validClassNo, validContact, validGender, validGrade, validName } from '@/lib/validate'
+
+const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
+const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
 export default function StartPage() {
   const router = useRouter()
+  const [school, setSchool] = useState<SelectedSchool | null>(null)
+  const [birthYmd, setBirthYmd] = useState('')
+  const [grade, setGrade] = useState('1')
+  const [classNo, setClassNo] = useState('')
+  const [gender, setGender] = useState<'남' | '여' | ''>('')
   const [name, setName] = useState('')
-  const [age, setAge] = useState('')
+  const [teacherName, setTeacherName] = useState('')
+  const [contact, setContact] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
   async function begin() {
     const cleanName = name.trim().replace(/\s+/g, ' ')
-    const ageNum = Number(age)
+    const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
+    const cleanContact = contact.trim()
+    if (!school) { setErr('학교를 선택해 주세요.'); return }
+    if (!validBirthYmd(birthYmd)) { setErr('생년월일은 숫자 6자리(예: 190101)로 입력해 주세요.'); return }
+    if (!validGrade(Number(grade))) { setErr('학년을 선택해 주세요.'); return }
+    if (!validClassNo(Number(classNo))) { setErr('반은 1~99 사이 숫자로 입력해 주세요.'); return }
+    if (!validGender(gender)) { setErr('성별을 선택해 주세요.'); return }
     if (!validName(cleanName)) { setErr('이름은 한글이나 영어로만 쓸 수 있어요.'); return }
-    if (!validAge(ageNum)) { setErr('나이는 숫자로만 쓸 수 있어요.'); return }
+    if (!validName(cleanTeacher)) { setErr('담임교사명은 한글이나 영어로만 쓸 수 있어요.'); return }
+    if (!validContact(cleanContact)) { setErr('연락처는 전화번호 또는 이메일 형식으로 입력해 주세요.'); return }
     setErr(''); setBusy(true)
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: cleanName, age: ageNum }),
+        body: JSON.stringify({
+          region: school.region, schoolId: school.schoolId, schoolName: school.schoolName,
+          birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
+          name: cleanName, teacherName: cleanTeacher, teacherContact: cleanContact,
+        }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setErr(json.error ?? '문제가 생겼어요. 다시 시도해 주세요.'); return }
-      sessionStorage.setItem('survey', JSON.stringify({ sessionId: json.sessionId, questions: json.questions, name: cleanName }))
+      saveState(newState(json.sessionId, cleanName))
       router.push('/survey')
     } catch {
       setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally { setBusy(false) }
   }
 
-  const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
+  const filled = school && birthYmd && classNo && gender && name.trim() && teacherName.trim() && contact.trim()
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
-        <span className="text-sm font-bold text-ink-soft">말하기 설문</span>
+        <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
       </div>
-      <h1 className="mt-14 text-2xl font-bold">안녕하세요!</h1>
+      <h1 className="mt-10 text-2xl font-bold">안녕하세요!</h1>
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
-        화면에 나오는 영어 문장을<br />소리 내어 읽는 설문이에요.
+        검사를 시작하기 전에<br />아래 정보를 입력해 주세요.
       </p>
       <div className="card mt-8 w-full p-5">
-        <label className="text-[13px] font-bold text-ink-soft" htmlFor="name">이름</label>
-        <input id="name" value={name} maxLength={30} onChange={e => setName(e.target.value)}
-          className={inputCls} />
-        <label className="mt-4 block text-[13px] font-bold text-ink-soft" htmlFor="age">나이</label>
-        <input id="age" value={age} inputMode="numeric" maxLength={3}
-          onChange={e => setAge(e.target.value.replace(/\D/g, ''))} className={inputCls} />
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-mute">이름은 한글·영어만, 나이는 숫자만 쓸 수 있어요.</p>
-        {err && <p role="alert" className="mt-2 text-sm text-rec-deep">{err}</p>}
-        <button onClick={begin} disabled={busy || !name.trim() || !age} className="cta mt-4">
+        <label className="text-[13px] font-bold text-ink-soft">학교명</label>
+        <SchoolPicker value={school} onSelect={setSchool} />
+
+        <label className={labelCls} htmlFor="birth">생년월일</label>
+        <input id="birth" value={birthYmd} inputMode="numeric" maxLength={6} placeholder="예: 190101"
+          onChange={e => setBirthYmd(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+
+        <div className="flex gap-2.5">
+          <div className="flex-1">
+            <label className={labelCls} htmlFor="grade">학년</label>
+            <select id="grade" value={grade} onChange={e => setGrade(e.target.value)}
+              className={`${inputCls} px-3`}>
+              {[1, 2, 3, 4, 5, 6].map(g => <option key={g} value={g}>{g}학년</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className={labelCls} htmlFor="classNo">반</label>
+            <input id="classNo" value={classNo} inputMode="numeric" maxLength={2}
+              onChange={e => setClassNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+          </div>
+        </div>
+
+        <span className={labelCls}>성별</span>
+        <div className="mt-1.5 flex gap-2.5">
+          {(['남', '여'] as const).map(g => (
+            <button key={g} type="button" onClick={() => setGender(g)} aria-pressed={gender === g}
+              className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
+                gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+              {g}
+            </button>
+          ))}
+        </div>
+
+        <label className={labelCls} htmlFor="name">이름</label>
+        <input id="name" value={name} maxLength={30} onChange={e => setName(e.target.value)} className={inputCls} />
+
+        <label className={labelCls} htmlFor="teacher">담임교사명</label>
+        <input id="teacher" value={teacherName} maxLength={30}
+          onChange={e => setTeacherName(e.target.value)} className={inputCls} />
+
+        <label className={labelCls} htmlFor="contact">담임 연락처</label>
+        <input id="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
+          onChange={e => setContact(e.target.value)} className={inputCls} />
+
+        {err && <p role="alert" className="mt-3 text-sm text-rec-deep">{err}</p>}
+        <button onClick={begin} disabled={busy || !filled} className="cta mt-5">
           {busy ? '준비 중…' : '시작하기'}
         </button>
       </div>
-      <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 설문 확인 용도로만 사용돼요.</p>
+      <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
     </main>
   )
 }
