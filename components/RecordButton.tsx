@@ -27,12 +27,12 @@ export function RecordButton({ state, onStart, onStop, disabled, maxSec = 20, el
 
       {recording ? (
         <button onClick={onStop} aria-label="녹음 끝내기"
-          className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-rec shadow-[0_4px_0_var(--color-rec-deep),0_16px_24px_-12px_rgba(197,58,62,.45)] transition active:translate-y-[2px]">
+          className="-translate-y-0.5 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-rec shadow-[0_4px_0_var(--color-rec-deep),0_16px_24px_-12px_rgba(197,58,62,.45)] transition active:translate-y-[2px]">
           <span className="h-7 w-7 rounded-lg bg-white" />
         </button>
       ) : success ? (
         <button onClick={onStart} disabled={disabled} aria-label="마이크 인식 완료 · 다시 확인"
-          className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-mint text-white shadow-[0_4px_0_var(--color-mint),0_16px_24px_-12px_rgba(20,160,120,.45)] transition active:translate-y-[2px] disabled:opacity-40">
+          className="-translate-y-0.5 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-mint text-white shadow-[0_4px_0_var(--color-mint),0_16px_24px_-12px_rgba(20,160,120,.45)] transition active:translate-y-[2px] disabled:opacity-40">
           <svg className="h-11 w-11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 12l5 5L20 6" />
@@ -40,7 +40,7 @@ export function RecordButton({ state, onStart, onStop, disabled, maxSec = 20, el
         </button>
       ) : (
         <button onClick={onStart} disabled={disabled} aria-label="녹음 시작"
-          className="flex h-[88px] w-[88px] items-center justify-center rounded-full bg-blue text-white shadow-[0_4px_0_var(--color-blue-deep),0_16px_24px_-12px_rgba(30,79,204,.5)] transition active:translate-y-[2px] disabled:opacity-40">
+          className="-translate-y-0.5 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-blue text-white shadow-[0_4px_0_var(--color-blue-deep),0_16px_24px_-12px_rgba(30,79,204,.5)] transition active:translate-y-[2px] disabled:opacity-40">
           <svg className="h-9 w-9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="9" y="2" width="6" height="12" rx="3" />

@@ -5,15 +5,16 @@ import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
+import { uploadRecording } from '@/lib/upload'
 import type { SurveyItem } from '@/lib/items'
 
 /** 녹음 문항: 타이머(낱말 30초/문장 40초) 카운트다운, 즉시 업로드, 재생 없음(완료 여부만) */
-export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onBusyChange }: {
+export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onUploadFailed }: {
   item: SurveyItem; sessionId: string; sessionToken: string; attemptCount: number; onSaved: () => void
   /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
   onRecordingChange?: (recording: boolean) => void
-  /** 업로드 중 여부를 부모에 알려 [다음] 이동을 막는다(업로드 실패 시 재시도 UI 언마운트 방지) */
-  onBusyChange?: (busy: boolean) => void
+  /** 업로드 실패를 부모에 알려 문항 이동 후에도 재시도할 수 있게 한다(실패한 녹음이 조용히 사라지지 않도록) */
+  onUploadFailed?: (rec: Recording) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -23,21 +24,11 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
 
   async function upload(rec: Recording) {
     setBusy(true); setErr('')
-    try {
-      const fd = new FormData()
-      fd.set('audio', rec.blob, 'audio')
-      fd.set('sessionId', sessionId)
-      fd.set('sessionToken', sessionToken)
-      fd.set('itemCode', item.code)
-      fd.set('attemptNo', String(attemptCount + 1))
-      fd.set('durationSec', rec.durationSec.toFixed(2))
-      const res = await fetch('/api/recordings', { method: 'POST', body: fd })
-      if (!res.ok) { setErr('저장에 문제가 생겼어요. 다시 시도해 주세요.'); return }
-      setLowVolume(rec.peak < MIC_MIN_PEAK)
-      onSaved()
-    } catch {
-      setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
-    } finally { setBusy(false) }
+    const ok = await uploadRecording({ sessionId, sessionToken, itemCode: item.code, attemptNo: attemptCount + 1, rec })
+    if (!ok) { setErr('저장에 문제가 생겼어요. 다시 시도해 주세요.'); onUploadFailed?.(rec); setBusy(false); return }
+    setLowVolume(rec.peak < MIC_MIN_PEAK)
+    setBusy(false)
+    onSaved()
   }
 
   function handleComplete(rec: Recording) { setLastRec(rec); void upload(rec) }
@@ -48,11 +39,6 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
     onRecordingChange?.(recording)
     return () => onRecordingChange?.(false)
   }, [recording, onRecordingChange])
-
-  useEffect(() => {
-    onBusyChange?.(busy)
-    return () => onBusyChange?.(false)
-  }, [busy, onBusyChange])
 
   async function startRecording() {
     setErr('')

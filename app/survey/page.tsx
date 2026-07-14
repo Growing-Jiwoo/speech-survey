@@ -2,8 +2,10 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CHECKLIST_AREAS, ITEMS, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
+import type { Recording } from '@/hooks/useRecorder'
+import { CHECKLIST_AREAS, ITEMS, SECTION_LABEL, itemByCode, toggleChecklistArea } from '@/lib/items'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
+import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
 import { MicCheck } from '@/components/survey/MicCheck'
 import { RecordingItem } from '@/components/survey/RecordingItem'
@@ -15,7 +17,8 @@ function SurveyInner() {
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<'mic' | 'item'>('item')
   const [isRecording, setIsRecording] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  // 문항 이동 중 업로드가 실패한 녹음: 다른 문항으로 넘어가도 사라지지 않고 여기서 재시도할 수 있다
+  const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
@@ -49,13 +52,32 @@ function SurveyInner() {
 
   const item = ITEMS[idx]
   const isLast = idx === ITEMS.length - 1
-  // 녹음 쓰기 문항은 예/아니오 필수, 녹음·업로드 중에는 이동 불가
+  // 녹음 쓰기 문항은 예/아니오 필수, 체크리스트는 최소 1개 선택 필수, 녹음 중에는 이동 불가
+  // (업로드는 이동 후에도 계속 진행되고, 실패하면 pendingRetries 배너로 재시도할 수 있어 이동을 막지 않는다)
   const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined)
-    && !isRecording && !isUploading
+    && (item.section !== 'checklist' || st.checklist.length > 0)
+    && !isRecording
 
   function goNext() {
     if (isLast) { router.push('/review'); return }
     goToIdx(idx + 1)
+  }
+
+  function markSaved(code: string) {
+    patch(prev => ({ recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 } }))
+    setPendingRetries(prev => {
+      if (!(code in prev)) return prev
+      const { [code]: _removed, ...rest } = prev
+      return rest
+    })
+  }
+
+  async function retryUpload(code: string) {
+    const rec = pendingRetries[code]
+    if (!rec || !st) return
+    const ok = await uploadRecording({ sessionId: st.sessionId, sessionToken: st.sessionToken,
+      itemCode: code, attemptNo: (st.recorded[code] ?? 0) + 1, rec })
+    if (ok) markSaved(code)
   }
 
   return (
@@ -70,9 +92,25 @@ function SurveyInner() {
 
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
         <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
-          attemptCount={st.recorded[item.code] ?? 0}
-          onRecordingChange={setIsRecording} onBusyChange={setIsUploading}
-          onSaved={() => patch(prev => ({ recorded: { ...prev.recorded, [item.code]: (prev.recorded[item.code] ?? 0) + 1 } }))} />
+          attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
+          onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
+          onSaved={() => markSaved(item.code)} />
+      )}
+
+      {Object.keys(pendingRetries).length > 0 && (
+        <div className="mt-3 flex flex-col gap-2 rounded-[14px] border border-rec/30 bg-rec/5 p-3">
+          {Object.keys(pendingRetries).map(code => (
+            <div key={code} className="flex items-center justify-between gap-2">
+              <p className="text-xs text-ink-soft">
+                <b className="text-rec-deep">{itemByCode.get(code)?.orderNo}번</b> 문항 저장에 실패했어요
+              </p>
+              <button onClick={() => retryUpload(code)}
+                className="flex-none rounded-lg bg-rec-deep px-3 py-1.5 text-xs font-bold text-white">
+                다시 저장
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       {item.section === 'word_writing' && (
@@ -99,7 +137,6 @@ function SurveyInner() {
           <p className="text-sm font-bold leading-relaxed">
             학생의 발달 영역 중 확인이 필요하다고 생각되는 영역에 모두 표시해 주세요.
           </p>
-          <p className="mt-1 text-[11px] text-ink-mute">해당 사항이 없으면 표시하지 않아도 됩니다.</p>
           <ul className="mt-4 flex flex-col gap-2">
             {CHECKLIST_AREAS.map(a => {
               const on = st.checklist.includes(a.code)
@@ -118,11 +155,13 @@ function SurveyInner() {
               )
             })}
           </ul>
+          {st.checklist.length === 0 &&
+            <p className="mt-3 text-center text-[11px] text-ink-mute">해당 사항이 없으면 &ldquo;특이사항 없음&rdquo;을 선택해 주세요.</p>}
         </div>
       )}
 
       <div className="mt-auto flex gap-2.5 pb-2 pt-6">
-        <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || isRecording || isUploading}
+        <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || isRecording}
           className="h-[52px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft transition disabled:opacity-40">
           이전
         </button>

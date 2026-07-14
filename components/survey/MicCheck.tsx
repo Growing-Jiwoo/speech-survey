@@ -47,7 +47,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         버튼을 누르고<br /><b>&ldquo;안녕하세요&rdquo;</b>라고 말해 주세요.
       </p>
       <div className="mt-12">
-        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop}
+        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop} disabled={micOk === 'ok'}
           maxSec={MAX_SEC} elapsedMs={recorder.elapsedMs} success={micOk === 'ok'} />
       </div>
       <div className="mt-8"><LevelMeter level={recorder.level} /></div>
