@@ -169,6 +169,23 @@ describe('sortSessions', () => {
     const desc = sortSessions([none, early, late], { key: 'submitted', dir: 'desc' }, TOTALS2)
     expect(desc.map(s => s.child_name)).toEqual(['나', '가', '다'])
   })
+  it('[REGRESSION] submitted 정렬에서 미제출 세션 여러 개가 있을 때 2차 정렬(이름)이 적용된다 (asc)', () => {
+    // 미제출 세션 3개를 섞인 순서로 제공: 다→나→가
+    const s다 = mkSession({ child_name: '다', submitted_at: null })
+    const s나 = mkSession({ child_name: '나', submitted_at: null })
+    const s가 = mkSession({ child_name: '가', submitted_at: null })
+    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'asc' }, TOTALS2)
+    expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
+  })
+  it('[REGRESSION] submitted 정렬에서 미제출 세션 여러 개가 있을 때 2차 정렬(이름)이 적용된다 (desc)', () => {
+    // 미제출 세션 3개를 섞인 순서로 제공: 다→나→가
+    // desc에서도 미제출 끼리는 이름 정렬(항상 오름차순)
+    const s다 = mkSession({ child_name: '다', submitted_at: null })
+    const s나 = mkSession({ child_name: '나', submitted_at: null })
+    const s가 = mkSession({ child_name: '가', submitted_at: null })
+    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'desc' }, TOTALS2)
+    expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
+  })
   it('원본 배열을 변형하지 않는다', () => {
     const arr = [a, b]
     sortSessions(arr, { key: 'name', dir: 'desc' }, TOTALS2)

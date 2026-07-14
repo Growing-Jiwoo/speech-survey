@@ -120,7 +120,7 @@ export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals)
   return [...rows].sort((a, b) => {
     const va = value(a), vb = value(b)
     const primary = typeof va === 'string' ? va.localeCompare(vb as string, 'ko') : va - (vb as number)
-    if (primary !== 0) return primary * sign
+    if (primary !== 0 && !Number.isNaN(primary)) return primary * sign
     // 동일 정렬 키 값 → 이름 오름차순 2차 정렬(방향 무관하게 일관된 순서로 흔들림 방지)
     return a.child_name.localeCompare(b.child_name, 'ko')
   })
