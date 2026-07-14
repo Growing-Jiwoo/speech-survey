@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { SessionListRow } from '@/lib/db'
-import { sessionProgress, type Filters, type Sort, type SortKey, type StatusFilter, type Totals } from '@/lib/adminStats'
+import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type StatusFilter, type Totals } from '@/lib/adminStats'
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -34,6 +34,10 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
 
   const hasFilter = filters.q !== '' || filters.status !== 'all'
     || filters.school !== null || filters.grade !== null || filters.today
+
+  // 결과지로 이동했다가 "← 목록"으로 돌아올 때 현재 필터·정렬을 유지하기 위해 back 파라미터로 전달
+  const backQuery = filtersToQuery(filters, sort)
+  const detailHref = (id: string) => backQuery ? `/admin/${id}?back=${encodeURIComponent(backQuery)}` : `/admin/${id}`
 
   return (
     <>
@@ -92,7 +96,7 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
             return (
               <tr key={s.id} className="border-t border-line/60 hover:bg-well">
                 <td className="px-5 py-2">
-                  <Link href={`/admin/${s.id}`} className="font-bold text-blue">{s.child_name}</Link>
+                  <Link href={detailHref(s.id)} className="font-bold text-blue">{s.child_name}</Link>
                 </td>
                 <td>{s.school_name}</td>
                 <td>{s.grade}-{s.class_no}</td>
