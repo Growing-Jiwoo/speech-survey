@@ -19,16 +19,22 @@ export function SchoolPicker({ value, onSelect }: {
   const [err, setErr] = useState('')
 
   useEffect(() => {
-    fetch('/schools/index.json').then(r => r.json()).then(setRegions)
-      .catch(() => setErr('학교 목록을 불러오지 못했어요. 새로고침해 주세요.'))
+    let ignore = false
+    fetch('/schools/index.json').then(r => r.json())
+      .then(data => { if (!ignore) setRegions(data) })
+      .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 새로고침해 주세요.') })
+    return () => { ignore = true }
   }, [])
 
   useEffect(() => {
     if (!slug) return
+    let ignore = false
     setLoading(true); setSchools([]); setQ(''); setErr('')
-    fetch(`/schools/${slug}.json`).then(r => r.json()).then(setSchools)
-      .catch(() => setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.'))
-      .finally(() => setLoading(false))
+    fetch(`/schools/${slug}.json`).then(r => r.json())
+      .then(data => { if (!ignore) setSchools(data) })
+      .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.') })
+      .finally(() => { if (!ignore) setLoading(false) })
+    return () => { ignore = true }
   }, [slug])
 
   const region = regions.find(r => r.slug === slug)
