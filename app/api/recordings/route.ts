@@ -1,0 +1,31 @@
+import { NextResponse } from 'next/server'
+import { insertRecording, uploadRecording } from '@/lib/db'
+import { audioExt } from '@/lib/audio-ext'
+import { itemByCode } from '@/lib/items'
+
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+export async function POST(req: Request) {
+  const fd = await req.formData().catch(() => null)
+  const audio = fd?.get('audio')
+  const sessionId = String(fd?.get('sessionId') ?? '')
+  const itemCode = String(fd?.get('itemCode') ?? '')
+  const attemptNo = Number(fd?.get('attemptNo'))
+  const durationSec = Number(fd?.get('durationSec') ?? 0)
+  const item = itemByCode.get(itemCode)
+  if (!(audio instanceof File) || !sessionId || !item || item.maxSec === 0
+    || !Number.isInteger(attemptNo) || attemptNo < 1)
+    return NextResponse.json({ error: '필수 항목 누락' }, { status: 400 })
+
+  const bytes = Buffer.from(await audio.arrayBuffer())
+  const mime = audio.type || 'application/octet-stream'
+  const audioPath = `${sessionId}/${itemCode}_${attemptNo}.${audioExt(mime)}`
+  try {
+    await uploadRecording(audioPath, bytes, mime)
+    await insertRecording({ sessionId, itemCode, attemptNo, audioPath, durationSec })
+  } catch (e) {
+    return NextResponse.json({ error: `녹음 저장 실패: ${(e as Error).message}` }, { status: 502 })
+  }
+  return NextResponse.json({ ok: true })
+}

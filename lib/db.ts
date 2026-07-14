@@ -10,52 +10,45 @@ export async function listQuestions(): Promise<Question[]> {
   return data!
 }
 
-export async function createSession(name: string, age: number): Promise<string> {
-  const { data, error } = await sb().from('sessions')
-    .insert({ child_name: name, child_age: age }).select('id').single()
+export interface NewSessionInput {
+  schoolRegion: string; schoolId: string; schoolName: string
+  birthYmd: string; grade: number; classNo: number; gender: '남' | '여'
+  childName: string; teacherName: string; teacherContact: string
+}
+
+export async function createSession(s: NewSessionInput): Promise<string> {
+  const { data, error } = await sb().from('sessions').insert({
+    school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
+    birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
+    child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+  }).select('id').single()
   fail(error)
   return data!.id
 }
 
-export async function completeSession(sessionId: string): Promise<void> {
-  const { error } = await sb().from('sessions')
-    .update({ completed_at: new Date().toISOString() }).eq('id', sessionId)
+export async function insertRecording(r: {
+  sessionId: string; itemCode: string; attemptNo: number; audioPath: string; durationSec: number
+}): Promise<void> {
+  const { error } = await sb().from('recordings').upsert({
+    session_id: r.sessionId, item_code: r.itemCode, attempt_no: r.attemptNo,
+    audio_path: r.audioPath, duration_sec: r.durationSec,
+  }, { onConflict: 'session_id,item_code,attempt_no' })
   fail(error)
 }
 
-/** 응답 행이 없으면 in_progress로 생성하고 id 반환 */
-export async function getOrCreateResponse(sessionId: string, questionId: number): Promise<string> {
-  const { data } = await sb().from('responses').select('id')
-    .eq('session_id', sessionId).eq('question_id', questionId).maybeSingle()
-  if (data) return data.id
-  const { data: ins, error } = await sb().from('responses')
-    .insert({ session_id: sessionId, question_id: questionId, status: 'in_progress' })
-    .select('id').single()
-  fail(error)
-  return ins!.id
-}
+export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
-export async function insertAttempt(a: {
-  responseId: string; attemptNo: number; sttText: string; audioPath: string; durationSec: number
-}): Promise<string> {
-  const { data, error } = await sb().from('attempts').upsert({
-    response_id: a.responseId, attempt_no: a.attemptNo, stt_text: a.sttText,
-    audio_path: a.audioPath, duration_sec: a.durationSec,
-  }, { onConflict: 'response_id,attempt_no' }).select('id').single()
-  fail(error)
-  // 시도가 저장되면 STT 인식 여부와 무관하게 문항 완료 (진행 게이트 = 업로드 성공)
-  const patch: Record<string, unknown> = {
-    retry_count: a.attemptNo, status: 'completed', final_attempt_id: data!.id,
+/** 최종 제출: 낱말쓰기 답 upsert + 체크리스트·submitted_at 기록 */
+export async function submitSession(
+  sessionId: string, writing: WritingAnswer[], checklist: string[],
+): Promise<void> {
+  if (writing.length > 0) {
+    const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
+    const { error } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
   }
-  const { error: e2 } = await sb().from('responses').update(patch).eq('id', a.responseId)
-  fail(e2)
-  return data!.id
-}
-
-export async function markSkipped(sessionId: string, questionId: number): Promise<void> {
-  const id = await getOrCreateResponse(sessionId, questionId)
-  const { error } = await sb().from('responses')
-    .update({ status: 'skipped', final_attempt_id: null }).eq('id', id)
+  const { error } = await sb().from('sessions')
+    .update({ checklist, submitted_at: new Date().toISOString() }).eq('id', sessionId)
   fail(error)
 }
 
