@@ -75,45 +75,48 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
           )}
         </div>
       </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-xs text-ink-mute">
-            <Th label="이름" sortKey="name" sort={sort} onSort={onSort} className="px-5 py-3" />
-            <Th label="학교" sortKey="school" sort={sort} onSort={onSort} className="px-4" />
-            <th scope="col" className="px-4 font-medium">학년/반</th>
-            <th scope="col" className="px-4 font-medium">생년월일</th>
-            <Th label="시작" sortKey="started" sort={sort} onSort={onSort} className="px-4" />
-            <Th label="진행률" sortKey="progress" sort={sort} onSort={onSort} className="px-4" />
-            <th scope="col" className="px-4 font-medium">체크</th>
-            <th scope="col" className="px-4 pr-5 font-medium">상태</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(s => {
-            const p = sessionProgress(s, totals)
-            // 행 어디를 눌러도 결과지로 이동. 이름은 접근성/새 탭용 실제 링크로 유지(중복 이동 방지 위해 전파 차단).
-            return (
-              <tr key={s.id} onClick={() => router.push(detailHref(s.id))}
-                className="cursor-pointer border-t border-line/60 hover:bg-well">
-                <td className="px-5 py-2.5">
-                  <Link href={detailHref(s.id)} onClick={e => e.stopPropagation()} className="font-bold text-blue">{s.child_name}</Link>
-                </td>
-                <td className="px-4">{s.school_name}</td>
-                <td className="px-4">{s.grade}-{s.class_no}</td>
-                <td className="px-4 text-ink-soft">{s.birth_ymd}</td>
-                <td className="px-4 text-ink-soft">{new Date(s.started_at).toLocaleString('ko-KR')}</td>
-                <td className="px-4"><ProgressCell recorded={p.recorded} written={p.written} totals={totals} /></td>
-                <td className="px-4">
-                  {s.checklist.length > 0
-                    ? <span className="rounded-full bg-amber/10 px-2.5 py-0.5 text-xs font-bold text-amber">{s.checklist.length}개 영역</span>
-                    : <span className="text-xs text-ink-mute">—</span>}
-                </td>
-                <td className="px-4 pr-5"><StatusBadge submitted={!!s.submitted_at} incomplete={p.incomplete} /></td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      {/* 긴 학교명 등으로 셀이 줄바꿈되지 않도록 각 셀은 nowrap, 넘치는 폭은 가로 스크롤로 처리 */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-ink-mute">
+              <Th label="이름" sortKey="name" sort={sort} onSort={onSort} className="whitespace-nowrap px-5 py-3" />
+              <Th label="학교" sortKey="school" sort={sort} onSort={onSort} className="whitespace-nowrap px-4" />
+              <th scope="col" className="whitespace-nowrap px-4 font-medium">학년/반</th>
+              <th scope="col" className="whitespace-nowrap px-4 font-medium">생년월일</th>
+              <Th label="참여일" sortKey="started" sort={sort} onSort={onSort} className="whitespace-nowrap px-4" />
+              <Th label="진행률" sortKey="progress" sort={sort} onSort={onSort} className="whitespace-nowrap px-4" />
+              <th scope="col" className="whitespace-nowrap px-4 font-medium">검사자 체크리스트</th>
+              <th scope="col" className="whitespace-nowrap px-4 pr-5 font-medium">상태</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(s => {
+              const p = sessionProgress(s, totals)
+              // 행 어디를 눌러도 결과지로 이동. 이름은 접근성/새 탭용 실제 링크로 유지(중복 이동 방지 위해 전파 차단).
+              return (
+                <tr key={s.id} onClick={() => router.push(detailHref(s.id))}
+                  className="cursor-pointer border-t border-line/60 hover:bg-well">
+                  <td className="whitespace-nowrap px-5 py-2.5">
+                    <Link href={detailHref(s.id)} onClick={e => e.stopPropagation()} className="font-bold text-blue">{s.child_name}</Link>
+                  </td>
+                  <td className="whitespace-nowrap px-4">{s.school_name}</td>
+                  <td className="whitespace-nowrap px-4">{s.grade}-{s.class_no}</td>
+                  <td className="whitespace-nowrap px-4 text-ink-soft">{s.birth_ymd}</td>
+                  <td className="whitespace-nowrap px-4 text-ink-soft">{new Date(s.started_at).toLocaleDateString('ko-KR')}</td>
+                  <td className="px-4"><ProgressCell recorded={p.recorded} written={p.written} totals={totals} /></td>
+                  <td className="whitespace-nowrap px-4">
+                    {s.checklist.length > 0
+                      ? <span className="rounded-full bg-amber/10 px-2.5 py-0.5 text-xs font-bold text-amber">{s.checklist.length}개 영역</span>
+                      : <span className="text-xs text-ink-mute">—</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 pr-5"><StatusBadge submitted={!!s.submitted_at} incomplete={p.incomplete} /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">
           {total === 0 ? '아직 참여한 세션이 없습니다.' : '조건에 맞는 세션이 없습니다.'}
