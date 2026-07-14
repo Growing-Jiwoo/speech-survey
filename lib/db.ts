@@ -1,14 +1,6 @@
 import { sb } from './supabase'
 
-export interface Question { id: number; order_no: number; text: string; difficulty: string }
-
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
-
-export async function listQuestions(): Promise<Question[]> {
-  const { data, error } = await sb().from('questions').select('*').order('order_no')
-  fail(error)
-  return data!
-}
 
 export interface NewSessionInput {
   schoolRegion: string; schoolId: string; schoolName: string
@@ -69,60 +61,58 @@ export async function signedAudioUrl(path: string): Promise<string> {
 // ---------- 관리자 조회 ----------
 
 export interface SessionRow {
-  id: string; child_name: string; child_age: number
-  started_at: string; completed_at: string | null
-  responses: { status: string }[]
+  id: string
+  school_region: string; school_id: string; school_name: string
+  birth_ymd: string; grade: number; class_no: number; gender: string
+  child_name: string; teacher_name: string; teacher_contact: string
+  checklist: string[]
+  started_at: string; submitted_at: string | null
 }
 
-export async function listSessions(): Promise<SessionRow[]> {
+export interface RecordingRow {
+  item_code: string; attempt_no: number; audio_path: string
+  duration_sec: number | null; created_at: string
+}
+
+export interface WritingRow { item_code: string; can_write: boolean }
+
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at'
+
+export async function listSessions(): Promise<(SessionRow & { recordings: { item_code: string }[] })[]> {
   const { data, error } = await sb().from('sessions')
-    .select('id, child_name, child_age, started_at, completed_at, responses(status)')
+    .select(`${SESSION_COLS}, recordings(item_code)`)
     .order('started_at', { ascending: false })
   fail(error)
-  return data as unknown as SessionRow[]
+  return data as unknown as (SessionRow & { recordings: { item_code: string }[] })[]
 }
 
-export interface AttemptRow { id: string; attempt_no: number; stt_text: string; audio_path: string; duration_sec: number | null; created_at: string }
-export interface DetailRow {
-  question: Question
-  status: 'none' | 'in_progress' | 'completed' | 'skipped'
-  retryCount: number
-  finalAttemptId: string | null
-  attempts: AttemptRow[]
-}
-
-export async function sessionDetail(sessionId: string): Promise<{ session: SessionRow; rows: DetailRow[] }> {
-  const [{ data: s, error: e1 }, questions, { data: resps, error: e2 }] = await Promise.all([
-    sb().from('sessions').select('*').eq('id', sessionId).single(),
-    listQuestions(),
-    sb().from('responses')
-      .select('id, question_id, status, retry_count, final_attempt_id, attempts(id, attempt_no, stt_text, audio_path, duration_sec, created_at)')
-      .eq('session_id', sessionId),
+export async function sessionDetail(sessionId: string): Promise<{
+  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+}> {
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }] = await Promise.all([
+    sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
+    sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
+      .eq('session_id', sessionId).order('item_code').order('attempt_no'),
+    sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
   ])
-  fail(e1); fail(e2)
-  const byQ = new Map((resps ?? []).map(r => [r.question_id, r]))
-  const rows: DetailRow[] = questions.map(question => {
-    const r = byQ.get(question.id)
-    return {
-      question,
-      status: (r?.status ?? 'none') as DetailRow['status'],
-      retryCount: r?.retry_count ?? 0,
-      finalAttemptId: r?.final_attempt_id ?? null,
-      attempts: ((r?.attempts ?? []) as AttemptRow[]).sort((a, b) => a.attempt_no - b.attempt_no),
-    }
-  })
-  return { session: s as unknown as SessionRow, rows }
+  fail(e1); fail(e2); fail(e3)
+  return {
+    session: s as unknown as SessionRow,
+    recordings: (recs ?? []) as RecordingRow[],
+    writing: (ans ?? []) as WritingRow[],
+  }
 }
 
-/** CSV용: 응답 기준 조회 (시도 0건인 건너뜀/진행중 응답도 포함, 세션 시작시각→문항순번 정렬) */
-export async function exportRows() {
-  const { data, error } = await sb().from('responses')
-    .select(`status, retry_count,
-      sessions!inner(child_name, child_age, started_at),
-      questions!inner(order_no, difficulty, text),
-      attempts(attempt_no, stt_text, audio_path, duration_sec, created_at)`)
-    .order('started_at', { ascending: true, referencedTable: 'sessions' })
-    .order('order_no', { ascending: true, referencedTable: 'questions' })
+export type ExportSession = SessionRow & {
+  recordings: Omit<RecordingRow, 'created_at'>[]
+  writing_answers: WritingRow[]
+}
+
+/** CSV용: 세션 기준 전체 조회 (녹음·낱말쓰기 중첩) */
+export async function exportRows(): Promise<ExportSession[]> {
+  const { data, error } = await sb().from('sessions')
+    .select(`${SESSION_COLS}, recordings(item_code, attempt_no, audio_path, duration_sec), writing_answers(item_code, can_write)`)
+    .order('started_at', { ascending: true })
   fail(error)
-  return data!
+  return data as unknown as ExportSession[]
 }

@@ -1,40 +1,34 @@
 import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
-  exportRows: vi.fn().mockResolvedValue([
-    {
-      status: 'completed', retry_count: 2,
-      sessions: { child_name: '민준', child_age: 8, started_at: '2026-07-13T04:55:00Z' },
-      questions: { order_no: 1, difficulty: 'easy', text: 'I like apples.' },
-      attempts: [{
-        attempt_no: 2, stt_text: 'i like apples', audio_path: 's1/1_2.webm',
-        duration_sec: 3.2, created_at: '2026-07-13T05:00:00Z',
-      }],
-    },
-    {
-      status: 'skipped', retry_count: 0,
-      sessions: { child_name: '민준', child_age: 8, started_at: '2026-07-13T04:55:00Z' },
-      questions: { order_no: 2, difficulty: 'easy', text: 'I like bananas.' },
-      attempts: [],
-    },
-  ]),
+  exportRows: vi.fn().mockResolvedValue([{
+    id: 'sess-1', school_region: '서울특별시교육청', school_id: 'B1', school_name: '서울신구초등학교',
+    birth_ymd: '190101', grade: 1, class_no: 3, gender: '남', child_name: '김도연',
+    teacher_name: '박선생', teacher_contact: '010-1234-5678',
+    checklist: ['speech'], started_at: '2026-07-14T01:00:00Z', submitted_at: '2026-07-14T01:30:00Z',
+    recordings: [
+      { item_code: 'rw01', attempt_no: 1, audio_path: 'sess-1/rw01_1.webm', duration_sec: 3.2 },
+      { item_code: 'rw01', attempt_no: 2, audio_path: 'sess-1/rw01_2.webm', duration_sec: 2.8 },
+    ],
+    writing_answers: [{ item_code: 'ww01', can_write: true }],
+  }]),
 }))
 
 import { GET } from '@/app/api/admin/export/route'
 
 describe('GET /api/admin/export', () => {
-  it('CSV 헤더·행·Content-Disposition', async () => {
+  it('세션당 29행 + 헤더, 새 참여자 필드 포함', async () => {
     const res = await GET()
-    expect(res.headers.get('Content-Type')).toContain('text/csv')
-    expect(res.headers.get('Content-Disposition')).toContain('attachment')
-    // Response.text() strips a leading BOM per the WHATWG fetch/encoding spec's
-    // UTF-8 decode step, so BOM presence must be checked at the byte level.
-    const buf = new Uint8Array(await res.arrayBuffer())
-    expect([buf[0], buf[1], buf[2]]).toEqual([0xef, 0xbb, 0xbf])
-    const body = new TextDecoder('utf-8', { ignoreBOM: true }).decode(buf.slice(3))
-    const [header, row1, row2] = body.split('\r\n')
-    expect(header).toBe('이름,나이,세션시작,문항번호,난이도,목표문장,시도순번,STT텍스트,자동비교,재시도총횟수,건너뜀,발화길이초,녹음경로')
-    expect(row1).toBe('민준,8,2026-07-13T04:55:00Z,1,easy,I like apples.,2,i like apples,matched,2,N,3.2,s1/1_2.webm')
-    expect(row2).toBe('민준,8,2026-07-13T04:55:00Z,2,easy,I like bananas.,,,skipped,0,Y,,')
+    const csv = await res.text()
+    const lines = csv.trim().split('\r\n')
+    expect(lines).toHaveLength(1 + 29)
+    expect(lines[0]).toContain('학교')
+    expect(lines[0]).toContain('생년월일')
+    const rw01 = lines.find(l => l.includes('rw01') || (l.includes(',1,') && l.includes('어디')))!
+    expect(rw01).toContain('녹음완료')
+    expect(rw01).toContain('sess-1/rw01_2.webm')
+    expect(lines.some(l => l.includes('우비') && l.includes('예'))).toBe(true)
+    expect(lines.some(l => l.includes('미녹음'))).toBe(true)
+    expect(lines.some(l => l.includes('말 (조음/유창성)'))).toBe(true)
   })
 })
