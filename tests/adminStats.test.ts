@@ -115,6 +115,15 @@ describe('filterSessions', () => {
     expect(filterSessions(base, f({ q: '다라' }), now)).toHaveLength(1)
     expect(filterSessions(base, f({ q: '없음' }), now)).toHaveLength(0)
   })
+  it('검색어는 담임교사명·반도 부분일치', () => {
+    const rows = [
+      mkSession({ child_name: '김하나', teacher_name: '이담임', class_no: 2 }),
+      mkSession({ child_name: '박둘', teacher_name: '최선생', class_no: 5 }),
+    ]
+    expect(filterSessions(rows, f({ q: '이담임' }), now)).toHaveLength(1)
+    expect(filterSessions(rows, f({ q: '최선생' }), now)).toHaveLength(1)
+    expect(filterSessions(rows, f({ q: '5' }), now)).toHaveLength(1) // 반 번호
+  })
   it('상태·학교·학년·오늘 필터가 AND로 결합된다', () => {
     expect(filterSessions(base, f({ status: 'submitted' }), now)).toHaveLength(1)
     expect(filterSessions(base, f({ status: 'inProgress' }), now)).toHaveLength(1)
@@ -144,6 +153,22 @@ describe('sortSessions', () => {
     expect(sortSessions([b, a], { key: 'progress', dir: 'asc' }, TOTALS2)[0]).toBe(a)
     expect(sortSessions([a, b], { key: 'progress', dir: 'desc' }, TOTALS2)[0]).toBe(b)
   })
+  it('grade는 학년→반 순, 동일 학년·반은 이름 2차 정렬', () => {
+    const g1c2n = mkSession({ child_name: '나', grade: 1, class_no: 2 })
+    const g1c2a = mkSession({ child_name: '가', grade: 1, class_no: 2 })
+    const g2c1 = mkSession({ child_name: '다', grade: 2, class_no: 1 })
+    const sorted = sortSessions([g2c1, g1c2n, g1c2a], { key: 'grade', dir: 'asc' }, TOTALS2)
+    expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
+  })
+  it('submitted는 제출일 기준, 미제출은 최하위(asc/desc 공통으로 뒤로)', () => {
+    const late = mkSession({ child_name: '나', submitted_at: '2026-07-14T05:00:00.000Z' })
+    const early = mkSession({ child_name: '가', submitted_at: '2026-07-14T01:00:00.000Z' })
+    const none = mkSession({ child_name: '다', submitted_at: null })
+    const asc = sortSessions([none, late, early], { key: 'submitted', dir: 'asc' }, TOTALS2)
+    expect(asc.map(s => s.child_name)).toEqual(['가', '나', '다'])
+    const desc = sortSessions([none, early, late], { key: 'submitted', dir: 'desc' }, TOTALS2)
+    expect(desc.map(s => s.child_name)).toEqual(['나', '가', '다'])
+  })
   it('원본 배열을 변형하지 않는다', () => {
     const arr = [a, b]
     sortSessions(arr, { key: 'name', dir: 'desc' }, TOTALS2)
@@ -165,6 +190,10 @@ describe('URL 직렬화', () => {
   it('parseFilters — 잘못된 값은 기본값으로 폴백', () => {
     const sp = new URLSearchParams('status=bogus&grade=abc&sort=nope&dir=sideways')
     expect(parseFilters(sp)).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
+  })
+  it('parseFilters — 신규 sort 키(grade/submitted) 허용', () => {
+    expect(parseFilters(new URLSearchParams('sort=grade&dir=asc')).sort).toEqual({ key: 'grade', dir: 'asc' })
+    expect(parseFilters(new URLSearchParams('sort=submitted&dir=desc')).sort).toEqual({ key: 'submitted', dir: 'desc' })
   })
   it('filtersToQuery — 기본값과 같은 키는 생략, 왕복 보존', () => {
     expect(filtersToQuery(DEFAULT_FILTERS, DEFAULT_SORT)).toBe('')
