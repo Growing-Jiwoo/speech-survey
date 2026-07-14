@@ -58,6 +58,35 @@ export async function signedAudioUrl(path: string): Promise<string> {
   return data!.signedUrl
 }
 
+// ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------
+
+/** 해당 IP가 현재 잠금 상태인지 (실패 임계 도달 + 잠금시각 이내) */
+export async function isLoginLocked(ip: string, maxFails: number): Promise<boolean> {
+  const { data, error } = await sb().from('login_attempts')
+    .select('fail_count, locked_until').eq('ip', ip).maybeSingle()
+  fail(error)
+  if (!data) return false
+  return data.fail_count >= maxFails && !!data.locked_until && new Date(data.locked_until) > new Date()
+}
+
+/** 로그인 실패 1건 기록 (fail_count 증가, 잠금시각 갱신) */
+export async function recordLoginFailure(ip: string, lockMs: number): Promise<void> {
+  const { data } = await sb().from('login_attempts').select('fail_count').eq('ip', ip).maybeSingle()
+  const nextCount = (data?.fail_count ?? 0) + 1
+  const { error } = await sb().from('login_attempts').upsert({
+    ip, fail_count: nextCount,
+    locked_until: new Date(Date.now() + lockMs).toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'ip' })
+  fail(error)
+}
+
+/** 로그인 성공 시 해당 IP 실패 기록 제거 */
+export async function clearLoginFailures(ip: string): Promise<void> {
+  const { error } = await sb().from('login_attempts').delete().eq('ip', ip)
+  fail(error)
+}
+
 // ---------- 관리자 조회 ----------
 
 export interface SessionRow {
