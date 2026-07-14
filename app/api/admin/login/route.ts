@@ -19,6 +19,9 @@ export async function POST(req: Request) {
   fails.delete(ip)
   const token = await createToken(env('SESSION_SECRET'))
   const res = NextResponse.json({ ok: true })
-  res.cookies.set(ADMIN_COOKIE, token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 12 * 3600 })
+  res.cookies.set(ADMIN_COOKIE, token, {
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 12 * 3600,
+    secure: process.env.NODE_ENV === 'production', // HTTPS에서만 전송 (평문 유출 방지)
+  })
   return res
 }
