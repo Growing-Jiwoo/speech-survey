@@ -44,6 +44,11 @@ describe('POST /api/sessions/submit', () => {
     expect((await POST(makeReq({ ...VALID(), sessionToken: `${SID}.deadbeef` }))).status).toBe(401)
     expect(db.submitSession).not.toHaveBeenCalled()
   })
+  it('sessionToken이 문자열이 아니면(숫자) 401 (500/미처리 예외 아님)', async () => {
+    const res = await POST(makeReq({ ...VALID(), sessionToken: 12345 }))
+    expect(res.status).toBe(401)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
   it('DB 오류 시 502 + 일반화된 메시지 (원본 오류 텍스트 노출 안 함)', async () => {
     vi.mocked(db.submitSession).mockRejectedValueOnce(new Error('secret db connection string leaked'))
     const res = await POST(makeReq(VALID()))

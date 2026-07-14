@@ -23,8 +23,10 @@ export async function POST(req: Request) {
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
 
+  const invalidToken = () => NextResponse.json({ error: '유효하지 않은 세션입니다.' }, { status: 401 })
+  if (typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
-    return NextResponse.json({ error: '유효하지 않은 세션입니다.' }, { status: 401 })
+    return invalidToken()
 
   try {
     const affected = await submitSession(b.sessionId, writing, checklist)
