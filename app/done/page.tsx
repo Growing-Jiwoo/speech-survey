@@ -7,7 +7,7 @@ export default function DonePage() {
       <Blip variant="idle" className="h-28 w-[118px]" />
       <h1 className="mt-2 text-2xl font-bold">검사가 끝났어요</h1>
       <p className="text-sm leading-relaxed text-ink-soft">
-        참여해 주셔서 감사합니다.<br />검사 결과가 안전하게 저장되었어요.
+        참여해 주셔서 감사합니다.
       </p>
       <Link href="/" className="cta mt-6 max-w-60">처음 화면으로</Link>
     </main>
