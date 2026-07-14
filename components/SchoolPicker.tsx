@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { Select } from '@/components/Select'
 import type { RegionInfo, School } from '@/lib/schools'
 
 export interface SelectedSchool { region: string; schoolId: string; schoolName: string }
@@ -55,11 +56,8 @@ export function SchoolPicker({ value, onSelect }: {
 
   return (
     <div className="mt-1.5">
-      <select aria-label="지역 선택" value={slug} onChange={e => setSlug(e.target.value)}
-        className="h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-3 text-base outline-none focus:border-blue">
-        <option value="">지역을 선택해 주세요</option>
-        {regions.map(r => <option key={r.slug} value={r.slug}>{r.short} ({r.count}개교)</option>)}
-      </select>
+      <Select ariaLabel="지역 선택" placeholder="지역을 선택해 주세요" value={slug} onChange={setSlug}
+        options={regions.map(r => ({ value: r.slug, label: `${r.short} (${r.count}개교)` }))} />
 
       {slug && (
         <div className="mt-2">

@@ -2,12 +2,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
+import { Select } from '@/components/Select'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { newState, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validClassNo, validContact, validGender, validName } from '@/lib/validate'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
-const selectCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-3 text-base outline-none transition focus:border-blue'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -97,30 +97,25 @@ export default function StartPage() {
 
         <span className={labelCls}>생년월일</span>
         <div className="mt-1.5 flex gap-2">
-          <select aria-label="출생 연도" value={year} onChange={e => { setYear(e.target.value); setDay('') }}
-            className={`${selectCls} mt-0 flex-[1.3]`}>
-            <option value="">연도</option>
-            {YEARS.map(y => <option key={y} value={y}>{y}년</option>)}
-          </select>
-          <select aria-label="출생 월" value={month} onChange={e => { setMonth(e.target.value); setDay('') }}
-            className={`${selectCls} mt-0 flex-1`}>
-            <option value="">월</option>
-            {MONTHS.map(m => <option key={m} value={m}>{m}월</option>)}
-          </select>
-          <select aria-label="출생 일" value={day} onChange={e => setDay(e.target.value)} disabled={!year || !month}
-            className={`${selectCls} mt-0 flex-1 disabled:opacity-50`}>
-            <option value="">일</option>
-            {DAYS.map(d => <option key={d} value={d}>{d}일</option>)}
-          </select>
+          <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
+            value={year} onChange={v => { setYear(v); setDay('') }}
+            options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
+          <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
+            value={month} onChange={v => { setMonth(v); setDay('') }}
+            options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
+          <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
+            value={day} onChange={setDay}
+            options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
         </div>
         <FieldError msg={errors.birth} />
 
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="grade">학년</label>
-            <select id="grade" value={grade} onChange={e => setGrade(e.target.value)} className={selectCls}>
-              {[1, 2, 3, 4, 5, 6].map(g => <option key={g} value={g}>{g}학년</option>)}
-            </select>
+            <div className="mt-1.5">
+              <Select id="grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
+                options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
+            </div>
           </div>
           <div className="flex-1">
             <label className={labelCls} htmlFor="classNo">반</label>
