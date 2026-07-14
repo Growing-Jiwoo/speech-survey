@@ -64,6 +64,13 @@ export const AREA_CODES: string[] = CHECKLIST_AREAS.map(a => a.code)
 export const areaLabel = (code: string) =>
   CHECKLIST_AREAS.find(a => a.code === code)?.label ?? code
 
+/** 체크리스트 배타 토글: 'none'(특이사항 없음)과 실제 영역은 상호 배타. */
+export function toggleChecklistArea(current: string[], code: string): string[] {
+  if (code === 'none') return current.includes('none') ? [] : ['none']
+  const base = current.filter(c => c !== 'none')
+  return base.includes(code) ? base.filter(c => c !== code) : [...base, code]
+}
+
 export const SECTION_LABEL: Record<Section, string> = {
   word_reading: '낱말 해독',
   sentence_reading: '문장 읽기유창성',
