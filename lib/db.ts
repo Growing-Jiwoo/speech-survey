@@ -30,17 +30,50 @@ export async function insertRecording(r: {
 
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
-/** 최종 제출: 낱말쓰기 답 upsert + 체크리스트·submitted_at 기록 */
+/**
+ * 최종 제출: 세션을 먼저 업데이트해 존재 여부를 확정하고, 존재할 때만 낱말쓰기를 upsert한다.
+ * 반환값은 업데이트된 세션 행수(0이면 미존재 → 라우트에서 404 처리).
+ */
 export async function submitSession(
   sessionId: string, writing: WritingAnswer[], checklist: string[],
-): Promise<void> {
+): Promise<number> {
+  const { data, error } = await sb().from('sessions')
+    .update({ checklist, submitted_at: new Date().toISOString() })
+    .eq('id', sessionId).select('id')
+  fail(error)
+  const affected = (data ?? []).length
+  if (affected === 0) return 0
   if (writing.length > 0) {
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
-    const { error } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
-    fail(error)
+    const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(e2)
   }
-  const { error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: new Date().toISOString() }).eq('id', sessionId)
+  return affected
+}
+
+/** 세션당 녹음 행 수(업로드 총량 상한 검사용). */
+export async function countSessionRecordings(sessionId: string): Promise<number> {
+  const { count, error } = await sb().from('recordings')
+    .select('id', { count: 'exact', head: true }).eq('session_id', sessionId)
+  fail(error)
+  return count ?? 0
+}
+
+/** 스토리지 객체 1건 제거(업로드 후 DB insert 실패 시 보상 정리). */
+export async function removeStorageObject(path: string): Promise<void> {
+  const { error } = await sb().storage.from('recordings').remove([path])
+  fail(error)
+}
+
+/** 관리자 세션 삭제: 스토리지 {id}/ 프리픽스 객체 전체 제거 후 행 삭제(FK CASCADE로 recordings·writing_answers 정리). */
+export async function deleteSession(id: string): Promise<void> {
+  const { data: objs, error: listErr } = await sb().storage.from('recordings').list(id)
+  fail(listErr)
+  if (objs && objs.length) {
+    const { error: rmErr } = await sb().storage.from('recordings').remove(objs.map(o => `${id}/${o.name}`))
+    fail(rmErr)
+  }
+  const { error } = await sb().from('sessions').delete().eq('id', id)
   fail(error)
 }
 
@@ -69,15 +102,9 @@ export async function isLoginLocked(ip: string, maxFails: number): Promise<boole
   return data.fail_count >= maxFails && !!data.locked_until && new Date(data.locked_until) > new Date()
 }
 
-/** 로그인 실패 1건 기록 (fail_count 증가, 잠금시각 갱신) */
+/** 로그인 실패 1건 기록 (fail_count 원자적 증가, 잠금시각 갱신). read-then-write 경쟁조건을 피하기 위해 RPC로 위임. */
 export async function recordLoginFailure(ip: string, lockMs: number): Promise<void> {
-  const { data } = await sb().from('login_attempts').select('fail_count').eq('ip', ip).maybeSingle()
-  const nextCount = (data?.fail_count ?? 0) + 1
-  const { error } = await sb().from('login_attempts').upsert({
-    ip, fail_count: nextCount,
-    locked_until: new Date(Date.now() + lockMs).toISOString(),
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'ip' })
+  const { error } = await sb().rpc('record_login_failure', { p_ip: ip, p_lock_ms: lockMs })
   fail(error)
 }
 
