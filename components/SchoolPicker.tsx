@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/Select'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
 import type { RegionInfo, School } from '@/lib/schools'
 
 export interface SelectedSchool { region: string; schoolId: string; schoolName: string }
@@ -64,7 +65,6 @@ export function SchoolPicker({ value, onSelect }: {
           <input aria-label="학교 검색" value={q} onChange={e => setQ(e.target.value)}
             placeholder="학교 이름을 입력해 주세요"
             className="h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none focus:border-blue" />
-          {loading && <p className="mt-2 text-xs text-ink-mute">불러오는 중…</p>}
           {!loading && schools.length > 0 && (
             <ul className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line">
               {shown.map(s => (
@@ -85,6 +85,7 @@ export function SchoolPicker({ value, onSelect }: {
         </div>
       )}
       {err && <p role="alert" className="mt-2 text-sm text-rec-deep">{err}</p>}
+      <LoadingOverlay show={loading} />
     </div>
   )
 }
