@@ -14,6 +14,7 @@ function SurveyInner() {
   const [st, setSt] = useState<SurveyState | null>(null)
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<'mic' | 'item'>('item')
+  const [isRecording, setIsRecording] = useState(false)
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
@@ -39,7 +40,8 @@ function SurveyInner() {
 
   const item = ITEMS[idx]
   const isLast = idx === ITEMS.length - 1
-  const canNext = item.section !== 'word_writing' || st.writing[item.code] !== undefined
+  // 녹음 쓰기 문항은 예/아니오 선택 필수, 그리고 녹음 진행 중에는 이동 불가
+  const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined) && !isRecording
 
   function goNext() {
     if (isLast) { router.push('/review'); return }
@@ -59,7 +61,7 @@ function SurveyInner() {
 
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
         <RecordingItem key={item.code} item={item} sessionId={st.sessionId}
-          attemptCount={st.recorded[item.code] ?? 0}
+          attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
           onSaved={() => patch(prev => ({ recorded: { ...prev.recorded, [item.code]: (prev.recorded[item.code] ?? 0) + 1 } }))} />
       )}
 
@@ -114,7 +116,7 @@ function SurveyInner() {
       )}
 
       <div className="mt-auto flex gap-2.5 pb-2 pt-6">
-        <button onClick={() => { setIdx(i => i - 1); window.scrollTo(0, 0) }} disabled={idx === 0}
+        <button onClick={() => { setIdx(i => i - 1); window.scrollTo(0, 0) }} disabled={idx === 0 || isRecording}
           className="h-[52px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft transition disabled:opacity-40">
           이전
         </button>

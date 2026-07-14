@@ -8,8 +8,10 @@ import type { SurveyItem } from '@/lib/items'
 const SILENT_PEAK = 0.01
 
 /** 녹음 문항: 타이머(낱말 30초/문장 40초) 카운트다운, 즉시 업로드, 재생 없음(완료 여부만) */
-export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
+export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecordingChange }: {
   item: SurveyItem; sessionId: string; attemptCount: number; onSaved: () => void
+  /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
+  onRecordingChange?: (recording: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -39,6 +41,12 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
   function handleComplete(rec: Recording) { setLastRec(rec); void upload(rec) }
   const recorder = useRecorder(item.maxSec, handleComplete)
   const recording = recorder.state === 'recording'
+
+  // 녹음 중에는 부모가 [다음]을 잠그도록 상태를 올린다. 언마운트 시 해제.
+  useEffect(() => {
+    onRecordingChange?.(recording)
+    return () => onRecordingChange?.(false)
+  }, [recording, onRecordingChange])
 
   useEffect(() => {
     if (!recording) { setRemaining(item.maxSec); return }
@@ -73,8 +81,6 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved }: {
           마이크를 쓸 수 없어요. 주소창의 자물쇠 아이콘에서 마이크를 <b>허용</b>으로 바꿔 주세요.
         </p>
       )}
-
-      {busy && <p className="mt-4 text-center text-sm text-ink-mute">저장하고 있어요…</p>}
 
       {saved && !recording && !busy && !err && (
         <div className="mt-4 flex items-center gap-2.5 rounded-[14px] border border-line bg-well px-4 py-3">
