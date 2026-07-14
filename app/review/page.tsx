@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { ITEMS, SECTION_LABEL, areaLabel, type Section } from '@/lib/items'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 const SECTIONS: Section[] = ['word_reading', 'sentence_reading', 'word_writing', 'checklist']
 
@@ -25,6 +26,9 @@ export default function ReviewPage() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
+  const closeModal = useCallback(() => { if (!busy) setModal(false) }, [busy])
+  const trapRef = useFocusTrap(modal, closeModal)
+
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
@@ -43,7 +47,7 @@ export default function ReviewPage() {
     try {
       const res = await fetch('/api/sessions/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: st.sessionId, writing: st.writing, checklist: st.checklist }),
+        body: JSON.stringify({ sessionId: st.sessionId, sessionToken: st.sessionToken, writing: st.writing, checklist: st.checklist }),
       })
       if (!res.ok) { setErr('제출에 문제가 생겼어요. 다시 시도해 주세요.'); return }
       clearState()
@@ -111,8 +115,8 @@ export default function ReviewPage() {
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6"
-          onClick={() => !busy && setModal(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="confirm-title"
+          onClick={closeModal}>
+          <div ref={trapRef} role="dialog" aria-modal="true" aria-labelledby="confirm-title"
             className="w-full max-w-sm rounded-[20px] bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
             <h2 id="confirm-title" className="text-center text-lg font-bold leading-relaxed">
               녹음이 잘 되었는지<br />모두 확인하셨습니까?

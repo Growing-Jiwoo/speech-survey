@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@/lib/db', () => ({
-  createSession: vi.fn().mockResolvedValue('sess-1'),
-}))
+vi.mock('@/lib/db', () => ({ createSession: vi.fn().mockResolvedValue('sess-1') }))
+vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 
 import { POST } from '@/app/api/sessions/route'
 import * as db from '@/lib/db'
@@ -13,19 +12,24 @@ const VALID = {
   name: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
 }
 
-function makeReq(body: unknown) {
+function makeReq(body: unknown, ip?: string) {
   return new Request('http://x/api/sessions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) },
+    body: JSON.stringify(body),
   })
 }
 
 beforeEach(() => vi.clearAllMocks())
 
 describe('POST /api/sessions', () => {
-  it('유효한 참여자 정보로 세션 생성', async () => {
+  it('유효한 참여자 정보로 세션 생성 + 토큰 반환', async () => {
     const res = await POST(makeReq(VALID))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ sessionId: 'sess-1' })
+    const json = await res.json()
+    expect(json.sessionId).toBe('sess-1')
+    expect(typeof json.sessionToken).toBe('string')
+    expect(json.sessionToken.length).toBeGreaterThan(0)
     expect(db.createSession).toHaveBeenCalledWith({
       schoolRegion: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
       birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
@@ -56,4 +60,18 @@ describe('POST /api/sessions', () => {
     expect((await POST(makeReq({ ...VALID, teacherName: '박선생1' }))).status).toBe(400))
   it('본문 없음 400', async () =>
     expect((await POST(new Request('http://x', { method: 'POST', body: 'not json' }))).status).toBe(400))
+  it('DB 오류는 원문 노출 없이 502로 은닉', async () => {
+    vi.mocked(db.createSession).mockRejectedValueOnce(new Error('connection refused: super-secret-internal-detail'))
+    const res = await POST(makeReq(VALID, '198.51.100.9'))
+    expect(res.status).toBe(502)
+    const json = await res.json()
+    expect(json.error).toBeTruthy()
+    expect(json.error).not.toMatch(/connection refused|super-secret-internal-detail/)
+    expect(json.sessionToken).toBeUndefined()
+  })
+  it('동일 IP 과다 요청 시 429', async () => {
+    let last = 200
+    for (let i = 0; i < 21; i++) last = (await POST(makeReq(VALID, '203.0.113.7'))).status
+    expect(last).toBe(429)
+  })
 })

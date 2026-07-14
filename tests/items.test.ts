@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ITEMS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS, itemByCode } from '@/lib/items'
+import { ITEMS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS, itemByCode, toggleChecklistArea } from '@/lib/items'
 
 describe('ITEMS (KODYS-G1)', () => {
   it('총 29문항, orderNo 1~29 연속', () => {
@@ -45,5 +45,23 @@ describe('ITEMS (KODYS-G1)', () => {
   it('체크리스트 영역 5개 (PDF 순서)', () => {
     expect(CHECKLIST_AREAS.map(a => a.label)).toEqual(
       ['특이사항 없음', '인지', '언어 (이해/표현)', '말 (조음/유창성)', '주의력'])
+  })
+})
+
+describe('toggleChecklistArea (배타 선택)', () => {
+  it('none 선택 시 나머지 모두 해제', () => {
+    expect(toggleChecklistArea(['cognition', 'language'], 'none')).toEqual(['none'])
+  })
+  it('none 재선택 시 해제', () => {
+    expect(toggleChecklistArea(['none'], 'none')).toEqual([])
+  })
+  it('영역 선택 시 none 제거 후 추가', () => {
+    expect(toggleChecklistArea(['none'], 'cognition')).toEqual(['cognition'])
+  })
+  it('영역 토글 (있으면 제거)', () => {
+    expect(toggleChecklistArea(['cognition', 'speech'], 'cognition')).toEqual(['speech'])
+  })
+  it('영역 추가는 기존 유지 + append', () => {
+    expect(toggleChecklistArea(['cognition'], 'speech')).toEqual(['cognition', 'speech'])
   })
 })

@@ -12,13 +12,22 @@ export interface Filters {
   today: boolean
 }
 
-export type SortKey = 'name' | 'school' | 'started' | 'progress'
+export type SortKey = 'name' | 'school' | 'grade' | 'started' | 'submitted' | 'progress'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 
 export interface Totals { rec: number; write: number }
 
 export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, today: false }
 export const DEFAULT_SORT: Sort = { key: 'started', dir: 'desc' }
+
+// ---------- 날짜(KST) ----------
+
+/** 해당 시각을 KST(UTC+9) 기준 일자 키 'YYYY-MM-DD'로 변환한다.
+ * 자정 무렵 로컬 타임존과 KST가 어긋나 "오늘"이 밀리는 문제(항목 16)를 막는다. */
+export function kstDateKey(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60_000)
+  return kst.toISOString().slice(0, 10)
+}
 
 // ---------- 집계 ----------
 
@@ -34,11 +43,11 @@ export function sessionProgress(s: SessionListRow, totals: Totals): {
 export interface Kpis { total: number; submitted: number; inProgress: number; today: number }
 
 export function computeKpis(sessions: SessionListRow[], now: Date): Kpis {
-  const todayKey = now.toDateString()
+  const todayKey = kstDateKey(now)
   let submitted = 0, today = 0
   for (const s of sessions) {
     if (s.submitted_at) submitted++
-    if (new Date(s.started_at).toDateString() === todayKey) today++
+    if (kstDateKey(new Date(s.started_at)) === todayKey) today++
   }
   return { total: sessions.length, submitted, inProgress: sessions.length - submitted, today }
 }
@@ -74,25 +83,33 @@ export function gradeOptions(sessions: SessionListRow[]): number[] {
 
 export function filterSessions(sessions: SessionListRow[], f: Filters, now: Date): SessionListRow[] {
   const keyword = f.q.trim()
-  const todayKey = now.toDateString()
+  const todayKey = kstDateKey(now)
   return sessions.filter(s => {
     if (f.status === 'submitted' && !s.submitted_at) return false
     if (f.status === 'inProgress' && s.submitted_at) return false
     if (f.school !== null && s.school_name !== f.school) return false
     if (f.grade !== null && s.grade !== f.grade) return false
-    if (f.today && new Date(s.started_at).toDateString() !== todayKey) return false
-    if (keyword && !s.child_name.includes(keyword) && !s.school_name.includes(keyword)) return false
+    if (f.today && kstDateKey(new Date(s.started_at)) !== todayKey) return false
+    if (keyword
+      && !s.child_name.includes(keyword)
+      && !s.school_name.includes(keyword)
+      && !s.teacher_name.includes(keyword)
+      && !String(s.class_no).includes(keyword)) return false
     return true
   })
 }
 
 export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals): SessionListRow[] {
   const denom = totals.rec + totals.write
+  // 미제출(제출일 없음)은 방향과 무관하게 항상 목록 끝으로 보내기 위한 sentinel.
+  const NO_SUBMIT = { asc: Number.POSITIVE_INFINITY, desc: Number.NEGATIVE_INFINITY }
   const value = (s: SessionListRow): string | number => {
     switch (sort.key) {
       case 'name': return s.child_name
       case 'school': return s.school_name
+      case 'grade': return s.grade * 100 + s.class_no
       case 'started': return new Date(s.started_at).getTime()
+      case 'submitted': return s.submitted_at ? new Date(s.submitted_at).getTime() : NO_SUBMIT[sort.dir]
       case 'progress': {
         const p = sessionProgress(s, totals)
         return denom === 0 ? 0 : (p.recorded + p.written) / denom
@@ -102,15 +119,32 @@ export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals)
   const sign = sort.dir === 'asc' ? 1 : -1
   return [...rows].sort((a, b) => {
     const va = value(a), vb = value(b)
-    const cmp = typeof va === 'string' ? va.localeCompare(vb as string, 'ko') : va - (vb as number)
-    return cmp * sign
+    const primary = typeof va === 'string' ? va.localeCompare(vb as string, 'ko') : va - (vb as number)
+    if (primary !== 0 && !Number.isNaN(primary)) return primary * sign
+    // 동일 정렬 키 값 → 이름 오름차순 2차 정렬(방향 무관하게 일관된 순서로 흔들림 방지)
+    return a.child_name.localeCompare(b.child_name, 'ko')
   })
+}
+
+// ---------- 결과지 내 이동 (이전/다음 아동) ----------
+
+/** 이미 필터·정렬된 rows에서 currentId의 앞/뒤 세션 id를 구한다.
+ * 결과지의 「◀ 이전 아동 / 다음 아동 ▶」이 목록과 같은 순서로 이동하도록 한다(항목 17). */
+export function adjacentSessionIds(
+  rows: SessionListRow[], currentId: string,
+): { prev: string | null; next: string | null } {
+  const idx = rows.findIndex(r => r.id === currentId)
+  if (idx === -1) return { prev: null, next: null }
+  return {
+    prev: idx > 0 ? rows[idx - 1].id : null,
+    next: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  }
 }
 
 // ---------- URL ↔ 상태 (searchParams 동기화) ----------
 
 const STATUS_SET = new Set<StatusFilter>(['all', 'submitted', 'inProgress'])
-const SORT_KEY_SET = new Set<SortKey>(['name', 'school', 'started', 'progress'])
+const SORT_KEY_SET = new Set<SortKey>(['name', 'school', 'grade', 'started', 'submitted', 'progress'])
 
 /** 잘못된/누락된 파라미터는 기본값으로 폴백한다 */
 export function parseFilters(sp: URLSearchParams): { filters: Filters; sort: Sort } {

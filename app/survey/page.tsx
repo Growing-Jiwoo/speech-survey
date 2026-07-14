@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CHECKLIST_AREAS, ITEMS, SECTION_LABEL } from '@/lib/items'
+import { CHECKLIST_AREAS, ITEMS, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { ProgressBar } from '@/components/ProgressBar'
 import { MicCheck } from '@/components/survey/MicCheck'
@@ -15,6 +15,7 @@ function SurveyInner() {
   const [idx, setIdx] = useState(0)
   const [phase, setPhase] = useState<'mic' | 'item'>('item')
   const [isRecording, setIsRecording] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
@@ -22,8 +23,12 @@ function SurveyInner() {
     if (!s) { router.replace('/'); return }
     setSt(s)
     const q = Number(params.get('q'))
-    if (Number.isInteger(q) && q >= 1 && q <= ITEMS.length) setIdx(q - 1)
-    else if (!s.micDone) setPhase('mic')
+    if (Number.isInteger(q) && q >= 1 && q <= ITEMS.length) {
+      setIdx(q - 1); setPhase('item')
+    } else {
+      setIdx(s.idx ?? 0)
+      setPhase(s.phase ?? (s.micDone ? 'item' : 'mic'))
+    }
   }, [router, params])
 
   if (!st) return null
@@ -36,17 +41,21 @@ function SurveyInner() {
     })
   }
 
-  if (phase === 'mic') return <MicCheck onOk={() => { patch({ micDone: true }); setPhase('item') }} />
+  // 문항 이동 시 현재 위치를 상태에 저장(새로고침·탭 닫힘 후 재개용)
+  function goToIdx(n: number) { setIdx(n); patch({ idx: n }); window.scrollTo(0, 0) }
+
+  if (phase === 'mic')
+    return <MicCheck onOk={() => { patch({ micDone: true, phase: 'item' }); setPhase('item') }} />
 
   const item = ITEMS[idx]
   const isLast = idx === ITEMS.length - 1
-  // 녹음 쓰기 문항은 예/아니오 선택 필수, 그리고 녹음 진행 중에는 이동 불가
-  const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined) && !isRecording
+  // 녹음 쓰기 문항은 예/아니오 필수, 녹음·업로드 중에는 이동 불가
+  const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined)
+    && !isRecording && !isUploading
 
   function goNext() {
     if (isLast) { router.push('/review'); return }
-    setIdx(i => i + 1)
-    window.scrollTo(0, 0)
+    goToIdx(idx + 1)
   }
 
   return (
@@ -60,8 +69,9 @@ function SurveyInner() {
       </p>
 
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-        <RecordingItem key={item.code} item={item} sessionId={st.sessionId}
-          attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
+        <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
+          attemptCount={st.recorded[item.code] ?? 0}
+          onRecordingChange={setIsRecording} onBusyChange={setIsUploading}
           onSaved={() => patch(prev => ({ recorded: { ...prev.recorded, [item.code]: (prev.recorded[item.code] ?? 0) + 1 } }))} />
       )}
 
@@ -97,12 +107,8 @@ function SurveyInner() {
                 <li key={a.code}>
                   <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-[1.5px] px-4 py-3 transition ${
                     on ? 'border-blue bg-blue/5' : 'border-line bg-well'}`}>
-                    <input type="checkbox" checked={on} className="mt-0.5 h-4 w-4 accent-[var(--color-blue)]"
-                      onChange={() => patch(prev => ({
-                        checklist: prev.checklist.includes(a.code)
-                          ? prev.checklist.filter(c => c !== a.code)
-                          : [...prev.checklist, a.code],
-                      }))} />
+                    <input type="checkbox" checked={on} className="mt-0.5 h-5 w-5 accent-[var(--color-blue)]"
+                      onChange={() => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, a.code) }))} />
                     <span>
                       <span className="text-sm font-bold">{a.label}</span>
                       {a.hint && <span className="mt-0.5 block text-xs leading-relaxed text-ink-mute">{a.hint}</span>}
@@ -116,13 +122,13 @@ function SurveyInner() {
       )}
 
       <div className="mt-auto flex gap-2.5 pb-2 pt-6">
-        <button onClick={() => { setIdx(i => i - 1); window.scrollTo(0, 0) }} disabled={idx === 0 || isRecording}
+        <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || isRecording || isUploading}
           className="h-[52px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft transition disabled:opacity-40">
           이전
         </button>
         <button onClick={goNext} disabled={!canNext}
           className="h-[52px] flex-[2] rounded-xl bg-blue text-[15px] font-bold text-white shadow-[0_3px_0_var(--color-blue-deep)] transition active:translate-y-[2px] disabled:opacity-40">
-          {isLast ? '제출' : '다음'}
+          {isLast ? '검토' : '다음'}
         </button>
       </div>
     </main>

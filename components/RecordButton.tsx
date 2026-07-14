@@ -1,35 +1,27 @@
 'use client'
-import { useEffect, useState } from 'react'
 import type { RecState } from '@/hooks/useRecorder'
 
 const R = 52
 const CIRC = 2 * Math.PI * R
 
-export function RecordButton({ state, onStart, onStop, disabled, maxSec = 20, success = false }: {
+export function RecordButton({ state, onStart, onStop, disabled, maxSec = 20, elapsedMs = 0, success = false }: {
   state: RecState; onStart: () => void; onStop: () => void; disabled?: boolean; maxSec?: number
+  /** 녹음 경과(ms) — useRecorder의 단일 시계에서 전달 */
+  elapsedMs?: number
   /** 마이크 확인 성공 등 완료 상태를 체크 표시로 나타낸다(대기 상태에서만). */
   success?: boolean
 }) {
   const recording = state === 'recording'
-  const [elapsed, setElapsed] = useState(0)
-
-  useEffect(() => {
-    if (!recording) { setElapsed(0); return }
-    const t0 = Date.now()
-    const id = setInterval(() => setElapsed((Date.now() - t0) / 1000), 100)
-    return () => clearInterval(id)
-  }, [recording])
+  const progress = Math.min(elapsedMs / 1000 / maxSec, 1)
 
   return (
     <div className="relative flex h-[116px] w-[116px] items-center justify-center">
-      {/* 동심원 링: 트랙(항상) + 진행(녹음 중). 버튼 바깥으로 균일하게 감싼다. */}
       <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 116 116" aria-hidden="true">
         <circle cx="58" cy="58" r={R} fill="none"
           stroke={!recording && success ? 'var(--color-mint)' : 'var(--color-line)'} strokeWidth="4" />
         {recording && (
           <circle cx="58" cy="58" r={R} fill="none" stroke="var(--color-rec)" strokeWidth="4"
-            strokeLinecap="round" strokeDasharray={CIRC}
-            strokeDashoffset={CIRC * Math.min(elapsed / maxSec, 1)} />
+            strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC * progress} />
         )}
       </svg>
 

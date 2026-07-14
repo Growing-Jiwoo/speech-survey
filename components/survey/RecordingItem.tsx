@@ -1,24 +1,25 @@
+// components/survey/RecordingItem.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
+import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 import type { SurveyItem } from '@/lib/items'
 
-const SILENT_PEAK = 0.01
-
 /** 녹음 문항: 타이머(낱말 30초/문장 40초) 카운트다운, 즉시 업로드, 재생 없음(완료 여부만) */
-export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecordingChange }: {
-  item: SurveyItem; sessionId: string; attemptCount: number; onSaved: () => void
+export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onBusyChange }: {
+  item: SurveyItem; sessionId: string; sessionToken: string; attemptCount: number; onSaved: () => void
   /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
   onRecordingChange?: (recording: boolean) => void
+  /** 업로드 중 여부를 부모에 알려 [다음] 이동을 막는다(업로드 실패 시 재시도 UI 언마운트 방지) */
+  onBusyChange?: (busy: boolean) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [lowVolume, setLowVolume] = useState(false)
-  const [micDenied, setMicDenied] = useState(false)
+  const [micErr, setMicErr] = useState<RecorderErrorKind | null>(null)
   const [lastRec, setLastRec] = useState<Recording | null>(null)
-  const [remaining, setRemaining] = useState(item.maxSec)
 
   async function upload(rec: Recording) {
     setBusy(true); setErr('')
@@ -26,12 +27,13 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
       const fd = new FormData()
       fd.set('audio', rec.blob, 'audio')
       fd.set('sessionId', sessionId)
+      fd.set('sessionToken', sessionToken)
       fd.set('itemCode', item.code)
       fd.set('attemptNo', String(attemptCount + 1))
       fd.set('durationSec', rec.durationSec.toFixed(2))
       const res = await fetch('/api/recordings', { method: 'POST', body: fd })
       if (!res.ok) { setErr('저장에 문제가 생겼어요. 다시 시도해 주세요.'); return }
-      setLowVolume(rec.peak < SILENT_PEAK)
+      setLowVolume(rec.peak < MIC_MIN_PEAK)
       onSaved()
     } catch {
       setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
@@ -42,23 +44,20 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
   const recorder = useRecorder(item.maxSec, handleComplete)
   const recording = recorder.state === 'recording'
 
-  // 녹음 중에는 부모가 [다음]을 잠그도록 상태를 올린다. 언마운트 시 해제.
   useEffect(() => {
     onRecordingChange?.(recording)
     return () => onRecordingChange?.(false)
   }, [recording, onRecordingChange])
 
   useEffect(() => {
-    if (!recording) { setRemaining(item.maxSec); return }
-    const t0 = Date.now()
-    const id = setInterval(() =>
-      setRemaining(Math.max(0, Math.ceil(item.maxSec - (Date.now() - t0) / 1000))), 200)
-    return () => clearInterval(id)
-  }, [recording, item.maxSec])
+    onBusyChange?.(busy)
+    return () => onBusyChange?.(false)
+  }, [busy, onBusyChange])
 
   async function startRecording() {
     setErr('')
-    try { await recorder.start(); setMicDenied(false) } catch { setMicDenied(true) }
+    try { await recorder.start(); setMicErr(null) }
+    catch (e) { setMicErr(classifyRecorderError(e)) }
   }
 
   const saved = attemptCount > 0
@@ -76,9 +75,13 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
         </p>
       </div>
 
-      {micDenied && (
+      {micErr && (
         <p className="mt-4 text-center text-sm leading-relaxed text-ink-soft">
-          마이크를 쓸 수 없어요. 주소창의 자물쇠 아이콘에서 마이크를 <b>허용</b>으로 바꿔 주세요.
+          {micErr === 'unsupported'
+            ? '이 브라우저에서는 녹음을 지원하지 않아요. Safari나 Chrome 최신 버전에서 다시 시도해 주세요.'
+            : micErr === 'denied'
+              ? <>마이크를 쓸 수 없어요. 브라우저 설정에서 이 사이트의 마이크를 <b>허용</b>으로 바꾼 뒤 다시 시도해 주세요.</>
+              : '마이크를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'}
         </p>
       )}
 
@@ -90,7 +93,7 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
               <path d="M4 12l5 5L20 6" />
             </svg>
           </span>
-          <p className="text-sm text-ink-soft">
+          <p className="text-sm text-ink-soft" aria-live="polite">
             {lowVolume ? '목소리가 잘 안 담긴 것 같아요. 한 번 더 해 볼까요?' : '녹음이 완료됐어요.'}
           </p>
         </div>
@@ -105,7 +108,7 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
 
       <div className="mt-8 flex flex-col items-center gap-5">
         <RecordButton state={recorder.state} onStart={startRecording} onStop={recorder.stop}
-          disabled={busy} maxSec={item.maxSec} />
+          disabled={busy} maxSec={item.maxSec} elapsedMs={recorder.elapsedMs} />
         <p className="text-sm font-bold text-ink-soft">
           {recording ? '다 읽었으면 버튼을 눌러 주세요'
             : saved ? '다시 녹음하려면 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
@@ -114,8 +117,8 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
           <div className="flex flex-col items-center gap-2.5">
             <LevelMeter level={recorder.level} />
             <div className="flex items-center gap-2">
-              <span className="blip-antpulse inline-block h-2 w-2 rounded-full bg-rec" />
-              <span className="text-[13px] font-bold text-rec-deep">남은 시간 {remaining}초</span>
+              <span className="blip-antpulse motion-reduce:animate-none inline-block h-2 w-2 rounded-full bg-rec" />
+              <span className="text-[13px] font-bold text-rec-deep" aria-live="polite">남은 시간 {recorder.remainingSec}초</span>
             </div>
           </div>
         )}
