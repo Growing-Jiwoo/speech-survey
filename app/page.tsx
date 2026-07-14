@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { Select } from '@/components/Select'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { newState, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validClassNo, validContact, validGender, validName } from '@/lib/validate'
@@ -152,11 +153,10 @@ export default function StartPage() {
         <FieldError msg={errors.contact} />
 
         {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
-        <button onClick={begin} disabled={busy || !filled} className="cta mt-5">
-          {busy ? '준비 중…' : '시작하기'}
-        </button>
+        <button onClick={begin} disabled={busy || !filled} className="cta mt-5">시작하기</button>
       </div>
       <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
+      <LoadingOverlay show={busy} />
     </main>
   )
 }
