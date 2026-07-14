@@ -12,8 +12,7 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
-  // TypeScript 7 (native tsgo)은 Next의 빌드 내장 타입체크(클래식 TS API 의존)와 호환되지 않는다.
-  // 타입체크는 `tsc --noEmit`(tsgo)로 분리 실행하고, 여기서는 Next의 타입체크만 끈다.
+  // 타입체크는 `npm run typecheck`(tsc --noEmit)로 분리 실행하고, 빌드 시에는 생략해 배포를 빠르게 한다.
   typescript: { ignoreBuildErrors: true },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
