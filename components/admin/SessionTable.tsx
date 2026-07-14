@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { SessionListRow } from '@/lib/db'
 import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type StatusFilter, type Totals } from '@/lib/adminStats'
+import { Select } from '@/components/Select'
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -53,18 +54,13 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
             </button>
           ))}
         </div>
-        <select value={filters.school ?? ''} onChange={e => onFilters({ school: e.target.value || null })}
-          aria-label="학교 필터"
-          className="h-9 rounded-xl border-[1.5px] border-line bg-well px-2.5 text-xs outline-none focus:border-blue">
-          <option value="">학교 전체</option>
-          {schools.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={filters.grade ?? ''} onChange={e => onFilters({ grade: e.target.value ? Number(e.target.value) : null })}
-          aria-label="학년 필터"
-          className="h-9 rounded-xl border-[1.5px] border-line bg-well px-2.5 text-xs outline-none focus:border-blue">
-          <option value="">학년 전체</option>
-          {grades.map(g => <option key={g} value={g}>{g}학년</option>)}
-        </select>
+        <Select size="sm" ariaLabel="학교 필터" placeholder="학교 전체" className="w-44"
+          value={filters.school ?? ''} onChange={v => onFilters({ school: v || null })}
+          options={[{ value: '', label: '학교 전체' }, ...schools.map(s => ({ value: s, label: s }))]} />
+        <Select size="sm" ariaLabel="학년 필터" placeholder="학년 전체" className="w-28"
+          value={filters.grade !== null ? String(filters.grade) : ''}
+          onChange={v => onFilters({ grade: v ? Number(v) : null })}
+          options={[{ value: '', label: '학년 전체' }, ...grades.map(g => ({ value: String(g), label: `${g}학년` }))]} />
         {filters.today && <Chip label="오늘 참여" onRemove={() => onFilters({ today: false })} />}
         {filters.school !== null && <Chip label={filters.school} onRemove={() => onFilters({ school: null })} />}
         {filters.grade !== null && <Chip label={`${filters.grade}학년`} onRemove={() => onFilters({ grade: null })} />}
