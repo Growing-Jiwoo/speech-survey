@@ -102,17 +102,3 @@ export async function sessionDetail(sessionId: string): Promise<{
     writing: (ans ?? []) as WritingRow[],
   }
 }
-
-export type ExportSession = SessionRow & {
-  recordings: Omit<RecordingRow, 'created_at'>[]
-  writing_answers: WritingRow[]
-}
-
-/** CSV용: 세션 기준 전체 조회 (녹음·낱말쓰기 중첩) */
-export async function exportRows(): Promise<ExportSession[]> {
-  const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code, attempt_no, audio_path, duration_sec), writing_answers(item_code, can_write)`)
-    .order('started_at', { ascending: true })
-  fail(error)
-  return data as unknown as ExportSession[]
-}

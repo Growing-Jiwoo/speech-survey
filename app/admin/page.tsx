@@ -25,9 +25,6 @@ export default async function AdminList() {
             <span className="kpi">세션 <b>{sessions.length}</b></span>
             <span className="kpi">제출 <b>{submitted}</b></span>
             <span className="kpi">오늘 <b>{today}</b></span>
-            <a href="/api/admin/export" className="rounded-xl bg-ink px-4 py-2 text-xs font-bold text-white">
-              CSV 내보내기
-            </a>
           </div>
         </div>
         <table className="w-full text-sm">
