@@ -1,11 +1,14 @@
 'use client'
 import { useEffect, useRef } from 'react'
 
-const FOCUSABLE = 'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])'
+const FOCUSABLE = 'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
 /** 다이얼로그용 포커스 트랩: 초기 포커스·Tab 순환·Esc 닫기·해제 시 포커스 복귀. */
 export function useFocusTrap(active: boolean, onEscape?: () => void) {
   const ref = useRef<HTMLDivElement | null>(null)
+  const onEscapeRef = useRef(onEscape)
+  onEscapeRef.current = onEscape
+
   useEffect(() => {
     if (!active) return
     const container = ref.current
@@ -15,7 +18,7 @@ export function useFocusTrap(active: boolean, onEscape?: () => void) {
     focusables()[0]?.focus()
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onEscape?.(); return }
+      if (e.key === 'Escape') { onEscapeRef.current?.(); return }
       if (e.key !== 'Tab') return
       const items = focusables()
       if (items.length === 0) return
@@ -29,6 +32,6 @@ export function useFocusTrap(active: boolean, onEscape?: () => void) {
       document.removeEventListener('keydown', onKeyDown)
       prevFocused?.focus()
     }
-  }, [active, onEscape])
+  }, [active])
   return ref
 }
