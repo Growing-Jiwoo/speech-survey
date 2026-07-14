@@ -72,7 +72,7 @@ export default function StartPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setFormErr(json.error ?? '문제가 생겼어요. 다시 시도해 주세요.'); return }
-      saveState(newState(json.sessionId, cleanName))
+      saveState(newState(json.sessionId, cleanName, json.sessionToken))
       router.push('/survey')
     } catch {
       setFormErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')

@@ -8,8 +8,8 @@ import { RecordButton } from '@/components/RecordButton'
 import type { SurveyItem } from '@/lib/items'
 
 /** 녹음 문항: 타이머(낱말 30초/문장 40초) 카운트다운, 즉시 업로드, 재생 없음(완료 여부만) */
-export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecordingChange, onBusyChange }: {
-  item: SurveyItem; sessionId: string; attemptCount: number; onSaved: () => void
+export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onBusyChange }: {
+  item: SurveyItem; sessionId: string; sessionToken: string; attemptCount: number; onSaved: () => void
   /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
   onRecordingChange?: (recording: boolean) => void
   /** 업로드 중 여부를 부모에 알려 [다음] 이동을 막는다(업로드 실패 시 재시도 UI 언마운트 방지) */
@@ -27,6 +27,7 @@ export function RecordingItem({ item, sessionId, attemptCount, onSaved, onRecord
       const fd = new FormData()
       fd.set('audio', rec.blob, 'audio')
       fd.set('sessionId', sessionId)
+      fd.set('sessionToken', sessionToken)
       fd.set('itemCode', item.code)
       fd.set('attemptNo', String(attemptCount + 1))
       fd.set('durationSec', rec.durationSec.toFixed(2))

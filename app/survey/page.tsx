@@ -69,7 +69,7 @@ function SurveyInner() {
       </p>
 
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-        <RecordingItem key={item.code} item={item} sessionId={st.sessionId}
+        <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
           attemptCount={st.recorded[item.code] ?? 0}
           onRecordingChange={setIsRecording} onBusyChange={setIsUploading}
           onSaved={() => patch(prev => ({ recorded: { ...prev.recorded, [item.code]: (prev.recorded[item.code] ?? 0) + 1 } }))} />

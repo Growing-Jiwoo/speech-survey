@@ -2,6 +2,7 @@
 // 저장 시점: 녹음=즉시(서버), 낱말쓰기·체크리스트=최종 제출(서버). 로컬은 진행 위치·답 캐시.
 export interface SurveyState {
   sessionId: string
+  sessionToken: string               // /api/sessions가 발급 — 녹음/제출 요청에 동봉
   childName: string
   micDone: boolean
   idx: number                        // 현재 문항 인덱스(0-based)
@@ -15,8 +16,8 @@ const PREFIX = 'kodys-survey:'
 const LAST_KEY = 'kodys-survey:last'
 const keyOf = (sessionId: string) => `${PREFIX}${sessionId}`
 
-export function newState(sessionId: string, childName: string): SurveyState {
-  return { sessionId, childName, micDone: false, idx: 0, phase: 'mic', recorded: {}, writing: {}, checklist: [] }
+export function newState(sessionId: string, childName: string, sessionToken: string): SurveyState {
+  return { sessionId, sessionToken, childName, micDone: false, idx: 0, phase: 'mic', recorded: {}, writing: {}, checklist: [] }
 }
 
 export function loadState(): SurveyState | null {

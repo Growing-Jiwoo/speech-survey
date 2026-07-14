@@ -47,7 +47,7 @@ export default function ReviewPage() {
     try {
       const res = await fetch('/api/sessions/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: st.sessionId, writing: st.writing, checklist: st.checklist }),
+        body: JSON.stringify({ sessionId: st.sessionId, sessionToken: st.sessionToken, writing: st.writing, checklist: st.checklist }),
       })
       if (!res.ok) { setErr('제출에 문제가 생겼어요. 다시 시도해 주세요.'); return }
       clearState()
