@@ -5,11 +5,14 @@ const BARS = [
 ]
 
 export function LevelMeter({ level }: { level: number }) {
+  const pct = Math.round(Math.min(level, 1) * 100)
   return (
-    <div className="flex h-11 items-end justify-center gap-[7px]" aria-label="목소리 크기">
+    <div className="flex h-11 items-end justify-center gap-[7px]"
+      role="meter" aria-label="목소리 크기" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
       {BARS.map((b, i) => (
         <div key={i}
-          className={`w-2 rounded-full transition-colors duration-75 ${level > b.t ? 'bg-blue' : 'bg-line'}`}
+          className={`w-2 rounded-full transition-colors duration-75 motion-reduce:transition-none ${
+            level > b.t ? 'bg-blue' : 'bg-line'}`}
           style={{ height: b.h }} />
       ))}
     </div>
