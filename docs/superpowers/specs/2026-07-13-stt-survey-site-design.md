@@ -57,7 +57,7 @@
 |---|---|---|---|
 | 프레임워크 | Next.js (App Router) | 16.2.10 | 프론트+API 단일 프로젝트 |
 | UI | React | 19.2.7 | Next 16 동봉 |
-| 언어 | TypeScript | 7.0.2 | 네이티브(tsgo) 세대. Next 16 툴링과 충돌 시 5.9.x로 폴백 (구현 초기 확인 항목) |
+| 언어 | TypeScript | 7.0.2 | 네이티브(tsgo) 세대. Next 16의 빌드 내장 타입체크는 클래식 TS API 의존이라 TS7과 비호환 → `next.config.ts`에서 `typescript.ignoreBuildErrors=true`로 Next 타입체크를 끄고, 타입 안전성은 `npm run typecheck`(=`tsc --noEmit`, tsgo)로 분리 보장 |
 | 스타일 | Tailwind CSS | 4.3.2 | 반응형 (태블릿/폰/PC) |
 | 저장소 SDK | @supabase/supabase-js | 2.110.2 | 서버 전용 사용 |
 | 오디오 변환 | ffmpeg-static | 5.3.0 | Safari mp4/aac → wav 트랜스코딩용, OS 무관 바이너리 동봉 |
@@ -95,7 +95,8 @@ create table responses (
   id               uuid primary key default gen_random_uuid(),
   session_id       uuid not null references sessions(id),
   question_id      int  not null references questions(id),
-  status           text not null check (status in ('completed','skipped')),
+  status           text not null check (status in ('in_progress','completed','skipped')),
+  -- in_progress: 시도는 있으나 성공(비어있지 않은 STT)이 아직 없는 상태
   retry_count      int  not null default 0,   -- 총 시도 횟수 (1 = 재시도 없음)
   final_attempt_id uuid,                      -- attempts.id, skipped면 null
   unique (session_id, question_id)
@@ -134,9 +135,9 @@ create table attempts (
 | 메서드/경로 | 동작 |
 |---|---|
 | `POST /api/admin/login` | 비밀번호 검증 → httpOnly 쿠키 발급 (서명된 토큰, 12시간 유효) |
-| `GET /api/admin/sessions` | 세션 목록 (이름·나이·일시·완료여부·건너뜀 수) |
-| `GET /api/admin/sessions/[id]` | 세션 상세 (문항별 최종+이력 시도, 각 오디오의 서명 URL 포함) |
 | `GET /api/admin/export` | CSV 다운로드 (UTF-8 BOM) |
+
+목록/상세 화면은 서버 컴포넌트가 `lib/db.ts`를 직접 호출한다(별도 GET API 없음 — DRY). API는 login/export만 유지.
 
 - 오디오 재생: 서버가 Supabase Storage **서명 URL**(1시간 만료) 생성해 내려줌. 버킷은 비공개 유지.
 - CSV 컬럼(1행=1시도): 참여자 이름, 나이, 세션 시작일시, 문항 번호, 난이도, 목표 문장,
