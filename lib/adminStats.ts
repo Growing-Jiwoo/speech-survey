@@ -126,6 +126,21 @@ export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals)
   })
 }
 
+// ---------- 결과지 내 이동 (이전/다음 아동) ----------
+
+/** 이미 필터·정렬된 rows에서 currentId의 앞/뒤 세션 id를 구한다.
+ * 결과지의 「◀ 이전 아동 / 다음 아동 ▶」이 목록과 같은 순서로 이동하도록 한다(항목 17). */
+export function adjacentSessionIds(
+  rows: SessionListRow[], currentId: string,
+): { prev: string | null; next: string | null } {
+  const idx = rows.findIndex(r => r.id === currentId)
+  if (idx === -1) return { prev: null, next: null }
+  return {
+    prev: idx > 0 ? rows[idx - 1].id : null,
+    next: idx < rows.length - 1 ? rows[idx + 1].id : null,
+  }
+}
+
 // ---------- URL ↔ 상태 (searchParams 동기화) ----------
 
 const STATUS_SET = new Set<StatusFilter>(['all', 'submitted', 'inProgress'])

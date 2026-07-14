@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
 import {
   sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
-  parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT,
+  parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds,
 } from '@/lib/adminStats'
 
 /** 테스트 픽스처 */
@@ -190,6 +190,25 @@ describe('sortSessions', () => {
     const arr = [a, b]
     sortSessions(arr, { key: 'name', dir: 'desc' }, TOTALS2)
     expect(arr[0]).toBe(a)
+  })
+})
+
+describe('adjacentSessionIds', () => {
+  const rows = [
+    mkSession({ id: 'a' }), mkSession({ id: 'b' }), mkSession({ id: 'c' }),
+  ]
+  it('가운데 항목은 앞/뒤 모두 반환', () => {
+    expect(adjacentSessionIds(rows, 'b')).toEqual({ prev: 'a', next: 'c' })
+  })
+  it('처음/끝 경계는 해당 방향 null', () => {
+    expect(adjacentSessionIds(rows, 'a')).toEqual({ prev: null, next: 'b' })
+    expect(adjacentSessionIds(rows, 'c')).toEqual({ prev: 'b', next: null })
+  })
+  it('목록에 없으면 둘 다 null', () => {
+    expect(adjacentSessionIds(rows, 'zzz')).toEqual({ prev: null, next: null })
+  })
+  it('빈 목록도 안전', () => {
+    expect(adjacentSessionIds([], 'a')).toEqual({ prev: null, next: null })
   })
 })
 
