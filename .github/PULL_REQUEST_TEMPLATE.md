@@ -21,7 +21,7 @@
 ## 테스트
 
 - [ ] `npm test` 통과
-- [ ] `npm run typecheck` 통과 (tsgo — Next 빌드 typecheck는 꺼져 있으므로 별도 필수)
+- [ ] `npm run typecheck` 통과 (TypeScript 5.9 — Next 빌드 typecheck는 꺼져 있으므로 별도 필수)
 - [ ] DB 마이그레이션 변경 시: `supabase/migrations/*.sql` 반영 및 확인
 - [ ] 해당 없음 (문서 전용 등)
 

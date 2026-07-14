@@ -28,6 +28,12 @@ export function validGender(v: unknown): v is '남' | '여' {
   return v === '남' || v === '여'
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function validUuid(v: unknown): v is string {
+  return typeof v === 'string' && UUID_RE.test(v)
+}
+
 const PHONE_RE = /^0\d{1,2}-?\d{3,4}-?\d{4}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 

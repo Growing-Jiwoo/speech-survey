@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/db', () => ({
   uploadRecording: vi.fn().mockResolvedValue(undefined),
   insertRecording: vi.fn().mockResolvedValue(undefined),
+  checkRateLimit: vi.fn().mockResolvedValue(true),
 }))
 
 import { POST } from '@/app/api/recordings/route'
@@ -58,9 +59,17 @@ describe('POST /api/recordings', () => {
     expect((await POST(makeReq({ audio: big }))).status).toBe(413)
     expect(db.uploadRecording).not.toHaveBeenCalled()
   })
-  it('업로드 실패 시 502, 기록 저장 안 함', async () => {
+  it('업로드 실패 시 502, 기록 저장 안 함, 내부 오류 메시지 노출 안 함', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(db.uploadRecording).mockRejectedValueOnce(new Error('storage down'))
-    expect((await POST(makeReq())).status).toBe(502)
+    const res = await POST(makeReq())
+    expect(res.status).toBe(502)
     expect(db.insertRecording).not.toHaveBeenCalled()
+    expect((await res.json()).error).not.toContain('storage down')
+  })
+  it('레이트리밋 초과 시 429, 업로드 안 함', async () => {
+    vi.mocked(db.checkRateLimit).mockResolvedValueOnce(false)
+    expect((await POST(makeReq())).status).toBe(429)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
   })
 })

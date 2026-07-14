@@ -7,8 +7,10 @@ vi.mock('@/lib/db', () => ({
 import { POST } from '@/app/api/sessions/submit/route'
 import * as db from '@/lib/db'
 
+const SID = '11111111-1111-4111-8111-111111111111'
+
 const VALID = {
-  sessionId: 'sess-1',
+  sessionId: SID,
   writing: { ww01: true, ww02: false },
   checklist: ['none'],
 }
@@ -25,14 +27,14 @@ describe('POST /api/sessions/submit', () => {
   it('낱말쓰기 답 + 체크리스트 저장', async () => {
     const res = await POST(makeReq(VALID))
     expect(res.status).toBe(200)
-    expect(db.submitSession).toHaveBeenCalledWith('sess-1',
+    expect(db.submitSession).toHaveBeenCalledWith(SID,
       [{ itemCode: 'ww01', canWrite: true }, { itemCode: 'ww02', canWrite: false }],
       ['none'])
   })
   it('답이 하나도 없어도 제출 가능 (미완료 제출 허용)', async () => {
-    const res = await POST(makeReq({ sessionId: 'sess-1', writing: {}, checklist: [] }))
+    const res = await POST(makeReq({ sessionId: SID, writing: {}, checklist: [] }))
     expect(res.status).toBe(200)
-    expect(db.submitSession).toHaveBeenCalledWith('sess-1', [], [])
+    expect(db.submitSession).toHaveBeenCalledWith(SID, [], [])
   })
   it('미지 낱말쓰기 코드 400', async () =>
     expect((await POST(makeReq({ ...VALID, writing: { rw01: true } }))).status).toBe(400))
@@ -42,6 +44,8 @@ describe('POST /api/sessions/submit', () => {
     expect((await POST(makeReq({ ...VALID, checklist: ['unknown'] }))).status).toBe(400))
   it('sessionId 누락 400', async () =>
     expect((await POST(makeReq({ ...VALID, sessionId: '' }))).status).toBe(400))
+  it('sessionId가 UUID 형식이 아니면 400', async () =>
+    expect((await POST(makeReq({ ...VALID, sessionId: 'sess-1' }))).status).toBe(400))
   it('본문 없음 400', async () =>
     expect((await POST(new Request('http://x', { method: 'POST', body: 'x' }))).status).toBe(400))
 })

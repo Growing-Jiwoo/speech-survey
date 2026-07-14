@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server'
-import { createSession } from '@/lib/db'
+import { clientIp } from '@/lib/client-ip'
+import { checkRateLimit, createSession } from '@/lib/db'
 import { REGION_NAMES } from '@/lib/schools'
 import { validBirthYmd, validClassNo, validContact, validGender, validGrade, validName } from '@/lib/validate'
 
 const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 })
 const cleanStr = (v: unknown) => typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : ''
 
+const MAX_SESSIONS_PER_HOUR = 60 // 학교 컴퓨터실 공용 IP 대비 여유 있게 설정
+
 export async function POST(req: Request) {
+  if (!(await checkRateLimit(`session:${clientIp(req)}`, MAX_SESSIONS_PER_HOUR, 3600_000)))
+    return NextResponse.json({ error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' }, { status: 429 })
   const b = await req.json().catch(() => ({}))
   const name = cleanStr(b.name)
   const teacherName = cleanStr(b.teacherName)

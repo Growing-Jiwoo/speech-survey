@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { sha256Hex } from '@/lib/auth'
+import { hashPassword } from '@/lib/password'
 
 vi.mock('@/lib/db', () => ({
   isLoginLocked: vi.fn().mockResolvedValue(false),
@@ -14,16 +14,16 @@ import * as db from '@/lib/db'
 const PW = 'correct-horse'
 let HASH = ''
 
-function makeReq(password: unknown, ip = '1.2.3.4') {
+function makeReq(password: unknown, ip = '1.2.3.4', extraHeaders: Record<string, string> = {}) {
   return new Request('http://x/api/admin/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+    headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip, ...extraHeaders },
     body: JSON.stringify({ password }),
   })
 }
 
-beforeEach(async () => {
-  HASH = await sha256Hex(PW)
+beforeEach(() => {
+  HASH = hashPassword(PW)
   vi.clearAllMocks()
   vi.mocked(db.isLoginLocked).mockResolvedValue(false)
 })
@@ -51,8 +51,12 @@ describe('POST /api/admin/login', () => {
     expect(res.status).toBe(429)
     expect(db.clearLoginFailures).not.toHaveBeenCalled()
   })
-  it('x-forwarded-for 첫 IP만 사용 (프록시 체인 뒤쪽 무시)', async () => {
+  it('x-forwarded-for 마지막 IP 사용 (클라이언트가 조작 가능한 앞쪽 항목은 무시)', async () => {
     await POST(makeReq('wrong', '5.5.5.5, 10.0.0.1, 10.0.0.2'))
-    expect(db.recordLoginFailure).toHaveBeenCalledWith('5.5.5.5', expect.any(Number))
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('10.0.0.2', expect.any(Number))
+  })
+  it('x-real-ip 헤더가 있으면 우선 사용', async () => {
+    await POST(makeReq('wrong', '1.2.3.4', { 'x-real-ip': '9.8.7.6' }))
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('9.8.7.6', expect.any(Number))
   })
 })

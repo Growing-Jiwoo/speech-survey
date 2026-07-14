@@ -87,6 +87,25 @@ export async function clearLoginFailures(ip: string): Promise<void> {
   fail(error)
 }
 
+// ---------- 공개 엔드포인트 레이트리밋 (세션 생성·녹음 업로드 남용 방지) ----------
+
+/** 고정 윈도우 레이트리밋. 윈도우 경과 시 카운트 리셋, 초과 시 false.
+ *  동시 요청 간 경합은 감수한다(login_attempts와 동일한 수준의 best-effort). */
+export async function checkRateLimit(bucket: string, maxCount: number, windowMs: number): Promise<boolean> {
+  const now = new Date()
+  const { data, error } = await sb().from('rate_limits')
+    .select('window_start, count').eq('bucket', bucket).maybeSingle()
+  fail(error)
+  const withinWindow = !!data && now.getTime() - new Date(data.window_start).getTime() < windowMs
+  if (withinWindow && data!.count >= maxCount) return false
+  const nextCount = withinWindow ? data!.count + 1 : 1
+  const windowStart = withinWindow ? data!.window_start : now.toISOString()
+  const { error: upErr } = await sb().from('rate_limits')
+    .upsert({ bucket, window_start: windowStart, count: nextCount }, { onConflict: 'bucket' })
+  fail(upErr)
+  return true
+}
+
 // ---------- 관리자 조회 ----------
 
 export interface SessionRow {

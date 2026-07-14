@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { submitSession, type WritingAnswer } from '@/lib/db'
 import { AREA_CODES, WRITING_ITEMS } from '@/lib/items'
+import { validUuid } from '@/lib/validate'
 
 const WRITING_CODES = new Set(WRITING_ITEMS.map(i => i.code))
 const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 })
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}))
-  if (typeof b.sessionId !== 'string' || !b.sessionId) return bad('세션 정보가 없습니다.')
+  if (!validUuid(b.sessionId)) return bad('세션 정보가 올바르지 않습니다.')
   if (typeof b.writing !== 'object' || b.writing === null || Array.isArray(b.writing))
     return bad('낱말쓰기 답 형식 오류')
   const writing: WritingAnswer[] = []

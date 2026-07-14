@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
   createSession: vi.fn().mockResolvedValue('sess-1'),
+  checkRateLimit: vi.fn().mockResolvedValue(true),
 }))
 
 import { POST } from '@/app/api/sessions/route'
@@ -56,4 +57,9 @@ describe('POST /api/sessions', () => {
     expect((await POST(makeReq({ ...VALID, teacherName: '박선생1' }))).status).toBe(400))
   it('본문 없음 400', async () =>
     expect((await POST(new Request('http://x', { method: 'POST', body: 'not json' }))).status).toBe(400))
+  it('레이트리밋 초과 시 429, 세션 생성 안 함', async () => {
+    vi.mocked(db.checkRateLimit).mockResolvedValueOnce(false)
+    expect((await POST(makeReq(VALID))).status).toBe(429)
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
 })
