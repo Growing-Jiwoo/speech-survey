@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { ITEMS, SECTION_LABEL, areaLabel, type Section } from '@/lib/items'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
@@ -127,12 +128,13 @@ export default function ReviewPage() {
               </button>
               <button onClick={submit} disabled={busy}
                 className="h-[50px] flex-1 rounded-xl bg-blue text-[15px] font-bold text-white disabled:opacity-40">
-                {busy ? '저장 중…' : '네'}
+                네
               </button>
             </div>
           </div>
         </div>
       )}
+      <LoadingOverlay show={busy} />
     </main>
   )
 }
