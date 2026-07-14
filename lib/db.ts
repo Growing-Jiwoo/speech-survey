@@ -139,12 +139,18 @@ export type SessionListRow = SessionRow & {
   writing_answers: { item_code: string }[]
 }
 
+const MAX_LIST_ROWS = 5000
+
 export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
     .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code)`)
     .order('started_at', { ascending: false })
+    .limit(MAX_LIST_ROWS)
   fail(error)
-  return data as unknown as SessionListRow[]
+  const rows = (data ?? []) as unknown as SessionListRow[]
+  if (rows.length >= MAX_LIST_ROWS)
+    console.warn(`[listSessions] 상한(${MAX_LIST_ROWS}) 도달 — 서버 페이지네이션 도입 검토 필요`)
+  return rows
 }
 
 export async function sessionDetail(sessionId: string): Promise<{
