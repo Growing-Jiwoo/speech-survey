@@ -106,3 +106,44 @@ export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals)
     return cmp * sign
   })
 }
+
+// ---------- URL ↔ 상태 (searchParams 동기화) ----------
+
+const STATUS_SET = new Set<StatusFilter>(['all', 'submitted', 'inProgress'])
+const SORT_KEY_SET = new Set<SortKey>(['name', 'school', 'started', 'progress'])
+
+/** 잘못된/누락된 파라미터는 기본값으로 폴백한다 */
+export function parseFilters(sp: URLSearchParams): { filters: Filters; sort: Sort } {
+  const status = sp.get('status') as StatusFilter | null
+  const gradeRaw = Number(sp.get('grade'))
+  const key = sp.get('sort') as SortKey | null
+  const dir = sp.get('dir')
+  return {
+    filters: {
+      q: sp.get('q') ?? '',
+      status: status !== null && STATUS_SET.has(status) ? status : 'all',
+      school: sp.get('school'),
+      grade: Number.isInteger(gradeRaw) && gradeRaw > 0 ? gradeRaw : null,
+      today: sp.get('today') === '1',
+    },
+    sort: {
+      key: key !== null && SORT_KEY_SET.has(key) ? key : DEFAULT_SORT.key,
+      dir: dir === 'asc' || dir === 'desc' ? dir : DEFAULT_SORT.dir,
+    },
+  }
+}
+
+/** 기본값과 다른 키만 담은 쿼리 문자열(선행 '?' 없음) */
+export function filtersToQuery(f: Filters, sort: Sort): string {
+  const sp = new URLSearchParams()
+  if (f.q) sp.set('q', f.q)
+  if (f.status !== 'all') sp.set('status', f.status)
+  if (f.school !== null) sp.set('school', f.school)
+  if (f.grade !== null) sp.set('grade', String(f.grade))
+  if (f.today) sp.set('today', '1')
+  if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) {
+    sp.set('sort', sort.key)
+    sp.set('dir', sort.dir)
+  }
+  return sp.toString()
+}

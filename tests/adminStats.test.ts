@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
-import { sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions } from '@/lib/adminStats'
+import {
+  sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
+  parseFilters, filtersToQuery, DEFAULT_FILTERS, DEFAULT_SORT,
+} from '@/lib/adminStats'
 
 /** 테스트 픽스처 */
 export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
@@ -126,5 +129,29 @@ describe('sortSessions', () => {
     const arr = [a, b]
     sortSessions(arr, { key: 'name', dir: 'desc' }, TOTALS2)
     expect(arr[0]).toBe(a)
+  })
+})
+
+describe('URL 직렬화', () => {
+  it('parseFilters — 빈 쿼리는 기본값', () => {
+    expect(parseFilters(new URLSearchParams())).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
+  })
+  it('parseFilters — 값 파싱', () => {
+    const sp = new URLSearchParams('q=김&status=submitted&school=가나초&grade=2&today=1&sort=name&dir=asc')
+    expect(parseFilters(sp)).toEqual({
+      filters: { q: '김', status: 'submitted', school: '가나초', grade: 2, today: true },
+      sort: { key: 'name', dir: 'asc' },
+    })
+  })
+  it('parseFilters — 잘못된 값은 기본값으로 폴백', () => {
+    const sp = new URLSearchParams('status=bogus&grade=abc&sort=nope&dir=sideways')
+    expect(parseFilters(sp)).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
+  })
+  it('filtersToQuery — 기본값과 같은 키는 생략, 왕복 보존', () => {
+    expect(filtersToQuery(DEFAULT_FILTERS, DEFAULT_SORT)).toBe('')
+    const filters = { q: '김', status: 'inProgress' as const, school: '가나초', grade: 1, today: true }
+    const sort = { key: 'progress' as const, dir: 'asc' as const }
+    const qs = filtersToQuery(filters, sort)
+    expect(parseFilters(new URLSearchParams(qs))).toEqual({ filters, sort })
   })
 })
