@@ -69,3 +69,40 @@ export function schoolOptions(sessions: SessionListRow[]): string[] {
 export function gradeOptions(sessions: SessionListRow[]): number[] {
   return [...new Set(sessions.map(s => s.grade))].sort((a, b) => a - b)
 }
+
+// ---------- 필터 · 정렬 ----------
+
+export function filterSessions(sessions: SessionListRow[], f: Filters, now: Date): SessionListRow[] {
+  const keyword = f.q.trim()
+  const todayKey = now.toDateString()
+  return sessions.filter(s => {
+    if (f.status === 'submitted' && !s.submitted_at) return false
+    if (f.status === 'inProgress' && s.submitted_at) return false
+    if (f.school !== null && s.school_name !== f.school) return false
+    if (f.grade !== null && s.grade !== f.grade) return false
+    if (f.today && new Date(s.started_at).toDateString() !== todayKey) return false
+    if (keyword && !s.child_name.includes(keyword) && !s.school_name.includes(keyword)) return false
+    return true
+  })
+}
+
+export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals): SessionListRow[] {
+  const denom = totals.rec + totals.write
+  const value = (s: SessionListRow): string | number => {
+    switch (sort.key) {
+      case 'name': return s.child_name
+      case 'school': return s.school_name
+      case 'started': return new Date(s.started_at).getTime()
+      case 'progress': {
+        const p = sessionProgress(s, totals)
+        return denom === 0 ? 0 : (p.recorded + p.written) / denom
+      }
+    }
+  }
+  const sign = sort.dir === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const va = value(a), vb = value(b)
+    const cmp = typeof va === 'string' ? va.localeCompare(vb as string, 'ko') : va - (vb as number)
+    return cmp * sign
+  })
+}
