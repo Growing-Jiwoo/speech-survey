@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
 import {
   sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
-  parseFilters, filtersToQuery, DEFAULT_FILTERS, DEFAULT_SORT,
+  parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT,
 } from '@/lib/adminStats'
 
 /** 테스트 픽스처 */
@@ -38,6 +38,15 @@ describe('sessionProgress', () => {
   })
 })
 
+describe('kstDateKey', () => {
+  it('UTC 시각을 KST(+9) 일자 키로 변환', () => {
+    // 2026-07-13T15:00:00Z == 2026-07-14 00:00 KST
+    expect(kstDateKey(new Date('2026-07-13T15:00:00.000Z'))).toBe('2026-07-14')
+    // 2026-07-13T14:59:00Z == 2026-07-13 23:59 KST
+    expect(kstDateKey(new Date('2026-07-13T14:59:00.000Z'))).toBe('2026-07-13')
+  })
+})
+
 describe('computeKpis', () => {
   it('전체/제출/진행중/오늘을 집계한다', () => {
     const now = new Date('2026-07-14T05:00:00.000Z')
@@ -48,10 +57,20 @@ describe('computeKpis', () => {
     ]
     expect(computeKpis(sessions, now)).toEqual({ total: 3, submitted: 2, inProgress: 1, today: 2 })
   })
-  it('오늘 판정은 로컬 타임존 toDateString 기준', () => {
-    const now = new Date('2026-07-14T05:00:00.000Z')
-    const other = mkSession({ started_at: '2026-07-13T01:00:00.000Z' })
+  it('KST 전날(UTC 오후)은 오늘로 세지 않는다', () => {
+    const now = new Date('2026-07-14T05:00:00.000Z') // 2026-07-14 14:00 KST
+    const other = mkSession({ started_at: '2026-07-13T01:00:00.000Z' }) // 2026-07-13 10:00 KST
     expect(computeKpis([other], now).today).toBe(0)
+  })
+})
+
+describe('computeKpis (KST 오늘)', () => {
+  it('오늘 판정은 KST 일자 경계 기준', () => {
+    // now = 2026-07-14 00:30 KST
+    const now = new Date('2026-07-13T15:30:00.000Z')
+    const sameKstDay = mkSession({ started_at: '2026-07-13T15:10:00.000Z' }) // 2026-07-14 00:10 KST → 오늘
+    const prevKstDay = mkSession({ started_at: '2026-07-13T14:50:00.000Z' }) // 2026-07-13 23:50 KST → 어제
+    expect(computeKpis([sameKstDay, prevKstDay], now).today).toBe(1)
   })
 })
 

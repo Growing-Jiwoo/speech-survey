@@ -20,6 +20,15 @@ export interface Totals { rec: number; write: number }
 export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, today: false }
 export const DEFAULT_SORT: Sort = { key: 'started', dir: 'desc' }
 
+// ---------- 날짜(KST) ----------
+
+/** 해당 시각을 KST(UTC+9) 기준 일자 키 'YYYY-MM-DD'로 변환한다.
+ * 자정 무렵 로컬 타임존과 KST가 어긋나 "오늘"이 밀리는 문제(항목 16)를 막는다. */
+export function kstDateKey(d: Date): string {
+  const kst = new Date(d.getTime() + 9 * 60 * 60_000)
+  return kst.toISOString().slice(0, 10)
+}
+
 // ---------- 집계 ----------
 
 /** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다 */
@@ -34,11 +43,11 @@ export function sessionProgress(s: SessionListRow, totals: Totals): {
 export interface Kpis { total: number; submitted: number; inProgress: number; today: number }
 
 export function computeKpis(sessions: SessionListRow[], now: Date): Kpis {
-  const todayKey = now.toDateString()
+  const todayKey = kstDateKey(now)
   let submitted = 0, today = 0
   for (const s of sessions) {
     if (s.submitted_at) submitted++
-    if (new Date(s.started_at).toDateString() === todayKey) today++
+    if (kstDateKey(new Date(s.started_at)) === todayKey) today++
   }
   return { total: sessions.length, submitted, inProgress: sessions.length - submitted, today }
 }
@@ -74,13 +83,13 @@ export function gradeOptions(sessions: SessionListRow[]): number[] {
 
 export function filterSessions(sessions: SessionListRow[], f: Filters, now: Date): SessionListRow[] {
   const keyword = f.q.trim()
-  const todayKey = now.toDateString()
+  const todayKey = kstDateKey(now)
   return sessions.filter(s => {
     if (f.status === 'submitted' && !s.submitted_at) return false
     if (f.status === 'inProgress' && s.submitted_at) return false
     if (f.school !== null && s.school_name !== f.school) return false
     if (f.grade !== null && s.grade !== f.grade) return false
-    if (f.today && new Date(s.started_at).toDateString() !== todayKey) return false
+    if (f.today && kstDateKey(new Date(s.started_at)) !== todayKey) return false
     if (keyword && !s.child_name.includes(keyword) && !s.school_name.includes(keyword)) return false
     return true
   })
