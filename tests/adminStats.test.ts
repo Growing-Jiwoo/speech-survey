@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
-import { sessionProgress, computeKpis } from '@/lib/adminStats'
+import { sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions } from '@/lib/adminStats'
 
 /** 테스트 픽스처 */
 export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
@@ -49,5 +49,33 @@ describe('computeKpis', () => {
     const now = new Date('2026-07-14T05:00:00.000Z')
     const other = mkSession({ started_at: '2026-07-13T01:00:00.000Z' })
     expect(computeKpis([other], now).today).toBe(0)
+  })
+})
+
+describe('computeSchoolStats', () => {
+  it('학교별 참여·제출·제출률, 참여 수 내림차순(동률은 이름 오름차순)', () => {
+    const sessions = [
+      mkSession({ school_name: '가나초', submitted_at: '2026-07-14T02:00:00.000Z' }),
+      mkSession({ school_name: '가나초' }),
+      mkSession({ school_name: '다라초', submitted_at: '2026-07-14T02:00:00.000Z' }),
+      mkSession({ school_name: '마바초' }),
+    ]
+    expect(computeSchoolStats(sessions)).toEqual([
+      { school: '가나초', total: 2, submitted: 1, rate: 0.5 },
+      { school: '다라초', total: 1, submitted: 1, rate: 1 },
+      { school: '마바초', total: 1, submitted: 0, rate: 0 },
+    ])
+  })
+})
+
+describe('filter options', () => {
+  it('schoolOptions는 중복 제거 + 가나다순, gradeOptions는 오름차순', () => {
+    const sessions = [
+      mkSession({ school_name: '나나초', grade: 2 }),
+      mkSession({ school_name: '가가초', grade: 1 }),
+      mkSession({ school_name: '나나초', grade: 1 }),
+    ]
+    expect(schoolOptions(sessions)).toEqual(['가가초', '나나초'])
+    expect(gradeOptions(sessions)).toEqual([1, 2])
   })
 })

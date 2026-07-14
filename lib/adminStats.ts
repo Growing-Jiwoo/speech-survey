@@ -42,3 +42,30 @@ export function computeKpis(sessions: SessionListRow[], now: Date): Kpis {
   }
   return { total: sessions.length, submitted, inProgress: sessions.length - submitted, today }
 }
+
+// ---------- 학교별 현황 ----------
+
+export interface SchoolStat { school: string; total: number; submitted: number; rate: number }
+
+export function computeSchoolStats(sessions: SessionListRow[]): SchoolStat[] {
+  const map = new Map<string, { total: number; submitted: number }>()
+  for (const s of sessions) {
+    const e = map.get(s.school_name) ?? { total: 0, submitted: 0 }
+    e.total++
+    if (s.submitted_at) e.submitted++
+    map.set(s.school_name, e)
+  }
+  return [...map.entries()]
+    .map(([school, e]) => ({ school, ...e, rate: e.total === 0 ? 0 : e.submitted / e.total }))
+    .sort((a, b) => b.total - a.total || a.school.localeCompare(b.school, 'ko'))
+}
+
+// ---------- 필터 옵션 ----------
+
+export function schoolOptions(sessions: SessionListRow[]): string[] {
+  return [...new Set(sessions.map(s => s.school_name))].sort((a, b) => a.localeCompare(b, 'ko'))
+}
+
+export function gradeOptions(sessions: SessionListRow[]): number[] {
+  return [...new Set(sessions.map(s => s.grade))].sort((a, b) => a - b)
+}
