@@ -6,8 +6,13 @@ import { Blip } from '@/components/Blip'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AdminDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function AdminDetail({ params, searchParams }: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ back?: string }>
+}) {
   const { id } = await params
+  const { back } = await searchParams
+  const listHref = back ? `/admin?${back}` : '/admin'
   const { session: s, recordings, writing } = await sessionDetail(id)
 
   const recItems = ITEMS.filter(i => i.maxSec > 0)
@@ -25,7 +30,7 @@ export default async function AdminDetail({ params }: { params: Promise<{ id: st
 
   return (
     <main className="mx-auto max-w-4xl p-6">
-      <Link href="/admin" className="text-sm text-ink-mute underline">← 목록</Link>
+      <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
         <div className="border-b border-line px-5 py-4">
           <div className="flex flex-wrap items-center gap-3">
