@@ -27,9 +27,9 @@ function SurveyInner() {
 
   if (!st) return null
 
-  function patch(p: Partial<SurveyState>) {
+  function patch(p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) {
     setSt(prev => {
-      const merged = { ...prev!, ...p }
+      const merged = { ...prev!, ...(typeof p === 'function' ? p(prev!) : p) }
       saveState(merged)
       return merged
     })
@@ -60,7 +60,7 @@ function SurveyInner() {
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
         <RecordingItem key={item.code} item={item} sessionId={st.sessionId}
           attemptCount={st.recorded[item.code] ?? 0}
-          onSaved={() => patch({ recorded: { ...st.recorded, [item.code]: (st.recorded[item.code] ?? 0) + 1 } })} />
+          onSaved={() => patch(prev => ({ recorded: { ...prev.recorded, [item.code]: (prev.recorded[item.code] ?? 0) + 1 } }))} />
       )}
 
       {item.section === 'word_writing' && (
@@ -70,7 +70,7 @@ function SurveyInner() {
           <div className="mt-6 flex gap-2.5">
             {([['예', true], ['아니오', false]] as const).map(([label, v]) => (
               <button key={label} type="button" aria-pressed={st.writing[item.code] === v}
-                onClick={() => patch({ writing: { ...st.writing, [item.code]: v } })}
+                onClick={() => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))}
                 className={`h-[52px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
                   st.writing[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
                 {label}
@@ -96,9 +96,11 @@ function SurveyInner() {
                   <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-[1.5px] px-4 py-3 transition ${
                     on ? 'border-blue bg-blue/5' : 'border-line bg-well'}`}>
                     <input type="checkbox" checked={on} className="mt-0.5 h-4 w-4 accent-[var(--color-blue)]"
-                      onChange={() => patch({
-                        checklist: on ? st.checklist.filter(c => c !== a.code) : [...st.checklist, a.code],
-                      })} />
+                      onChange={() => patch(prev => ({
+                        checklist: prev.checklist.includes(a.code)
+                          ? prev.checklist.filter(c => c !== a.code)
+                          : [...prev.checklist, a.code],
+                      }))} />
                     <span>
                       <span className="text-sm font-bold">{a.label}</span>
                       {a.hint && <span className="mt-0.5 block text-xs leading-relaxed text-ink-mute">{a.hint}</span>}
