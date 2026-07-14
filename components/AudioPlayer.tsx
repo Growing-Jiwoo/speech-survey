@@ -1,11 +1,13 @@
 // components/AudioPlayer.tsx — 채점용 오디오 플레이어(wavesurfer.js v7).
-// 파형 클릭/드래그 시크 · 배속(0.75~1.5×) · −5초 · 키보드(Space/←/→) · 동시재생 1개 · onError 복구.
+// 파형 클릭/드래그 시크 · 배속(0.5~1.5×) · 키보드(Space/←/→) · 동시재생 1개 · onError 복구.
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { useAudioBus } from '@/components/AudioBus'
+import { Select } from '@/components/Select'
 
-const RATES = [0.75, 1, 1.25, 1.5] as const
+const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
+const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: `${r}×` }))
 
 /** canvas fillStyle은 CSS var()를 해석하지 못하므로, globals.css 변수를 실제 값으로 읽어 온다. */
 function cssVar(name: string): string {
@@ -80,13 +82,10 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   }, [visible, src, bus])
 
   const toggle = useCallback(() => { void wsRef.current?.playPause() }, [])
-  const back5 = useCallback(() => { wsRef.current?.skip(-5) }, [])
-  const cycleRate = useCallback(() => {
-    setRate(prev => {
-      const next = RATES[(RATES.indexOf(prev as typeof RATES[number]) + 1) % RATES.length]
-      wsRef.current?.setPlaybackRate(next)
-      return next
-    })
+  const changeRate = useCallback((v: string) => {
+    const next = Number(v)
+    setRate(next)
+    wsRef.current?.setPlaybackRate(next)
   }, [])
 
   // 3) 플레이어 포커스 시 키보드: Space 재생/정지, ←/→ 5초 이동.
@@ -111,16 +110,10 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
           </svg>
         )}
       </button>
-      <button type="button" onClick={back5} disabled={!ready} aria-label="5초 뒤로"
-        className="flex-none rounded-md bg-well px-2 py-1 text-[11px] font-bold text-ink-soft transition disabled:opacity-40">
-        −5초
-      </button>
       <div ref={waveRef} className="h-8 min-w-0 flex-1" aria-hidden="true" />
       <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmt(cur)}/{fmt(dur)}</span>
-      <button type="button" onClick={cycleRate} disabled={!ready} aria-label={`재생 속도 ${rate}배`}
-        className="flex-none rounded-md bg-well px-2 py-1 text-[11px] font-bold text-blue transition disabled:opacity-40">
-        {rate}×
-      </button>
+      <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
+        ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[84px] flex-none" />
     </div>
   )
 }

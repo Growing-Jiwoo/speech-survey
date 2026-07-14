@@ -137,7 +137,7 @@ export function AdminDetailView() {
                   <tr key={item.code} className="border-t border-line/60 bg-rec/5">
                     <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
                     <td className="px-3 text-xs text-ink-mute">{label}</td>
-                    <td className="px-3 font-read whitespace-pre-line">{item.text}</td>
+                    <td className="px-3 font-read whitespace-pre-line break-keep">{item.text}</td>
                     <td className="px-3">—</td>
                     <td className="px-3 text-ink-mute">—</td>
                     <td className="px-3 pr-5">
@@ -151,7 +151,7 @@ export function AdminDetailView() {
                     <tr key={`${item.code}-${v.attempt_no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
                       <td className="px-5 py-3 text-ink-mute">{i === 0 ? item.orderNo : ''}</td>
                       <td className="px-3 text-xs text-ink-mute">{i === 0 ? label : ''}</td>
-                      <td className="px-3 font-read whitespace-pre-line">{i === 0 ? item.text : ''}</td>
+                      <td className="px-3 font-read whitespace-pre-line break-keep">{i === 0 ? item.text : ''}</td>
                       <td className="px-3 text-ink-mute">{views.length > 1 ? `#${v.attempt_no}` : ''}</td>
                       <td className={`px-3 font-read text-[12px] tabular-nums ${over ? 'font-bold text-amber' : 'text-ink-soft'}`}
                         title={over ? `제한(${item.maxSec}초) 초과` : undefined}>
