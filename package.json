@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "build:schools": "tsx scripts/build-schools.ts",
     "smoke:azure": "tsx --env-file=.env.local scripts/smoke-azure.ts",
     "hash-password": "tsx scripts/hash-password.ts"
   },
