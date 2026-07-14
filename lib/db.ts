@@ -1,61 +1,46 @@
 import { sb } from './supabase'
 
-export interface Question { id: number; order_no: number; text: string; difficulty: string }
-
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
 
-export async function listQuestions(): Promise<Question[]> {
-  const { data, error } = await sb().from('questions').select('*').order('order_no')
-  fail(error)
-  return data!
+export interface NewSessionInput {
+  schoolRegion: string; schoolId: string; schoolName: string
+  birthYmd: string; grade: number; classNo: number; gender: '남' | '여'
+  childName: string; teacherName: string; teacherContact: string
 }
 
-export async function createSession(name: string, age: number): Promise<string> {
-  const { data, error } = await sb().from('sessions')
-    .insert({ child_name: name, child_age: age }).select('id').single()
+export async function createSession(s: NewSessionInput): Promise<string> {
+  const { data, error } = await sb().from('sessions').insert({
+    school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
+    birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
+    child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+  }).select('id').single()
   fail(error)
   return data!.id
 }
 
-export async function completeSession(sessionId: string): Promise<void> {
-  const { error } = await sb().from('sessions')
-    .update({ completed_at: new Date().toISOString() }).eq('id', sessionId)
+export async function insertRecording(r: {
+  sessionId: string; itemCode: string; attemptNo: number; audioPath: string; durationSec: number
+}): Promise<void> {
+  const { error } = await sb().from('recordings').upsert({
+    session_id: r.sessionId, item_code: r.itemCode, attempt_no: r.attemptNo,
+    audio_path: r.audioPath, duration_sec: r.durationSec,
+  }, { onConflict: 'session_id,item_code,attempt_no' })
   fail(error)
 }
 
-/** 응답 행이 없으면 in_progress로 생성하고 id 반환 */
-export async function getOrCreateResponse(sessionId: string, questionId: number): Promise<string> {
-  const { data } = await sb().from('responses').select('id')
-    .eq('session_id', sessionId).eq('question_id', questionId).maybeSingle()
-  if (data) return data.id
-  const { data: ins, error } = await sb().from('responses')
-    .insert({ session_id: sessionId, question_id: questionId, status: 'in_progress' })
-    .select('id').single()
-  fail(error)
-  return ins!.id
-}
+export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
-export async function insertAttempt(a: {
-  responseId: string; attemptNo: number; sttText: string; audioPath: string; durationSec: number
-}): Promise<string> {
-  const { data, error } = await sb().from('attempts').upsert({
-    response_id: a.responseId, attempt_no: a.attemptNo, stt_text: a.sttText,
-    audio_path: a.audioPath, duration_sec: a.durationSec,
-  }, { onConflict: 'response_id,attempt_no' }).select('id').single()
-  fail(error)
-  // 시도가 저장되면 STT 인식 여부와 무관하게 문항 완료 (진행 게이트 = 업로드 성공)
-  const patch: Record<string, unknown> = {
-    retry_count: a.attemptNo, status: 'completed', final_attempt_id: data!.id,
+/** 최종 제출: 낱말쓰기 답 upsert + 체크리스트·submitted_at 기록 */
+export async function submitSession(
+  sessionId: string, writing: WritingAnswer[], checklist: string[],
+): Promise<void> {
+  if (writing.length > 0) {
+    const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
+    const { error } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
   }
-  const { error: e2 } = await sb().from('responses').update(patch).eq('id', a.responseId)
-  fail(e2)
-  return data!.id
-}
-
-export async function markSkipped(sessionId: string, questionId: number): Promise<void> {
-  const id = await getOrCreateResponse(sessionId, questionId)
-  const { error } = await sb().from('responses')
-    .update({ status: 'skipped', final_attempt_id: null }).eq('id', id)
+  const { error } = await sb().from('sessions')
+    .update({ checklist, submitted_at: new Date().toISOString() }).eq('id', sessionId)
   fail(error)
 }
 
@@ -73,63 +58,81 @@ export async function signedAudioUrl(path: string): Promise<string> {
   return data!.signedUrl
 }
 
+// ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------
+
+/** 해당 IP가 현재 잠금 상태인지 (실패 임계 도달 + 잠금시각 이내) */
+export async function isLoginLocked(ip: string, maxFails: number): Promise<boolean> {
+  const { data, error } = await sb().from('login_attempts')
+    .select('fail_count, locked_until').eq('ip', ip).maybeSingle()
+  fail(error)
+  if (!data) return false
+  return data.fail_count >= maxFails && !!data.locked_until && new Date(data.locked_until) > new Date()
+}
+
+/** 로그인 실패 1건 기록 (fail_count 증가, 잠금시각 갱신) */
+export async function recordLoginFailure(ip: string, lockMs: number): Promise<void> {
+  const { data } = await sb().from('login_attempts').select('fail_count').eq('ip', ip).maybeSingle()
+  const nextCount = (data?.fail_count ?? 0) + 1
+  const { error } = await sb().from('login_attempts').upsert({
+    ip, fail_count: nextCount,
+    locked_until: new Date(Date.now() + lockMs).toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'ip' })
+  fail(error)
+}
+
+/** 로그인 성공 시 해당 IP 실패 기록 제거 */
+export async function clearLoginFailures(ip: string): Promise<void> {
+  const { error } = await sb().from('login_attempts').delete().eq('ip', ip)
+  fail(error)
+}
+
 // ---------- 관리자 조회 ----------
 
 export interface SessionRow {
-  id: string; child_name: string; child_age: number
-  started_at: string; completed_at: string | null
-  responses: { status: string }[]
+  id: string
+  school_region: string; school_id: string; school_name: string
+  birth_ymd: string; grade: number; class_no: number; gender: string
+  child_name: string; teacher_name: string; teacher_contact: string
+  checklist: string[]
+  started_at: string; submitted_at: string | null
 }
 
-export async function listSessions(): Promise<SessionRow[]> {
+export interface RecordingRow {
+  item_code: string; attempt_no: number; audio_path: string
+  duration_sec: number | null; created_at: string
+}
+
+export interface WritingRow { item_code: string; can_write: boolean }
+
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at'
+
+export type SessionListRow = SessionRow & {
+  recordings: { item_code: string }[]
+  writing_answers: { item_code: string }[]
+}
+
+export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select('id, child_name, child_age, started_at, completed_at, responses(status)')
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code)`)
     .order('started_at', { ascending: false })
   fail(error)
-  return data as unknown as SessionRow[]
+  return data as unknown as SessionListRow[]
 }
 
-export interface AttemptRow { id: string; attempt_no: number; stt_text: string; audio_path: string; duration_sec: number | null; created_at: string }
-export interface DetailRow {
-  question: Question
-  status: 'none' | 'in_progress' | 'completed' | 'skipped'
-  retryCount: number
-  finalAttemptId: string | null
-  attempts: AttemptRow[]
-}
-
-export async function sessionDetail(sessionId: string): Promise<{ session: SessionRow; rows: DetailRow[] }> {
-  const [{ data: s, error: e1 }, questions, { data: resps, error: e2 }] = await Promise.all([
-    sb().from('sessions').select('*').eq('id', sessionId).single(),
-    listQuestions(),
-    sb().from('responses')
-      .select('id, question_id, status, retry_count, final_attempt_id, attempts(id, attempt_no, stt_text, audio_path, duration_sec, created_at)')
-      .eq('session_id', sessionId),
+export async function sessionDetail(sessionId: string): Promise<{
+  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+}> {
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }] = await Promise.all([
+    sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
+    sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
+      .eq('session_id', sessionId).order('item_code').order('attempt_no'),
+    sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
   ])
-  fail(e1); fail(e2)
-  const byQ = new Map((resps ?? []).map(r => [r.question_id, r]))
-  const rows: DetailRow[] = questions.map(question => {
-    const r = byQ.get(question.id)
-    return {
-      question,
-      status: (r?.status ?? 'none') as DetailRow['status'],
-      retryCount: r?.retry_count ?? 0,
-      finalAttemptId: r?.final_attempt_id ?? null,
-      attempts: ((r?.attempts ?? []) as AttemptRow[]).sort((a, b) => a.attempt_no - b.attempt_no),
-    }
-  })
-  return { session: s as unknown as SessionRow, rows }
-}
-
-/** CSV용: 응답 기준 조회 (시도 0건인 건너뜀/진행중 응답도 포함, 세션 시작시각→문항순번 정렬) */
-export async function exportRows() {
-  const { data, error } = await sb().from('responses')
-    .select(`status, retry_count,
-      sessions!inner(child_name, child_age, started_at),
-      questions!inner(order_no, difficulty, text),
-      attempts(attempt_no, stt_text, audio_path, duration_sec, created_at)`)
-    .order('started_at', { ascending: true, referencedTable: 'sessions' })
-    .order('order_no', { ascending: true, referencedTable: 'questions' })
-  fail(error)
-  return data!
+  fail(e1); fail(e2); fail(e3)
+  return {
+    session: s as unknown as SessionRow,
+    recordings: (recs ?? []) as RecordingRow[],
+    writing: (ans ?? []) as WritingRow[],
+  }
 }

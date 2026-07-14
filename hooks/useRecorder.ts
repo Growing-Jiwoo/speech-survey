@@ -52,7 +52,7 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
     rec.ondataavailable = e => chunks.push(e.data)
     cleanupRef.current = () => {
       cancelAnimationFrame(raf)
-      ctx.close()
+      if (ctx.state !== 'closed') void ctx.close()
       stream.getTracks().forEach(t => t.stop())
     }
     rec.onstop = () => {

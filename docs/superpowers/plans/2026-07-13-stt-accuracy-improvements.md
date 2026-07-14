@@ -1,5 +1,8 @@
 # STT 정확도 개선 Implementation Plan
 
+> **[폐기됨 2026-07-14]** STT 자체가 제거되어 이 계획은 더 이상 유효하지 않다.
+> 대체: `docs/superpowers/plans/2026-07-14-kodys-g1-redesign.md`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 자동 비교를 완전일치 → 단어 단위 퍼지 점수(0~100, 4단계)로 바꾸고, Azure STT를 `format=detailed`+`Lexical`(ITN 회피)로 전환하며 타임아웃을 25초로 늘려, 아동 발화 판정의 공정성과 견고성을 높인다. 아이 화면·평가 비노출 원칙·DB 스키마는 무변경.

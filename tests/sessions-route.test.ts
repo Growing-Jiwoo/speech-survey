@@ -2,11 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
   createSession: vi.fn().mockResolvedValue('sess-1'),
-  listQuestions: vi.fn().mockResolvedValue([{ id: 1, order_no: 1, text: 'Hi.', difficulty: 'easy' }]),
 }))
 
 import { POST } from '@/app/api/sessions/route'
 import * as db from '@/lib/db'
+
+const VALID = {
+  region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
+  birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
+  name: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
+}
 
 function makeReq(body: unknown) {
   return new Request('http://x/api/sessions', {
@@ -17,31 +22,38 @@ function makeReq(body: unknown) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('POST /api/sessions', () => {
-  it('한글 이름 + 나이 20 허용 (기존 3~19 제한 폐기 확인)', async () => {
-    const res = await POST(makeReq({ name: '김도연', age: 20 }))
+  it('유효한 참여자 정보로 세션 생성', async () => {
+    const res = await POST(makeReq(VALID))
     expect(res.status).toBe(200)
-    expect(db.createSession).toHaveBeenCalledWith('김도연', 20)
+    expect(await res.json()).toEqual({ sessionId: 'sess-1' })
+    expect(db.createSession).toHaveBeenCalledWith({
+      schoolRegion: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
+      birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
+      childName: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
+    })
   })
-  it('영어 공백 이름 허용, 연속 공백은 서버가 정규화', async () => {
-    const res = await POST(makeReq({ name: '  Mary   Jane ', age: 8 }))
-    expect(res.status).toBe(200)
-    expect(db.createSession).toHaveBeenCalledWith('Mary Jane', 8)
+  it('이름 연속 공백은 서버가 정규화', async () => {
+    await POST(makeReq({ ...VALID, name: '  Mary   Jane ' }))
+    expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({ childName: 'Mary Jane' }))
   })
-  it('숫자·특수문자 이름 400', async () => {
-    expect((await POST(makeReq({ name: '지우1', age: 8 }))).status).toBe(400)
-    expect((await POST(makeReq({ name: '지우!', age: 8 }))).status).toBe(400)
+  it('미등록 지역 400', async () =>
+    expect((await POST(makeReq({ ...VALID, region: '화성교육청' }))).status).toBe(400))
+  it('학교 누락 400', async () => {
+    expect((await POST(makeReq({ ...VALID, schoolId: '' }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID, schoolName: '' }))).status).toBe(400)
   })
-  it('나이 0·비숫자·1000 400', async () => {
-    expect((await POST(makeReq({ name: '지우', age: 0 }))).status).toBe(400)
-    expect((await POST(makeReq({ name: '지우', age: 'abc' }))).status).toBe(400)
-    expect((await POST(makeReq({ name: '지우', age: 1000 }))).status).toBe(400)
+  it('생년월일 형식 오류 400', async () =>
+    expect((await POST(makeReq({ ...VALID, birthYmd: '191301' }))).status).toBe(400))
+  it('학년·반 범위 밖 400', async () => {
+    expect((await POST(makeReq({ ...VALID, grade: 7 }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID, classNo: 0 }))).status).toBe(400)
   })
-  it('비원시 나이(배열·불리언) 400', async () => {
-    expect((await POST(makeReq({ name: '지우', age: [8] }))).status).toBe(400)
-    expect((await POST(makeReq({ name: '지우', age: true }))).status).toBe(400)
+  it('성별·연락처 형식 오류 400', async () => {
+    expect((await POST(makeReq({ ...VALID, gender: 'M' }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID, teacherContact: '1234' }))).status).toBe(400)
   })
-  it('본문 없음 400', async () => {
-    const res = await POST(new Request('http://x', { method: 'POST', body: 'not json' }))
-    expect(res.status).toBe(400)
-  })
+  it('담임교사명 특수문자 400', async () =>
+    expect((await POST(makeReq({ ...VALID, teacherName: '박선생1' }))).status).toBe(400))
+  it('본문 없음 400', async () =>
+    expect((await POST(new Request('http://x', { method: 'POST', body: 'not json' }))).status).toBe(400))
 })

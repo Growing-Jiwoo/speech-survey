@@ -1,98 +1,146 @@
 import Link from 'next/link'
 import { sessionDetail, signedAudioUrl } from '@/lib/db'
-import { compareUtterance, type MatchResult } from '@/lib/compare'
+import { ITEMS, KIND_LABEL, SECTION_LABEL, areaLabel } from '@/lib/items'
 import { AudioPlayer } from '@/components/AudioPlayer'
 import { Blip } from '@/components/Blip'
 
 export const dynamic = 'force-dynamic'
 
-const PILL: Record<MatchResult | 'skipped' | 'none', { label: string; cls: string }> = {
-  matched: { label: '일치', cls: 'bg-mint/10 text-mint' },
-  mismatched: { label: '불일치', cls: 'bg-amber/10 text-amber' },
-  unrecognized: { label: '인식 안 됨', cls: 'bg-ink/5 text-ink-mute' },
-  skipped: { label: '건너뜀', cls: 'bg-ink/5 text-ink-mute' },
-  none: { label: '미응답', cls: 'bg-ink/5 text-ink-mute' },
-}
-
-function Pill({ kind }: { kind: keyof typeof PILL }) {
-  const p = PILL[kind]
-  return <span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${p.cls}`}>{p.label}</span>
-}
-
 export default async function AdminDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { session, rows } = await sessionDetail(id)
-  const items = await Promise.all(rows.map(async r => ({
-    ...r,
-    views: await Promise.all(r.attempts.map(async a => ({
-      no: a.attempt_no, stt: a.stt_text,
-      url: await signedAudioUrl(a.audio_path),
-      match: compareUtterance(r.question.text, a.stt_text),
-    }))),
-  })))
-  const answered = items.filter(r => r.views.length > 0).length
-  const skipped = items.filter(r => r.status === 'skipped').length
-  const matched = items.filter(r => r.status !== 'skipped' && r.views.length > 0 && r.views[r.views.length - 1].match === 'matched').length
+  const { session: s, recordings, writing } = await sessionDetail(id)
+
+  const recItems = ITEMS.filter(i => i.maxSec > 0)
+  const writeItems = ITEMS.filter(i => i.section === 'word_writing')
+  const byItem = new Map<string, { attempt_no: number; url: string; duration_sec: number | null }[]>()
+  for (const r of recordings) {
+    const url = await signedAudioUrl(r.audio_path)
+    const list = byItem.get(r.item_code) ?? []
+    list.push({ attempt_no: r.attempt_no, url, duration_sec: r.duration_sec })
+    byItem.set(r.item_code, list)
+  }
+  const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
+  const recordedCount = recItems.filter(i => byItem.has(i.code)).length
+  const missingCount = (recItems.length - recordedCount) + (writeItems.length - writing.length)
 
   return (
     <main className="mx-auto max-w-4xl p-6">
       <Link href="/admin" className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-        <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-          <Blip variant="logo" className="h-8 w-8" />
-          <div>
-            <p className="text-[15px] font-bold">결과지 — {session.child_name} ({session.child_age}세)</p>
-            <p className="text-[11px] text-ink-mute">
-              {new Date(session.started_at).toLocaleString('ko-KR')} · {session.completed_at ? '완료' : '진행 중'}
-            </p>
+        <div className="border-b border-line px-5 py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Blip variant="logo" className="h-8 w-8" />
+            <div>
+              <p className="text-[15px] font-bold">
+                결과지 — {s.child_name} ({s.school_name} {s.grade}-{s.class_no}, {s.gender})
+              </p>
+              <p className="text-[11px] text-ink-mute">
+                생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({s.teacher_contact}) ·{' '}
+                {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'}
+              </p>
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <span className="kpi">녹음 <b>{recordedCount} / {recItems.length}</b></span>
+              <span className="kpi">낱말쓰기 <b>{writing.length} / {writeItems.length}</b></span>
+              {missingCount > 0 && (
+                <span className="rounded-full bg-rec/10 px-3 py-1.5 text-xs font-bold text-rec-deep">
+                  미완료 {missingCount}건
+                </span>
+              )}
+            </div>
           </div>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <span className="kpi">응답 <b>{answered} / {items.length}</b></span>
-            <span className="kpi">자동 일치 <b>{matched}</b></span>
-            <span className="kpi">건너뜀 <b>{skipped}</b></span>
-          </div>
+          {s.checklist.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-ink-soft">확인 필요 영역:</span>
+              {s.checklist.map(c => (
+                <span key={c} className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">{areaLabel(c)}</span>
+              ))}
+            </div>
+          )}
         </div>
+
+        <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-ink-mute">
               <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
-              <th scope="col" className="font-medium">제시 문장</th>
+              <th scope="col" className="w-24 font-medium">구분</th>
+              <th scope="col" className="font-medium">제시어</th>
               <th scope="col" className="w-14 font-medium">시도</th>
-              <th scope="col" className="font-medium">들린 말 (STT)</th>
-              <th scope="col" className="w-28 font-medium">자동 비교</th>
               <th scope="col" className="w-52 pr-5 font-medium">듣기</th>
             </tr>
           </thead>
           <tbody>
-            {items.flatMap(r => {
-              if (r.views.length === 0) return [(
-                <tr key={r.question.id} className="border-t border-line/60">
-                  <td className="px-5 py-3 text-ink-mute">{r.question.order_no}</td>
-                  <td className="font-read">{r.question.text}</td>
+            {recItems.flatMap(item => {
+              const label = item.section === 'word_reading'
+                ? `낱말 (${KIND_LABEL[item.kind!]})` : '문장'
+              const views = byItem.get(item.code) ?? []
+              if (views.length === 0) return [(
+                <tr key={item.code} className="border-t border-line/60 bg-rec/5">
+                  <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
+                  <td className="text-xs text-ink-mute">{label}</td>
+                  <td className="font-read whitespace-pre-line">{item.text}</td>
                   <td>—</td>
-                  <td className="text-ink-mute">—</td>
-                  <td><Pill kind={r.status === 'skipped' ? 'skipped' : 'none'} /></td>
-                  <td className="pr-5">—</td>
+                  <td className="pr-5">
+                    <span className="rounded-full bg-rec/10 px-3 py-1 text-xs font-bold text-rec-deep">미녹음</span>
+                  </td>
                 </tr>
               )]
-              return r.views.map((v, i) => (
-                <tr key={`${r.question.id}-${v.no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
-                  <td className="px-5 py-3 text-ink-mute">{i === 0 ? r.question.order_no : ''}</td>
-                  <td className="font-read">
-                    {i === 0 ? r.question.text : ''}
-                    {i === 0 && r.status === 'skipped' && <span className="ml-2 text-xs text-ink-mute">(이후 건너뜀)</span>}
-                  </td>
-                  <td className="text-ink-mute">{r.views.length > 1 ? `#${v.no}` : ''}</td>
-                  <td className="font-read">{v.stt || <span className="text-ink-mute">(인식되지 않음)</span>}</td>
-                  <td><Pill kind={v.match} /></td>
+              return views.map((v, i) => (
+                <tr key={`${item.code}-${v.attempt_no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
+                  <td className="px-5 py-3 text-ink-mute">{i === 0 ? item.orderNo : ''}</td>
+                  <td className="text-xs text-ink-mute">{i === 0 ? label : ''}</td>
+                  <td className="font-read whitespace-pre-line">{i === 0 ? item.text : ''}</td>
+                  <td className="text-ink-mute">{views.length > 1 ? `#${v.attempt_no}` : ''}</td>
                   <td className="py-2 pr-5"><AudioPlayer src={v.url} /></td>
                 </tr>
               ))
             })}
           </tbody>
         </table>
+
+        <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-ink-mute">
+              <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
+              <th scope="col" className="w-24 font-medium">구분</th>
+              <th scope="col" className="font-medium">낱말</th>
+              <th scope="col" className="w-28 pr-5 font-medium">답</th>
+            </tr>
+          </thead>
+          <tbody>
+            {writeItems.map(item => {
+              const v = writingByCode.get(item.code)
+              return (
+                <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
+                  <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
+                  <td className="text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
+                  <td className="font-read">{item.text}</td>
+                  <td className="pr-5">
+                    {v === undefined
+                      ? <span className="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink-mute">미선택</span>
+                      : v
+                        ? <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-bold text-mint">예</span>
+                        : <span className="rounded-full bg-rec/10 px-3 py-1 text-xs font-bold text-rec-deep">아니오</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+
+        <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
+        <div className="flex flex-wrap gap-2 px-5 py-4">
+          {s.checklist.length === 0
+            ? <span className="text-sm text-ink-mute">선택 없음</span>
+            : s.checklist.map(c => (
+              <span key={c} className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">{areaLabel(c)}</span>
+            ))}
+        </div>
+
         <p className="border-t border-line bg-well px-5 py-3 text-[11.5px] text-ink-mute">
-          자동 비교는 참고용입니다 — 최종 평가는 녹음을 직접 듣고 판단해 주세요. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.
+          채점 기준(PDF): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.
         </p>
       </div>
     </main>
