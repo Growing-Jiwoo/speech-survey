@@ -76,7 +76,7 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <Blip variant="logo" className="h-8 w-8" />
         <div>
-          <p className="text-[15px] font-bold">KODYS-G1 읽기 검사 · 관리자</p>
+          <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
           <p className="text-[11px] text-ink-mute">행을 누르면 결과지가 열립니다 · 카드와 학교를 누르면 목록이 필터링됩니다</p>
         </div>
         <button type="button" onClick={refresh} disabled={isFetching}

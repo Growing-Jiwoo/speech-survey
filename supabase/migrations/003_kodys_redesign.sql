@@ -1,4 +1,4 @@
--- 003_kodys_redesign.sql — KODYS-G1 전환.
+-- 003_kodys_redesign.sql — 읽기 선별검사 스키마 전환.
 -- ⚠️ 기존 questions/responses/attempts/sessions와 데이터를 폐기한다 (기존 수집분은 테스트 데이터).
 -- Supabase SQL Editor에서 직접 실행할 것.
 
