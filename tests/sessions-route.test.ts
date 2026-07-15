@@ -12,10 +12,14 @@ const VALID = {
   name: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
 }
 
-function makeReq(body: unknown, ip?: string) {
+function makeReq(body: unknown, ip?: string, extraHeaders: Record<string, string> = {}) {
   return new Request('http://x/api/sessions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ip ? { 'x-forwarded-for': ip } : {}),
+      ...extraHeaders,
+    },
     body: JSON.stringify(body),
   })
 }
@@ -73,5 +77,22 @@ describe('POST /api/sessions', () => {
     let last = 200
     for (let i = 0; i < 21; i++) last = (await POST(makeReq(VALID, '203.0.113.7'))).status
     expect(last).toBe(429)
+  })
+  it('x-forwarded-for 마지막 IP를 레이트리밋 키로 사용 (클라이언트가 조작 가능한 앞쪽 항목은 무시)', async () => {
+    // 앞쪽에 서로 다른 위조 IP를 채워 넣어도, 실제 키는 항상 마지막 값(203.0.113.201)으로 수렴 → 결국 차단.
+    let last = 200
+    for (let i = 0; i < 21; i++)
+      last = (await POST(makeReq(VALID, `198.51.100.${i}, 203.0.113.201`))).status
+    expect(last).toBe(429)
+  })
+  it('x-real-ip 헤더가 있으면 x-forwarded-for보다 우선', async () => {
+    let last = 200
+    for (let i = 0; i < 21; i++)
+      last = (await POST(makeReq(VALID, '198.51.100.50', { 'x-real-ip': '203.0.113.202' }))).status
+    expect(last).toBe(429)
+    // 같은 x-real-ip를 계속 쓰지만 x-forwarded-for는 매번 다르게 줘도 여전히 차단되어야
+    // x-real-ip가 실제로 우선 적용되고 있음을 확인할 수 있다.
+    const res = await POST(makeReq(VALID, '9.9.9.9', { 'x-real-ip': '203.0.113.202' }))
+    expect(res.status).toBe(429)
   })
 })

@@ -12,10 +12,14 @@ const RATE_WINDOW_MS = 10 * 60_000
 // 스팸성 세션 생성을 완화하는 목적(마찰 추가)이다.
 const hits = new Map<string, number[]>()
 
-/** x-forwarded-for의 첫 IP(가장 왼쪽 = 실제 클라이언트, 프록시가 덧붙인 뒤쪽 제외). login 라우트와 동일 규칙. */
+/** 레이트리밋 키: 플랫폼(Vercel)이 주입하는 x-real-ip 우선(클라이언트 위조 불가).
+ *  없으면 x-forwarded-for의 마지막(가장 신뢰 가능한) 홉. 둘 다 없으면 'local'.
+ *  ※ x-forwarded-for 첫 IP는 클라이언트가 위조 가능하므로 키로 쓰지 않는다. (login 라우트와 동일 규칙) */
 function clientIp(req: Request): string {
-  const xff = req.headers.get('x-forwarded-for')
-  return xff?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'local'
+  const real = req.headers.get('x-real-ip')?.trim()
+  if (real) return real
+  const hops = req.headers.get('x-forwarded-for')?.split(',').map(s => s.trim()).filter(Boolean)
+  return hops?.[hops.length - 1] ?? 'local'
 }
 
 function rateLimited(ip: string): boolean {
