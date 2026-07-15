@@ -60,14 +60,15 @@
 3. **환경변수 등록** (Settings → Environment Variables, Production):
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase 대시보드 값
    - `SESSION_SECRET` — `openssl rand -hex 32`로 새로 생성 (로컬과 다른 값 권장)
-   - `ADMIN_PASSWORD_HASH` — ⚠️ **`admin1234` 금지.** `npm run hash-password -- '강한랜덤비번'` 출력 중
+   - `ADMIN_PASSWORD_HASH` — ⚠️ **로컬에서 쓰던 값이나 예시용 약한 비번 금지.** `npm run hash-password -- '강한랜덤비번'` 출력 중
      **"원본 해시"** 줄(이스케이프 없는 `$argon2id$v=19$...`)을 그대로 붙여넣는다. Vercel 대시보드는 셸/dotenv
      파싱을 거치지 않으므로 `$`를 이스케이프하면 안 된다(로컬 `.env.local`용 `\$` 이스케이프 버전과 다름 — 위 셋업 절 참고).
    - (네 변수 모두 서버 전용 — `NEXT_PUBLIC_` 접두사 붙이지 말 것. 붙이면 클라이언트에 노출된다.)
 4. **Deploy** → 자동 HTTPS 발급. 마이크 녹음은 HTTPS에서만 동작하므로 배포 후 정상 작동한다.
 5. 배포 도메인을 확인하고 `/`(아동)·`/admin`(관리자) 흐름을 실기기로 점검한다.
 
-- 환경변수는 로컬(`.env.local`)과 Vercel이 별개다 — 로컬은 `admin1234` 유지, Vercel만 강한 비번으로 둘 수 있다.
+- 환경변수는 로컬(`.env.local`)과 Vercel이 별개다 — 각자 `npm run hash-password`로 자신만의 로컬 비번을
+  생성해 쓰고, Vercel은 그와 다른 별도의 강한 비번을 쓴다. 실제 비밀번호 값은 코드·문서 어디에도 적어두지 말 것.
 - `recordings` 라우트는 `maxDuration=60`(초). Vercel Hobby는 함수 실행시간 상한이 더 짧을 수 있으나, 5MB 이하 업로드는 수 초 내라 실사용엔 무방하다.
 
 ## 주의
@@ -78,5 +79,7 @@
   (참고: 초기엔 TypeScript 7 tsgo를 썼으나 Next 16 빌드 워커와 호환 문제로 크래시가 나 5.9로 되돌렸다.)
 - 마이크는 HTTPS 또는 localhost에서만 동작한다. 같은 네트워크의 폰으로 테스트하려면
   `npx next dev --experimental-https` 또는 터널(예: `cloudflared tunnel --url localhost:3000`) 사용.
+  ⚠️ 터널은 로컬 서버를 인터넷에 공개로 노출한다 — 로컬 관리자 비번이 약하다면 터널을 쓰는
+  동안만이라도 강한 비번으로 바꿔서 테스트할 것.
 - Supabase Storage 무료 1GB — 수개월 운영 시 오래된 녹음 정리 필요.
 - 관리자 비밀번호는 argon2id(`@node-rs/argon2`)로 검증한다. 로그인 라우트는 네이티브 바인딩 때문에 `runtime='nodejs'`로 고정돼 있으며, Vercel 빌드는 플랫폼 프리빌트 바이너리를 자동 설치한다. 기존 SHA-256 해시는 무효이므로 `hash-password`로 재생성해 교체할 것.
