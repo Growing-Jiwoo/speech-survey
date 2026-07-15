@@ -8,9 +8,11 @@ const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 })
 const cleanStr = (v: unknown) => typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : ''
 
 // 세션 생성은 IP 단위로 제한한다(세션당 스팸은 녹음 라우트의 세션 단위 상한이 막음).
-// 한 학교의 여러 학급이 같은 공용 IP(NAT)로 동시 검사할 수 있으므로 넉넉히 잡되,
-// 무한 세션 생성으로 인한 PII row·스토리지 남용의 외곽 상한 역할을 한다.
-const MAX_SESSIONS_PER_HOUR = 200
+// 한 학교의 여러 학급, 나아가 학원 등 제3의 장소가 같은 공용 IP(NAT)로 동시 검사할 수
+// 있으므로 넉넉히 잡는다. 예상 전체 사용 규모(6개월 약 1,000명) 기준, 가장 몰릴 만한
+// 단일 이벤트(학교 1개 학년 전체 동시 시작, 100~200명)의 2~3배 여유를 둔 값 — 정상
+// 사용은 절대 못 닿고, 닿으면 그 자체가 이상 징후인 감지선 역할.
+const MAX_SESSIONS_PER_HOUR = 500
 
 export async function POST(req: Request) {
   if (!(await checkRateLimit(`session:${clientIp(req)}`, MAX_SESSIONS_PER_HOUR, 3600_000)))
