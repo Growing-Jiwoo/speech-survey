@@ -3,7 +3,7 @@
 -- Supabase SQL Editor에서 직접 실행할 것.
 
 create table rate_limits (
-  bucket        text primary key,  -- 예: 'session:<ip>', 'recording:<ip>'
+  bucket        text primary key,  -- 예: 'session:<ip>'(IP 단위), 'recording:<sessionId>'(세션 단위)
   window_start  timestamptz not null,
   count         int not null default 1
 );

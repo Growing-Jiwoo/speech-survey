@@ -89,21 +89,52 @@ export async function clearLoginFailures(ip: string): Promise<void> {
 
 // ---------- 공개 엔드포인트 레이트리밋 (세션 생성·녹음 업로드 남용 방지) ----------
 
-/** 고정 윈도우 레이트리밋. 윈도우 경과 시 카운트 리셋, 초과 시 false.
- *  동시 요청 간 경합은 감수한다(login_attempts와 동일한 수준의 best-effort). */
+export interface RateWindow { windowStartMs: number; count: number }
+export interface RateDecision { allowed: boolean; nextCount: number; windowStartMs: number }
+
+/** 고정 윈도우 판정(순수 함수 — DB 접근 없음, 단위 테스트 대상).
+ *  윈도우 안에서 count가 상한 이상이면 차단, 아니면 증가. 윈도우 경과 시 새 윈도우로 리셋(count=1). */
+export function rateLimitDecision(
+  nowMs: number, existing: RateWindow | null, maxCount: number, windowMs: number,
+): RateDecision {
+  const withinWindow = !!existing && nowMs - existing.windowStartMs < windowMs
+  if (withinWindow && existing!.count >= maxCount)
+    return { allowed: false, nextCount: existing!.count, windowStartMs: existing!.windowStartMs }
+  return {
+    allowed: true,
+    nextCount: withinWindow ? existing!.count + 1 : 1,
+    windowStartMs: withinWindow ? existing!.windowStartMs : nowMs,
+  }
+}
+
+/** 고정 윈도우 레이트리밋. 남용 방지용(인가 아님)이므로 DB 오류 시 fail-open(허용)한다 —
+ *  레이트리밋 저장소 장애가 아동 검사 흐름 전체를 막지 않도록. 동시 요청 경합은 감수(best-effort). */
 export async function checkRateLimit(bucket: string, maxCount: number, windowMs: number): Promise<boolean> {
-  const now = new Date()
-  const { data, error } = await sb().from('rate_limits')
-    .select('window_start, count').eq('bucket', bucket).maybeSingle()
-  fail(error)
-  const withinWindow = !!data && now.getTime() - new Date(data.window_start).getTime() < windowMs
-  if (withinWindow && data!.count >= maxCount) return false
-  const nextCount = withinWindow ? data!.count + 1 : 1
-  const windowStart = withinWindow ? data!.window_start : now.toISOString()
-  const { error: upErr } = await sb().from('rate_limits')
-    .upsert({ bucket, window_start: windowStart, count: nextCount }, { onConflict: 'bucket' })
-  fail(upErr)
-  return true
+  try {
+    const nowMs = Date.now()
+    const { data, error } = await sb().from('rate_limits')
+      .select('window_start, count').eq('bucket', bucket).maybeSingle()
+    if (error) throw new Error(error.message)
+    const existing = data ? { windowStartMs: new Date(data.window_start).getTime(), count: data.count } : null
+    const d = rateLimitDecision(nowMs, existing, maxCount, windowMs)
+    if (!d.allowed) return false
+    const { error: upErr } = await sb().from('rate_limits').upsert(
+      { bucket, window_start: new Date(d.windowStartMs).toISOString(), count: d.nextCount },
+      { onConflict: 'bucket' })
+    if (upErr) throw new Error(upErr.message)
+    return true
+  } catch (e) {
+    console.error('레이트리밋 확인 실패 (fail-open으로 허용):', e)
+    return true
+  }
+}
+
+/** 세션이 실제로 존재하는지. 녹음 업로드 전 위조 sessionId(형식만 맞는 무작위 UUID)를 걸러
+ *  스토리지 고아 파일 남용을 막는다. DB 오류 시 fail-open(존재로 간주) — 데이터 정합성은 FK가 최종 보증. */
+export async function sessionExists(sessionId: string): Promise<boolean> {
+  const { data, error } = await sb().from('sessions').select('id').eq('id', sessionId).maybeSingle()
+  if (error) { console.error('세션 존재 확인 실패 (fail-open으로 허용):', error.message); return true }
+  return !!data
 }
 
 // ---------- 관리자 조회 ----------

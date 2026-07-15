@@ -7,7 +7,10 @@ import { validBirthYmd, validClassNo, validContact, validGender, validGrade, val
 const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 })
 const cleanStr = (v: unknown) => typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : ''
 
-const MAX_SESSIONS_PER_HOUR = 60 // 학교 컴퓨터실 공용 IP 대비 여유 있게 설정
+// 세션 생성은 IP 단위로 제한한다(세션당 스팸은 녹음 라우트의 세션 단위 상한이 막음).
+// 한 학교의 여러 학급이 같은 공용 IP(NAT)로 동시 검사할 수 있으므로 넉넉히 잡되,
+// 무한 세션 생성으로 인한 PII row·스토리지 남용의 외곽 상한 역할을 한다.
+const MAX_SESSIONS_PER_HOUR = 200
 
 export async function POST(req: Request) {
   if (!(await checkRateLimit(`session:${clientIp(req)}`, MAX_SESSIONS_PER_HOUR, 3600_000)))

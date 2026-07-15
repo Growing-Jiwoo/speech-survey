@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/db', () => ({
   uploadRecording: vi.fn().mockResolvedValue(undefined),
   insertRecording: vi.fn().mockResolvedValue(undefined),
+  sessionExists: vi.fn().mockResolvedValue(true),
   checkRateLimit: vi.fn().mockResolvedValue(true),
 }))
 
@@ -67,9 +68,18 @@ describe('POST /api/recordings', () => {
     expect(db.insertRecording).not.toHaveBeenCalled()
     expect((await res.json()).error).not.toContain('storage down')
   })
+  it('존재하지 않는 세션(위조 UUID) 400, 업로드 안 함', async () => {
+    vi.mocked(db.sessionExists).mockResolvedValueOnce(false)
+    expect((await POST(makeReq())).status).toBe(400)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
   it('레이트리밋 초과 시 429, 업로드 안 함', async () => {
     vi.mocked(db.checkRateLimit).mockResolvedValueOnce(false)
     expect((await POST(makeReq())).status).toBe(429)
     expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+  it('레이트리밋은 세션 단위 키로 확인', async () => {
+    await POST(makeReq())
+    expect(db.checkRateLimit).toHaveBeenCalledWith(`recording:${SID}`, expect.any(Number), expect.any(Number))
   })
 })
