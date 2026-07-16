@@ -68,9 +68,11 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
         <p className="text-xs font-bold text-blue">
           {word ? '아래 낱말을 소리 내어 읽어 주세요' : '아래 문장을 소리 내어 읽어 주세요'}
         </p>
-        {/* 제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치로 검사 흐름 방해 방지) */}
+        {/* 제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치로 검사 흐름 방해 방지).
+            lg+: 모니터 시청 거리(태블릿의 약 2배)를 보정해 글자를 키운다 — 아동 눈에 닿는
+            시각 크기를 기기 간 비슷하게 유지(검사 일관성). */}
         <p className={`no-select-callout font-read mt-2 break-keep font-medium leading-relaxed ${
-          word ? 'text-center text-[38px]' : 'whitespace-pre-line text-[22px]'}`}>
+          word ? 'text-center text-[38px] lg:py-6 lg:text-[64px]' : 'whitespace-pre-line text-[22px] lg:py-3 lg:text-[30px]'}`}>
           {item.text}
         </p>
       </div>

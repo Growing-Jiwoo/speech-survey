@@ -57,7 +57,8 @@ export default function ReviewPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
+    // 데스크톱(lg+): 교사가 29문항을 한눈에 훑도록 섹션 카드 4장을 2열로 펼친다(스크롤 최소화).
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-4xl">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">검사 검토</span>
@@ -68,8 +69,11 @@ export default function ReviewPage() {
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b> 문항이 완료되지 않았어요.</>}
       </p>
 
+      <div className="lg:mt-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
       {SECTIONS.map(section => (
-        <section key={section} className="card mt-4 p-4">
+        // 낱말 해독(14문항)은 좌측 2행 스팬 — 우측의 문장(4)+낱말쓰기(10)와 높이가 맞아 균형 잡힌 2열이 된다
+        <section key={section}
+          className={`card mt-4 p-4 lg:mt-0 ${section === 'word_reading' ? 'lg:row-span-2' : ''}`}>
           <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
           <ul className="mt-2 flex flex-col">
             {ITEMS.filter(i => i.section === section).map(i => {
@@ -101,6 +105,7 @@ export default function ReviewPage() {
           </ul>
         </section>
       ))}
+      </div>
 
       <div className="mt-6 flex gap-2.5 pb-2">
         <button onClick={() => router.push(`/survey?q=${ITEMS.length}`)} className="btn-ghost h-[52px] flex-1">

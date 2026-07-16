@@ -40,12 +40,13 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
   )
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
+    // lg+: 검사 화면과 같은 무대 원칙 — 넓힌 컨테이너에 수직 중앙 정렬(흐름·버튼은 동일).
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10 lg:max-w-2xl lg:justify-center lg:pt-6">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
       </div>
-      <h1 className="mt-14 text-2xl font-bold">마이크 확인</h1>
+      <h1 className="mt-14 text-2xl font-bold lg:mt-10 lg:text-3xl">마이크 확인</h1>
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
         버튼을 누르고<br /><b>&ldquo;안녕하세요&rdquo;</b>라고 말해 주세요.
       </p>
@@ -70,7 +71,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
           ? '목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.'
           : '목소리가 들리면 막대가 움직여요.'}
       </p>
-      <div className="mt-auto w-full pb-2">
+      <div className="mt-auto w-full pb-2 lg:mt-10 lg:max-w-md lg:pb-0">
         {/* 아동용 쉬운 고지(개인정보보호법 제22조의2 제3항) — 검사(녹음) 시작 직전에 보여준다 */}
         <p className="mb-3 text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>

@@ -132,7 +132,9 @@ function SurveyInner() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
+    // 데스크톱(lg+): 시청 거리가 먼 모니터에 맞춰 무대를 넓히고(2xl) 콘텐츠를 수직 중앙 정렬해
+    // "낱말 카드를 들어 보이는 슬라이드"처럼 만든다. 상호작용·흐름은 모바일과 동일(검사 일관성).
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-2xl lg:justify-center lg:pt-6">
       {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
       {st.childName && (
         <p className="mb-2 text-xs font-bold text-ink-soft">
@@ -166,7 +168,9 @@ function SurveyInner() {
           onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
       )}
 
-      <div className="mt-auto flex gap-2.5 pb-2 pt-6">
+      {/* 모바일: 화면 하단 고정(mt-auto). lg: 중앙 정렬 블록을 따라오게(mt-12) —
+          큰 모니터에서 콘텐츠와 버튼 사이가 텅 비는 것을 막는다. */}
+      <div className="mt-auto flex gap-2.5 pb-2 pt-6 lg:mt-12 lg:pb-0">
         <button onClick={() => goToIdx(st.idx - 1)} disabled={st.idx === 0 || isRecording}
           className="btn-ghost h-[52px] flex-1">
           이전

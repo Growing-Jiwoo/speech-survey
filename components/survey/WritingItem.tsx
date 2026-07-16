@@ -12,7 +12,8 @@ export function WritingItem({ item, value, onChange }: {
   return (
     <div className="card mt-3 p-5">
       <p className="text-sm font-bold">학생이 아래의 낱말을 정확하게 쓸 수 있나요?</p>
-      <p className="no-select-callout font-read mt-5 text-center text-[38px] font-bold">{item.text}</p>
+      {/* lg+: 녹음 문항 제시어와 같은 시청 거리 보정 스케일 */}
+      <p className="no-select-callout font-read mt-5 text-center text-[38px] font-bold lg:py-6 lg:text-[64px]">{item.text}</p>
       <div className="mt-6 flex gap-2.5">
         {([['예', true], ['아니오', false]] as const).map(([label, v]) => (
           <button key={label} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
