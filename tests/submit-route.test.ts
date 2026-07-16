@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
-vi.mock('@/lib/db', () => ({ submitSession: vi.fn().mockResolvedValue(1) }))
+vi.mock('@/lib/db', () => ({ submitSession: vi.fn().mockResolvedValue('ok') }))
 
 import { POST } from '@/app/api/sessions/submit/route'
 import * as db from '@/lib/db'
@@ -19,7 +19,7 @@ function makeReq(body: unknown) {
 
 beforeEach(async () => {
   vi.clearAllMocks()
-  vi.mocked(db.submitSession).mockResolvedValue(1)
+  vi.mocked(db.submitSession).mockResolvedValue('ok')
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -36,8 +36,12 @@ describe('POST /api/sessions/submit', () => {
     expect(db.submitSession).toHaveBeenCalledWith('sess-1', [], [])
   })
   it('존재하지 않는 세션 404 (허위 성공 제거)', async () => {
-    vi.mocked(db.submitSession).mockResolvedValue(0)
+    vi.mocked(db.submitSession).mockResolvedValue('not_found')
     expect((await POST(makeReq(VALID()))).status).toBe(404)
+  })
+  it('이미 제출된 세션 재제출 409 (제출 후 변조 차단)', async () => {
+    vi.mocked(db.submitSession).mockResolvedValue('already_submitted')
+    expect((await POST(makeReq(VALID()))).status).toBe(409)
   })
   it('토큰 없음/위조 401', async () => {
     expect((await POST(makeReq({ ...VALID(), sessionToken: '' }))).status).toBe(401)

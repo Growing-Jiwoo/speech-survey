@@ -29,9 +29,11 @@ export async function POST(req: Request) {
     return invalidToken()
 
   try {
-    const affected = await submitSession(b.sessionId, writing, checklist)
-    if (affected === 0)
+    const result = await submitSession(b.sessionId, writing, checklist)
+    if (result === 'not_found')
       return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 })
+    if (result === 'already_submitted')
+      return NextResponse.json({ error: '이미 제출된 검사입니다.' }, { status: 409 })
   } catch (e) {
     console.error('[submit] 제출 실패', e)
     return NextResponse.json({ error: '제출에 실패했습니다.' }, { status: 502 })

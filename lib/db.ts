@@ -30,25 +30,38 @@ export async function insertRecording(r: {
 
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
+export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
+
 /**
- * 최종 제출: 세션을 먼저 업데이트해 존재 여부를 확정하고, 존재할 때만 낱말쓰기를 upsert한다.
- * 반환값은 업데이트된 세션 행수(0이면 미존재 → 라우트에서 404 처리).
+ * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만 낱말쓰기를 upsert한다.
+ * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
  */
 export async function submitSession(
   sessionId: string, writing: WritingAnswer[], checklist: string[],
-): Promise<number> {
+): Promise<SubmitResult> {
   const { data, error } = await sb().from('sessions')
     .update({ checklist, submitted_at: new Date().toISOString() })
-    .eq('id', sessionId).select('id')
+    .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
-  const affected = (data ?? []).length
-  if (affected === 0) return 0
+  if ((data ?? []).length === 0) {
+    const state = await sessionSubmitState(sessionId)
+    return state === 'submitted' ? 'already_submitted' : 'not_found'
+  }
   if (writing.length > 0) {
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e2)
   }
-  return affected
+  return 'ok'
+}
+
+/** 세션 존재·제출 상태 조회(업로드/제출 가드용). */
+export async function sessionSubmitState(sessionId: string): Promise<'missing' | 'open' | 'submitted'> {
+  const { data, error } = await sb().from('sessions')
+    .select('submitted_at').eq('id', sessionId).maybeSingle()
+  fail(error)
+  if (!data) return 'missing'
+  return data.submitted_at ? 'submitted' : 'open'
 }
 
 /** 세션당 녹음 행 수(업로드 총량 상한 검사용). */

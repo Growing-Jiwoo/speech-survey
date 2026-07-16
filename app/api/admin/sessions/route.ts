@@ -9,6 +9,7 @@ export async function GET() {
     const sessions = await listSessions()
     return NextResponse.json({ sessions })
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 })
+    console.error('[admin/sessions] 목록 조회 실패', e)
+    return NextResponse.json({ error: '목록을 불러오지 못했습니다.' }, { status: 500 })
   }
 }

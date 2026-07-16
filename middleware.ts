@@ -3,7 +3,9 @@ import { verifyToken, ADMIN_COOKIE } from '@/lib/auth'
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  if (pathname === '/admin/login' || pathname === '/api/admin/login') return NextResponse.next()
+  // 로그아웃은 만료된 쿠키로도 항상 가능해야 한다(쿠키 제거가 목적이므로 인증 불필요).
+  if (pathname === '/admin/login' || pathname === '/api/admin/login' || pathname === '/api/admin/logout')
+    return NextResponse.next()
   // 시크릿 미설정 시 fail-open 금지 — 빈 키로 서명된 토큰 위조를 차단한다.
   const secret = process.env.SESSION_SECRET
   const token = req.cookies.get(ADMIN_COOKIE)?.value ?? ''

@@ -124,6 +124,11 @@ export default function ReviewPage() {
             <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
               ※ 녹음이 잘 되지 않았을 경우 재검사 요청이 갈 수 있습니다.
             </p>
+            {missing > 0 && (
+              <p className="mt-3 rounded-xl bg-rec/10 px-3 py-2 text-center text-[13px] font-bold text-rec-deep">
+                아직 {missing}개 문항이 완료되지 않았어요.
+              </p>
+            )}
             {err && <p role="alert" className="mt-3 text-center text-sm text-rec-deep">{err}</p>}
             <div className="mt-5 flex gap-2.5">
               <button onClick={() => setModal(false)} disabled={busy}

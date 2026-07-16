@@ -18,7 +18,10 @@ export default function AdminLogin() {
         body: JSON.stringify({ password: pw }),
       })
       if (res.ok) { router.push('/admin'); return }
-      setErr((await res.json()).error ?? '로그인 실패')
+      const json = await res.json().catch(() => ({}))
+      setErr(json.error ?? '로그인 실패')
+    } catch {
+      setErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally { setBusy(false) }
   }
 
@@ -27,7 +30,7 @@ export default function AdminLogin() {
       <div className="card p-6">
         <div className="flex items-center gap-2">
           <Blip variant="logo" className="h-8 w-8" />
-          <span className="text-sm font-bold text-ink-soft">말하기 설문 · 관리자</span>
+          <span className="text-sm font-bold text-ink-soft">읽기 검사 · 관리자</span>
         </div>
         <input type="password" value={pw} onChange={e => setPw(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !busy && login()} placeholder="비밀번호" disabled={busy}

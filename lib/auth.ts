@@ -50,17 +50,21 @@ export async function verifyToken(token: string, secret: string): Promise<boolea
   return timingSafeEqualHex(await hmacHex(`${exp}.${jti}`, secret), sig)
 }
 
-/** 세션 스코프 토큰 형식: `${sessionId}.${HMAC(sessionId)}`. 후속 업로드/제출에 동봉해 임의 세션 쓰기 차단. */
-export async function createSessionToken(sessionId: string, secret: string): Promise<string> {
-  return `${sessionId}.${await hmacHex(sessionId, secret)}`
+/** 세션 스코프 토큰 형식: `${만료ms}.${HMAC(sessionId.만료ms)}`. 후속 업로드/제출에 동봉해 임의 세션 쓰기 차단.
+ *  만료(기본 24시간)를 둬 유출된 토큰의 유효 기간을 검사 당일 수준으로 제한한다. */
+export async function createSessionToken(sessionId: string, secret: string, ttlMs = 24 * 3600_000): Promise<string> {
+  const exp = String(Date.now() + ttlMs)
+  return `${exp}.${await hmacHex(`${sessionId}.${exp}`, secret)}`
 }
 
 export async function verifySessionToken(sessionId: string, token: string, secret: string): Promise<boolean> {
   if (!sessionId || !token) return false
-  const idx = token.lastIndexOf('.')
+  const idx = token.indexOf('.')
   if (idx < 0) return false
+  const exp = token.slice(0, idx)
   const sig = token.slice(idx + 1)
-  return timingSafeEqualHex(await hmacHex(sessionId, secret), sig)
+  if (!(Number(exp) >= Date.now())) return false // NaN 포함 거부
+  return timingSafeEqualHex(await hmacHex(`${sessionId}.${exp}`, secret), sig)
 }
 
 export const ADMIN_COOKIE = 'admin_token'
