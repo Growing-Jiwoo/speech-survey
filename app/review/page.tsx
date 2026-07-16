@@ -14,6 +14,7 @@ import { postJson } from '@/lib/http'
 import { ITEMS, SECTION_LABEL, areaLabel, isRecordingItem, type Section } from '@/lib/items'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
+/** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
   return <Badge tone={done ? 'blue' : 'rec'}>{label}</Badge>
 }
@@ -43,12 +44,12 @@ export default function ReviewPage() {
     (isRecordingItem(i) && !(state.recorded[i.code] > 0)) ||
     (i.section === 'word_writing' && state.writing[i.code] === undefined)).length
 
-  /** 섹션 하나를 카드로 렌더 — 두 컬럼에서 재사용한다. */
+  /** 섹션 하나를 카드로 렌더 — 얇은 구분선 행 + 작은 상태 배지의 차분한 목록. */
   function renderSection(section: Section) {
     return (
-      <section key={section} className="card p-4">
+      <section className="card p-4 lg:p-5">
         <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
-        <ul className="mt-2 flex flex-col">
+        <ul className="mt-1 flex flex-col">
           {ITEMS.filter(i => i.section === section).map(i => {
             let pill: React.ReactNode
             if (isRecordingItem(i)) {
@@ -68,7 +69,7 @@ export default function ReviewPage() {
               <li key={i.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
                 {/* ?q=<orderNo>&from=review — 설문 화면이 해당 문항으로 열리고 "검토로 돌아가기" 링크를 보여준다 */}
                 <Link href={`/survey?q=${i.orderNo}&from=review`} className="flex min-w-0 items-center gap-2.5">
-                  <span className="w-7 flex-none text-sm font-bold text-blue underline">{i.orderNo}</span>
+                  <span className="w-6 flex-none text-sm font-bold text-blue">{i.orderNo}</span>
                   <span className="font-read truncate text-sm">{i.text || '검사자 체크리스트'}</span>
                 </Link>
                 {pill}
@@ -93,7 +94,6 @@ export default function ReviewPage() {
   }
 
   return (
-    // 데스크톱(lg+): 교사가 29문항을 한눈에 훑도록 섹션 카드 4장을 2열로 펼친다(스크롤 최소화).
     <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-4xl">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
@@ -105,18 +105,18 @@ export default function ReviewPage() {
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b> 문항이 완료되지 않았어요.</>}
       </p>
 
-      {/* 데스크톱(lg+): 2열. 좌열=낱말 해독(14문항), 우열=문장(4)+낱말 쓰기(10)+체크리스트(1)로
-          양쪽 높이가 비슷하게 균형 잡힌다. 모바일은 단일 컬럼으로 원래 순서 그대로 쌓인다.
-          space-y로 카드 간격을 일관되게 준다(바깥=열 사이, 안=열 내부). */}
-      <div className="mt-5 space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
-        <div className="space-y-4">
-          {renderSection('word_reading')}
+      {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
+          검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.
+          모바일은 이 순서 그대로 세로로 쌓여 문항 번호 순서(1→29)가 유지된다. */}
+      <div className="mt-5 space-y-4">
+        <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+          <div>{renderSection('word_reading')}</div>
+          <div className="space-y-4">
+            {renderSection('sentence_reading')}
+            {renderSection('word_writing')}
+          </div>
         </div>
-        <div className="space-y-4">
-          {renderSection('sentence_reading')}
-          {renderSection('word_writing')}
-          {renderSection('checklist')}
-        </div>
+        {renderSection('checklist')}
       </div>
 
       <div className="mt-6 flex gap-2.5 pb-2">
