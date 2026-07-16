@@ -128,6 +128,18 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
                   ? micPermissionHint(typeof navigator !== 'undefined' ? navigator.userAgent : '')
                   : '마이크를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'}
             </p>
+          ) : saved && lowVolume ? (
+            // 저음 경고: 저장은 됐지만 다시 권하는 "주의" 상태 — 성공(파란 체크)과 확실히
+            // 구분되도록 앰버색 느낌표로 표시한다.
+            <div className="flex items-center gap-2.5 rounded-[14px] border border-amber/40 bg-amber/10 px-4 py-3">
+              <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-amber/20 text-amber">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 7v6" /><path d="M12 17h.01" />
+                </svg>
+              </span>
+              <p className="text-sm font-bold text-amber">{savedMessage}</p>
+            </div>
           ) : saved ? (
             <div className="flex items-center gap-2.5 rounded-[14px] border border-line bg-well px-4 py-3">
               <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-blue/10 text-blue">
