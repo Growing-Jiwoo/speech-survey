@@ -10,6 +10,7 @@ const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
   birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
   name: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
+  guardianConsent: true, // 법정대리인 서면 동의 확인(필수 — 제22조의2)
 }
 
 function makeReq(body: unknown, ip?: string, extraHeaders: Record<string, string> = {}) {
@@ -43,6 +44,12 @@ describe('POST /api/sessions', () => {
   it('이름 연속 공백은 서버가 정규화', async () => {
     await POST(makeReq({ ...VALID, name: '  Mary   Jane ' }))
     expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({ childName: 'Mary Jane' }))
+  })
+  it('[제22조의2] 법정대리인 동의 미확인(false/누락)이면 400 — 세션 생성 불가', async () => {
+    expect((await POST(makeReq({ ...VALID, guardianConsent: false }))).status).toBe(400)
+    const { guardianConsent: _omitted, ...withoutConsent } = VALID
+    expect((await POST(makeReq(withoutConsent))).status).toBe(400)
+    expect(db.createSession).not.toHaveBeenCalled()
   })
   it('미등록 지역 400', async () =>
     expect((await POST(makeReq({ ...VALID, region: '화성교육청' }))).status).toBe(400))

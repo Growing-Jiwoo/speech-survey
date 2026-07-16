@@ -8,6 +8,7 @@ import { Blip } from '@/components/Blip'
 import { Select } from '@/components/Select'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
+import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { pad2 } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { clearState, loadState, newState, saveState } from '@/lib/survey-state'
@@ -55,6 +56,8 @@ export default function StartPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // 법정대리인 서면 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [시작하기] 비활성
+  const [consent, setConsent] = useState(false)
   // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(childName) 함께 보여 이어하기를 돕는다
   const [resume, setResume] = useState<{ childName: string } | null>(null)
 
@@ -92,6 +95,7 @@ export default function StartPage() {
       region: school!.region, schoolId: school!.schoolId, schoolName: school!.schoolName,
       birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
       name: cleanName, teacherName: cleanTeacher, teacherContact: cleanContact,
+      guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
     })
     setBusy(false)
     if (!r.ok) { setFormErr(r.error); return }
@@ -100,7 +104,7 @@ export default function StartPage() {
     router.push('/survey')
   }
 
-  const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim()
+  const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim() && consent
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
@@ -207,8 +211,34 @@ export default function StartPage() {
           onChange={e => setContact(e.target.value)} className={inputCls} />
         <FieldError id="err-contact" msg={errors.contact} />
 
+        {/* 개인정보 수집·이용 고지(개인정보보호법 제15조 제2항의 4대 필수 고지사항) +
+            법정대리인 서면 동의 확인 체크(제22조의2). 문구의 단일 소스는 lib/consent.ts. */}
+        <div className="mt-6 rounded-xl border border-line bg-well p-4">
+          <p className="text-[13px] font-bold text-ink-soft">개인정보 수집·이용 안내</p>
+          <dl className="mt-2 flex flex-col gap-1.5">
+            {CONSENT_NOTICE.map(row => (
+              <div key={row.label} className="flex gap-2 text-xs leading-relaxed">
+                <dt className="w-20 flex-none font-bold text-ink-mute">{row.label}</dt>
+                <dd className="min-w-0 text-ink-soft">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-mute">
+            만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.
+            학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
+          </p>
+          <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
+            <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-none accent-[var(--color-blue)]" />
+            <span className="text-xs font-bold leading-relaxed text-ink-soft">{GUARDIAN_CONSENT_LABEL}</span>
+          </label>
+        </div>
+
         {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
         <button type="submit" disabled={busy || !filled} className="cta mt-5">시작하기</button>
+        {!consent && (
+          <p className="mt-2 text-center text-[11px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
+        )}
       </form>
       <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
       <LoadingOverlay show={busy} />

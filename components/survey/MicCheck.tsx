@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
+import { CHILD_NOTICE } from '@/lib/consent'
 import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
@@ -70,6 +71,8 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
           : '목소리가 들리면 막대가 움직여요.'}
       </p>
       <div className="mt-auto w-full pb-2">
+        {/* 아동용 쉬운 고지(개인정보보호법 제22조의2 제3항) — 검사(녹음) 시작 직전에 보여준다 */}
+        <p className="mb-3 text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
       </div>
     </main>

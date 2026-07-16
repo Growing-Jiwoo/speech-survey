@@ -46,7 +46,7 @@
 
 1. `npm install`
 2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 순서대로 실행:
-   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql`
+   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql` → `008_guardian_consent.sql`
    - ⚠️ `003`은 기존 `questions`/`responses`/`attempts`/`sessions` 테이블과 데이터를 폐기한다.
      (`002`는 003 이전 스키마 전용 레거시 — 실행하지 말 것, 파일 상단 주석 참고)
    - `004`는 관리자 로그인 무차별 대입 방어용 `login_attempts` 테이블을 만든다.
@@ -54,7 +54,8 @@
      로그인 실패 원자적 증가 함수(`record_login_failure`)를 만든다.
    - `006`은 잠금 만료 후 실패 카운트를 리셋해, 오답 1회로 잠금이 무한 연장되는 것을 막는다(관리자 로그인 DoS 완화).
    - `007`은 `record_login_failure`의 EXECUTE 권한 회수·search_path 고정(방어 심층).
-   - `005`~`007`은 비파괴적이며 재실행해도 안전하다.
+   - `008`은 법정대리인 동의 확인 시각 컬럼(`guardian_consented_at`) 추가.
+   - `005`~`008`은 비파괴적이며 재실행해도 안전하다.
 3. `cp .env.local.example .env.local` 후 값 채우기
    - `ADMIN_PASSWORD_HASH`: `npm run hash-password -- '원하는비밀번호'` 실행 → **".env.local용" 라벨이 붙은 줄**을 그대로 복사해 붙여넣는다.
      - ⚠️ argon2id 해시(`$argon2id$v=19$...`)는 `$`를 필드 구분자로 쓰는데, Next.js는 `.env*` 파일의 `$VAR`를
@@ -122,9 +123,18 @@
 ## 운영 · 개인정보 (PII)
 
 이 서비스는 **아동 실명·생년월일·성별·학교·반, 담임 이름·연락처, 음성 녹음**을 수집한다.
-만 14세 미만 아동의 개인정보이므로 수집·이용 동의(법정대리인), 고지 문구, 보유 기간은
-**운영 주체가 법무 검토를 거쳐 확정**해야 한다. 코드가 제공하는 수단:
+만 14세 미만 아동의 개인정보이므로 법정대리인 동의가 필수다(개인정보보호법 제22조의2).
 
+- **동의 절차(구현됨)**: ① 검사 전 가정통신문 서면 동의서
+  ([docs/consent/guardian-consent-form.md](docs/consent/guardian-consent-form.md)) 배부·회수(시행령 제17조의2 ①4호)
+  → ② 시작 화면에서 4대 고지사항(제15조②) 표시 + 검사자가 "서면 동의 확인" 필수 체크
+  → ③ 확인 시각이 `sessions.guardian_consented_at`에 기록(감사 증적, 마이그레이션 008)
+  → ④ 아동에게는 마이크 확인 화면에서 쉬운 말로 고지(제22조의2 ③).
+  서면 동의서 원본은 운영 주체가 별도 보관한다. 고지 문구의 단일 소스는 `lib/consent.ts`.
+- ⚠️ **TODO(보존 기한 확정 — 운영 개시 전 반드시 결정)**: 현재 보유 기간 고지는
+  "목적 달성 시 지체 없이 파기"(일반 원칙)로 되어 있다. 운영 주체가 구체 기한(예: 결과 통보 후
+  6개월)을 확정하면 → `lib/consent.ts`의 `RETENTION_LABEL`·가정통신문 양식을 함께 교체하고,
+  아래 일괄 파기 절차를 pg_cron으로 자동화할 것. 상세 절차는 `lib/consent.ts` 상단 TODO 주석 참고.
 - **세션 삭제(파기)**: 관리자 결과지의 [세션 삭제] 버튼 — 스토리지 녹음 파일과 DB 행(녹음 메타·낱말쓰기 포함, FK CASCADE)을 영구 삭제한다. 삭제 요청 대응에 사용.
 - **일괄 파기(보존 기한 경과분)**: 보존 기한을 정한 뒤(예: 결과 통보 후 6개월) 주기적으로 SQL Editor에서 실행 —
   스토리지 객체는 행 삭제로 지워지지 않으므로, **먼저 관리자 화면에서 대상 세션을 삭제**하거나

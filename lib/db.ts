@@ -13,6 +13,9 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
     birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
     child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+    // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
+    // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
+    guardian_consented_at: new Date().toISOString(),
   }).select('id').single()
   fail(error)
   return data!.id
@@ -161,6 +164,7 @@ export interface SessionRow {
   child_name: string; teacher_name: string; teacher_contact: string
   checklist: string[]
   started_at: string; submitted_at: string | null
+  guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
 }
 
 export interface RecordingRow {
@@ -170,7 +174,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

@@ -14,6 +14,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     child_name: '김테스트', teacher_name: '이담임', teacher_contact: '010-0000-0000',
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
+    guardian_consented_at: '2026-07-14T00:59:00.000Z',
     recordings: [], writing_answers: [],
     ...over,
   }

@@ -111,7 +111,11 @@ export function AdminDetailView() {
                 </p>
                 <p className="text-[11px] text-ink-mute">
                   생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({s.teacher_contact}) ·{' '}
-                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'}
+                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
+                  {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
+                  {s.guardian_consented_at
+                    ? `보호자 동의 확인 ${new Date(s.guardian_consented_at).toLocaleDateString('ko-KR')}`
+                    : '보호자 동의 기록 없음'}
                 </p>
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
