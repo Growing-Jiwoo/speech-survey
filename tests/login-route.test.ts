@@ -3,6 +3,7 @@ import { hash } from '@node-rs/argon2'
 
 vi.mock('@/lib/db', () => ({
   isLoginLocked: vi.fn().mockResolvedValue(false),
+  loginFailureCount: vi.fn().mockResolvedValue(0),
   recordLoginFailure: vi.fn().mockResolvedValue(undefined),
   clearLoginFailures: vi.fn().mockResolvedValue(undefined),
 }))
@@ -26,6 +27,7 @@ beforeEach(async () => {
   HASH = await hash(PW)                 // argon2id 인코딩 해시
   vi.clearAllMocks()
   vi.mocked(db.isLoginLocked).mockResolvedValue(false)
+  vi.mocked(db.loginFailureCount).mockResolvedValue(0)
 })
 
 describe('POST /api/admin/login', () => {
@@ -53,11 +55,18 @@ describe('POST /api/admin/login', () => {
     expect(res.status).toBe(429)
     expect(db.clearLoginFailures).not.toHaveBeenCalled()
   })
-  it('전역 스로틀 트리거 시 429 (IP는 잠기지 않았어도 차단)', async () => {
-    vi.mocked(db.isLoginLocked).mockImplementation(async (key: string) => key === '__global__')
+  it('[S1] 전역 실패가 누적돼도 로그인을 봉쇄하지 않는다 (하드 잠금 대신 백오프 지연)', async () => {
+    // 전역 카운트를 백오프 임계(30)로 → 약 300ms 지연 후에도 올바른 비번은 통과(200)
+    vi.mocked(db.loginFailureCount).mockResolvedValue(30)
+    const t0 = performance.now()
     const res = await POST(makeReq(PW, { 'x-real-ip': '1.2.3.4' }))
-    expect(res.status).toBe(429)
-    expect(db.clearLoginFailures).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(performance.now() - t0).toBeGreaterThanOrEqual(250) // 백오프가 실제로 적용됨
+  })
+  it('전역 카운트가 임계 미만이면 지연 없이 즉시 처리', async () => {
+    vi.mocked(db.loginFailureCount).mockResolvedValue(5)
+    const res = await POST(makeReq(PW, { 'x-real-ip': '1.2.3.4' }))
+    expect(res.status).toBe(200)
   })
   it('플랫폼 주입 x-real-ip 우선 사용', async () => {
     await POST(makeReq('wrong', { 'x-real-ip': '8.8.8.8', 'x-forwarded-for': '5.5.5.5' }))

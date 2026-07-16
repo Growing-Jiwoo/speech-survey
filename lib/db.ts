@@ -132,6 +132,14 @@ export async function isLoginLocked(ip: string, maxFails: number): Promise<boole
   return data.fail_count >= maxFails && !!data.locked_until && new Date(data.locked_until) > new Date()
 }
 
+/** 해당 키(IP 또는 글로벌 버킷)의 현재 누적 실패 수(없으면 0). 글로벌 백오프 지연 계산용. */
+export async function loginFailureCount(ip: string): Promise<number> {
+  const { data, error } = await sb().from('login_attempts')
+    .select('fail_count').eq('ip', ip).maybeSingle()
+  fail(error)
+  return data?.fail_count ?? 0
+}
+
 /** 로그인 실패 1건 기록 (fail_count 원자적 증가, 잠금시각 갱신). read-then-write 경쟁조건을 피하기 위해 RPC로 위임. */
 export async function recordLoginFailure(ip: string, lockMs: number): Promise<void> {
   const { error } = await sb().rpc('record_login_failure', { p_ip: ip, p_lock_ms: lockMs })

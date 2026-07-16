@@ -135,8 +135,10 @@
   where submitted_at < now() - interval '180 days';
   ```
 - **로그아웃**: 관리자 대시보드 [로그아웃] — 공용 PC에서 자리를 떠날 때 반드시 사용(브라우저 캐시의 세션 목록도 함께 비운다).
-- **로그인 방어**: IP당 5회/글로벌 50회 실패 시 10분 잠금(`login_attempts`). `login_attempts`의 IP 기록도
-  개인정보성 데이터이므로 오래된 행은 주기적으로 정리 권장:
+- **로그인 방어**: IP당 5회 실패 시 10분 하드 잠금(대상형 429). 전역 실패 누적은 하드 잠금 대신
+  점증 지연(백오프, 상한 2초)만 적용해 IP 로테이션 공격에 마찰을 주되 정상 관리자 로그인을
+  봉쇄하지 않는다(가용성 우선). `login_attempts`의 IP 기록도 개인정보성 데이터이므로 오래된 행은
+  주기적으로 정리 권장:
   ```sql
   delete from login_attempts where updated_at < now() - interval '30 days';
   ```
