@@ -33,6 +33,15 @@
 - **인증**: 관리자는 argon2id 비밀번호 + HMAC 쿠키(8시간), 참여자는 세션 생성 시 발급되는 HMAC 세션 토큰(24시간, 해당 세션에만 쓰기 가능)
 - **제출 후 잠금**: 최종 제출된 세션은 녹음 업로드·재제출이 차단된다(검사 증적 사후 변조 방지)
 
+## 폴더 구조
+
+각 폴더의 목적·파일 설명·관례는 폴더별 README에 있다:
+[app/](app/README.md) (화면·흐름) · [app/api/](app/api/README.md) (서버 라우트·방어) ·
+[components/](components/README.md) (+ [survey/](components/survey/README.md), [admin/](components/admin/README.md)) ·
+[hooks/](hooks/README.md) · [lib/](lib/README.md) (로직·서버 유틸) · [tests/](tests/README.md) (테스트 관례) ·
+[supabase/](supabase/README.md) (마이그레이션) · [scripts/](scripts/README.md) · [public/schools/](public/schools/README.md) (생성물) ·
+[docs/](docs/README.md) (설계 문서)
+
 ## 셋업
 
 1. `npm install`
