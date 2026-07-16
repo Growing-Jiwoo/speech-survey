@@ -42,8 +42,9 @@ export function sessionProgress(s: SessionListRow, totals: Totals): {
 
 export interface Kpis { total: number; submitted: number; inProgress: number; today: number }
 
-export function computeKpis(sessions: SessionListRow[], now: Date): Kpis {
-  const todayKey = kstDateKey(now)
+/** @param todayKey "오늘" 판정 기준 KST 일자 키(`kstDateKey(now)`) — Date 대신 문자열을 받아
+ *  호출부(useMemo)가 분 단위 시계 갱신에도 날짜가 같으면 재계산을 건너뛸 수 있게 한다. */
+export function computeKpis(sessions: SessionListRow[], todayKey: string): Kpis {
   let submitted = 0, today = 0
   for (const s of sessions) {
     if (s.submitted_at) submitted++
@@ -81,9 +82,9 @@ export function gradeOptions(sessions: SessionListRow[]): number[] {
 
 // ---------- 필터 · 정렬 ----------
 
-export function filterSessions(sessions: SessionListRow[], f: Filters, now: Date): SessionListRow[] {
+/** @param todayKey "오늘 참여" 필터 기준 KST 일자 키(`kstDateKey(now)`) */
+export function filterSessions(sessions: SessionListRow[], f: Filters, todayKey: string): SessionListRow[] {
   const keyword = f.q.trim()
-  const todayKey = kstDateKey(now)
   return sessions.filter(s => {
     if (f.status === 'submitted' && !s.submitted_at) return false
     if (f.status === 'inProgress' && s.submitted_at) return false

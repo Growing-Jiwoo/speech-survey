@@ -22,8 +22,9 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
   const startedRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cleanupRef = useRef<() => void>(() => {})
+  // 최신 콜백 유지(latest-ref). 렌더 중 ref 쓰기는 금지라 커밋 후 effect에서 갱신한다.
   const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
+  useEffect(() => { onCompleteRef.current = onComplete })
 
   const stop = useCallback(() => {
     clearTimeout(timerRef.current)

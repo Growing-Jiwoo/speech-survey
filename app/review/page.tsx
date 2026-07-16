@@ -32,6 +32,9 @@ export default function ReviewPage() {
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
+    // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
+    // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSt(s)
   }, [router])
 

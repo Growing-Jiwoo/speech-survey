@@ -6,8 +6,9 @@ const FOCUSABLE = 'a[href],button:not([disabled]),textarea:not([disabled]),input
 /** 다이얼로그용 포커스 트랩: 초기 포커스·Tab 순환·Esc 닫기·해제 시 포커스 복귀. */
 export function useFocusTrap(active: boolean, onEscape?: () => void) {
   const ref = useRef<HTMLDivElement | null>(null)
+  // 최신 콜백 유지(latest-ref). 렌더 중 ref 쓰기는 금지라 커밋 후 effect에서 갱신한다.
   const onEscapeRef = useRef(onEscape)
-  onEscapeRef.current = onEscape
+  useEffect(() => { onEscapeRef.current = onEscape })
 
   useEffect(() => {
     if (!active) return

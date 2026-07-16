@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -12,6 +12,8 @@ import { Select } from '@/components/Select'
 
 // 컬럼별 정렬 키·셀 클래스를 meta로 실어 헤더/셀 렌더에서 사용한다.
 declare module '@tanstack/react-table' {
+  // 선언 병합은 원본과 타입 파라미터 이름까지 동일해야 한다(TS2428) — 이 확장에서는 미사용.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     sortKey?: SortKey
     thClassName?: string
@@ -46,18 +48,23 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
   // 검색 입력은 로컬 상태 + 250ms 디바운스로 URL에 반영
   const [qLocal, setQLocal] = useState(filters.q)
   useEffect(() => { setQLocal(filters.q) }, [filters.q])
+  // 디바운스 반영. filters.q·onFilters가 바뀌면 타이머가 재장전되지만
+  // qLocal === filters.q인 동안은 무동작이라 실질 영향 없다(onFilters는 부모에서 useCallback).
   useEffect(() => {
     const t = setTimeout(() => { if (qLocal !== filters.q) onFilters({ q: qLocal }) }, 250)
     return () => clearTimeout(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qLocal])
+  }, [qLocal, filters.q, onFilters])
 
   const hasFilter = filters.q !== '' || filters.status !== 'all'
     || filters.school !== null || filters.grade !== null || filters.today
 
-  // 결과지로 이동했다가 "← 목록"으로 돌아올 때 현재 필터·정렬을 유지하기 위해 back 파라미터로 전달
+  // 결과지로 이동했다가 "← 목록"으로 돌아올 때 현재 필터·정렬을 유지하기 위해 back 파라미터로 전달.
+  // columns 메모의 의존성이 되므로 useCallback으로 정체성을 backQuery에 고정한다.
   const backQuery = filtersToQuery(filters, sort)
-  const detailHref = (id: string) => backQuery ? `/admin/${id}?back=${encodeURIComponent(backQuery)}` : `/admin/${id}`
+  const detailHref = useCallback(
+    (id: string) => backQuery ? `/admin/${id}?back=${encodeURIComponent(backQuery)}` : `/admin/${id}`,
+    [backQuery],
+  )
 
   // ---- react-table 컬럼 정의 (셀 마크업·클래스는 기존 디자인 그대로 보존) ----
   const columns = useMemo(() => {
@@ -121,10 +128,11 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         },
       }),
     ]
-    // detailHref는 filters/sort에 의존하므로 backQuery를 deps에 포함
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totals, backQuery])
+  }, [totals, detailHref])
 
+  // tanstack table v8은 React Compiler 미호환 목록에 있으나(내부 캐시 뮤테이션),
+  // 자체 메모이제이션으로 동작은 안전하다 — v9 호환판이 나올 때까지 경고만 억제.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data: rows,
     columns,

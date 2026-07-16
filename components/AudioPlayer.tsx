@@ -26,8 +26,9 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   const rootRef = useRef<HTMLDivElement>(null)
   const waveRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
+  // 최신 콜백 유지(latest-ref). 렌더 중 ref 쓰기는 금지라 커밋 후 effect에서 갱신한다.
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+  useEffect(() => { onErrorRef.current = onError })
   const bus = useAudioBus()
 
   const [visible, setVisible] = useState(false)   // 화면 진입 전에는 인스턴스 미생성(지연 로드)

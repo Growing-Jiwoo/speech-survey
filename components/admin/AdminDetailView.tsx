@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
-import { adjacentSessionIds, filterSessions, parseFilters, sortSessions } from '@/lib/adminStats'
+import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { AudioBusProvider } from '@/components/AudioBus'
@@ -43,7 +43,7 @@ export function AdminDetailView() {
   const nav = useMemo(() => {
     if (!sessions) return { prev: null, next: null }
     const { filters, sort } = parseFilters(new URLSearchParams(back ?? ''))
-    const rows = sortSessions(filterSessions(sessions, filters, new Date()), sort, TOTALS)
+    const rows = sortSessions(filterSessions(sessions, filters, kstDateKey(new Date())), sort, TOTALS)
     return adjacentSessionIds(rows, id)
   }, [sessions, back, id])
 

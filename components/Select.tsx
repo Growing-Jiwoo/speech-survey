@@ -27,8 +27,12 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
   const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
 
+  // disabled 상태에서는 열림을 파생으로 무효화한다(effect로 setOpen(false)를 쏘는 것보다
+  // 단순하고, disabled 전환 프레임에 목록이 잠깐 보이는 일도 없다).
+  const isOpen = open && !disabled
+
   useEffect(() => {
-    if (!open) return
+    if (!isOpen) return
     function onDocPointerDown(e: PointerEvent) {
       const t = e.target as Node
       if (rootRef.current?.contains(t) || listRef.current?.contains(t)) return
@@ -41,13 +45,11 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
       document.removeEventListener('pointerdown', onDocPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
-
-  useEffect(() => { if (disabled) setOpen(false) }, [disabled])
+  }, [isOpen])
 
   // 열려있는 동안 트리거 위치를 추적해 포탈된 목록의 fixed 좌표를 갱신
   useLayoutEffect(() => {
-    if (!open) return
+    if (!isOpen) return
     function measure() {
       const r = triggerRef.current?.getBoundingClientRect()
       if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width })
@@ -59,25 +61,25 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
       window.removeEventListener('scroll', measure, true)
       window.removeEventListener('resize', measure)
     }
-  }, [open])
+  }, [isOpen])
 
   const selected = options.find(o => o.value === value)
   const trigger = size === 'sm' ? 'h-9 px-2.5 text-xs' : 'h-[50px] px-4 text-base'
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
-      <button ref={triggerRef} type="button" id={id} aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open}
+      <button ref={triggerRef} type="button" id={id} aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={isOpen}
         disabled={disabled} onClick={() => setOpen(o => !o)}
         className={`flex w-full items-center justify-between rounded-xl border-[1.5px] bg-well transition disabled:opacity-50 ${trigger} ${
-          open ? 'border-blue' : 'border-line'}`}>
+          isOpen ? 'border-blue' : 'border-line'}`}>
         <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>{selected ? selected.label : placeholder}</span>
-        <svg className={`ml-2 h-4 w-4 flex-none text-ink-mute transition-transform ${open ? 'rotate-180' : ''}`}
+        <svg className={`ml-2 h-4 w-4 flex-none text-ink-mute transition-transform ${isOpen ? 'rotate-180' : ''}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M6 9l6 6 6-6" />
         </svg>
       </button>
-      {open && pos && createPortal(
+      {isOpen && pos && createPortal(
         <ul ref={listRef} role="listbox" aria-label={ariaLabel}
           style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
           className="z-50 max-h-56 overflow-y-auto rounded-xl border border-line bg-white py-1 shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">

@@ -28,16 +28,23 @@ export function SchoolPicker({ value, onSelect }: {
     return () => { ignore = true }
   }, [])
 
+  // 지역 변경 시 검색어·목록 리셋은 selectRegion(이벤트 핸들러)에서 수행하고,
+  // 이 effect는 해당 지역 학교 목록 fetch만 담당한다(경쟁 상태는 ignore 플래그로 차단).
   useEffect(() => {
     if (!slug) return
     let ignore = false
-    setLoading(true); setSchools([]); setQ(''); setErr('')
     fetch(`/schools/${slug}.json`).then(r => r.json())
       .then(data => { if (!ignore) setSchools(data) })
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.') })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [slug])
+
+  function selectRegion(nextSlug: string) {
+    if (nextSlug === slug) return // 같은 지역 재선택: fetch effect가 재실행되지 않으므로 리셋도 하지 않는다
+    setSlug(nextSlug)
+    setLoading(true); setSchools([]); setQ(''); setErr('')
+  }
 
   const region = regions.find(r => r.slug === slug)
 
@@ -57,7 +64,7 @@ export function SchoolPicker({ value, onSelect }: {
 
   return (
     <div className="mt-1.5">
-      <Select ariaLabel="지역 선택" placeholder="지역을 선택해 주세요" value={slug} onChange={setSlug}
+      <Select ariaLabel="지역 선택" placeholder="지역을 선택해 주세요" value={slug} onChange={selectRegion}
         options={regions.map(r => ({ value: r.slug, label: `${r.short} (${r.count}개교)` }))} />
 
       {slug && (

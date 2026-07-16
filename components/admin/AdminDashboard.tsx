@@ -1,10 +1,10 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DEFAULT_FILTERS, DEFAULT_SORT, computeKpis, computeSchoolStats, filterSessions, filtersToQuery,
-  gradeOptions, parseFilters, schoolOptions, sortSessions,
+  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
   type Filters, type Sort, type SortKey, type Totals,
 } from '@/lib/adminStats'
 import { useSessionsQuery } from '@/hooks/useAdminQueries'
@@ -35,21 +35,29 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
     return () => { clearInterval(iv); window.removeEventListener('focus', tick) }
   }, [])
 
-  const list = sessions ?? []
-  const kpis = useMemo(() => computeKpis(list, now), [list, now])
+  const list = useMemo(() => sessions ?? [], [sessions])
+  // "오늘" 파생값은 Date가 아닌 KST 일자 키(문자열)에 의존시킨다 — now는 1분마다 바뀌지만
+  // 날짜가 그대로면 KPI·필터·정렬(최대 5,000행)을 재계산하지 않는다.
+  const todayKey = kstDateKey(now)
+  const kpis = useMemo(() => computeKpis(list, todayKey), [list, todayKey])
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
   const rows = useMemo(
-    () => sortSessions(filterSessions(list, filters, now), sort, totals),
-    [list, filters, sort, totals, now],
+    () => sortSessions(filterSessions(list, filters, todayKey), sort, totals),
+    [list, filters, sort, totals, todayKey],
   )
 
-  const apply = (f: Filters, s: Sort) => {
+  // SessionTable의 검색 디바운스 effect가 onFilters를 의존성으로 갖도록(정직한 deps)
+  // 콜백 정체성을 안정화한다.
+  const apply = useCallback((f: Filters, s: Sort) => {
     const qs = filtersToQuery(f, s)
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-  }
-  const patchFilters = (patch: Partial<Filters>) => apply({ ...filters, ...patch }, sort)
+  }, [router, pathname])
+  const patchFilters = useCallback(
+    (patch: Partial<Filters>) => apply({ ...filters, ...patch }, sort),
+    [apply, filters, sort],
+  )
 
   const onKpi = (kind: KpiKind) => {
     if (kind === 'total') apply(DEFAULT_FILTERS, sort)
