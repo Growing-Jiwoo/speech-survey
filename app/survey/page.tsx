@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
-import { ITEMS, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
+import { ITEMS, SECTION_FIRST_CODES, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -15,6 +15,7 @@ import { ChecklistItem } from '@/components/survey/ChecklistItem'
 import { MicCheck } from '@/components/survey/MicCheck'
 import { RecordingItem } from '@/components/survey/RecordingItem'
 import { RetryBanner } from '@/components/survey/RetryBanner'
+import { SectionIntro } from '@/components/survey/SectionIntro'
 import { WritingItem } from '@/components/survey/WritingItem'
 
 function SurveyInner() {
@@ -107,6 +108,13 @@ function SurveyInner() {
   // (응답 거부도 유효한 관찰일 수 있어 완전 차단하지 않음).
   const skipping = !fromReview && !isLast && isRecordingSection && (st.recorded[item.code] ?? 0) === 0
 
+  // 섹션(주제) 진입 안내: 각 섹션의 첫 문항에 처음 도달하면 안내 화면을 먼저 보여준다.
+  // 검토에서 특정 문항으로 바로 들어온 경우(fromReview)나 이미 본 섹션은 건너뛴다.
+  const showIntro = !fromReview && SECTION_FIRST_CODES.has(item.code) && !st.introsSeen.includes(item.section)
+  function startSection() {
+    patch(prev => ({ introsSeen: [...prev.introsSeen, item.section] }))
+  }
+
   function goNext() {
     // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
     if (fromReview || isLast) { router.push('/review'); return }
@@ -148,32 +156,41 @@ function SurveyInner() {
         {fromReview && (
           <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
         )}
-        <h1 className="mt-4 text-xs font-bold text-ink-mute">
-          {item.orderNo}. {SECTION_LABEL[item.section]}
-        </h1>
+        {/* 섹션 안내 중에는 문항 번호 라벨을 숨긴다(안내 화면이 주제를 이미 크게 보여줌) */}
+        {!showIntro && (
+          <h1 className="mt-4 text-xs font-bold text-ink-mute">
+            {item.orderNo}. {SECTION_LABEL[item.section]}
+          </h1>
+        )}
       </header>
 
       {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
           이 구역 안에서만 스크롤(헤더·내비는 그대로) — 페이지 스크롤이 생기지 않는다. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col justify-center py-4">
-          {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-            <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
-              attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
-              onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
-              onSaved={() => markSaved(item.code)} />
-          )}
+          {showIntro ? (
+            <SectionIntro section={item.section} />
+          ) : (
+            <>
+              {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
+                <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
+                  attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
+                  onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
+                  onSaved={() => markSaved(item.code)} />
+              )}
 
-          <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
+              <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
-          {item.section === 'word_writing' && (
-            <WritingItem item={item} value={st.writing[item.code]}
-              onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
-          )}
+              {item.section === 'word_writing' && (
+                <WritingItem item={item} value={st.writing[item.code]}
+                  onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
+              )}
 
-          {item.section === 'checklist' && (
-            <ChecklistItem selected={st.checklist}
-              onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
+              {item.section === 'checklist' && (
+                <ChecklistItem selected={st.checklist}
+                  onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -183,10 +200,17 @@ function SurveyInner() {
           className="btn-ghost h-[52px] flex-1">
           이전
         </button>
-        <button onClick={goNext} disabled={!canNext}
-          className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
-          {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
-        </button>
+        {showIntro ? (
+          // 섹션 안내에서는 [시작하기]가 안내를 닫고 첫 문항을 연다(같은 문항에 머무름)
+          <button onClick={startSection} className="btn-primary h-[52px] flex-[2]">
+            시작하기
+          </button>
+        ) : (
+          <button onClick={goNext} disabled={!canNext}
+            className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
+            {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
+          </button>
+        )}
       </nav>
     </main>
   )

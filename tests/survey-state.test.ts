@@ -60,7 +60,7 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
 
   it('sessionId 타입이 잘못된 상태는 null', () => {
     localStorage.setItem('kodys-survey:last', 'sid-1')
-    localStorage.setItem('kodys-survey:sid-1', JSON.stringify({ v: 2, sessionId: 42 }))
+    localStorage.setItem('kodys-survey:sid-1', JSON.stringify({ v: 3, sessionId: 42 }))
     expect(loadState()).toBeNull()
   })
 

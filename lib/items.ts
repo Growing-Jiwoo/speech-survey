@@ -83,4 +83,21 @@ export const SECTION_LABEL: Record<Section, string> = {
   word_writing: '낱말 쓰기',
   checklist: '검사자 체크리스트',
 }
+
+/** 화면에 등장하는 순서(단계). 섹션 진입 안내(SectionIntro)의 "N단계 / 총" 표기에 쓴다. */
+export const SECTION_ORDER: Section[] = ['word_reading', 'sentence_reading', 'word_writing', 'checklist']
+
+/** 섹션 진입 안내 문구 — 주제가 바뀔 때 아동이 "무엇을 하는지" 알도록 아이 눈높이로.
+ *  (checklist는 검사자용 단계라 그에 맞춰 안내) */
+export const SECTION_INTRO: Record<Section, { title: string; desc: string }> = {
+  word_reading: { title: '낱말 읽기', desc: '화면에 나오는 낱말을 소리 내어 읽어요.' },
+  sentence_reading: { title: '문장 읽기', desc: '이번에는 문장을 소리 내어 읽어요.' },
+  word_writing: { title: '낱말 쓰기', desc: '낱말을 정확하게 쓸 수 있는지 확인해요.' },
+  checklist: { title: '마무리 확인', desc: '마지막으로 선생님이 확인하는 단계예요.' },
+}
+
+/** 각 섹션의 "첫 문항" 코드 — 이 문항에 진입할 때 섹션 안내를 한 번 보여준다. */
+export const SECTION_FIRST_CODES = new Set(
+  SECTION_ORDER.map(sec => ITEMS.find(i => i.section === sec)!.code),
+)
 export const KIND_LABEL: Record<'meaning' | 'nonsense', string> = { meaning: '의미', nonsense: '무의미' }
