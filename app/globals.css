@@ -26,12 +26,23 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-noto), sans-serif;
+  /* 한글은 기본적으로 음절 단위로 줄바꿈돼 "다시"가 "다"/"시"로 갈라진다.
+     keep-all로 어절(공백) 단위로만 줄바꿈해 낱말이 쪼개지지 않게 한다. */
+  word-break: keep-all;
 }
 
 /* Tailwind v4는 버튼 기본 커서를 default로 두므로, 활성 버튼은 pointer로 되돌린다. */
 button:not(:disabled), label:has(> input[type="checkbox"]), select:not(:disabled) {
   cursor: pointer;
 }
+
+/* 모든 버튼에 공통 hover/press 피드백(밝기 변화 — 레이아웃을 밀지 않아 어떤 버튼에도 안전).
+   :where()는 명시도 0이라 아래 .cta/.btn-* 등 구체 스타일이 항상 우선한다. */
+:where(button):not(:disabled) {
+  transition: filter .12s ease, background-color .12s ease, border-color .12s ease, box-shadow .08s ease, transform .08s ease;
+}
+:where(button):not(:disabled):hover { filter: brightness(0.97); }
+:where(button):not(:disabled):active { filter: brightness(0.93); }
 
 /* 터치 반응성: 더블탭 줌 대기 제거(연타하는 아동 화면 필수) + iOS 탭 하이라이트 제거 */
 button, a, label {
@@ -65,6 +76,7 @@ button, a, label {
   box-shadow: 0 3px 0 var(--color-blue-deep), 0 12px 20px -10px rgb(30 79 204 / .45);
   transition: transform .08s, box-shadow .08s, opacity .15s;
 }
+.cta:hover:not(:disabled) { box-shadow: 0 3px 0 var(--color-blue-deep), 0 16px 26px -10px rgb(30 79 204 / .55); }
 .cta:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--color-blue-deep); }
 .cta:disabled { opacity: .4; pointer-events: none; }
 .kpi {
@@ -85,12 +97,16 @@ button, a, label {
   border: 1.5px solid var(--color-line);
   background: var(--color-well); color: var(--color-ink-soft);
 }
+.btn-ghost:hover:not(:disabled) { border-color: var(--color-ink-mute); background: #fff; }
+.btn-ghost:active:not(:disabled) { transform: translateY(1px); }
 .btn-primary {
   background: var(--color-blue); color: #fff;
   box-shadow: 0 3px 0 var(--color-blue-deep);
 }
+.btn-primary:hover:not(:disabled) { box-shadow: 0 3px 0 var(--color-blue-deep), 0 10px 18px -8px rgb(30 79 204 / .5); }
 .btn-primary:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--color-blue-deep); }
-.btn-danger { background: var(--color-rec-deep); color: #fff; }
+.btn-danger { background: var(--color-rec-deep); color: #fff; box-shadow: 0 3px 0 #9e2f33; }
+.btn-danger:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #9e2f33; }
 
 @keyframes blip-blink { 0%, 93%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
 @keyframes blip-antp { 0%, 100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.28); opacity: .85 } }

@@ -133,6 +133,12 @@ function SurveyInner() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
+      {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
+      {st.childName && (
+        <p className="mb-2 text-xs font-bold text-ink-soft">
+          <b className="text-blue">{st.childName}</b> 학생
+        </p>
+      )}
       <ProgressBar current={st.idx + 1} total={ITEMS.length} />
       {fromReview && (
         <Link href="/review" className="mt-2 inline-block py-2 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>

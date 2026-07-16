@@ -64,7 +64,7 @@ export function AdminDetailView() {
 
   if (isLoading) return <LoadingOverlay show />
   if (isError || !data) return (
-    <main className="mx-auto max-w-4xl p-6">
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
         <p className="text-sm text-ink-soft">결과지를 불러오지 못했어요.</p>
@@ -83,7 +83,7 @@ export function AdminDetailView() {
 
   return (
     <AudioBusProvider>
-      <main className="mx-auto max-w-4xl p-6">
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <div className="flex items-center justify-between gap-2">
           <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
           {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.

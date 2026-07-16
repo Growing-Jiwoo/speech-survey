@@ -55,13 +55,14 @@ export default function StartPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
-  // 이 기기에 남아 있는 미제출 세션 — 실수로 뒤로가기/탭 닫기를 한 경우 이어서 할 수 있게 안내
-  const [resumable, setResumable] = useState(false)
+  // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(childName) 함께 보여 이어하기를 돕는다
+  const [resume, setResume] = useState<{ childName: string } | null>(null)
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
+    const s = loadState()
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setResumable(loadState() !== null)
+    if (s) setResume({ childName: s.childName })
   }, [])
 
   // 선택한 연·월에 맞는 일수 (윤년 반영)
@@ -95,7 +96,7 @@ export default function StartPage() {
     setBusy(false)
     if (!r.ok) { setFormErr(r.error); return }
     clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
-    saveState(newState(r.data.sessionId, r.data.sessionToken))
+    saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken))
     router.push('/survey')
   }
 
@@ -112,16 +113,21 @@ export default function StartPage() {
         검사를 시작하기 전에<br />아래 정보를 입력해 주세요.
       </p>
 
-      {resumable && (
-        <div className="card mt-6 flex w-full items-center justify-between gap-3 border-blue/40 bg-blue/5 p-4">
-          <p className="text-sm font-bold text-ink-soft">이 기기에 진행 중인 검사가 있어요.</p>
-          <div className="flex flex-none gap-2">
+      {resume && (
+        // 세로 배치: 안내 문장이 버튼과 자리를 다투다 한 글자만 줄바꿈되던 문제를 없앤다.
+        <div className="card mt-6 flex w-full flex-col gap-3 border-blue/40 bg-blue/5 p-4">
+          <p className="text-sm font-bold text-ink-soft">
+            {resume.childName
+              ? <><b className="text-blue">{resume.childName}</b> 학생의 검사가 진행 중이에요.</>
+              : '이 기기에 진행 중인 검사가 있어요.'}
+          </p>
+          <div className="flex gap-2">
             <button type="button" onClick={() => router.push('/survey')}
-              className="rounded-lg bg-blue px-3 py-2 text-xs font-bold text-white">
+              className="flex-1 rounded-lg bg-blue py-2.5 text-sm font-bold text-white">
               이어서 하기
             </button>
-            <button type="button" onClick={() => { clearState(); setResumable(false) }}
-              className="rounded-lg border-[1.5px] border-line bg-white px-3 py-2 text-xs font-bold text-ink-soft">
+            <button type="button" onClick={() => { clearState(); setResume(null) }}
+              className="flex-1 rounded-lg border-[1.5px] border-line bg-white py-2.5 text-sm font-bold text-ink-soft">
               새로 시작
             </button>
           </div>
