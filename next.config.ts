@@ -1,9 +1,8 @@
 import type { NextConfig } from 'next'
 
-// 전 경로 공통 보안 응답 헤더. CSP는 프레이밍만 통제(frame-ancestors)해
-// Next 하이드레이션·Tailwind 인라인 스타일을 깨지 않으면서 클릭재킹을 막는다.
+// 전 경로 공통 보안 응답 헤더. CSP는 요청별 nonce가 필요해 여기(정적 설정)가 아니라
+// middleware.ts에서 주입한다(script-src를 nonce+strict-dynamic으로 잠금 — F-13).
 const securityHeaders = [
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
