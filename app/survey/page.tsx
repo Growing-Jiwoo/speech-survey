@@ -132,45 +132,53 @@ function SurveyInner() {
   }
 
   return (
-    // 데스크톱(lg+): 시청 거리가 먼 모니터에 맞춰 무대를 넓히고(2xl) 콘텐츠를 수직 중앙 정렬해
-    // "낱말 카드를 들어 보이는 슬라이드"처럼 만든다. 상호작용·흐름은 모바일과 동일(검사 일관성).
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-2xl lg:justify-center lg:pt-6">
-      {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
-      {st.childName && (
-        <p className="mb-2 text-xs font-bold text-ink-soft">
-          <b className="text-blue">{st.childName}</b> 학생
-        </p>
-      )}
-      <ProgressBar current={st.idx + 1} total={ITEMS.length} />
-      {fromReview && (
-        <Link href="/review" className="mt-2 inline-block py-2 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
-      )}
-      <h1 className="mt-4 text-xs font-bold text-ink-mute">
-        {item.orderNo}. {SECTION_LABEL[item.section]}
-      </h1>
+    // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
+    // 화면 전체(h-dvh)를 세 구역으로 나눠, 문항 내용 크기가 바뀌어도 헤더와 [이전/다음] 버튼은
+    // 절대 움직이지 않는다(꿀렁임 제거). 페이지는 스크롤되지 않고, 내용이 넘칠 때만 가운데
+    // 구역 안에서만 스크롤된다. 데스크톱은 폭만 넓혀(2xl) 무대를 크게 보인다.
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6">
+      <header className="flex-none">
+        {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
+        {st.childName && (
+          <p className="mb-2 text-xs font-bold text-ink-soft">
+            <b className="text-blue">{st.childName}</b> 학생
+          </p>
+        )}
+        <ProgressBar current={st.idx + 1} total={ITEMS.length} />
+        {fromReview && (
+          <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
+        )}
+        <h1 className="mt-4 text-xs font-bold text-ink-mute">
+          {item.orderNo}. {SECTION_LABEL[item.section]}
+        </h1>
+      </header>
 
-      {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-        <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
-          attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
-          onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
-          onSaved={() => markSaved(item.code)} />
-      )}
+      {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
+          이 구역 안에서만 스크롤(헤더·내비는 그대로) — 페이지 스크롤이 생기지 않는다. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center py-4">
+          {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
+            <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
+              attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
+              onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
+              onSaved={() => markSaved(item.code)} />
+          )}
 
-      <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
+          <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
-      {item.section === 'word_writing' && (
-        <WritingItem item={item} value={st.writing[item.code]}
-          onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
-      )}
+          {item.section === 'word_writing' && (
+            <WritingItem item={item} value={st.writing[item.code]}
+              onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
+          )}
 
-      {item.section === 'checklist' && (
-        <ChecklistItem selected={st.checklist}
-          onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
-      )}
+          {item.section === 'checklist' && (
+            <ChecklistItem selected={st.checklist}
+              onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
+          )}
+        </div>
+      </div>
 
-      {/* 모바일: 화면 하단 고정(mt-auto). lg: 중앙 정렬 블록을 따라오게(mt-12) —
-          큰 모니터에서 콘텐츠와 버튼 사이가 텅 비는 것을 막는다. */}
-      <div className="mt-auto flex gap-2.5 pb-2 pt-6 lg:mt-12 lg:pb-0">
+      <nav className="flex flex-none gap-2.5 pt-4">
         <button onClick={() => goToIdx(st.idx - 1)} disabled={st.idx === 0 || isRecording}
           className="btn-ghost h-[52px] flex-1">
           이전
@@ -179,7 +187,7 @@ function SurveyInner() {
           className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
           {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
         </button>
-      </div>
+      </nav>
     </main>
   )
 }

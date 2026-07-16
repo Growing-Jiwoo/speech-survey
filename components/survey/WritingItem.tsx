@@ -10,11 +10,13 @@ export function WritingItem({ item, value, onChange }: {
   onChange: (v: boolean) => void
 }) {
   return (
-    <div className="card mt-3 p-5">
+    <div className="card mx-auto w-full max-w-md p-5 lg:p-6">
       <p className="text-sm font-bold">학생이 아래의 낱말을 정확하게 쓸 수 있나요?</p>
-      {/* lg+: 녹음 문항 제시어와 같은 시청 거리 보정 스케일 */}
-      <p className="no-select-callout font-read mt-5 text-center text-[38px] font-bold lg:py-6 lg:text-[64px]">{item.text}</p>
-      <div className="mt-6 flex gap-2.5">
+      {/* 녹음 문항 카드와 같은 고정 최소 높이·중앙 배치(시청 거리 보정 스케일) */}
+      <div className="flex min-h-[112px] items-center justify-center lg:min-h-[168px]">
+        <p className="no-select-callout font-read text-center text-[38px] font-bold lg:text-[64px]">{item.text}</p>
+      </div>
+      <div className="mt-2 flex gap-2.5">
         {([['예', true], ['아니오', false]] as const).map(([label, v]) => (
           <button key={label} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
             className={`h-[52px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
