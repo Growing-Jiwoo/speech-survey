@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/Select'
-import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { Spinner } from '@/components/Spinner'
 import { fetchJson } from '@/lib/http'
 import type { RegionInfo, School } from '@/lib/schools'
 
@@ -73,6 +73,12 @@ export function SchoolPicker({ value, onSelect }: {
           <input aria-label="학교 검색" value={q} onChange={e => setQ(e.target.value)}
             placeholder="학교 이름을 입력해 주세요"
             className="h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none focus:border-blue" />
+          {/* 학교 목록 로딩은 목록 영역 인라인 스피너로 표시(전체 화면 dim은 과한 피드백) */}
+          {loading && (
+            <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-line py-6 text-sm text-ink-mute">
+              <Spinner className="h-4 w-4" /> 학교 목록을 불러오는 중…
+            </div>
+          )}
           {!loading && schools.length > 0 && (
             <ul className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line">
               {shown.map(s => (
@@ -93,7 +99,6 @@ export function SchoolPicker({ value, onSelect }: {
         </div>
       )}
       {err && <p role="alert" className="mt-2 text-sm text-rec-deep">{err}</p>}
-      <LoadingOverlay show={loading} />
     </div>
   )
 }

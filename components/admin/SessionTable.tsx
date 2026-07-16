@@ -159,8 +159,12 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
                       className={`font-medium ${meta?.thClassName ?? 'px-4'}`}>
                       {sortKey !== undefined ? (
                         <button type="button" onClick={() => onSort(sortKey)}
-                          className={`inline-flex items-center gap-0.5 ${on ? 'font-bold text-ink' : ''}`}>
-                          {label}{on && <span aria-hidden>{sort.dir === 'asc' ? '▲' : '▼'}</span>}
+                          className={`inline-flex items-center gap-0.5 transition-colors hover:text-ink ${on ? 'font-bold text-ink' : ''}`}>
+                          {label}
+                          {/* 정렬 방향 화살표(활성). 비활성 헤더에는 흐린 ↕로 정렬 가능함을 상시 표시. */}
+                          {on
+                            ? <span aria-hidden>{sort.dir === 'asc' ? '▲' : '▼'}</span>
+                            : <span aria-hidden className="text-ink-mute/40">↕</span>}
                         </button>
                       ) : label}
                     </th>

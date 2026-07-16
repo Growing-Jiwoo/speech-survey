@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
+import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 import { Blip } from '@/components/Blip'
@@ -30,7 +31,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         {micErr === 'unsupported'
           ? <>Safari나 Chrome 최신 버전에서<br />다시 열어 주세요.</>
           : micErr === 'denied'
-            ? <>브라우저 설정에서 이 사이트의 마이크를<br /><b>허용</b>으로 바꾼 뒤 다시 눌러 주세요.</>
+            ? micPermissionHint(typeof navigator !== 'undefined' ? navigator.userAgent : '')
             : <>마이크를 시작하지 못했어요.<br />잠시 후 다시 눌러 주세요.</>}
       </p>
       {micErr !== 'unsupported' && <button onClick={start} className="cta mt-2 max-w-60">다시 시도</button>}

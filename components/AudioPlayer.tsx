@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { useAudioBus } from '@/components/AudioBus'
 import { Select } from '@/components/Select'
+import { Spinner } from '@/components/Spinner'
 import { fmtDuration } from '@/lib/format'
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
@@ -91,11 +92,14 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   }, [])
 
   return (
-    <div ref={rootRef} tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"
+    <div ref={rootRef} role="group" tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"
       className="flex w-full max-w-[280px] items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue/40">
       <button type="button" onClick={toggle} disabled={!ready} aria-label={playing ? '일시정지' : '재생'}
         className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-ink text-white disabled:opacity-40">
-        {playing ? (
+        {/* 파형 로딩 전에는 재생 버튼 자리에 스피너를 보여 준다(단순 비활성보다 상태가 분명) */}
+        {!ready ? (
+          <Spinner className="h-3.5 w-3.5" />
+        ) : playing ? (
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
           </svg>

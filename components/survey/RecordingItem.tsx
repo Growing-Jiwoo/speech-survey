@@ -4,11 +4,15 @@
 import { useEffect, useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
+import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 import { Spinner } from '@/components/Spinner'
 import { uploadRecording } from '@/lib/upload'
 import type { SurveyItem } from '@/lib/items'
+
+// 남은 시간 텍스트를 노출하기 시작하는 임계(초) — 이 전까지는 시간 압박 신호를 숨긴다.
+const COUNTDOWN_WARN_SEC = 10
 
 export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onUploadFailed }: {
   item: SurveyItem; sessionId: string; sessionToken: string; attemptCount: number; onSaved: () => void
@@ -76,7 +80,7 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
           {micErr === 'unsupported'
             ? '이 브라우저에서는 녹음을 지원하지 않아요. Safari나 Chrome 최신 버전에서 다시 시도해 주세요.'
             : micErr === 'denied'
-              ? <>마이크를 쓸 수 없어요. 브라우저 설정에서 이 사이트의 마이크를 <b>허용</b>으로 바꾼 뒤 다시 시도해 주세요.</>
+              ? micPermissionHint(typeof navigator !== 'undefined' ? navigator.userAgent : '')
               : '마이크를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'}
         </p>
       )}
@@ -125,8 +129,12 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
             <LevelMeter level={recorder.level} />
             <div className="flex items-center gap-2">
               <span className="blip-antpulse motion-reduce:animate-none inline-block h-2 w-2 rounded-full bg-rec" />
-              {/* 매초 바뀌는 카운트다운에는 aria-live를 붙이지 않는다(스크린리더 낭독 스팸 방지) */}
-              <span className="text-[13px] font-bold tabular-nums text-rec-deep">남은 시간 {recorder.remainingSec}초</span>
+              {/* 아동 시간 압박 완화: 남은 시간이 충분할 때는 "녹음 중"만 보이고(진행 링·레벨미터가
+                  녹음 상태를 알려줌), 종료 임박(≤10초)에만 중립색으로 남은 시간을 부드럽게 알린다.
+                  매초 바뀌는 값에는 aria-live를 붙이지 않는다(스크린리더 낭독 스팸 방지). */}
+              {recorder.remainingSec <= COUNTDOWN_WARN_SEC
+                ? <span className="text-[13px] font-bold tabular-nums text-ink-soft">곧 끝나요 · {recorder.remainingSec}초</span>
+                : <span className="text-[13px] font-bold text-ink-soft">녹음 중이에요</span>}
             </div>
           </div>
         )}

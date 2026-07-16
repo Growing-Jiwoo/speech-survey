@@ -113,7 +113,7 @@ export default function ReviewPage() {
 
       <ConfirmDialog open={modal} busy={busy} error={err}
         title={<>녹음이 잘 되었는지<br />모두 확인하셨습니까?</>}
-        confirmLabel="네" cancelLabel="아니오"
+        confirmLabel={missing > 0 ? '그래도 제출하기' : '제출하기'} cancelLabel="돌아가기"
         onConfirm={submit} onClose={() => setModal(false)}>
         <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
           ※ 녹음이 잘 되지 않았을 경우 재검사 요청이 갈 수 있습니다.

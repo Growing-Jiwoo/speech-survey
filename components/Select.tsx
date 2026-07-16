@@ -5,6 +5,10 @@ import { createPortal } from 'react-dom'
 
 export interface SelectOption { value: string; label: string }
 
+// 목록 최대 높이(max-h-56 = 224px)와 옵션당 추정 높이 — 아래 공간이 부족하면 위로 펼치기 위한 계산용
+const MAX_LIST_H = 224
+const EST_OPTION_H = 41
+
 /**
  * 목록은 document.body에 포탈 렌더한다 — 조상 요소의 overflow-hidden(카드형 컨테이너 등)에
  * 잘리는 문제를 근본적으로 피하기 위함(트리거 위치를 기준으로 fixed 포지션 계산).
@@ -92,7 +96,13 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
     if (!isOpen) return
     function measure() {
       const r = triggerRef.current?.getBoundingClientRect()
-      if (r) setPos({ top: r.bottom + 6, left: r.left, width: r.width })
+      if (!r) return
+      // 아래 공간이 목록 높이보다 작고 위 공간이 더 넓으면 위로 펼친다(뷰포트 하단 행에서 잘림 방지).
+      const estH = Math.min(options.length * EST_OPTION_H + 8, MAX_LIST_H)
+      const spaceBelow = window.innerHeight - r.bottom
+      const flipUp = spaceBelow < estH + 12 && r.top > spaceBelow
+      const top = flipUp ? Math.max(8, r.top - 6 - estH) : r.bottom + 6
+      setPos({ top, left: r.left, width: r.width })
     }
     measure()
     window.addEventListener('scroll', measure, true)
@@ -101,7 +111,7 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
       window.removeEventListener('scroll', measure, true)
       window.removeEventListener('resize', measure)
     }
-  }, [isOpen])
+  }, [isOpen, options.length])
 
   const selected = selectedIdx >= 0 ? options[selectedIdx] : undefined
   const trigger = size === 'sm' ? 'h-9 px-2.5 text-xs' : 'h-[50px] px-4 text-base'
