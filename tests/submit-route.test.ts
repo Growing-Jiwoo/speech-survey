@@ -60,6 +60,17 @@ describe('POST /api/sessions/submit', () => {
     const body = await res.json()
     expect(body.error).not.toMatch(/secret db connection string/)
   })
+  it('체크리스트 중복 코드는 dedup되어 저장된다', async () => {
+    const res = await POST(makeReq({ ...VALID(), checklist: ['speech', 'speech', 'attention'] }))
+    expect(res.status).toBe(200)
+    expect(db.submitSession).toHaveBeenCalledWith(SID, expect.anything(), ['speech', 'attention'])
+  })
+  it('writing이 배열이면 400 (객체만 허용)', async () =>
+    expect((await POST(makeReq({ ...VALID(), writing: [['ww01', true]] }))).status).toBe(400))
+  it('체크리스트 비문자열 원소 400', async () =>
+    expect((await POST(makeReq({ ...VALID(), checklist: [1] }))).status).toBe(400))
+  it('sessionId 비문자열 400', async () =>
+    expect((await POST(makeReq({ ...VALID(), sessionId: 123 }))).status).toBe(400))
   it('미지 낱말쓰기 코드 400', async () =>
     expect((await POST(makeReq({ ...VALID(), writing: { rw01: true } }))).status).toBe(400))
   it('불리언 아닌 답 400', async () =>

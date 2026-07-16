@@ -49,3 +49,42 @@ describe('survey-state', () => {
     expect(loadState()).toBeNull()
   })
 })
+
+describe('survey-state — 손상·구버전 데이터 방어', () => {
+  it('저장값이 JSON이 아니면 null (throw 없이)', () => {
+    localStorage.setItem('kodys-survey:last', 'sid-1')
+    localStorage.setItem('kodys-survey:sid-1', 'not-json{{{')
+    expect(loadState()).toBeNull()
+  })
+
+  it('sessionId 타입이 잘못된 상태는 null', () => {
+    localStorage.setItem('kodys-survey:last', 'sid-1')
+    localStorage.setItem('kodys-survey:sid-1', JSON.stringify({ v: 1, sessionId: 42 }))
+    expect(loadState()).toBeNull()
+  })
+
+  it('last 포인터만 있고 본체가 없으면 null', () => {
+    localStorage.setItem('kodys-survey:last', 'sid-ghost')
+    expect(loadState()).toBeNull()
+  })
+
+  it('[REGRESSION] 스키마 버전(v) 없는 구버전 상태는 로드하지 않는다 — 새로 시작', () => {
+    localStorage.setItem('kodys-survey:last', 'sid-old')
+    localStorage.setItem('kodys-survey:sid-old',
+      JSON.stringify({ sessionId: 'sid-old', sessionToken: 't', idx: 5, recorded: {}, writing: {}, checklist: [] }))
+    expect(loadState()).toBeNull()
+  })
+
+  it('saveState는 저장 실패(쿼터 초과 등) 시 예외를 전파하지 않는다', () => {
+    const broken = { ...localStorage, setItem: () => { throw new Error('QuotaExceededError') } }
+    ;(globalThis as unknown as { localStorage: Storage }).localStorage = broken as Storage
+    expect(() => saveState(newState('sid-1', 'tok'))).not.toThrow()
+  })
+
+  it('clearState는 localStorage 접근 실패 시에도 예외를 전파하지 않는다', () => {
+    ;(globalThis as unknown as { localStorage: Storage }).localStorage = {
+      getItem: () => { throw new Error('SecurityError') },
+    } as unknown as Storage
+    expect(() => clearState()).not.toThrow()
+  })
+})

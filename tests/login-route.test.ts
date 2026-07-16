@@ -67,6 +67,29 @@ describe('POST /api/admin/login', () => {
     await POST(makeReq('wrong', { 'x-forwarded-for': '5.5.5.5, 10.0.0.1, 10.0.0.2' }))
     expect(db.recordLoginFailure).toHaveBeenCalledWith('10.0.0.2', expect.any(Number))
   })
+  it('성공 쿠키 속성: HttpOnly + SameSite=Lax + Path=/ + Max-Age는 토큰 TTL(8h)과 일치', async () => {
+    const res = await POST(makeReq(PW))
+    const cookie = res.headers.get('set-cookie') ?? ''
+    expect(cookie).toMatch(/HttpOnly/i)
+    expect(cookie).toMatch(/SameSite=Lax/i)
+    expect(cookie).toMatch(/Path=\//i)
+    expect(cookie).toMatch(/Max-Age=28800/i)
+  })
+  it('비문자열 password(숫자·객체)는 401 + 실패 기록', async () => {
+    expect((await POST(makeReq(12345, { 'x-real-ip': '3.3.3.3' }))).status).toBe(401)
+    expect((await POST(makeReq({ pw: 'x' }, { 'x-real-ip': '3.3.3.3' }))).status).toBe(401)
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('3.3.3.3', expect.any(Number))
+  })
+  it('본문이 JSON이 아니면 401 (500 아님)', async () => {
+    const res = await POST(new Request('http://x/api/admin/login', { method: 'POST', body: 'not-json' }))
+    expect(res.status).toBe(401)
+  })
+  it('ADMIN_PASSWORD_HASH가 손상돼 verify가 throw해도 500이 아닌 401', async () => {
+    HASH = 'corrupted-not-a-hash'
+    const res = await POST(makeReq(PW, { 'x-real-ip': '4.4.4.4' }))
+    expect(res.status).toBe(401)
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('4.4.4.4', expect.any(Number))
+  })
   it('공격자가 x-forwarded-for 첫 홉을 위조해도 신뢰 위치(x-real-ip)가 같으면 동일 잠금 버킷으로 집계된다', async () => {
     // 첫 시도: 위조된 첫 홉 '1.1.1.1', 실제 신뢰 IP(x-real-ip)는 '9.9.9.9'
     await POST(makeReq('wrong', { 'x-real-ip': '9.9.9.9', 'x-forwarded-for': '1.1.1.1' }))

@@ -24,6 +24,11 @@ describe('auth token', () => {
   it('sha256Hex는 알려진 값과 일치', async () => {
     expect(await sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
   })
+  it('비숫자 exp는 안전하게 실패 (NaN은 만료검사를 지나가도 서명에서 걸린다 — 동작 고정)', async () => {
+    const t = await createToken(SECRET, 60_000)
+    const [, jti] = t.split('.')
+    expect(await verifyToken(`abc.${jti}.${t.split('.')[2]}`, SECRET)).toBe(false)
+  })
 })
 
 describe('세션 스코프 토큰', () => {
