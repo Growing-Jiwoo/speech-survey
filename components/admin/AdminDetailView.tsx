@@ -1,11 +1,12 @@
 'use client'
-import { useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, parseFilters, sortSessions } from '@/lib/adminStats'
 import { useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { AudioPlayer } from '@/components/AudioPlayer'
 import { Blip } from '@/components/Blip'
@@ -30,6 +31,13 @@ export function AdminDetailView() {
   const queryClient = useQueryClient()
   const { data, isLoading, isError, error } = useSessionDetailQuery(id)
 
+  // 세션 삭제(PII 파기): 확인 모달 → DELETE → 목록 캐시 무효화 후 목록으로 복귀
+  const [delModal, setDelModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [delErr, setDelErr] = useState('')
+  const closeDelModal = useCallback(() => { if (!deleting) setDelModal(false) }, [deleting])
+  const delTrapRef = useFocusTrap(delModal, closeDelModal)
+
   // 이전/다음 아동: 캐시된 목록에 back의 필터·정렬을 재적용해 현재 id의 앞/뒤를 구한다.
   const { data: sessions } = useSessionsQuery()
   const nav = useMemo(() => {
@@ -40,6 +48,19 @@ export function AdminDetailView() {
   }, [sessions, back, id])
 
   const goHref = (target: string) => back ? `/admin/${target}?back=${encodeURIComponent(back)}` : `/admin/${target}`
+
+  async function removeSession() {
+    setDeleting(true); setDelErr('')
+    try {
+      const res = await fetch(`/api/admin/sessions/${id}`, { method: 'DELETE' })
+      if (!res.ok) { setDelErr('삭제에 실패했어요. 다시 시도해 주세요.'); return }
+      queryClient.removeQueries({ queryKey: ['admin', 'session', id] })
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] })
+      router.replace(listHref)
+    } catch {
+      setDelErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
+    } finally { setDeleting(false) }
+  }
 
   const byItem = useMemo(() => {
     const m = new Map<string, { attempt_no: number; url: string; duration_sec: number | null }[]>()
@@ -80,6 +101,10 @@ export function AdminDetailView() {
               onClick={() => nav.next && router.push(goHref(nav.next))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               다음 아동 ▶
+            </button>
+            <button type="button" onClick={() => setDelModal(true)}
+              className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
+              세션 삭제
             </button>
           </div>
         </div>
@@ -212,6 +237,33 @@ export function AdminDetailView() {
             채점 기준(PDF): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.
           </p>
         </div>
+
+        {delModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6" onClick={closeDelModal}>
+            <div ref={delTrapRef} role="dialog" aria-modal="true" aria-labelledby="del-title"
+              className="w-full max-w-sm rounded-[20px] bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+              <h2 id="del-title" className="text-center text-lg font-bold leading-relaxed">
+                이 세션을 삭제할까요?
+              </h2>
+              <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+                <b>{s.child_name}</b> ({s.school_name} {s.grade}-{s.class_no})의 정보와
+                녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
+              </p>
+              {delErr && <p role="alert" className="mt-3 text-center text-sm text-rec-deep">{delErr}</p>}
+              <div className="mt-5 flex gap-2.5">
+                <button onClick={closeDelModal} disabled={deleting}
+                  className="h-[50px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft disabled:opacity-40">
+                  취소
+                </button>
+                <button onClick={removeSession} disabled={deleting}
+                  className="h-[50px] flex-1 rounded-xl bg-rec-deep text-[15px] font-bold text-white disabled:opacity-40">
+                  {deleting ? '삭제 중…' : '삭제'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <LoadingOverlay show={deleting} />
       </main>
     </AudioBusProvider>
   )

@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
   insertRecording: vi.fn().mockResolvedValue(undefined),
   countSessionRecordings: vi.fn().mockResolvedValue(0),
   removeStorageObject: vi.fn().mockResolvedValue(undefined),
+  sessionSubmitState: vi.fn().mockResolvedValue('open'),
 }))
 
 import { POST } from '@/app/api/recordings/route'
@@ -31,6 +32,7 @@ function makeReq(over: Record<string, string | Blob> = {}) {
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(db.countSessionRecordings).mockResolvedValue(0)
+  vi.mocked(db.sessionSubmitState).mockResolvedValue('open')
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -75,6 +77,16 @@ describe('POST /api/recordings', () => {
   it('5MB 초과 파일 413', async () => {
     const big = new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'audio/webm' })
     expect((await POST(makeReq({ audio: big }))).status).toBe(413)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+  it('이미 제출된 세션 업로드 409 (제출 후 변조 차단)', async () => {
+    vi.mocked(db.sessionSubmitState).mockResolvedValue('submitted')
+    expect((await POST(makeReq())).status).toBe(409)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+  it('존재하지 않는 세션 업로드 404', async () => {
+    vi.mocked(db.sessionSubmitState).mockResolvedValue('missing')
+    expect((await POST(makeReq())).status).toBe(404)
     expect(db.uploadRecording).not.toHaveBeenCalled()
   })
   it('세션당 녹음 상한 초과 429', async () => {

@@ -6,7 +6,7 @@ export interface SurveyItem {
   code: string      // rw01~rw14 / rs01~rs04 / ww01~ww10 / cl
   orderNo: number   // 1~29 (화면 문항 번호)
   section: Section
-  kind: WordKind    // 낱말 의미/무의미 구분 (아이 화면 비노출, 관리자·CSV 전용)
+  kind: WordKind    // 낱말 의미/무의미 구분 (아이 화면 비노출, 관리자 결과지 전용)
   text: string      // 제시 낱말·문장 (체크리스트는 '')
   maxSec: number    // 녹음 제한(초). 비녹음 문항은 0
 }

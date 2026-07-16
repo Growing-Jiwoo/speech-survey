@@ -44,6 +44,15 @@ describe('세션 스코프 토큰', () => {
     const t = await createSessionToken(SID, SECRET)
     expect(await verifySessionToken(SID, t, 'other')).toBe(false)
   })
+  it('만료된 세션 토큰은 실패', async () => {
+    const t = await createSessionToken(SID, SECRET, -1)
+    expect(await verifySessionToken(SID, t, SECRET)).toBe(false)
+  })
+  it('만료(exp) 필드 변조 시 실패', async () => {
+    const t = await createSessionToken(SID, SECRET, 60_000)
+    const sig = t.slice(t.indexOf('.') + 1)
+    expect(await verifySessionToken(SID, `9999999999999.${sig}`, SECRET)).toBe(false)
+  })
 })
 
 describe('관리자 토큰 jti', () => {

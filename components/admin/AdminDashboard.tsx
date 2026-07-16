@@ -64,6 +64,12 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
 
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] }) }
 
+  async function logout() {
+    try { await fetch('/api/admin/logout', { method: 'POST' }) } catch { /* 쿠키 삭제 실패해도 로그인으로 이동 */ }
+    queryClient.clear() // 공용 PC 대비: 캐시에 남은 아동 PII 제거
+    router.replace('/admin/login')
+  }
+
   if (isLoading) return <LoadingOverlay show />
   if (isError || !sessions) return (
     <div className="rounded-[20px] border border-line bg-white p-10 text-center text-sm text-ink-soft shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
@@ -87,6 +93,10 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
             <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
           </svg>
           {isFetching ? '갱신 중' : '새로고침'}
+        </button>
+        <button type="button" onClick={logout}
+          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
+          로그아웃
         </button>
       </div>
       <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />

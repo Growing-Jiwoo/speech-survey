@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { insertRecording, uploadRecording, countSessionRecordings, removeStorageObject } from '@/lib/db'
+import { insertRecording, uploadRecording, countSessionRecordings, removeStorageObject, sessionSubmitState } from '@/lib/db'
 import { audioExt } from '@/lib/audio-ext'
 import { isAllowedAudioMime, sniffAudio, safeContentType } from '@/lib/audio-validate'
 import { verifySessionToken } from '@/lib/auth'
@@ -44,6 +44,12 @@ export async function POST(req: Request) {
   const audioPath = `${sessionId}/${itemCode}_${attemptNo}.${audioExt(mime)}`
 
   try {
+    // 제출 완료 후 업로드 차단(검사 증적 사후 변조 방지). 세션 미존재도 여기서 걸러낸다.
+    const state = await sessionSubmitState(sessionId)
+    if (state === 'missing')
+      return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 })
+    if (state === 'submitted')
+      return NextResponse.json({ error: '이미 제출된 검사입니다.' }, { status: 409 })
     if ((await countSessionRecordings(sessionId)) >= MAX_PER_SESSION)
       return NextResponse.json({ error: '녹음 개수 상한을 초과했습니다.' }, { status: 429 })
     await uploadRecording(audioPath, Buffer.from(bytes), mime)
