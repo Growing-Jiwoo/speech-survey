@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/Select'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { fetchJson } from '@/lib/http'
 import type { RegionInfo, School } from '@/lib/schools'
 
 export interface SelectedSchool { region: string; schoolId: string; schoolName: string }
@@ -22,7 +23,7 @@ export function SchoolPicker({ value, onSelect }: {
 
   useEffect(() => {
     let ignore = false
-    fetch('/schools/index.json').then(r => r.json())
+    fetchJson<(RegionInfo & { count: number })[]>('/schools/index.json')
       .then(data => { if (!ignore) setRegions(data) })
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 새로고침해 주세요.') })
     return () => { ignore = true }
@@ -33,7 +34,7 @@ export function SchoolPicker({ value, onSelect }: {
   useEffect(() => {
     if (!slug) return
     let ignore = false
-    fetch(`/schools/${slug}.json`).then(r => r.json())
+    fetchJson<School[]>(`/schools/${slug}.json`)
       .then(data => { if (!ignore) setSchools(data) })
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.') })
       .finally(() => { if (!ignore) setLoading(false) })

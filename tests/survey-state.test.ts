@@ -16,14 +16,14 @@ beforeEach(() => {
 
 describe('survey-state', () => {
   it('newState는 idx=0, phase=mic로 시작', () => {
-    const s = newState('sid-1', '김도연', 'tok')
+    const s = newState('sid-1', 'tok')
     expect(s.idx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
   })
 
   it('save→load 왕복으로 idx·phase 복원', () => {
-    const s = newState('sid-1', '김도연', 'tok')
+    const s = newState('sid-1', 'tok')
     saveState({ ...s, idx: 12, phase: 'item', micDone: true })
     const loaded = loadState()
     expect(loaded?.sessionId).toBe('sid-1')
@@ -33,14 +33,14 @@ describe('survey-state', () => {
   })
 
   it('세션별 키 분리 + last 포인터가 최신 세션을 가리킴', () => {
-    saveState({ ...newState('sid-1', 'A', 'tok'), idx: 3 })
-    saveState({ ...newState('sid-2', 'B', 'tok'), idx: 7 })
+    saveState({ ...newState('sid-1', 'tok'), idx: 3 })
+    saveState({ ...newState('sid-2', 'tok'), idx: 7 })
     expect(loadState()?.sessionId).toBe('sid-2')
     expect(loadState()?.idx).toBe(7)
   })
 
   it('clearState는 현재 세션과 포인터를 제거해 load가 null', () => {
-    saveState({ ...newState('sid-1', 'A', 'tok'), idx: 3 })
+    saveState({ ...newState('sid-1', 'tok'), idx: 3 })
     clearState()
     expect(loadState()).toBeNull()
   })

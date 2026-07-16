@@ -78,12 +78,29 @@ export async function removeStorageObject(path: string): Promise<void> {
   fail(error)
 }
 
-/** 관리자 세션 삭제: 스토리지 {id}/ 프리픽스 객체 전체 제거 후 행 삭제(FK CASCADE로 recordings·writing_answers 정리). */
+/** storage list() 페이지 크기. supabase-js 기본값도 100이지만, 아래 페이지네이션 루프가
+ *  "기본값이 곧 전부"라고 오해하지 않도록 명시한다. */
+const STORAGE_LIST_PAGE = 100
+
+/**
+ * 관리자 세션 삭제(PII 파기): 스토리지 {id}/ 프리픽스 객체 전체 제거 후 행 삭제
+ * (FK CASCADE로 recordings·writing_answers 정리).
+ * - list()는 기본 100개까지만 반환하므로 반드시 페이지네이션으로 전부 수집한다
+ *   (세션당 녹음 상한 200개 — 한 페이지만 지우면 음성 파일이 고아로 잔존한다).
+ * - 스토리지 → 행 순서 유지: 중간 실패 시 세션 행이 남아 관리자가 재시도할 수 있다.
+ */
 export async function deleteSession(id: string): Promise<void> {
-  const { data: objs, error: listErr } = await sb().storage.from('recordings').list(id)
-  fail(listErr)
-  if (objs && objs.length) {
-    const { error: rmErr } = await sb().storage.from('recordings').remove(objs.map(o => `${id}/${o.name}`))
+  const paths: string[] = []
+  for (let offset = 0; ; offset += STORAGE_LIST_PAGE) {
+    const { data: objs, error: listErr } = await sb().storage.from('recordings')
+      .list(id, { limit: STORAGE_LIST_PAGE, offset })
+    fail(listErr)
+    if (!objs || objs.length === 0) break
+    paths.push(...objs.map(o => `${id}/${o.name}`))
+    if (objs.length < STORAGE_LIST_PAGE) break
+  }
+  if (paths.length > 0) {
+    const { error: rmErr } = await sb().storage.from('recordings').remove(paths)
     fail(rmErr)
   }
   const { error } = await sb().from('sessions').delete().eq('id', id)

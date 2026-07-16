@@ -1,8 +1,10 @@
+// POST /api/admin/login — 관리자 로그인. argon2id 해시 검증 + DB 기반 레이트리밋(IP·글로벌 이중 버킷).
 import { NextResponse } from 'next/server'
 import { verify } from '@node-rs/argon2'
-import { createToken, ADMIN_COOKIE } from '@/lib/auth'
+import { createToken, ADMIN_COOKIE, ADMIN_TTL_MS } from '@/lib/auth'
 import { clearLoginFailures, isLoginLocked, recordLoginFailure } from '@/lib/db'
 import { env } from '@/lib/env'
+import { clientIp } from '@/lib/request'
 
 export const runtime = 'nodejs' // @node-rs/argon2는 네이티브 바인딩 → Node 런타임 필수
 
@@ -10,16 +12,6 @@ const MAX_FAILS = 5
 const LOCK_MS = 10 * 60_000
 const GLOBAL_KEY = '__global__'   // IP 무관 누적 실패 버킷(IP 로테이션 공격 완화)
 const GLOBAL_MAX_FAILS = 50
-
-/** 브루트포스 키: 플랫폼(Vercel)이 주입하는 x-real-ip 우선(클라이언트 위조 불가).
- *  없으면 x-forwarded-for의 마지막(가장 신뢰 가능한) 홉. 둘 다 없으면 'local'.
- *  ※ x-forwarded-for 첫 IP는 클라이언트가 위조 가능하므로 키로 쓰지 않는다. */
-function clientIp(req: Request): string {
-  const real = req.headers.get('x-real-ip')?.trim()
-  if (real) return real
-  const hops = req.headers.get('x-forwarded-for')?.split(',').map(s => s.trim()).filter(Boolean)
-  return hops?.[hops.length - 1] ?? 'local'
-}
 
 export async function POST(req: Request) {
   const ip = clientIp(req)
@@ -42,7 +34,7 @@ export async function POST(req: Request) {
   const token = await createToken(env('SESSION_SECRET'))
   const res = NextResponse.json({ ok: true })
   res.cookies.set(ADMIN_COOKIE, token, {
-    httpOnly: true, sameSite: 'lax', path: '/', maxAge: 8 * 3600, // 토큰 TTL과 일치(8시간)
+    httpOnly: true, sameSite: 'lax', path: '/', maxAge: ADMIN_TTL_MS / 1000, // 토큰 TTL과 단일 소스로 일치
     secure: process.env.NODE_ENV === 'production',
   })
   return res

@@ -1,5 +1,6 @@
+// components/admin/SessionTable.tsx — 관리자 세션 목록 표(가상화 렌더).
 'use client'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -7,8 +8,9 @@ import {
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type StatusFilter, type Totals } from '@/lib/adminStats'
-import { Select } from '@/components/Select'
+import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { Badge } from '@/components/Badge'
+import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
 // 컬럼별 정렬 키·셀 클래스를 meta로 실어 헤더/셀 렌더에서 사용한다.
 declare module '@tanstack/react-table' {
@@ -20,12 +22,6 @@ declare module '@tanstack/react-table' {
     tdClassName?: string
   }
 }
-
-const STATUS_TABS: { key: StatusFilter; label: string }[] = [
-  { key: 'all', label: '전체' },
-  { key: 'submitted', label: '제출' },
-  { key: 'inProgress', label: '진행 중' },
-]
 
 const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measureElement로 실측 보정)
 
@@ -45,18 +41,6 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
   onReset: () => void
 }) {
   const router = useRouter()
-  // 검색 입력은 로컬 상태 + 250ms 디바운스로 URL에 반영
-  const [qLocal, setQLocal] = useState(filters.q)
-  useEffect(() => { setQLocal(filters.q) }, [filters.q])
-  // 디바운스 반영. filters.q·onFilters가 바뀌면 타이머가 재장전되지만
-  // qLocal === filters.q인 동안은 무동작이라 실질 영향 없다(onFilters는 부모에서 useCallback).
-  useEffect(() => {
-    const t = setTimeout(() => { if (qLocal !== filters.q) onFilters({ q: qLocal }) }, 250)
-    return () => clearTimeout(t)
-  }, [qLocal, filters.q, onFilters])
-
-  const hasFilter = filters.q !== '' || filters.status !== 'all'
-    || filters.school !== null || filters.grade !== null || filters.today
 
   // 결과지로 이동했다가 "← 목록"으로 돌아올 때 현재 필터·정렬을 유지하기 위해 back 파라미터로 전달.
   // columns 메모의 의존성이 되므로 useCallback으로 정체성을 backQuery에 고정한다.
@@ -116,7 +100,7 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         id: 'checklist', header: '검사자 체크리스트',
         meta: { thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
         cell: ({ row }) => row.original.checklist.length > 0
-          ? <span className="rounded-full bg-amber/10 px-2.5 py-0.5 text-xs font-bold text-amber">{row.original.checklist.length}개 영역</span>
+          ? <Badge tone="amber" size="sm">{row.original.checklist.length}개 영역</Badge>
           : <span className="text-xs text-ink-mute">—</span>,
       }),
       col.display({
@@ -156,36 +140,8 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
-        <input value={qLocal} onChange={e => setQLocal(e.target.value)} placeholder="이름·학교·담임·반 검색"
-          className="h-10 w-52 rounded-xl border-[1.5px] border-line bg-well px-3.5 text-sm outline-none transition focus:border-blue" />
-        <div className="flex gap-1.5">
-          {STATUS_TABS.map(t => (
-            <button key={t.key} type="button" onClick={() => onFilters({ status: t.key })} aria-pressed={filters.status === t.key}
-              className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
-                filters.status === t.key ? 'bg-blue text-white' : 'bg-well text-ink-soft'}`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <Select size="sm" ariaLabel="학교 필터" placeholder="학교 전체" className="w-44"
-          value={filters.school ?? ''} onChange={v => onFilters({ school: v || null })}
-          options={[{ value: '', label: '학교 전체' }, ...schools.map(s => ({ value: s, label: s }))]} />
-        <Select size="sm" ariaLabel="학년 필터" placeholder="학년 전체" className="w-28"
-          value={filters.grade !== null ? String(filters.grade) : ''}
-          onChange={v => onFilters({ grade: v ? Number(v) : null })}
-          options={[{ value: '', label: '학년 전체' }, ...grades.map(g => ({ value: String(g), label: `${g}학년` }))]} />
-        {/* 학교·학년은 Select가 현재 값을 나타내므로 중복 Chip 제거. Select가 없는 'today'만 Chip 유지. */}
-        {filters.today && <Chip label="오늘 참여" onRemove={() => onFilters({ today: false })} />}
-        <div className="ml-auto flex items-center gap-2">
-          {hasFilter && (
-            <>
-              <span className="text-xs text-ink-mute">{rows.length}건 표시</span>
-              <button type="button" onClick={onReset} className="text-xs font-bold text-blue underline">초기화</button>
-            </>
-          )}
-        </div>
-      </div>
+      <FilterToolbar filters={filters} schools={schools} grades={grades}
+        shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
       {/* 세로 가상화를 위한 스크롤 컨테이너. 긴 학교명 등은 셀 nowrap + 가로 스크롤로 처리. */}
       <div ref={scrollRef} className="max-h-[70vh] overflow-auto">
         <table className="min-w-full text-sm">
@@ -218,8 +174,13 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
             {virtualRows.map(vr => {
               const row = modelRows[vr.index]
               return (
+                // 행 전체 클릭은 마우스 편의용(키보드·새 탭 열기는 이름 셀의 실제 Link가 담당).
+                // 수정자 키(Cmd/Ctrl/Shift) 클릭은 가로채지 않는다 — 링크 기대 동작 존중.
                 <tr key={row.id} data-index={vr.index} ref={rowVirtualizer.measureElement}
-                  onClick={() => router.push(detailHref(row.original.id))}
+                  onClick={e => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey) return
+                    router.push(detailHref(row.original.id))
+                  }}
                   className="cursor-pointer border-t border-line/60 hover:bg-well">
                   {row.getVisibleCells().map(cell => (
                     <td key={cell.id} className={cell.column.columnDef.meta?.tdClassName ?? 'px-4'}>
@@ -242,22 +203,11 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
   )
 }
 
-function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span className="flex items-center gap-1 rounded-full bg-blue/10 px-2.5 py-1 text-xs font-bold text-blue">
-      {label}
-      <button type="button" onClick={onRemove} aria-label={`${label} 필터 제거`} className="leading-none">×</button>
-    </span>
-  )
-}
-
 /** 상태 배지 3단계: 제출 완료(mint) / 제출·미완료 있음(amber) / 진행 중(회색) */
 function StatusBadge({ submitted, incomplete }: { submitted: boolean; incomplete: boolean }) {
-  if (!submitted)
-    return <span className="whitespace-nowrap rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink-mute">진행 중</span>
-  if (incomplete)
-    return <span className="whitespace-nowrap rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">제출 · 미완료 있음</span>
-  return <span className="whitespace-nowrap rounded-full bg-mint/10 px-3 py-1 text-xs font-bold text-mint">제출 완료</span>
+  if (!submitted) return <Badge tone="mute">진행 중</Badge>
+  if (incomplete) return <Badge tone="amber">제출 · 미완료 있음</Badge>
+  return <Badge tone="mint">제출 완료</Badge>
 }
 
 function ProgressCell({ recorded, written, totals }: { recorded: number; written: number; totals: Totals }) {
@@ -278,7 +228,7 @@ function Track({ label, value, max }: { label: string; value: number; max: numbe
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-ink/10">
         <span className={`block h-full rounded-full ${full ? 'bg-mint' : 'bg-rec'}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className={`font-read text-[11px] ${full ? 'text-ink-soft' : 'font-bold text-rec-deep'}`}>{value}/{max}</span>
+      <span className={`font-read text-[11px] tabular-nums ${full ? 'text-ink-soft' : 'font-bold text-rec-deep'}`}>{value}/{max}</span>
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { useAudioBus } from '@/components/AudioBus'
 import { Select } from '@/components/Select'
+import { fmtDuration } from '@/lib/format'
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
 const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: `${r}×` }))
@@ -13,13 +14,6 @@ const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: `${r}×` }))
 function cssVar(name: string): string {
   if (typeof window === 'undefined') return ''
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-}
-
-function fmt(sec: number): string {
-  if (!Number.isFinite(sec) || sec < 0) sec = 0
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export function AudioPlayer({ src, onError }: { src: string; onError?: () => void }) {
@@ -112,7 +106,7 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
         )}
       </button>
       <div ref={waveRef} className="h-8 min-w-0 flex-1" aria-hidden="true" />
-      <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmt(cur)}/{fmt(dur)}</span>
+      <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
       <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
         ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[84px] flex-none" />
     </div>

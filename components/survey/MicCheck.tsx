@@ -15,6 +15,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
   const recorder = useRecorder(MAX_SEC, (r: Recording) => setMicOk(r.peak > MIC_MIN_PEAK ? 'ok' : 'quiet'))
 
   async function start() {
+    setMicOk('none') // 자리 이동·기기 변경 후 재확인 허용(성공 뒤에도 다시 눌러 확인 가능)
     try { await recorder.start(); setMicErr(null) }
     catch (e) { setMicErr(classifyRecorderError(e)) }
   }
@@ -47,23 +48,26 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         버튼을 누르고<br /><b>&ldquo;안녕하세요&rdquo;</b>라고 말해 주세요.
       </p>
       <div className="mt-12">
-        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop} disabled={micOk === 'ok'}
+        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop}
           maxSec={MAX_SEC} elapsedMs={recorder.elapsedMs} success={micOk === 'ok'} />
       </div>
       <div className="mt-8"><LevelMeter level={recorder.level} /></div>
-      {micOk === 'ok' ? (
-        <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-mint" aria-live="polite">
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 12l5 5L20 6" />
-          </svg>
-          마이크가 잘 인식됐어요!
-        </p>
-      ) : micOk === 'quiet' ? (
-        <p className="mt-3 text-sm text-ink-soft" aria-live="polite">목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.</p>
-      ) : (
-        <p className="mt-3 text-[11px] text-ink-mute">목소리가 들리면 막대가 움직여요.</p>
-      )}
+      {/* 항상 마운트된 단일 라이브 리전 — 조건부로 갈아끼우면 스크린리더 낭독이 보장되지 않는다 */}
+      <p aria-live="polite" className={`mt-3 ${
+        micOk === 'ok' ? 'flex items-center gap-1.5 text-sm font-bold text-mint'
+          : micOk === 'quiet' ? 'text-sm text-ink-soft' : 'text-[11px] text-ink-mute'}`}>
+        {micOk === 'ok' ? (
+          <>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 12l5 5L20 6" />
+            </svg>
+            마이크가 잘 인식됐어요!
+          </>
+        ) : micOk === 'quiet'
+          ? '목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.'
+          : '목소리가 들리면 막대가 움직여요.'}
+      </p>
       <div className="mt-auto w-full pb-2">
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
       </div>

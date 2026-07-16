@@ -1,13 +1,16 @@
+// POST /api/sessions/submit — 최종 제출(낱말쓰기 답 + 체크리스트 저장, submitted_at 확정).
+// 제출 이후에는 같은 세션의 재제출·녹음 업로드가 모두 거부된다(검사 증적 보호).
 import { NextResponse } from 'next/server'
 import { submitSession, type WritingAnswer } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { AREA_CODES, WRITING_ITEMS } from '@/lib/items'
+import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
 
 const WRITING_CODES = new Set(WRITING_ITEMS.map(i => i.code))
-const bad = (msg: string) => NextResponse.json({ error: msg }, { status: 400 })
+const bad = (msg: string) => jsonError(msg, 400)
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}))
@@ -23,7 +26,7 @@ export async function POST(req: Request) {
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
 
-  const invalidToken = () => NextResponse.json({ error: '유효하지 않은 세션입니다.' }, { status: 401 })
+  const invalidToken = () => jsonError('유효하지 않은 세션입니다.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
@@ -31,12 +34,12 @@ export async function POST(req: Request) {
   try {
     const result = await submitSession(b.sessionId, writing, checklist)
     if (result === 'not_found')
-      return NextResponse.json({ error: '세션을 찾을 수 없습니다.' }, { status: 404 })
+      return jsonError('세션을 찾을 수 없습니다.', 404)
     if (result === 'already_submitted')
-      return NextResponse.json({ error: '이미 제출된 검사입니다.' }, { status: 409 })
+      return jsonError('이미 제출된 검사입니다.', 409)
   } catch (e) {
     console.error('[submit] 제출 실패', e)
-    return NextResponse.json({ error: '제출에 실패했습니다.' }, { status: 502 })
+    return jsonError('제출에 실패했습니다.', 502)
   }
   return NextResponse.json({ ok: true })
 }

@@ -1,4 +1,6 @@
 // lib/items.ts — 읽기 선별검사 문항 (출처: [최종] 초등 1학년 선별검사지.pdf)
+import { pad2 } from './format'
+
 export type Section = 'word_reading' | 'sentence_reading' | 'word_writing' | 'checklist'
 export type WordKind = 'meaning' | 'nonsense' | null
 
@@ -22,35 +24,39 @@ const SENTENCES = [
 const WRITE_MEANING = ['우비', '까치', '수박', '동상', '생각']
 const WRITE_NONSENSE = ['오거', '끼추', '소벅', '당송', '갈먹']
 
-const pad = (n: number) => String(n).padStart(2, '0')
-
 export const ITEMS: SurveyItem[] = [
   ...READ_MEANING.map((text, i) => ({
-    code: `rw${pad(i + 1)}`, orderNo: i + 1,
+    code: `rw${pad2(i + 1)}`, orderNo: i + 1,
     section: 'word_reading' as const, kind: 'meaning' as const, text, maxSec: 30,
   })),
   ...READ_NONSENSE.map((text, i) => ({
-    code: `rw${pad(i + 8)}`, orderNo: i + 8,
+    code: `rw${pad2(i + 8)}`, orderNo: i + 8,
     section: 'word_reading' as const, kind: 'nonsense' as const, text, maxSec: 30,
   })),
   ...SENTENCES.map((text, i) => ({
-    code: `rs${pad(i + 1)}`, orderNo: i + 15,
+    code: `rs${pad2(i + 1)}`, orderNo: i + 15,
     section: 'sentence_reading' as const, kind: null, text, maxSec: 40,
   })),
   ...WRITE_MEANING.map((text, i) => ({
-    code: `ww${pad(i + 1)}`, orderNo: i + 19,
+    code: `ww${pad2(i + 1)}`, orderNo: i + 19,
     section: 'word_writing' as const, kind: 'meaning' as const, text, maxSec: 0,
   })),
   ...WRITE_NONSENSE.map((text, i) => ({
-    code: `ww${pad(i + 6)}`, orderNo: i + 24,
+    code: `ww${pad2(i + 6)}`, orderNo: i + 24,
     section: 'word_writing' as const, kind: 'nonsense' as const, text, maxSec: 0,
   })),
   { code: 'cl', orderNo: 29, section: 'checklist', kind: null, text: '', maxSec: 0 },
 ]
 
-export const RECORDING_ITEMS = ITEMS.filter(i => i.maxSec > 0)
+/** 녹음 문항 판별의 단일 술어 — "maxSec > 0" 규약이 화면마다 재표현되는 것을 막는다. */
+export const isRecordingItem = (i: SurveyItem): boolean => i.maxSec > 0
+
+export const RECORDING_ITEMS = ITEMS.filter(isRecordingItem)
 export const WRITING_ITEMS = ITEMS.filter(i => i.section === 'word_writing')
 export const itemByCode = new Map(ITEMS.map(i => [i.code, i]))
+
+/** 진행률 분모(녹음/쓰기 문항 수) — 관리자 목록·결과지가 같은 값을 쓰도록 한 곳에 정의. */
+export const ITEM_TOTALS = { rec: RECORDING_ITEMS.length, write: WRITING_ITEMS.length }
 
 export const CHECKLIST_AREAS = [
   { code: 'none', label: '특이사항 없음', hint: '' },

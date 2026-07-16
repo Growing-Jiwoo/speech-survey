@@ -1,5 +1,4 @@
 import { Suspense } from 'react'
-import { RECORDING_ITEMS, WRITING_ITEMS } from '@/lib/items'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 
@@ -9,7 +8,7 @@ export default function AdminList() {
   return (
     <main className="mx-auto max-w-5xl p-6">
       <Suspense fallback={<LoadingOverlay show />}>
-        <AdminDashboard totals={{ rec: RECORDING_ITEMS.length, write: WRITING_ITEMS.length }} />
+        <AdminDashboard />
       </Suspense>
     </main>
   )
