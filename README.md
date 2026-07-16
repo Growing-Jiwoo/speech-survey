@@ -37,13 +37,15 @@
 
 1. `npm install`
 2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 순서대로 실행:
-   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql`
+   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql`
    - ⚠️ `003`은 기존 `questions`/`responses`/`attempts`/`sessions` 테이블과 데이터를 폐기한다.
+     (`002`는 003 이전 스키마 전용 레거시 — 실행하지 말 것, 파일 상단 주석 참고)
    - `004`는 관리자 로그인 무차별 대입 방어용 `login_attempts` 테이블을 만든다.
    - `005`는 FK에 `ON DELETE CASCADE`를 추가하고(세션 삭제 시 녹음·낱말쓰기 자동 정리), 조회 인덱스와
      로그인 실패 원자적 증가 함수(`record_login_failure`)를 만든다.
    - `006`은 잠금 만료 후 실패 카운트를 리셋해, 오답 1회로 잠금이 무한 연장되는 것을 막는다(관리자 로그인 DoS 완화).
-   - `005`·`006`은 비파괴적이며 재실행해도 안전하다.
+   - `007`은 `record_login_failure`의 EXECUTE 권한 회수·search_path 고정(방어 심층).
+   - `005`~`007`은 비파괴적이며 재실행해도 안전하다.
 3. `cp .env.local.example .env.local` 후 값 채우기
    - `ADMIN_PASSWORD_HASH`: `npm run hash-password -- '원하는비밀번호'` 실행 → **".env.local용" 라벨이 붙은 줄**을 그대로 복사해 붙여넣는다.
      - ⚠️ argon2id 해시(`$argon2id$v=19$...`)는 `$`를 필드 구분자로 쓰는데, Next.js는 `.env*` 파일의 `$VAR`를
@@ -61,6 +63,7 @@
 ## 개발 · 테스트
 
 - `npm test` — 단위 + 라우트 테스트 (vitest)
+- `npm run lint` — ESLint(eslint-config-next). react-hooks 규칙 포함 — PR 전 필수.
 - `npm run typecheck` — 타입체크. **빌드 성공만으로 타입 에러가 없다고 판단하지 말 것** — 빌드 속도를 위해
   Next 빌드 내장 타입체크를 꺼두었다(`next.config.ts`의 `typescript.ignoreBuildErrors`).
   (참고: 초기엔 TypeScript 7 tsgo를 썼으나 Next 16 빌드 워커와 호환 문제로 크래시가 나 5.9로 되돌렸다.)
@@ -104,6 +107,8 @@
   5MB 이하 업로드는 수 초 내라 실사용엔 무방하다.
 - 세션 토큰(참여자)은 24시간 만료라, 배포로 `SESSION_SECRET`을 교체하면 진행 중이던 검사의
   업로드가 실패한다 — 검사 시간대를 피해서 시크릿을 회전할 것.
+  **토큰/저장 형식을 바꾸는 배포도 동일하게 진행 중 세션을 무효화한다**(예: 토큰에 만료 추가,
+  localStorage 스키마 버전 변경). 이런 변경이 포함된 릴리스는 반드시 검사 시간대를 피해 배포할 것.
 
 ## 운영 · 개인정보 (PII)
 
