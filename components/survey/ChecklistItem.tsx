@@ -9,7 +9,7 @@ export function ChecklistItem({ selected, onToggle }: {
   onToggle: (code: string) => void
 }) {
   return (
-    <div className="card mt-3 p-5">
+    <div className="card mx-auto w-full max-w-xl p-5 lg:p-6">
       <p className="text-sm font-bold leading-relaxed">
         학생의 발달 영역 중 확인이 필요하다고 생각되는 영역에 모두 표시해 주세요.
       </p>

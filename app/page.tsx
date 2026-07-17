@@ -107,7 +107,8 @@ export default function StartPage() {
   const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim() && consent
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
+    // 데스크톱(lg+)에서는 교사 입력 효율을 위해 폼을 2열로 넓힌다(모바일·태블릿 세로는 현행 유지).
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10 lg:max-w-2xl">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
@@ -139,81 +140,97 @@ export default function StartPage() {
       )}
 
       {/* 자동완성은 의도적으로 끈다(autoComplete="off") — 교사 개인 기기에서 본인 정보가
-          아동 정보 칸에 제안되는 것을 막는다. */}
-      <form className="card mt-8 w-full p-5" autoComplete="off"
+          아동 정보 칸에 제안되는 것을 막는다.
+          lg+에서는 2열 그리드: 각 필드 그룹을 셀 div로 감싸고(모바일 블록 흐름은 그대로)
+          짧은 필드끼리 나란히 배치해 교사의 입력 스크롤을 줄인다. */}
+      <form className="card mt-8 w-full p-5 lg:grid lg:grid-cols-2 lg:gap-x-6 lg:p-7" autoComplete="off"
         onSubmit={e => { e.preventDefault(); if (!busy && filled) void begin() }}>
-        <label className="text-[13px] font-bold text-ink-soft">학교명</label>
-        <div data-field="school">
-          <SchoolPicker value={school} onSelect={setSchool} />
+        <div className="lg:col-span-2">
+          <label className="text-[13px] font-bold text-ink-soft">학교명</label>
+          <div data-field="school">
+            <SchoolPicker value={school} onSelect={setSchool} />
+          </div>
+          <FieldError id="err-school" msg={errors.school} />
         </div>
-        <FieldError id="err-school" msg={errors.school} />
 
-        <span className={labelCls}>생년월일</span>
-        <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
-          aria-describedby={errors.birth ? 'err-birth' : undefined}>
-          <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
-            value={year} onChange={v => { setYear(v); setDay('') }}
-            options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
-          <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
-            value={month} onChange={v => { setMonth(v); setDay('') }}
-            options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
-          <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
-            value={day} onChange={setDay}
-            options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
+        <div className="lg:col-span-2">
+          <span className={labelCls}>생년월일</span>
+          <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
+            aria-describedby={errors.birth ? 'err-birth' : undefined}>
+            <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
+              value={year} onChange={v => { setYear(v); setDay('') }}
+              options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
+            <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
+              value={month} onChange={v => { setMonth(v); setDay('') }}
+              options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
+            <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
+              value={day} onChange={setDay}
+              options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
+          </div>
+          <FieldError id="err-birth" msg={errors.birth} />
         </div>
-        <FieldError id="err-birth" msg={errors.birth} />
 
-        <div className="flex gap-2.5">
-          <div className="flex-1">
-            <label className={labelCls} htmlFor="grade">학년</label>
-            <div className="mt-1.5">
-              <Select id="grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
-                options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
+        <div>
+          <div className="flex gap-2.5">
+            <div className="flex-1">
+              <label className={labelCls} htmlFor="grade">학년</label>
+              <div className="mt-1.5">
+                <Select id="grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
+                  options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
+              </div>
+            </div>
+            <div className="flex-1">
+              <label className={labelCls} htmlFor="classNo">반</label>
+              <input id="classNo" data-field="classNo" name="classNo" value={classNo} inputMode="numeric" maxLength={2}
+                aria-describedby={errors.classNo ? 'err-classNo' : undefined} aria-invalid={!!errors.classNo}
+                onChange={e => setClassNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
             </div>
           </div>
-          <div className="flex-1">
-            <label className={labelCls} htmlFor="classNo">반</label>
-            <input id="classNo" data-field="classNo" name="classNo" value={classNo} inputMode="numeric" maxLength={2}
-              aria-describedby={errors.classNo ? 'err-classNo' : undefined} aria-invalid={!!errors.classNo}
-              onChange={e => setClassNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+          <FieldError id="err-classNo" msg={errors.classNo} />
+        </div>
+
+        <div>
+          <span className={labelCls} id="gender-label">성별</span>
+          <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
+            aria-describedby={errors.gender ? 'err-gender' : undefined}>
+            {(['남', '여'] as const).map(g => (
+              <button key={g} type="button" onClick={() => setGender(g)} aria-pressed={gender === g}
+                className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
+                  gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+                {g}
+              </button>
+            ))}
           </div>
+          <FieldError id="err-gender" msg={errors.gender} />
         </div>
-        <FieldError id="err-classNo" msg={errors.classNo} />
 
-        <span className={labelCls} id="gender-label">성별</span>
-        <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
-          aria-describedby={errors.gender ? 'err-gender' : undefined}>
-          {(['남', '여'] as const).map(g => (
-            <button key={g} type="button" onClick={() => setGender(g)} aria-pressed={gender === g}
-              className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
-                gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
-              {g}
-            </button>
-          ))}
+        <div>
+          <label className={labelCls} htmlFor="name">이름</label>
+          <input id="name" data-field="name" name="name" value={name} maxLength={30}
+            aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
+            onChange={e => setName(e.target.value)} className={inputCls} />
+          <FieldError id="err-name" msg={errors.name} />
         </div>
-        <FieldError id="err-gender" msg={errors.gender} />
 
-        <label className={labelCls} htmlFor="name">이름</label>
-        <input id="name" data-field="name" name="name" value={name} maxLength={30}
-          aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
-          onChange={e => setName(e.target.value)} className={inputCls} />
-        <FieldError id="err-name" msg={errors.name} />
+        <div>
+          <label className={labelCls} htmlFor="teacher">담임교사명</label>
+          <input id="teacher" data-field="teacher" name="teacher" value={teacherName} maxLength={30}
+            aria-describedby={errors.teacher ? 'err-teacher' : undefined} aria-invalid={!!errors.teacher}
+            onChange={e => setTeacherName(e.target.value)} className={inputCls} />
+          <FieldError id="err-teacher" msg={errors.teacher} />
+        </div>
 
-        <label className={labelCls} htmlFor="teacher">담임교사명</label>
-        <input id="teacher" data-field="teacher" name="teacher" value={teacherName} maxLength={30}
-          aria-describedby={errors.teacher ? 'err-teacher' : undefined} aria-invalid={!!errors.teacher}
-          onChange={e => setTeacherName(e.target.value)} className={inputCls} />
-        <FieldError id="err-teacher" msg={errors.teacher} />
-
-        <label className={labelCls} htmlFor="contact">담임 연락처</label>
-        <input id="contact" data-field="contact" name="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
-          aria-describedby={errors.contact ? 'err-contact' : undefined} aria-invalid={!!errors.contact}
-          onChange={e => setContact(e.target.value)} className={inputCls} />
-        <FieldError id="err-contact" msg={errors.contact} />
+        <div className="lg:col-span-2">
+          <label className={labelCls} htmlFor="contact">담임 연락처</label>
+          <input id="contact" data-field="contact" name="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
+            aria-describedby={errors.contact ? 'err-contact' : undefined} aria-invalid={!!errors.contact}
+            onChange={e => setContact(e.target.value)} className={inputCls} />
+          <FieldError id="err-contact" msg={errors.contact} />
+        </div>
 
         {/* 개인정보 수집·이용 고지(개인정보보호법 제15조 제2항의 4대 필수 고지사항) +
             법정대리인 서면 동의 확인 체크(제22조의2). 문구의 단일 소스는 lib/consent.ts. */}
-        <div className="mt-6 rounded-xl border border-line bg-well p-4">
+        <div className="mt-6 rounded-xl border border-line bg-well p-4 lg:col-span-2">
           <p className="text-[13px] font-bold text-ink-soft">개인정보 수집·이용 안내</p>
           <dl className="mt-2 flex flex-col gap-1.5">
             {CONSENT_NOTICE.map(row => (
@@ -234,10 +251,10 @@ export default function StartPage() {
           </label>
         </div>
 
-        {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
-        <button type="submit" disabled={busy || !filled} className="cta mt-5">시작하기</button>
+        {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep lg:col-span-2">{formErr}</p>}
+        <button type="submit" disabled={busy || !filled} className="cta mt-5 lg:col-span-2">시작하기</button>
         {!consent && (
-          <p className="mt-2 text-center text-[11px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
+          <p className="mt-2 text-center text-[11px] text-ink-mute lg:col-span-2">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
         )}
       </form>
       <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>

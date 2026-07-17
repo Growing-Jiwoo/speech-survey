@@ -14,8 +14,7 @@ import { postJson } from '@/lib/http'
 import { ITEMS, SECTION_LABEL, areaLabel, isRecordingItem, type Section } from '@/lib/items'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
-const SECTIONS: Section[] = ['word_reading', 'sentence_reading', 'word_writing', 'checklist']
-
+/** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
   return <Badge tone={done ? 'blue' : 'rec'}>{label}</Badge>
 }
@@ -37,12 +36,50 @@ export default function ReviewPage() {
   }, [router])
 
   if (!st) return null
+  const state = st
 
   // 미완료 판정: 녹음 문항은 저장된 시도 0회, 낱말쓰기는 예/아니오 미선택.
   // (체크리스트는 설문 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
   const missing = ITEMS.filter(i =>
-    (isRecordingItem(i) && !(st.recorded[i.code] > 0)) ||
-    (i.section === 'word_writing' && st.writing[i.code] === undefined)).length
+    (isRecordingItem(i) && !(state.recorded[i.code] > 0)) ||
+    (i.section === 'word_writing' && state.writing[i.code] === undefined)).length
+
+  /** 섹션 하나를 카드로 렌더 — 얇은 구분선 행 + 작은 상태 배지의 차분한 목록. */
+  function renderSection(section: Section) {
+    return (
+      <section className="card p-4 lg:p-5">
+        <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
+        <ul className="mt-1 flex flex-col">
+          {ITEMS.filter(i => i.section === section).map(i => {
+            let pill: React.ReactNode
+            if (isRecordingItem(i)) {
+              const done = (state.recorded[i.code] ?? 0) > 0
+              pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
+            } else if (i.section === 'word_writing') {
+              const v = state.writing[i.code]
+              pill = <StatusPill done={v !== undefined} label={v === true ? '예' : v === false ? '아니오' : '미선택'} />
+            } else {
+              pill = (
+                <span className="text-right text-xs text-ink-soft">
+                  {state.checklist.length > 0 ? state.checklist.map(areaLabel).join(', ') : '선택 없음'}
+                </span>
+              )
+            }
+            return (
+              <li key={i.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
+                {/* ?q=<orderNo>&from=review — 설문 화면이 해당 문항으로 열리고 "검토로 돌아가기" 링크를 보여준다 */}
+                <Link href={`/survey?q=${i.orderNo}&from=review`} className="flex min-w-0 items-center gap-2.5">
+                  <span className="w-6 flex-none text-sm font-bold text-blue">{i.orderNo}</span>
+                  <span className="font-read truncate text-sm">{i.text || '검사자 체크리스트'}</span>
+                </Link>
+                {pill}
+              </li>
+            )
+          })}
+        </ul>
+      </section>
+    )
+  }
 
   async function submit() {
     if (!st) return
@@ -57,7 +94,7 @@ export default function ReviewPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-4xl">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">검사 검토</span>
@@ -68,39 +105,19 @@ export default function ReviewPage() {
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b> 문항이 완료되지 않았어요.</>}
       </p>
 
-      {SECTIONS.map(section => (
-        <section key={section} className="card mt-4 p-4">
-          <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
-          <ul className="mt-2 flex flex-col">
-            {ITEMS.filter(i => i.section === section).map(i => {
-              let pill: React.ReactNode
-              if (isRecordingItem(i)) {
-                const done = (st!.recorded[i.code] ?? 0) > 0
-                pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
-              } else if (i.section === 'word_writing') {
-                const v = st!.writing[i.code]
-                pill = <StatusPill done={v !== undefined} label={v === true ? '예' : v === false ? '아니오' : '미선택'} />
-              } else {
-                pill = (
-                  <span className="text-right text-xs text-ink-soft">
-                    {st!.checklist.length > 0 ? st!.checklist.map(areaLabel).join(', ') : '선택 없음'}
-                  </span>
-                )
-              }
-              return (
-                <li key={i.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
-                  {/* ?q=<orderNo>&from=review — 설문 화면이 해당 문항으로 열리고 "검토로 돌아가기" 링크를 보여준다 */}
-                  <Link href={`/survey?q=${i.orderNo}&from=review`} className="flex min-w-0 items-center gap-2.5">
-                    <span className="w-7 flex-none text-sm font-bold text-blue underline">{i.orderNo}</span>
-                    <span className="font-read truncate text-sm">{i.text || '검사자 체크리스트'}</span>
-                  </Link>
-                  {pill}
-                </li>
-              )
-            })}
-          </ul>
-        </section>
-      ))}
+      {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
+          검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.
+          모바일은 이 순서 그대로 세로로 쌓여 문항 번호 순서(1→29)가 유지된다. */}
+      <div className="mt-5 space-y-4">
+        <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 lg:space-y-0">
+          <div>{renderSection('word_reading')}</div>
+          <div className="space-y-4">
+            {renderSection('sentence_reading')}
+            {renderSection('word_writing')}
+          </div>
+        </div>
+        {renderSection('checklist')}
+      </div>
 
       <div className="mt-6 flex gap-2.5 pb-2">
         <button onClick={() => router.push(`/survey?q=${ITEMS.length}`)} className="btn-ghost h-[52px] flex-1">

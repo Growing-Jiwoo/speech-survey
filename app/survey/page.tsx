@@ -7,7 +7,7 @@ import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
-import { ITEMS, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
+import { ITEMS, SECTION_FIRST_CODES, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -15,6 +15,7 @@ import { ChecklistItem } from '@/components/survey/ChecklistItem'
 import { MicCheck } from '@/components/survey/MicCheck'
 import { RecordingItem } from '@/components/survey/RecordingItem'
 import { RetryBanner } from '@/components/survey/RetryBanner'
+import { SectionIntro } from '@/components/survey/SectionIntro'
 import { WritingItem } from '@/components/survey/WritingItem'
 
 function SurveyInner() {
@@ -107,6 +108,13 @@ function SurveyInner() {
   // (응답 거부도 유효한 관찰일 수 있어 완전 차단하지 않음).
   const skipping = !fromReview && !isLast && isRecordingSection && (st.recorded[item.code] ?? 0) === 0
 
+  // 섹션(주제) 진입 안내: 각 섹션의 첫 문항에 처음 도달하면 안내 화면을 먼저 보여준다.
+  // 검토에서 특정 문항으로 바로 들어온 경우(fromReview)나 이미 본 섹션은 건너뛴다.
+  const showIntro = !fromReview && SECTION_FIRST_CODES.has(item.code) && !st.introsSeen.includes(item.section)
+  function startSection() {
+    patch(prev => ({ introsSeen: [...prev.introsSeen, item.section] }))
+  }
+
   function goNext() {
     // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
     if (fromReview || isLast) { router.push('/review'); return }
@@ -132,50 +140,78 @@ function SurveyInner() {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
-      {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
-      {st.childName && (
-        <p className="mb-2 text-xs font-bold text-ink-soft">
-          <b className="text-blue">{st.childName}</b> 학생
-        </p>
-      )}
-      <ProgressBar current={st.idx + 1} total={ITEMS.length} />
-      {fromReview && (
-        <Link href="/review" className="mt-2 inline-block py-2 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
-      )}
-      <h1 className="mt-4 text-xs font-bold text-ink-mute">
-        {item.orderNo}. {SECTION_LABEL[item.section]}
-      </h1>
+    // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
+    // 화면 전체(h-dvh)를 세 구역으로 나눠, 문항 내용 크기가 바뀌어도 헤더와 [이전/다음] 버튼은
+    // 절대 움직이지 않는다(꿀렁임 제거). 페이지는 스크롤되지 않고, 내용이 넘칠 때만 가운데
+    // 구역 안에서만 스크롤된다. 데스크톱은 폭만 넓혀(2xl) 무대를 크게 보인다.
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6">
+      <header className="flex-none">
+        {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
+        {st.childName && (
+          <p className="mb-2 text-xs font-bold text-ink-soft">
+            <b className="text-blue">{st.childName}</b> 학생
+          </p>
+        )}
+        <ProgressBar current={st.idx + 1} total={ITEMS.length} />
+        {fromReview && (
+          <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
+        )}
+        {/* 섹션 안내 중에는 문항 번호 라벨을 숨긴다(안내 화면이 주제를 이미 크게 보여줌) */}
+        {!showIntro && (
+          <h1 className="mt-4 text-xs font-bold text-ink-mute">
+            {item.orderNo}. {SECTION_LABEL[item.section]}
+          </h1>
+        )}
+      </header>
 
-      {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-        <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
-          attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
-          onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
-          onSaved={() => markSaved(item.code)} />
-      )}
+      {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
+          이 구역 안에서만 스크롤(헤더·내비는 그대로) — 페이지 스크롤이 생기지 않는다. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col justify-center py-4">
+          {showIntro ? (
+            <SectionIntro section={item.section} />
+          ) : (
+            <>
+              {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
+                <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
+                  attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
+                  onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
+                  onSaved={() => markSaved(item.code)} />
+              )}
 
-      <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
+              <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
-      {item.section === 'word_writing' && (
-        <WritingItem item={item} value={st.writing[item.code]}
-          onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
-      )}
+              {item.section === 'word_writing' && (
+                <WritingItem item={item} value={st.writing[item.code]}
+                  onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
+              )}
 
-      {item.section === 'checklist' && (
-        <ChecklistItem selected={st.checklist}
-          onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
-      )}
+              {item.section === 'checklist' && (
+                <ChecklistItem selected={st.checklist}
+                  onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
+              )}
+            </>
+          )}
+        </div>
+      </div>
 
-      <div className="mt-auto flex gap-2.5 pb-2 pt-6">
+      <nav className="flex flex-none gap-2.5 pt-4">
         <button onClick={() => goToIdx(st.idx - 1)} disabled={st.idx === 0 || isRecording}
           className="btn-ghost h-[52px] flex-1">
           이전
         </button>
-        <button onClick={goNext} disabled={!canNext}
-          className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
-          {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
-        </button>
-      </div>
+        {showIntro ? (
+          // 섹션 안내에서는 [시작하기]가 안내를 닫고 첫 문항을 연다(같은 문항에 머무름)
+          <button onClick={startSection} className="btn-primary h-[52px] flex-[2]">
+            시작하기
+          </button>
+        ) : (
+          <button onClick={goNext} disabled={!canNext}
+            className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
+            {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
+          </button>
+        )}
+      </nav>
     </main>
   )
 }

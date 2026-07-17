@@ -64,15 +64,21 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
 
   return (
     <>
-      <div className="card mt-3 p-5">
-        <p className="text-xs font-bold text-blue">
+      <div className="card p-5 lg:p-6">
+        <p className="text-xs font-bold text-blue lg:text-sm">
           {word ? '아래 낱말을 소리 내어 읽어 주세요' : '아래 문장을 소리 내어 읽어 주세요'}
         </p>
-        {/* 제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치로 검사 흐름 방해 방지) */}
-        <p className={`no-select-callout font-read mt-2 break-keep font-medium leading-relaxed ${
-          word ? 'text-center text-[38px]' : 'whitespace-pre-line text-[22px]'}`}>
-          {item.text}
-        </p>
+        {/* 제시어를 고정 최소 높이 안에 세로 중앙 배치 — 짧은 낱말과 긴 문장의 카드 높이를
+            비슷하게 맞춰, 문항을 넘겨도 아래 녹음 버튼 위치가 크게 흔들리지 않게 한다.
+            제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치 방지). */}
+        <div className="flex min-h-[112px] items-center justify-center lg:min-h-[168px]">
+          {/* lg+: 모니터 시청 거리를 보정해 낱말은 크게, 문장은 한 줄에 담기는 크기로.
+              break-keep로 어절 단위 줄바꿈, 문장은 컨테이너 폭에 맞춰 원문 그대로 보이게 한다. */}
+          <p className={`no-select-callout font-read break-keep text-center font-medium leading-relaxed ${
+            word ? 'text-[38px] lg:text-[64px]' : 'whitespace-pre-line text-[22px] lg:text-[26px]'}`}>
+            {item.text}
+          </p>
+        </div>
       </div>
 
       {/* 저장 상태 안내 스크린리더용 라이브 리전 — 조건부 마운트되는 요소의 aria-live는
@@ -122,6 +128,18 @@ export function RecordingItem({ item, sessionId, sessionToken, attemptCount, onS
                   ? micPermissionHint(typeof navigator !== 'undefined' ? navigator.userAgent : '')
                   : '마이크를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'}
             </p>
+          ) : saved && lowVolume ? (
+            // 저음 경고: 저장은 됐지만 다시 권하는 "주의" 상태 — 성공(파란 체크)과 확실히
+            // 구분되도록 앰버색 느낌표로 표시한다.
+            <div className="flex items-center gap-2.5 rounded-[14px] border border-amber/40 bg-amber/10 px-4 py-3">
+              <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-amber/20 text-amber">
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 7v6" /><path d="M12 17h.01" />
+                </svg>
+              </span>
+              <p className="text-sm font-bold text-amber">{savedMessage}</p>
+            </div>
           ) : saved ? (
             <div className="flex items-center gap-2.5 rounded-[14px] border border-line bg-well px-4 py-3">
               <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-blue/10 text-blue">

@@ -5,7 +5,7 @@
 
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다. */
-const SCHEMA_V = 2
+const SCHEMA_V = 3
 
 export interface SurveyState {
   v: typeof SCHEMA_V
@@ -18,6 +18,7 @@ export interface SurveyState {
   recorded: Record<string, number>   // itemCode → 저장된 시도 수
   writing: Record<string, boolean>   // itemCode → 예(true)/아니오(false)
   checklist: string[]                // 선택된 영역 코드
+  introsSeen: string[]               // 진입 안내를 이미 본 섹션 코드(새로고침·왕복에도 재노출 방지)
 }
 
 const PREFIX = 'kodys-survey:'
@@ -25,7 +26,7 @@ const LAST_KEY = 'kodys-survey:last'
 const keyOf = (sessionId: string) => `${PREFIX}${sessionId}`
 
 export function newState(sessionId: string, childName: string, sessionToken: string): SurveyState {
-  return { v: SCHEMA_V, sessionId, sessionToken, childName, micDone: false, idx: 0, phase: 'mic', recorded: {}, writing: {}, checklist: [] }
+  return { v: SCHEMA_V, sessionId, sessionToken, childName, micDone: false, idx: 0, phase: 'mic', recorded: {}, writing: {}, checklist: [], introsSeen: [] }
 }
 
 export function loadState(): SurveyState | null {
