@@ -26,6 +26,12 @@ beforeEach(() => {
 })
 
 describe('GET /api/admin/sessions', () => {
+  it('성공 시 200 + { sessions } 형태', async () => {
+    vi.mocked(db.listSessions).mockResolvedValueOnce([{ id: SID } as never])
+    const res = await LIST()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ sessions: [{ id: SID }] })
+  })
   it('DB 오류 시 500 + 일반화된 메시지 (내부 오류 원문 노출 안 함)', async () => {
     vi.mocked(db.listSessions).mockRejectedValueOnce(new Error('relation "sessions" does not exist'))
     const res = await LIST()
@@ -35,6 +41,28 @@ describe('GET /api/admin/sessions', () => {
 })
 
 describe('GET /api/admin/sessions/[id]', () => {
+  it('성공: 녹음마다 서명 URL을 만들어 내려주고, 스토리지 내부 경로(audio_path)는 노출하지 않는다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: { id: SID } as never,
+      recordings: [
+        { item_code: 'rw01', attempt_no: 1, audio_path: `${SID}/rw01_1.webm`, duration_sec: 3.2, created_at: 'z' },
+        { item_code: 'rw02', attempt_no: 2, audio_path: `${SID}/rw02_2.webm`, duration_sec: null, created_at: 'z' },
+      ],
+      writing: [{ item_code: 'ww01', can_write: true }],
+    })
+    vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
+
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(db.signedAudioUrl).toHaveBeenCalledTimes(2)
+    expect(body.recordings).toEqual([
+      { item_code: 'rw01', attempt_no: 1, url: `https://signed/${SID}/rw01_1.webm`, duration_sec: 3.2 },
+      { item_code: 'rw02', attempt_no: 2, url: `https://signed/${SID}/rw02_2.webm`, duration_sec: null },
+    ])
+    expect(JSON.stringify(body.recordings)).not.toContain('audio_path')
+    expect(body.writing).toEqual([{ item_code: 'ww01', can_write: true }])
+  })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))
     expect(res.status).toBe(400)

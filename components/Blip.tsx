@@ -18,7 +18,7 @@ export function Blip({ variant = 'idle', className }: { variant?: Variant; class
   )
 
   if (variant === 'logo') return (
-    <svg viewBox="0 0 56 60" className={className} role="img" aria-label="말하기 설문 로고">
+    <svg viewBox="0 0 56 60" className={className} role="img" aria-label="읽기 검사 로고">
       {defs}
       <line x1="28" y1="12" x2="28" y2="5" stroke="#22335C" strokeWidth="3" strokeLinecap="round" />
       <circle cx="28" cy="4" r="3.5" fill="#2F6BFF" />

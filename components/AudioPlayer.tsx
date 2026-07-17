@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 import { useAudioBus } from '@/components/AudioBus'
 import { Select } from '@/components/Select'
+import { Spinner } from '@/components/Spinner'
+import { fmtDuration } from '@/lib/format'
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
 const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: `${r}×` }))
@@ -15,19 +17,13 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-function fmt(sec: number): string {
-  if (!Number.isFinite(sec) || sec < 0) sec = 0
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
-}
-
 export function AudioPlayer({ src, onError }: { src: string; onError?: () => void }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const waveRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
+  // 최신 콜백 유지(latest-ref). 렌더 중 ref 쓰기는 금지라 커밋 후 effect에서 갱신한다.
   const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+  useEffect(() => { onErrorRef.current = onError })
   const bus = useAudioBus()
 
   const [visible, setVisible] = useState(false)   // 화면 진입 전에는 인스턴스 미생성(지연 로드)
@@ -96,11 +92,14 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   }, [])
 
   return (
-    <div ref={rootRef} tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"
+    <div ref={rootRef} role="group" tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"
       className="flex w-full max-w-[280px] items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue/40">
       <button type="button" onClick={toggle} disabled={!ready} aria-label={playing ? '일시정지' : '재생'}
         className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-ink text-white disabled:opacity-40">
-        {playing ? (
+        {/* 파형 로딩 전에는 재생 버튼 자리에 스피너를 보여 준다(단순 비활성보다 상태가 분명) */}
+        {!ready ? (
+          <Spinner className="h-3.5 w-3.5" />
+        ) : playing ? (
           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
           </svg>
@@ -111,7 +110,7 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
         )}
       </button>
       <div ref={waveRef} className="h-8 min-w-0 flex-1" aria-hidden="true" />
-      <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmt(cur)}/{fmt(dur)}</span>
+      <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
       <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
         ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[84px] flex-none" />
     </div>

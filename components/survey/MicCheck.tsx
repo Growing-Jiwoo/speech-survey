@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
+import { CHILD_NOTICE } from '@/lib/consent'
+import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 import { Blip } from '@/components/Blip'
@@ -15,6 +17,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
   const recorder = useRecorder(MAX_SEC, (r: Recording) => setMicOk(r.peak > MIC_MIN_PEAK ? 'ok' : 'quiet'))
 
   async function start() {
+    setMicOk('none') // 자리 이동·기기 변경 후 재확인 허용(성공 뒤에도 다시 눌러 확인 가능)
     try { await recorder.start(); setMicErr(null) }
     catch (e) { setMicErr(classifyRecorderError(e)) }
   }
@@ -29,7 +32,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         {micErr === 'unsupported'
           ? <>Safari나 Chrome 최신 버전에서<br />다시 열어 주세요.</>
           : micErr === 'denied'
-            ? <>브라우저 설정에서 이 사이트의 마이크를<br /><b>허용</b>으로 바꾼 뒤 다시 눌러 주세요.</>
+            ? micPermissionHint(typeof navigator !== 'undefined' ? navigator.userAgent : '')
             : <>마이크를 시작하지 못했어요.<br />잠시 후 다시 눌러 주세요.</>}
       </p>
       {micErr !== 'unsupported' && <button onClick={start} className="cta mt-2 max-w-60">다시 시도</button>}
@@ -47,24 +50,29 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         버튼을 누르고<br /><b>&ldquo;안녕하세요&rdquo;</b>라고 말해 주세요.
       </p>
       <div className="mt-12">
-        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop} disabled={micOk === 'ok'}
+        <RecordButton state={recorder.state} onStart={start} onStop={recorder.stop}
           maxSec={MAX_SEC} elapsedMs={recorder.elapsedMs} success={micOk === 'ok'} />
       </div>
       <div className="mt-8"><LevelMeter level={recorder.level} /></div>
-      {micOk === 'ok' ? (
-        <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-mint" aria-live="polite">
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M4 12l5 5L20 6" />
-          </svg>
-          마이크가 잘 인식됐어요!
-        </p>
-      ) : micOk === 'quiet' ? (
-        <p className="mt-3 text-sm text-ink-soft" aria-live="polite">목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.</p>
-      ) : (
-        <p className="mt-3 text-[11px] text-ink-mute">목소리가 들리면 막대가 움직여요.</p>
-      )}
+      {/* 항상 마운트된 단일 라이브 리전 — 조건부로 갈아끼우면 스크린리더 낭독이 보장되지 않는다 */}
+      <p aria-live="polite" className={`mt-3 ${
+        micOk === 'ok' ? 'flex items-center gap-1.5 text-sm font-bold text-mint'
+          : micOk === 'quiet' ? 'text-sm text-ink-soft' : 'text-[11px] text-ink-mute'}`}>
+        {micOk === 'ok' ? (
+          <>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 12l5 5L20 6" />
+            </svg>
+            마이크가 잘 인식됐어요!
+          </>
+        ) : micOk === 'quiet'
+          ? '목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.'
+          : '목소리가 들리면 막대가 움직여요.'}
+      </p>
       <div className="mt-auto w-full pb-2">
+        {/* 아동용 쉬운 고지(개인정보보호법 제22조의2 제3항) — 검사(녹음) 시작 직전에 보여준다 */}
+        <p className="mb-3 text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
       </div>
     </main>

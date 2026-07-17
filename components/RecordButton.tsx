@@ -1,6 +1,9 @@
+// components/RecordButton.tsx — 대형 녹음 버튼(아동 터치 타깃) + 남은 시간 진행 링.
 'use client'
 import type { RecState } from '@/hooks/useRecorder'
 
+// 진행 링: 반지름 R의 원 둘레(CIRC)를 strokeDasharray로 깔고, 경과 비율만큼
+// strokeDashoffset을 늘려 링이 "줄어드는" 카운트다운으로 보이게 한다(-rotate-90으로 12시 시작).
 const R = 52
 const CIRC = 2 * Math.PI * R
 

@@ -1,3 +1,4 @@
+// components/ProgressBar.tsx — 검사 진행률 표시(현재 문항/전체).
 export function ProgressBar({ current, total }: { current: number; total: number }) {
   return (
     <div className="w-full">

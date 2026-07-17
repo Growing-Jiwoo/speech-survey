@@ -13,6 +13,9 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
     birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
     child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+    // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
+    // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
+    guardian_consented_at: new Date().toISOString(),
   }).select('id').single()
   fail(error)
   return data!.id
@@ -78,12 +81,29 @@ export async function removeStorageObject(path: string): Promise<void> {
   fail(error)
 }
 
-/** 관리자 세션 삭제: 스토리지 {id}/ 프리픽스 객체 전체 제거 후 행 삭제(FK CASCADE로 recordings·writing_answers 정리). */
+/** storage list() 페이지 크기. supabase-js 기본값도 100이지만, 아래 페이지네이션 루프가
+ *  "기본값이 곧 전부"라고 오해하지 않도록 명시한다. */
+const STORAGE_LIST_PAGE = 100
+
+/**
+ * 관리자 세션 삭제(PII 파기): 스토리지 {id}/ 프리픽스 객체 전체 제거 후 행 삭제
+ * (FK CASCADE로 recordings·writing_answers 정리).
+ * - list()는 기본 100개까지만 반환하므로 반드시 페이지네이션으로 전부 수집한다
+ *   (세션당 녹음 상한 200개 — 한 페이지만 지우면 음성 파일이 고아로 잔존한다).
+ * - 스토리지 → 행 순서 유지: 중간 실패 시 세션 행이 남아 관리자가 재시도할 수 있다.
+ */
 export async function deleteSession(id: string): Promise<void> {
-  const { data: objs, error: listErr } = await sb().storage.from('recordings').list(id)
-  fail(listErr)
-  if (objs && objs.length) {
-    const { error: rmErr } = await sb().storage.from('recordings').remove(objs.map(o => `${id}/${o.name}`))
+  const paths: string[] = []
+  for (let offset = 0; ; offset += STORAGE_LIST_PAGE) {
+    const { data: objs, error: listErr } = await sb().storage.from('recordings')
+      .list(id, { limit: STORAGE_LIST_PAGE, offset })
+    fail(listErr)
+    if (!objs || objs.length === 0) break
+    paths.push(...objs.map(o => `${id}/${o.name}`))
+    if (objs.length < STORAGE_LIST_PAGE) break
+  }
+  if (paths.length > 0) {
+    const { error: rmErr } = await sb().storage.from('recordings').remove(paths)
     fail(rmErr)
   }
   const { error } = await sb().from('sessions').delete().eq('id', id)
@@ -115,6 +135,14 @@ export async function isLoginLocked(ip: string, maxFails: number): Promise<boole
   return data.fail_count >= maxFails && !!data.locked_until && new Date(data.locked_until) > new Date()
 }
 
+/** 해당 키(IP 또는 글로벌 버킷)의 현재 누적 실패 수(없으면 0). 글로벌 백오프 지연 계산용. */
+export async function loginFailureCount(ip: string): Promise<number> {
+  const { data, error } = await sb().from('login_attempts')
+    .select('fail_count').eq('ip', ip).maybeSingle()
+  fail(error)
+  return data?.fail_count ?? 0
+}
+
 /** 로그인 실패 1건 기록 (fail_count 원자적 증가, 잠금시각 갱신). read-then-write 경쟁조건을 피하기 위해 RPC로 위임. */
 export async function recordLoginFailure(ip: string, lockMs: number): Promise<void> {
   const { error } = await sb().rpc('record_login_failure', { p_ip: ip, p_lock_ms: lockMs })
@@ -136,6 +164,7 @@ export interface SessionRow {
   child_name: string; teacher_name: string; teacher_contact: string
   checklist: string[]
   started_at: string; submitted_at: string | null
+  guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
 }
 
 export interface RecordingRow {
@@ -145,7 +174,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

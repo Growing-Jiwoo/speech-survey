@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Select } from '@/components/Select'
-import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { Spinner } from '@/components/Spinner'
+import { fetchJson } from '@/lib/http'
 import type { RegionInfo, School } from '@/lib/schools'
 
 export interface SelectedSchool { region: string; schoolId: string; schoolName: string }
@@ -22,22 +23,29 @@ export function SchoolPicker({ value, onSelect }: {
 
   useEffect(() => {
     let ignore = false
-    fetch('/schools/index.json').then(r => r.json())
+    fetchJson<(RegionInfo & { count: number })[]>('/schools/index.json')
       .then(data => { if (!ignore) setRegions(data) })
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 새로고침해 주세요.') })
     return () => { ignore = true }
   }, [])
 
+  // 지역 변경 시 검색어·목록 리셋은 selectRegion(이벤트 핸들러)에서 수행하고,
+  // 이 effect는 해당 지역 학교 목록 fetch만 담당한다(경쟁 상태는 ignore 플래그로 차단).
   useEffect(() => {
     if (!slug) return
     let ignore = false
-    setLoading(true); setSchools([]); setQ(''); setErr('')
-    fetch(`/schools/${slug}.json`).then(r => r.json())
+    fetchJson<School[]>(`/schools/${slug}.json`)
       .then(data => { if (!ignore) setSchools(data) })
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.') })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [slug])
+
+  function selectRegion(nextSlug: string) {
+    if (nextSlug === slug) return // 같은 지역 재선택: fetch effect가 재실행되지 않으므로 리셋도 하지 않는다
+    setSlug(nextSlug)
+    setLoading(true); setSchools([]); setQ(''); setErr('')
+  }
 
   const region = regions.find(r => r.slug === slug)
 
@@ -57,7 +65,7 @@ export function SchoolPicker({ value, onSelect }: {
 
   return (
     <div className="mt-1.5">
-      <Select ariaLabel="지역 선택" placeholder="지역을 선택해 주세요" value={slug} onChange={setSlug}
+      <Select ariaLabel="지역 선택" placeholder="지역을 선택해 주세요" value={slug} onChange={selectRegion}
         options={regions.map(r => ({ value: r.slug, label: `${r.short} (${r.count}개교)` }))} />
 
       {slug && (
@@ -65,6 +73,12 @@ export function SchoolPicker({ value, onSelect }: {
           <input aria-label="학교 검색" value={q} onChange={e => setQ(e.target.value)}
             placeholder="학교 이름을 입력해 주세요"
             className="h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none focus:border-blue" />
+          {/* 학교 목록 로딩은 목록 영역 인라인 스피너로 표시(전체 화면 dim은 과한 피드백) */}
+          {loading && (
+            <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-line py-6 text-sm text-ink-mute">
+              <Spinner className="h-4 w-4" /> 학교 목록을 불러오는 중…
+            </div>
+          )}
           {!loading && schools.length > 0 && (
             <ul className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-line">
               {shown.map(s => (
@@ -85,7 +99,6 @@ export function SchoolPicker({ value, onSelect }: {
         </div>
       )}
       {err && <p role="alert" className="mt-2 text-sm text-rec-deep">{err}</p>}
-      <LoadingOverlay show={loading} />
     </div>
   )
 }

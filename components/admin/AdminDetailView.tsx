@@ -1,27 +1,21 @@
+// components/admin/AdminDetailView.tsx — 관리자 결과지(세션 상세) 화면.
+// 목록 캐시를 재활용해 이전/다음 아동 내비를 제공하고, 녹음 청취·낱말쓰기·체크리스트를
+// 채점자가 한 화면에서 볼 수 있게 구성한다. 세션 삭제(PII 파기)도 여기서 수행한다.
 'use client'
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
-import { adjacentSessionIds, filterSessions, parseFilters, sortSessions } from '@/lib/adminStats'
-import { useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
-import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { ITEM_TOTALS, KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { requestJson } from '@/lib/http'
+import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { AudioBusProvider } from '@/components/AudioBus'
-import { AudioPlayer } from '@/components/AudioPlayer'
+import { Badge } from '@/components/Badge'
 import { Blip } from '@/components/Blip'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
-
-// 결과지에서도 목록과 동일한 totals(문항 수)로 정렬·진행률을 재구성한다.
-const TOTALS = { rec: RECORDING_ITEMS.length, write: WRITING_ITEMS.length }
-
-/** 초 → m:ss (미상이면 '—') */
-function fmtDur(sec: number | null): string {
-  if (sec == null || !Number.isFinite(sec)) return '—'
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
-}
+import { RecordingsTable, type RecordingsByItem } from '@/components/admin/RecordingsTable'
 
 export function AdminDetailView() {
   const id = String(useParams().id)
@@ -29,21 +23,19 @@ export function AdminDetailView() {
   const back = useSearchParams().get('back')
   const listHref = back ? `/admin?${back}` : '/admin'
   const queryClient = useQueryClient()
-  const { data, isLoading, isError, error } = useSessionDetailQuery(id)
+  const { data, isLoading, isError, refetch } = useSessionDetailQuery(id)
 
   // 세션 삭제(PII 파기): 확인 모달 → DELETE → 목록 캐시 무효화 후 목록으로 복귀
   const [delModal, setDelModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
-  const closeDelModal = useCallback(() => { if (!deleting) setDelModal(false) }, [deleting])
-  const delTrapRef = useFocusTrap(delModal, closeDelModal)
 
   // 이전/다음 아동: 캐시된 목록에 back의 필터·정렬을 재적용해 현재 id의 앞/뒤를 구한다.
   const { data: sessions } = useSessionsQuery()
   const nav = useMemo(() => {
     if (!sessions) return { prev: null, next: null }
     const { filters, sort } = parseFilters(new URLSearchParams(back ?? ''))
-    const rows = sortSessions(filterSessions(sessions, filters, new Date()), sort, TOTALS)
+    const rows = sortSessions(filterSessions(sessions, filters, kstDateKey(new Date())), sort, ITEM_TOTALS)
     return adjacentSessionIds(rows, id)
   }, [sessions, back, id])
 
@@ -51,19 +43,17 @@ export function AdminDetailView() {
 
   async function removeSession() {
     setDeleting(true); setDelErr('')
-    try {
-      const res = await fetch(`/api/admin/sessions/${id}`, { method: 'DELETE' })
-      if (!res.ok) { setDelErr('삭제에 실패했어요. 다시 시도해 주세요.'); return }
-      queryClient.removeQueries({ queryKey: ['admin', 'session', id] })
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] })
-      router.replace(listHref)
-    } catch {
-      setDelErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
-    } finally { setDeleting(false) }
+    const r = await requestJson(`/api/admin/sessions/${id}`, { method: 'DELETE' }, '삭제에 실패했어요. 다시 시도해 주세요.')
+    setDeleting(false)
+    if (!r.ok) { setDelErr(r.error); return }
+    queryClient.removeQueries({ queryKey: adminKeys.session(id) })
+    await queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+    router.replace(listHref)
   }
 
-  const byItem = useMemo(() => {
-    const m = new Map<string, { attempt_no: number; url: string; duration_sec: number | null }[]>()
+  // item_code → 시도 목록(정렬은 API가 보장). 결과지 표와 진행 집계가 공유한다.
+  const byItem: RecordingsByItem = useMemo(() => {
+    const m: RecordingsByItem = new Map()
     for (const r of data?.recordings ?? []) {
       const list = m.get(r.item_code) ?? []
       list.push({ attempt_no: r.attempt_no, url: r.url, duration_sec: r.duration_sec })
@@ -74,9 +64,15 @@ export function AdminDetailView() {
 
   if (isLoading) return <LoadingOverlay show />
   if (isError || !data) return (
-    <main className="mx-auto max-w-4xl p-6">
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
-      <p className="mt-6 text-sm text-ink-soft">결과지를 불러오지 못했어요. {(error as Error | undefined)?.message ?? ''}</p>
+      <div className="mt-6 flex flex-col items-start gap-3">
+        <p className="text-sm text-ink-soft">결과지를 불러오지 못했어요.</p>
+        <button type="button" onClick={() => void refetch()}
+          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
+          다시 시도
+        </button>
+      </div>
     </main>
   )
 
@@ -87,10 +83,11 @@ export function AdminDetailView() {
 
   return (
     <AudioBusProvider>
-      <main className="mx-auto max-w-4xl p-6">
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <div className="flex items-center justify-between gap-2">
           <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
-          {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존 */}
+          {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.
+              (파괴적인 [세션 삭제]는 오클릭 방지를 위해 페이지 하단으로 분리) */}
           <div className="flex items-center gap-1.5">
             <button type="button" disabled={!nav.prev}
               onClick={() => nav.prev && router.push(goHref(nav.prev))}
@@ -101,10 +98,6 @@ export function AdminDetailView() {
               onClick={() => nav.next && router.push(goHref(nav.next))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               다음 아동 ▶
-            </button>
-            <button type="button" onClick={() => setDelModal(true)}
-              className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
-              세션 삭제
             </button>
           </div>
         </div>
@@ -118,119 +111,67 @@ export function AdminDetailView() {
                 </p>
                 <p className="text-[11px] text-ink-mute">
                   생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({s.teacher_contact}) ·{' '}
-                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'}
+                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
+                  {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
+                  {s.guardian_consented_at
+                    ? `보호자 동의 확인 ${new Date(s.guardian_consented_at).toLocaleDateString('ko-KR')}`
+                    : '보호자 동의 기록 없음'}
                 </p>
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_ITEMS.length}</b></span>
                 <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
-                {missingCount > 0 && (
-                  <span className="rounded-full bg-rec/10 px-3 py-1.5 text-xs font-bold text-rec-deep">
-                    미완료 {missingCount}건
-                  </span>
-                )}
+                {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
               </div>
             </div>
             {s.checklist.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-ink-soft">확인 필요 영역:</span>
-                {s.checklist.map(c => (
-                  <span key={c} className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">{areaLabel(c)}</span>
-                ))}
+                {s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
               </div>
             )}
           </div>
 
           <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-ink-mute">
-                <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
-                <th scope="col" className="w-24 px-3 font-medium">구분</th>
-                <th scope="col" className="px-3 font-medium">제시어</th>
-                <th scope="col" className="w-14 px-3 font-medium">시도</th>
-                <th scope="col" className="w-20 px-3 font-medium">길이</th>
-                <th scope="col" className="w-72 px-3 pr-5 font-medium">듣기</th>
-              </tr>
-            </thead>
-            <tbody>
-              {RECORDING_ITEMS.flatMap(item => {
-                const label = item.section === 'word_reading'
-                  ? `낱말 (${KIND_LABEL[item.kind!]})` : '문장'
-                const views = byItem.get(item.code) ?? []
-                if (views.length === 0) return [(
-                  <tr key={item.code} className="border-t border-line/60 bg-rec/5">
-                    <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
-                    <td className="px-3 text-xs text-ink-mute">{label}</td>
-                    <td className="px-3 font-read whitespace-pre-line break-keep">{item.text}</td>
-                    <td className="px-3">—</td>
-                    <td className="px-3 text-ink-mute">—</td>
-                    <td className="px-3 pr-5">
-                      <span className="rounded-full bg-rec/10 px-3 py-1 text-xs font-bold text-rec-deep">미녹음</span>
-                    </td>
-                  </tr>
-                )]
-                return views.map((v, i) => {
-                  const over = v.duration_sec != null && v.duration_sec > item.maxSec
+          <RecordingsTable byItem={byItem}
+            onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
+
+          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead>
+                <tr className="text-left text-xs text-ink-mute">
+                  <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
+                  <th scope="col" className="w-24 px-3 font-medium">구분</th>
+                  <th scope="col" className="px-3 font-medium">낱말</th>
+                  <th scope="col" className="w-28 px-3 pr-5 font-medium">답</th>
+                </tr>
+              </thead>
+              <tbody>
+                {WRITING_ITEMS.map(item => {
+                  const v = writingByCode.get(item.code)
                   return (
-                    <tr key={`${item.code}-${v.attempt_no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
-                      <td className="px-5 py-3 text-ink-mute">{i === 0 ? item.orderNo : ''}</td>
-                      <td className="px-3 text-xs text-ink-mute">{i === 0 ? label : ''}</td>
-                      <td className="px-3 font-read whitespace-pre-line break-keep">{i === 0 ? item.text : ''}</td>
-                      <td className="px-3 text-ink-mute">{views.length > 1 ? `#${v.attempt_no}` : ''}</td>
-                      <td className={`px-3 font-read text-[12px] tabular-nums ${over ? 'font-bold text-amber' : 'text-ink-soft'}`}
-                        title={over ? `제한(${item.maxSec}초) 초과` : undefined}>
-                        {fmtDur(v.duration_sec)}{over && ' !'}
-                      </td>
-                      <td className="px-3 py-2 pr-5">
-                        <AudioPlayer src={v.url}
-                          onError={() => queryClient.invalidateQueries({ queryKey: ['admin', 'session', id] })} />
+                    <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
+                      <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
+                      <td className="px-3 text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
+                      <td className="px-3 font-read">{item.text}</td>
+                      <td className="px-3 pr-5">
+                        {v === undefined
+                          ? <Badge tone="mute">미선택</Badge>
+                          : v ? <Badge tone="mint">예</Badge> : <Badge tone="rec">아니오</Badge>}
                       </td>
                     </tr>
                   )
-                })
-              })}
-            </tbody>
-          </table>
-
-          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-ink-mute">
-                <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
-                <th scope="col" className="w-24 px-3 font-medium">구분</th>
-                <th scope="col" className="px-3 font-medium">낱말</th>
-                <th scope="col" className="w-28 px-3 pr-5 font-medium">답</th>
-              </tr>
-            </thead>
-            <tbody>
-              {WRITING_ITEMS.map(item => {
-                const v = writingByCode.get(item.code)
-                return (
-                  <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
-                    <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
-                    <td className="px-3 text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
-                    <td className="px-3 font-read">{item.text}</td>
-                    <td className="px-3 pr-5">
-                      {v === undefined
-                        ? <span className="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink-mute">미선택</span>
-                        : v
-                          ? <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-bold text-mint">예</span>
-                          : <span className="rounded-full bg-rec/10 px-3 py-1 text-xs font-bold text-rec-deep">아니오</span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          </div>
 
           <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
           <div className="flex flex-wrap gap-2 px-5 py-4">
             {s.checklist.length === 0
               ? <span className="text-sm text-ink-mute">선택 없음</span>
-              : s.checklist.map(c => (
-                <span key={c} className="rounded-full bg-amber/10 px-3 py-1 text-xs font-bold text-amber">{areaLabel(c)}</span>
-              ))}
+              : s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
           </div>
 
           <p className="border-t border-line bg-well px-5 py-3 text-[11.5px] text-ink-mute">
@@ -238,31 +179,23 @@ export function AdminDetailView() {
           </p>
         </div>
 
-        {delModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6" onClick={closeDelModal}>
-            <div ref={delTrapRef} role="dialog" aria-modal="true" aria-labelledby="del-title"
-              className="w-full max-w-sm rounded-[20px] bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
-              <h2 id="del-title" className="text-center text-lg font-bold leading-relaxed">
-                이 세션을 삭제할까요?
-              </h2>
-              <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-                <b>{s.child_name}</b> ({s.school_name} {s.grade}-{s.class_no})의 정보와
-                녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
-              </p>
-              {delErr && <p role="alert" className="mt-3 text-center text-sm text-rec-deep">{delErr}</p>}
-              <div className="mt-5 flex gap-2.5">
-                <button onClick={closeDelModal} disabled={deleting}
-                  className="h-[50px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft disabled:opacity-40">
-                  취소
-                </button>
-                <button onClick={removeSession} disabled={deleting}
-                  className="h-[50px] flex-1 rounded-xl bg-rec-deep text-[15px] font-bold text-white disabled:opacity-40">
-                  {deleting ? '삭제 중…' : '삭제'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 파괴적 동작은 본문과 분리된 하단 영역에 배치(고빈도 내비 버튼과의 오클릭 방지) */}
+        <div className="mt-4 flex justify-end">
+          <button type="button" onClick={() => setDelModal(true)}
+            className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
+            세션 삭제
+          </button>
+        </div>
+
+        <ConfirmDialog open={delModal} busy={deleting} error={delErr} danger
+          title="이 세션을 삭제할까요?"
+          confirmLabel={deleting ? '삭제 중…' : '삭제'}
+          onConfirm={removeSession} onClose={() => setDelModal(false)}>
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            <b>{s.child_name}</b> ({s.school_name} {s.grade}-{s.class_no})의 정보와
+            녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
+          </p>
+        </ConfirmDialog>
         <LoadingOverlay show={deleting} />
       </main>
     </AudioBusProvider>

@@ -1,41 +1,86 @@
+// app/survey/page.tsx — 검사 진행 화면(29문항 위저드).
+// 문항 타입별 UI는 components/survey/*가 담당하고, 이 페이지는 진행 상태(현재 문항·답 캐시)의
+// 로드/저장과 문항 간 이동만 제어한다. 진행 위치는 localStorage에 저장돼 새로고침·탭 닫힘
+// 후에도 같은 문항에서 재개된다.
 'use client'
 import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
-import { CHECKLIST_AREAS, ITEMS, SECTION_LABEL, itemByCode, toggleChecklistArea } from '@/lib/items'
+import { ITEMS, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
+import { ChecklistItem } from '@/components/survey/ChecklistItem'
 import { MicCheck } from '@/components/survey/MicCheck'
 import { RecordingItem } from '@/components/survey/RecordingItem'
+import { RetryBanner } from '@/components/survey/RetryBanner'
+import { WritingItem } from '@/components/survey/WritingItem'
 
 function SurveyInner() {
   const router = useRouter()
   const params = useSearchParams()
+  // 진행 상태의 단일 소스 — 현재 문항(idx)·단계(phase)도 여기에만 둔다
+  // (별도 useState로 이중 보관하면 재개 위치가 어긋나는 버그 여지가 생긴다).
   const [st, setSt] = useState<SurveyState | null>(null)
-  const [idx, setIdx] = useState(0)
-  const [phase, setPhase] = useState<'mic' | 'item'>('item')
   const [isRecording, setIsRecording] = useState(false)
-  // 문항 이동 중 업로드가 실패한 녹음: 다른 문항으로 넘어가도 사라지지 않고 여기서 재시도할 수 있다
+  // 문항 이동 중 업로드가 실패한 녹음: 다른 문항으로 넘어가도 사라지지 않고 배너에서 재시도할 수 있다
   const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
-    setSt(s)
+    // ?q=N 딥링크(검토 화면에서 문항 클릭): 해당 문항으로 이동한 상태로 복원하고 즉시 저장한다.
     const q = Number(params.get('q'))
-    if (Number.isInteger(q) && q >= 1 && q <= ITEMS.length) {
-      setIdx(q - 1); setPhase('item')
-    } else {
-      setIdx(s.idx ?? 0)
-      setPhase(s.phase ?? (s.micDone ? 'item' : 'mic'))
+    const jumped = Number.isInteger(q) && q >= 1 && q <= ITEMS.length
+      ? { ...s, idx: q - 1, phase: 'item' as const }
+      : s
+    if (jumped !== s) {
+      saveState(jumped)
+      // q는 1회만 소비하고 URL에서 제거한다(from은 유지) — 이후 문항을 이동한 뒤 새로고침해도
+      // stale q가 저장된 위치(idx)를 덮어쓰지 않도록(B10). q 제거로 이 effect가 한 번 더 돌지만
+      // 그때는 q가 없어 되돌아온 상태를 그대로 로드하므로 루프가 아니다.
+      const sp = new URLSearchParams(params.toString())
+      sp.delete('q')
+      router.replace(sp.toString() ? `/survey?${sp}` : '/survey', { scroll: false })
     }
+    // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
+    // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSt(jumped)
   }, [router, params])
+
+  // 녹음 중 새로고침·탭 닫기 실수 방지(해당 시도의 소리가 유실되므로 확인창을 띄운다)
+  useEffect(() => {
+    if (!isRecording) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [isRecording])
+
+  // 검사 중 화면 자동 잠금 방지(교사 설명이 길어져도 화면이 꺼지지 않게). 미지원 브라우저는 무시하고,
+  // 탭이 백그라운드로 갔다 오면 잠금이 해제되므로 visible 복귀 시 재획득한다.
+  useEffect(() => {
+    let sentinel: WakeLockSentinel | null = null
+    let cancelled = false
+    const acquire = async () => {
+      if (!('wakeLock' in navigator)) return
+      try { sentinel = await navigator.wakeLock.request('screen') } catch { /* 배터리 절약 모드 등 — 무시 */ }
+    }
+    void acquire()
+    const onVisible = () => { if (document.visibilityState === 'visible' && !cancelled) void acquire() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      document.removeEventListener('visibilitychange', onVisible)
+      void sentinel?.release().catch(() => {})
+    }
+  }, [])
 
   if (!st) return null
 
+  /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
   function patch(p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) {
     setSt(prev => {
       const merged = { ...prev!, ...(typeof p === 'function' ? p(prev!) : p) }
@@ -44,25 +89,31 @@ function SurveyInner() {
     })
   }
 
-  // 문항 이동 시 현재 위치를 상태에 저장(새로고침·탭 닫힘 후 재개용)
-  function goToIdx(n: number) { setIdx(n); patch({ idx: n }); window.scrollTo(0, 0) }
+  function goToIdx(n: number) { patch({ idx: n }); window.scrollTo(0, 0) }
 
-  if (phase === 'mic')
-    return <MicCheck onOk={() => { patch({ micDone: true, phase: 'item' }); setPhase('item') }} />
+  if (st.phase === 'mic')
+    return <MicCheck onOk={() => patch({ micDone: true, phase: 'item' })} />
 
-  const item = ITEMS[idx]
-  const isLast = idx === ITEMS.length - 1
-  // 녹음 쓰기 문항은 예/아니오 필수, 체크리스트는 최소 1개 선택 필수, 녹음 중에는 이동 불가
-  // (업로드는 이동 후에도 계속 진행되고, 실패하면 pendingRetries 배너로 재시도할 수 있어 이동을 막지 않는다)
+  const item = ITEMS[st.idx]
+  const isLast = st.idx === ITEMS.length - 1
+  const isRecordingSection = item.section === 'word_reading' || item.section === 'sentence_reading'
+  // 낱말 쓰기 문항은 예/아니오 필수, 체크리스트는 최소 1개 선택 필수, 녹음 중에는 이동 불가.
+  // (업로드는 이동 후에도 계속 진행되고, 실패하면 RetryBanner로 재시도할 수 있어 이동을 막지 않는다)
   const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined)
     && (item.section !== 'checklist' || st.checklist.length > 0)
     && !isRecording
+  // 녹음 문항을 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "건너뛰기"로 바꿔(+약한 스타일)
+  // 아동의 오터치 한 번으로 문항이 조용히 통과되지 않도록 의도를 드러낸다. 진행 자체는 허용
+  // (응답 거부도 유효한 관찰일 수 있어 완전 차단하지 않음).
+  const skipping = !fromReview && !isLast && isRecordingSection && (st.recorded[item.code] ?? 0) === 0
 
   function goNext() {
-    if (isLast) { router.push('/review'); return }
-    goToIdx(idx + 1)
+    // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
+    if (fromReview || isLast) { router.push('/review'); return }
+    goToIdx(st!.idx + 1)
   }
 
+  /** 업로드 성공 반영: 시도 수 +1, 재시도 대기 목록에서 제거 */
   function markSaved(code: string) {
     patch(prev => ({ recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 } }))
     setPendingRetries(prev => {
@@ -82,13 +133,19 @@ function SurveyInner() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8">
-      <ProgressBar current={idx + 1} total={ITEMS.length} />
-      {fromReview && (
-        <Link href="/review" className="mt-2 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
+      {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
+      {st.childName && (
+        <p className="mb-2 text-xs font-bold text-ink-soft">
+          <b className="text-blue">{st.childName}</b> 학생
+        </p>
       )}
-      <p className="mt-4 text-xs font-bold text-ink-mute">
+      <ProgressBar current={st.idx + 1} total={ITEMS.length} />
+      {fromReview && (
+        <Link href="/review" className="mt-2 inline-block py-2 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
+      )}
+      <h1 className="mt-4 text-xs font-bold text-ink-mute">
         {item.orderNo}. {SECTION_LABEL[item.section]}
-      </p>
+      </h1>
 
       {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
         <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
@@ -97,77 +154,26 @@ function SurveyInner() {
           onSaved={() => markSaved(item.code)} />
       )}
 
-      {Object.keys(pendingRetries).length > 0 && (
-        <div className="mt-3 flex flex-col gap-2 rounded-[14px] border border-rec/30 bg-rec/5 p-3">
-          {Object.keys(pendingRetries).map(code => (
-            <div key={code} className="flex items-center justify-between gap-2">
-              <p className="text-xs text-ink-soft">
-                <b className="text-rec-deep">{itemByCode.get(code)?.orderNo}번</b> 문항 저장에 실패했어요
-              </p>
-              <button onClick={() => retryUpload(code)}
-                className="flex-none rounded-lg bg-rec-deep px-3 py-1.5 text-xs font-bold text-white">
-                다시 저장
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
       {item.section === 'word_writing' && (
-        <div className="card mt-3 p-5">
-          <p className="text-sm font-bold">학생이 아래의 낱말을 정확하게 쓸 수 있나요?</p>
-          <p className="font-read mt-5 text-center text-[38px] font-bold">{item.text}</p>
-          <div className="mt-6 flex gap-2.5">
-            {([['예', true], ['아니오', false]] as const).map(([label, v]) => (
-              <button key={label} type="button" aria-pressed={st.writing[item.code] === v}
-                onClick={() => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))}
-                className={`h-[52px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
-                  st.writing[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {st.writing[item.code] === undefined &&
-            <p className="mt-3 text-center text-[11px] text-ink-mute">예 / 아니오를 선택해야 다음으로 갈 수 있어요.</p>}
-        </div>
+        <WritingItem item={item} value={st.writing[item.code]}
+          onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
       )}
 
       {item.section === 'checklist' && (
-        <div className="card mt-3 p-5">
-          <p className="text-sm font-bold leading-relaxed">
-            학생의 발달 영역 중 확인이 필요하다고 생각되는 영역에 모두 표시해 주세요.
-          </p>
-          <ul className="mt-4 flex flex-col gap-2">
-            {CHECKLIST_AREAS.map(a => {
-              const on = st.checklist.includes(a.code)
-              return (
-                <li key={a.code}>
-                  <label className={`flex cursor-pointer items-start gap-3 rounded-xl border-[1.5px] px-4 py-3 transition ${
-                    on ? 'border-blue bg-blue/5' : 'border-line bg-well'}`}>
-                    <input type="checkbox" checked={on} className="mt-0.5 h-5 w-5 accent-[var(--color-blue)]"
-                      onChange={() => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, a.code) }))} />
-                    <span>
-                      <span className="text-sm font-bold">{a.label}</span>
-                      {a.hint && <span className="mt-0.5 block text-xs leading-relaxed text-ink-mute">{a.hint}</span>}
-                    </span>
-                  </label>
-                </li>
-              )
-            })}
-          </ul>
-          {st.checklist.length === 0 &&
-            <p className="mt-3 text-center text-[11px] text-ink-mute">해당 사항이 없으면 &ldquo;특이사항 없음&rdquo;을 선택해 주세요.</p>}
-        </div>
+        <ChecklistItem selected={st.checklist}
+          onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
       )}
 
       <div className="mt-auto flex gap-2.5 pb-2 pt-6">
-        <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || isRecording}
-          className="h-[52px] flex-1 rounded-xl border-[1.5px] border-line bg-well text-[15px] font-bold text-ink-soft transition disabled:opacity-40">
+        <button onClick={() => goToIdx(st.idx - 1)} disabled={st.idx === 0 || isRecording}
+          className="btn-ghost h-[52px] flex-1">
           이전
         </button>
         <button onClick={goNext} disabled={!canNext}
-          className="h-[52px] flex-[2] rounded-xl bg-blue text-[15px] font-bold text-white shadow-[0_3px_0_var(--color-blue-deep)] transition active:translate-y-[2px] disabled:opacity-40">
-          {isLast ? '검토' : '다음'}
+          className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
+          {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
         </button>
       </div>
     </main>

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { ITEMS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS, itemByCode, toggleChecklistArea } from '@/lib/items'
+import {
+  ITEMS, ITEM_TOTALS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS,
+  areaLabel, isRecordingItem, itemByCode, toggleChecklistArea,
+} from '@/lib/items'
 
 describe('ITEMS', () => {
   it('총 29문항, orderNo 1~29 연속', () => {
@@ -37,6 +40,18 @@ describe('ITEMS', () => {
     expect(itemByCode.get('rw08')!.kind).toBe('nonsense')
     expect(itemByCode.get('ww05')!.kind).toBe('meaning')
     expect(itemByCode.get('ww10')!.kind).toBe('nonsense')
+  })
+  it('isRecordingItem은 RECORDING_ITEMS 필터와 동일한 술어', () => {
+    expect(ITEMS.filter(isRecordingItem)).toEqual(RECORDING_ITEMS)
+    expect(isRecordingItem(itemByCode.get('rw01')!)).toBe(true)
+    expect(isRecordingItem(itemByCode.get('ww01')!)).toBe(false)
+  })
+  it('ITEM_TOTALS는 진행률 분모(녹음 18, 쓰기 10)', () => {
+    expect(ITEM_TOTALS).toEqual({ rec: 18, write: 10 })
+  })
+  it('areaLabel 미지 코드는 코드 그대로 반환 (구버전 데이터 표시 안전망)', () => {
+    expect(areaLabel('speech')).toBe('말 (조음/유창성)')
+    expect(areaLabel('unknown-code')).toBe('unknown-code')
   })
   it('파생 목록: 녹음 18, 쓰기 10', () => {
     expect(RECORDING_ITEMS).toHaveLength(18)

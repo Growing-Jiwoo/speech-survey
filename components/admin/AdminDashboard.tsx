@@ -1,21 +1,26 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DEFAULT_FILTERS, DEFAULT_SORT, computeKpis, computeSchoolStats, filterSessions, filtersToQuery,
-  gradeOptions, parseFilters, schoolOptions, sortSessions,
-  type Filters, type Sort, type SortKey, type Totals,
+  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
+  type Filters, type Sort, type SortKey,
 } from '@/lib/adminStats'
-import { useSessionsQuery } from '@/hooks/useAdminQueries'
+import { ITEM_TOTALS } from '@/lib/items'
+import { adminKeys, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { postJson } from '@/lib/http'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { StatsCards, type KpiKind } from '@/components/admin/StatsCards'
 import { SchoolBreakdown } from '@/components/admin/SchoolBreakdown'
 import { SessionTable } from '@/components/admin/SessionTable'
 
+// 진행률 분모는 문항 정의(lib/items)에서 직접 가져온다 — prop 드릴링과 이원화 방지.
+const totals = ITEM_TOTALS
+
 /** /admin 대시보드 — 세션은 react-query로 캐싱, 필터·정렬 상태의 단일 소스는 URL searchParams */
-export function AdminDashboard({ totals }: { totals: Totals }) {
+export function AdminDashboard() {
   const router = useRouter()
   const pathname = usePathname()
   const sp = useSearchParams()
@@ -35,21 +40,29 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
     return () => { clearInterval(iv); window.removeEventListener('focus', tick) }
   }, [])
 
-  const list = sessions ?? []
-  const kpis = useMemo(() => computeKpis(list, now), [list, now])
+  const list = useMemo(() => sessions ?? [], [sessions])
+  // "오늘" 파생값은 Date가 아닌 KST 일자 키(문자열)에 의존시킨다 — now는 1분마다 바뀌지만
+  // 날짜가 그대로면 KPI·필터·정렬(최대 5,000행)을 재계산하지 않는다.
+  const todayKey = kstDateKey(now)
+  const kpis = useMemo(() => computeKpis(list, todayKey), [list, todayKey])
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
   const rows = useMemo(
-    () => sortSessions(filterSessions(list, filters, now), sort, totals),
-    [list, filters, sort, totals, now],
+    () => sortSessions(filterSessions(list, filters, todayKey), sort, totals),
+    [list, filters, sort, todayKey],
   )
 
-  const apply = (f: Filters, s: Sort) => {
+  // SessionTable의 검색 디바운스 effect가 onFilters를 의존성으로 갖도록(정직한 deps)
+  // 콜백 정체성을 안정화한다.
+  const apply = useCallback((f: Filters, s: Sort) => {
     const qs = filtersToQuery(f, s)
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
-  }
-  const patchFilters = (patch: Partial<Filters>) => apply({ ...filters, ...patch }, sort)
+  }, [router, pathname])
+  const patchFilters = useCallback(
+    (patch: Partial<Filters>) => apply({ ...filters, ...patch }, sort),
+    [apply, filters, sort],
+  )
 
   const onKpi = (kind: KpiKind) => {
     if (kind === 'total') apply(DEFAULT_FILTERS, sort)
@@ -62,10 +75,10 @@ export function AdminDashboard({ totals }: { totals: Totals }) {
       ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
       : { key, dir: key === 'started' || key === 'submitted' ? 'desc' : 'asc' })
 
-  const refresh = () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'sessions'] }) }
+  const refresh = () => { void queryClient.invalidateQueries({ queryKey: adminKeys.sessions }) }
 
   async function logout() {
-    try { await fetch('/api/admin/logout', { method: 'POST' }) } catch { /* 쿠키 삭제 실패해도 로그인으로 이동 */ }
+    await postJson('/api/admin/logout') // 쿠키 삭제 실패(네트워크 등)해도 아래는 계속 — 로그인으로 이동
     queryClient.clear() // 공용 PC 대비: 캐시에 남은 아동 PII 제거
     router.replace('/admin/login')
   }

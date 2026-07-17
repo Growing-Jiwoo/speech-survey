@@ -3,6 +3,7 @@ import { hash } from '@node-rs/argon2'
 
 vi.mock('@/lib/db', () => ({
   isLoginLocked: vi.fn().mockResolvedValue(false),
+  loginFailureCount: vi.fn().mockResolvedValue(0),
   recordLoginFailure: vi.fn().mockResolvedValue(undefined),
   clearLoginFailures: vi.fn().mockResolvedValue(undefined),
 }))
@@ -26,6 +27,7 @@ beforeEach(async () => {
   HASH = await hash(PW)                 // argon2id 인코딩 해시
   vi.clearAllMocks()
   vi.mocked(db.isLoginLocked).mockResolvedValue(false)
+  vi.mocked(db.loginFailureCount).mockResolvedValue(0)
 })
 
 describe('POST /api/admin/login', () => {
@@ -53,11 +55,18 @@ describe('POST /api/admin/login', () => {
     expect(res.status).toBe(429)
     expect(db.clearLoginFailures).not.toHaveBeenCalled()
   })
-  it('전역 스로틀 트리거 시 429 (IP는 잠기지 않았어도 차단)', async () => {
-    vi.mocked(db.isLoginLocked).mockImplementation(async (key: string) => key === '__global__')
+  it('[S1] 전역 실패가 누적돼도 로그인을 봉쇄하지 않는다 (하드 잠금 대신 백오프 지연)', async () => {
+    // 전역 카운트를 백오프 임계(30)로 → 약 300ms 지연 후에도 올바른 비번은 통과(200)
+    vi.mocked(db.loginFailureCount).mockResolvedValue(30)
+    const t0 = performance.now()
     const res = await POST(makeReq(PW, { 'x-real-ip': '1.2.3.4' }))
-    expect(res.status).toBe(429)
-    expect(db.clearLoginFailures).not.toHaveBeenCalled()
+    expect(res.status).toBe(200)
+    expect(performance.now() - t0).toBeGreaterThanOrEqual(250) // 백오프가 실제로 적용됨
+  })
+  it('전역 카운트가 임계 미만이면 지연 없이 즉시 처리', async () => {
+    vi.mocked(db.loginFailureCount).mockResolvedValue(5)
+    const res = await POST(makeReq(PW, { 'x-real-ip': '1.2.3.4' }))
+    expect(res.status).toBe(200)
   })
   it('플랫폼 주입 x-real-ip 우선 사용', async () => {
     await POST(makeReq('wrong', { 'x-real-ip': '8.8.8.8', 'x-forwarded-for': '5.5.5.5' }))
@@ -66,6 +75,29 @@ describe('POST /api/admin/login', () => {
   it('x-real-ip 없으면 x-forwarded-for 마지막(신뢰) 홉', async () => {
     await POST(makeReq('wrong', { 'x-forwarded-for': '5.5.5.5, 10.0.0.1, 10.0.0.2' }))
     expect(db.recordLoginFailure).toHaveBeenCalledWith('10.0.0.2', expect.any(Number))
+  })
+  it('성공 쿠키 속성: HttpOnly + SameSite=Lax + Path=/ + Max-Age는 토큰 TTL(8h)과 일치', async () => {
+    const res = await POST(makeReq(PW))
+    const cookie = res.headers.get('set-cookie') ?? ''
+    expect(cookie).toMatch(/HttpOnly/i)
+    expect(cookie).toMatch(/SameSite=Lax/i)
+    expect(cookie).toMatch(/Path=\//i)
+    expect(cookie).toMatch(/Max-Age=28800/i)
+  })
+  it('비문자열 password(숫자·객체)는 401 + 실패 기록', async () => {
+    expect((await POST(makeReq(12345, { 'x-real-ip': '3.3.3.3' }))).status).toBe(401)
+    expect((await POST(makeReq({ pw: 'x' }, { 'x-real-ip': '3.3.3.3' }))).status).toBe(401)
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('3.3.3.3', expect.any(Number))
+  })
+  it('본문이 JSON이 아니면 401 (500 아님)', async () => {
+    const res = await POST(new Request('http://x/api/admin/login', { method: 'POST', body: 'not-json' }))
+    expect(res.status).toBe(401)
+  })
+  it('ADMIN_PASSWORD_HASH가 손상돼 verify가 throw해도 500이 아닌 401', async () => {
+    HASH = 'corrupted-not-a-hash'
+    const res = await POST(makeReq(PW, { 'x-real-ip': '4.4.4.4' }))
+    expect(res.status).toBe(401)
+    expect(db.recordLoginFailure).toHaveBeenCalledWith('4.4.4.4', expect.any(Number))
   })
   it('공격자가 x-forwarded-for 첫 홉을 위조해도 신뢰 위치(x-real-ip)가 같으면 동일 잠금 버킷으로 집계된다', async () => {
     // 첫 시도: 위조된 첫 홉 '1.1.1.1', 실제 신뢰 IP(x-real-ip)는 '9.9.9.9'

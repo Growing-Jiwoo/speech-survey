@@ -1,26 +1,44 @@
+// app/page.tsx — 검사 시작(아동 정보 입력) 화면. 주로 교사/검사자가 입력한다.
+// 제출 시 서버 검증(lib/schema)과 같은 규칙으로 클라이언트에서 선검증하고,
+// 세션 생성 성공 시 진행 상태를 localStorage에 만들어 /survey로 이동한다.
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { Select } from '@/components/Select'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
-import { newState, saveState } from '@/lib/survey-state'
+import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
+import { pad2 } from '@/lib/format'
+import { postJson } from '@/lib/http'
+import { clearState, loadState, newState, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validClassNo, validContact, validGender, validName } from '@/lib/validate'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
-const pad = (n: number) => String(n).padStart(2, '0')
 const NOW_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 12 }, (_, i) => NOW_YEAR - 5 - i) // 초등 연령대 여유 범위
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
-type FieldErrors = Partial<Record<'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'contact', string>>
+type FieldKey = 'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'contact'
+type FieldErrors = Partial<Record<FieldKey, string>>
 
-function FieldError({ msg }: { msg?: string }) {
+/** 화면상 필드 순서 — 검증 실패 시 이 순서의 첫 에러 필드로 포커스를 옮긴다. */
+const FIELD_ORDER: FieldKey[] = ['school', 'birth', 'classNo', 'gender', 'name', 'teacher', 'contact']
+
+function focusFirstError(errors: FieldErrors) {
+  const key = FIELD_ORDER.find(k => errors[k])
+  if (!key) return
+  const root = document.querySelector<HTMLElement>(`[data-field="${key}"]`)
+  const target = root?.matches('input,button') ? root : root?.querySelector<HTMLElement>('input,button')
+  ;(target ?? root)?.focus()
+  root?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+function FieldError({ id, msg }: { id: string; msg?: string }) {
   if (!msg) return null
-  return <p role="alert" className="mt-1.5 text-[13px] text-rec-deep">{msg}</p>
+  return <p id={id} role="alert" className="mt-1.5 text-[13px] text-rec-deep">{msg}</p>
 }
 
 export default function StartPage() {
@@ -38,6 +56,17 @@ export default function StartPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // 법정대리인 서면 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [시작하기] 비활성
+  const [consent, setConsent] = useState(false)
+  // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(childName) 함께 보여 이어하기를 돕는다
+  const [resume, setResume] = useState<{ childName: string } | null>(null)
+
+  useEffect(() => {
+    // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
+    const s = loadState()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (s) setResume({ childName: s.childName })
+  }, [])
 
   // 선택한 연·월에 맞는 일수 (윤년 반영)
   const daysInMonth = year && month ? new Date(Number(year), Number(month), 0).getDate() : 31
@@ -47,7 +76,8 @@ export default function StartPage() {
     const cleanName = name.trim().replace(/\s+/g, ' ')
     const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
     const cleanContact = contact.trim()
-    const birthYmd = year && month && day ? `${String(year).slice(2)}${pad(Number(month))}${pad(Number(day))}` : ''
+    // 생년월일은 서버 스키마(birthYmdSchema)와 같은 YYMMDD 6자리로 조립한다
+    const birthYmd = year && month && day ? `${String(year).slice(2)}${pad2(Number(month))}${pad2(Number(day))}` : ''
 
     const next: FieldErrors = {}
     if (!school) next.school = '학교를 선택해 주세요.'
@@ -58,28 +88,23 @@ export default function StartPage() {
     if (!validName(cleanTeacher)) next.teacher = '담임교사명은 한글이나 영어로만 쓸 수 있어요.'
     if (!validContact(cleanContact)) next.contact = '연락처는 전화번호 또는 이메일 형식으로 입력해 주세요.'
     setErrors(next)
-    if (Object.keys(next).length > 0) return
+    if (Object.keys(next).length > 0) { focusFirstError(next); return }
 
     setFormErr(''); setBusy(true)
-    try {
-      const res = await fetch('/api/sessions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          region: school!.region, schoolId: school!.schoolId, schoolName: school!.schoolName,
-          birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
-          name: cleanName, teacherName: cleanTeacher, teacherContact: cleanContact,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setFormErr(json.error ?? '문제가 생겼어요. 다시 시도해 주세요.'); return }
-      saveState(newState(json.sessionId, cleanName, json.sessionToken))
-      router.push('/survey')
-    } catch {
-      setFormErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
-    } finally { setBusy(false) }
+    const r = await postJson<{ sessionId: string; sessionToken: string }>('/api/sessions', {
+      region: school!.region, schoolId: school!.schoolId, schoolName: school!.schoolName,
+      birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
+      name: cleanName, teacherName: cleanTeacher, teacherContact: cleanContact,
+      guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
+    })
+    setBusy(false)
+    if (!r.ok) { setFormErr(r.error); return }
+    clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
+    saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken))
+    router.push('/survey')
   }
 
-  const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim()
+  const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim() && consent
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
@@ -91,13 +116,41 @@ export default function StartPage() {
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
         검사를 시작하기 전에<br />아래 정보를 입력해 주세요.
       </p>
-      <div className="card mt-8 w-full p-5">
+
+      {resume && (
+        // 세로 배치: 안내 문장이 버튼과 자리를 다투다 한 글자만 줄바꿈되던 문제를 없앤다.
+        <div className="card mt-6 flex w-full flex-col gap-3 border-blue/40 bg-blue/5 p-4">
+          <p className="text-sm font-bold text-ink-soft">
+            {resume.childName
+              ? <><b className="text-blue">{resume.childName}</b> 학생의 검사가 진행 중이에요.</>
+              : '이 기기에 진행 중인 검사가 있어요.'}
+          </p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => router.push('/survey')}
+              className="flex-1 rounded-lg bg-blue py-2.5 text-sm font-bold text-white">
+              이어서 하기
+            </button>
+            <button type="button" onClick={() => { clearState(); setResume(null) }}
+              className="flex-1 rounded-lg border-[1.5px] border-line bg-white py-2.5 text-sm font-bold text-ink-soft">
+              새로 시작
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 자동완성은 의도적으로 끈다(autoComplete="off") — 교사 개인 기기에서 본인 정보가
+          아동 정보 칸에 제안되는 것을 막는다. */}
+      <form className="card mt-8 w-full p-5" autoComplete="off"
+        onSubmit={e => { e.preventDefault(); if (!busy && filled) void begin() }}>
         <label className="text-[13px] font-bold text-ink-soft">학교명</label>
-        <SchoolPicker value={school} onSelect={setSchool} />
-        <FieldError msg={errors.school} />
+        <div data-field="school">
+          <SchoolPicker value={school} onSelect={setSchool} />
+        </div>
+        <FieldError id="err-school" msg={errors.school} />
 
         <span className={labelCls}>생년월일</span>
-        <div className="mt-1.5 flex gap-2">
+        <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
+          aria-describedby={errors.birth ? 'err-birth' : undefined}>
           <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
             value={year} onChange={v => { setYear(v); setDay('') }}
             options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
@@ -108,7 +161,7 @@ export default function StartPage() {
             value={day} onChange={setDay}
             options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
         </div>
-        <FieldError msg={errors.birth} />
+        <FieldError id="err-birth" msg={errors.birth} />
 
         <div className="flex gap-2.5">
           <div className="flex-1">
@@ -120,14 +173,16 @@ export default function StartPage() {
           </div>
           <div className="flex-1">
             <label className={labelCls} htmlFor="classNo">반</label>
-            <input id="classNo" value={classNo} inputMode="numeric" maxLength={2}
+            <input id="classNo" data-field="classNo" name="classNo" value={classNo} inputMode="numeric" maxLength={2}
+              aria-describedby={errors.classNo ? 'err-classNo' : undefined} aria-invalid={!!errors.classNo}
               onChange={e => setClassNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
           </div>
         </div>
-        <FieldError msg={errors.classNo} />
+        <FieldError id="err-classNo" msg={errors.classNo} />
 
-        <span className={labelCls}>성별</span>
-        <div className="mt-1.5 flex gap-2.5">
+        <span className={labelCls} id="gender-label">성별</span>
+        <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
+          aria-describedby={errors.gender ? 'err-gender' : undefined}>
           {(['남', '여'] as const).map(g => (
             <button key={g} type="button" onClick={() => setGender(g)} aria-pressed={gender === g}
               className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
@@ -136,25 +191,55 @@ export default function StartPage() {
             </button>
           ))}
         </div>
-        <FieldError msg={errors.gender} />
+        <FieldError id="err-gender" msg={errors.gender} />
 
         <label className={labelCls} htmlFor="name">이름</label>
-        <input id="name" value={name} maxLength={30} onChange={e => setName(e.target.value)} className={inputCls} />
-        <FieldError msg={errors.name} />
+        <input id="name" data-field="name" name="name" value={name} maxLength={30}
+          aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
+          onChange={e => setName(e.target.value)} className={inputCls} />
+        <FieldError id="err-name" msg={errors.name} />
 
         <label className={labelCls} htmlFor="teacher">담임교사명</label>
-        <input id="teacher" value={teacherName} maxLength={30}
+        <input id="teacher" data-field="teacher" name="teacher" value={teacherName} maxLength={30}
+          aria-describedby={errors.teacher ? 'err-teacher' : undefined} aria-invalid={!!errors.teacher}
           onChange={e => setTeacherName(e.target.value)} className={inputCls} />
-        <FieldError msg={errors.teacher} />
+        <FieldError id="err-teacher" msg={errors.teacher} />
 
         <label className={labelCls} htmlFor="contact">담임 연락처</label>
-        <input id="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
+        <input id="contact" data-field="contact" name="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
+          aria-describedby={errors.contact ? 'err-contact' : undefined} aria-invalid={!!errors.contact}
           onChange={e => setContact(e.target.value)} className={inputCls} />
-        <FieldError msg={errors.contact} />
+        <FieldError id="err-contact" msg={errors.contact} />
+
+        {/* 개인정보 수집·이용 고지(개인정보보호법 제15조 제2항의 4대 필수 고지사항) +
+            법정대리인 서면 동의 확인 체크(제22조의2). 문구의 단일 소스는 lib/consent.ts. */}
+        <div className="mt-6 rounded-xl border border-line bg-well p-4">
+          <p className="text-[13px] font-bold text-ink-soft">개인정보 수집·이용 안내</p>
+          <dl className="mt-2 flex flex-col gap-1.5">
+            {CONSENT_NOTICE.map(row => (
+              <div key={row.label} className="flex gap-2 text-xs leading-relaxed">
+                <dt className="w-20 flex-none font-bold text-ink-mute">{row.label}</dt>
+                <dd className="min-w-0 text-ink-soft">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-mute">
+            만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.
+            학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
+          </p>
+          <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
+            <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-none accent-[var(--color-blue)]" />
+            <span className="text-xs font-bold leading-relaxed text-ink-soft">{GUARDIAN_CONSENT_LABEL}</span>
+          </label>
+        </div>
 
         {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
-        <button onClick={begin} disabled={busy || !filled} className="cta mt-5">시작하기</button>
-      </div>
+        <button type="submit" disabled={busy || !filled} className="cta mt-5">시작하기</button>
+        {!consent && (
+          <p className="mt-2 text-center text-[11px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
+        )}
+      </form>
       <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
       <LoadingOverlay show={busy} />
     </main>

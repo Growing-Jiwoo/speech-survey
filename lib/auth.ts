@@ -29,13 +29,16 @@ function randomId(): string {
   return [...b].map(x => x.toString(16).padStart(2, '0')).join('')
 }
 
+/** 관리자 세션 수명(토큰 exp·쿠키 maxAge가 공유하는 단일 소스 — 한쪽만 바뀌어 어긋나는 것 방지). */
+export const ADMIN_TTL_MS = 8 * 3600_000
+
 /**
  * 관리자 토큰 형식: `${만료ms}.${jti}.${HMAC(만료ms.jti)}`.
  * YAGNI: jti는 유일성 확보용일 뿐, DB 기반 폐기(revocation) 테이블은 두지 않는다.
  * 토큰을 즉시 무효화해야 하면 SESSION_SECRET을 회전한다 — 그 즉시 발급된 모든 토큰의 서명이
  * 무효가 되므로 이것이 이 시스템의 유일한 폐기(revocation) 메커니즘이다.
  */
-export async function createToken(secret: string, ttlMs = 8 * 3600_000): Promise<string> {
+export async function createToken(secret: string, ttlMs = ADMIN_TTL_MS): Promise<string> {
   const exp = String(Date.now() + ttlMs)
   const jti = randomId()
   return `${exp}.${jti}.${await hmacHex(`${exp}.${jti}`, secret)}`

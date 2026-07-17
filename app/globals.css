@@ -5,26 +5,62 @@
   --color-blue-deep: #1E4FCC;
   --color-rec: #E5484D;
   --color-rec-deep: #C13A3E;
-  --color-mint: #0BA37A;
-  --color-amber: #B97F10;
+  /* mint·amber·ink-mute는 흰 배경 위 본문 크기 텍스트로도 쓰이므로 WCAG AA(4.5:1)를 만족하는 명도로 유지할 것 */
+  --color-mint: #0A8062;
+  --color-amber: #96660C;
   --color-ink: #0E1526;
   --color-ink-soft: #3A4256;
-  --color-ink-mute: #8A94AD;
+  --color-ink-mute: #6E7994;
   --color-bg: #F4F6FB;
   --color-line: #E3E8F3;
   --color-well: #F7F9FE;
   --font-read: var(--font-lexend), sans-serif;
 }
 
+html, body {
+  /* 아동이 화면을 쓸어내려도 당겨서-새로고침으로 검사가 리로드되지 않게 한다 */
+  overscroll-behavior-y: none;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-noto), sans-serif;
+  /* 한글은 기본적으로 음절 단위로 줄바꿈돼 "다시"가 "다"/"시"로 갈라진다.
+     keep-all로 어절(공백) 단위로만 줄바꿈해 낱말이 쪼개지지 않게 한다. */
+  word-break: keep-all;
 }
 
 /* Tailwind v4는 버튼 기본 커서를 default로 두므로, 활성 버튼은 pointer로 되돌린다. */
 button:not(:disabled), label:has(> input[type="checkbox"]), select:not(:disabled) {
   cursor: pointer;
+}
+
+/* 모든 버튼에 공통 hover/press 피드백(밝기 변화 — 레이아웃을 밀지 않아 어떤 버튼에도 안전).
+   :where()는 명시도 0이라 아래 .cta/.btn-* 등 구체 스타일이 항상 우선한다. */
+:where(button):not(:disabled) {
+  transition: filter .12s ease, background-color .12s ease, border-color .12s ease, box-shadow .08s ease, transform .08s ease;
+}
+:where(button):not(:disabled):hover { filter: brightness(0.97); }
+:where(button):not(:disabled):active { filter: brightness(0.93); }
+
+/* 터치 반응성: 더블탭 줌 대기 제거(연타하는 아동 화면 필수) + iOS 탭 하이라이트 제거 */
+button, a, label {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 키보드 포커스 가시화 — 브라우저 기본 링에 의존하지 않는다 */
+:where(button, a, [tabindex]):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-blue) 55%, transparent);
+  outline-offset: 2px;
+}
+
+/* 제시 낱말·문장용: 길게 눌러도 텍스트 선택·iOS 콜아웃(복사 메뉴)이 뜨지 않게 */
+.no-select-callout {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .card {
@@ -40,6 +76,7 @@ button:not(:disabled), label:has(> input[type="checkbox"]), select:not(:disabled
   box-shadow: 0 3px 0 var(--color-blue-deep), 0 12px 20px -10px rgb(30 79 204 / .45);
   transition: transform .08s, box-shadow .08s, opacity .15s;
 }
+.cta:hover:not(:disabled) { box-shadow: 0 3px 0 var(--color-blue-deep), 0 16px 26px -10px rgb(30 79 204 / .55); }
 .cta:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--color-blue-deep); }
 .cta:disabled { opacity: .4; pointer-events: none; }
 .kpi {
@@ -48,12 +85,38 @@ button:not(:disabled), label:has(> input[type="checkbox"]), select:not(:disabled
 }
 .kpi b { color: var(--color-ink); font-family: var(--font-read), sans-serif; }
 
+/* 버튼 스킨 3종 — 크기(h-*, flex-*)는 호출부 클래스로 지정하고 여기는 색·모양만 담당.
+ * .cta(큰 주 행동 버튼)와 달리 화면 하단 내비·모달 등 나란히 놓이는 버튼용. */
+.btn-ghost, .btn-primary, .btn-danger {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; font-size: 15px; font-weight: 700;
+  transition: transform .08s, box-shadow .08s, opacity .15s, border-color .15s;
+}
+.btn-ghost:disabled, .btn-primary:disabled, .btn-danger:disabled { opacity: .4; }
+.btn-ghost {
+  border: 1.5px solid var(--color-line);
+  background: var(--color-well); color: var(--color-ink-soft);
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--color-ink-mute); background: #fff; }
+.btn-ghost:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary {
+  background: var(--color-blue); color: #fff;
+  box-shadow: 0 3px 0 var(--color-blue-deep);
+}
+.btn-primary:hover:not(:disabled) { box-shadow: 0 3px 0 var(--color-blue-deep), 0 10px 18px -8px rgb(30 79 204 / .5); }
+.btn-primary:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--color-blue-deep); }
+.btn-danger { background: var(--color-rec-deep); color: #fff; box-shadow: 0 3px 0 #9e2f33; }
+.btn-danger:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #9e2f33; }
+
 @keyframes blip-blink { 0%, 93%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
 @keyframes blip-antp { 0%, 100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.28); opacity: .85 } }
+@keyframes spinner-rotate { to { transform: rotate(360deg) } }
 
 .blip-blink { transform-box: fill-box; transform-origin: center; animation: blip-blink 4.6s infinite; }
 .blip-antpulse { transform-box: fill-box; transform-origin: center; animation: blip-antp 1.3s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* 진행 표시 스피너는 예외 — 멈춰 있으면 "죽은 화면"으로 보인다(WCAG 필수 모션 예외) */
+  .animate-spin { animation: spinner-rotate 1s linear infinite !important; }
 }

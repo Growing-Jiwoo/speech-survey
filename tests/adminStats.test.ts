@@ -14,6 +14,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     child_name: '김테스트', teacher_name: '이담임', teacher_contact: '010-0000-0000',
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
+    guardian_consented_at: '2026-07-14T00:59:00.000Z',
     recordings: [], writing_answers: [],
     ...over,
   }
@@ -55,12 +56,12 @@ describe('computeKpis', () => {
       mkSession({ started_at: '2026-07-14T03:00:00.000Z' }),
       mkSession({ started_at: '2026-07-10T01:00:00.000Z', submitted_at: '2026-07-10T02:00:00.000Z' }),
     ]
-    expect(computeKpis(sessions, now)).toEqual({ total: 3, submitted: 2, inProgress: 1, today: 2 })
+    expect(computeKpis(sessions, kstDateKey(now))).toEqual({ total: 3, submitted: 2, inProgress: 1, today: 2 })
   })
   it('KST 전날(UTC 오후)은 오늘로 세지 않는다', () => {
     const now = new Date('2026-07-14T05:00:00.000Z') // 2026-07-14 14:00 KST
     const other = mkSession({ started_at: '2026-07-13T01:00:00.000Z' }) // 2026-07-13 10:00 KST
-    expect(computeKpis([other], now).today).toBe(0)
+    expect(computeKpis([other], kstDateKey(now)).today).toBe(0)
   })
 })
 
@@ -70,7 +71,7 @@ describe('computeKpis (KST 오늘)', () => {
     const now = new Date('2026-07-13T15:30:00.000Z')
     const sameKstDay = mkSession({ started_at: '2026-07-13T15:10:00.000Z' }) // 2026-07-14 00:10 KST → 오늘
     const prevKstDay = mkSession({ started_at: '2026-07-13T14:50:00.000Z' }) // 2026-07-13 23:50 KST → 어제
-    expect(computeKpis([sameKstDay, prevKstDay], now).today).toBe(1)
+    expect(computeKpis([sameKstDay, prevKstDay], kstDateKey(now)).today).toBe(1)
   })
 })
 
@@ -111,26 +112,26 @@ describe('filterSessions', () => {
   const f = (over: object) => ({ q: '', status: 'all' as const, school: null, grade: null, today: false, ...over })
 
   it('검색어는 이름·학교 부분일치(공백 트림)', () => {
-    expect(filterSessions(base, f({ q: ' 하나 ' }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ q: '다라' }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ q: '없음' }), now)).toHaveLength(0)
+    expect(filterSessions(base, f({ q: ' 하나 ' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ q: '다라' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ q: '없음' }), kstDateKey(now))).toHaveLength(0)
   })
   it('검색어는 담임교사명·반도 부분일치', () => {
     const rows = [
       mkSession({ child_name: '김하나', teacher_name: '이담임', class_no: 2 }),
       mkSession({ child_name: '박둘', teacher_name: '최선생', class_no: 5 }),
     ]
-    expect(filterSessions(rows, f({ q: '이담임' }), now)).toHaveLength(1)
-    expect(filterSessions(rows, f({ q: '최선생' }), now)).toHaveLength(1)
-    expect(filterSessions(rows, f({ q: '5' }), now)).toHaveLength(1) // 반 번호
+    expect(filterSessions(rows, f({ q: '이담임' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(rows, f({ q: '최선생' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(rows, f({ q: '5' }), kstDateKey(now))).toHaveLength(1) // 반 번호
   })
   it('상태·학교·학년·오늘 필터가 AND로 결합된다', () => {
-    expect(filterSessions(base, f({ status: 'submitted' }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ status: 'inProgress' }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ school: '가나초' }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ grade: 2 }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ today: true }), now)).toHaveLength(1)
-    expect(filterSessions(base, f({ today: true, grade: 2 }), now)).toHaveLength(0)
+    expect(filterSessions(base, f({ status: 'submitted' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ status: 'inProgress' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ school: '가나초' }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ grade: 2 }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ today: true }), kstDateKey(now))).toHaveLength(1)
+    expect(filterSessions(base, f({ today: true, grade: 2 }), kstDateKey(now))).toHaveLength(0)
   })
 })
 
