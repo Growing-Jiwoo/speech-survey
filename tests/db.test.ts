@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  countSessionRecordings, deleteSession, isLoginLocked, sessionSubmitState, submitSession, uploadRecording,
+  countSessionRecordings, deleteSession, isLoginLocked, sessionDetail, sessionSubmitState, submitSession, uploadRecording,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
@@ -121,6 +121,23 @@ describe('submitSession — 현장 채점(marks) 저장', () => {
     enqueue('reading_marks', { error: { message: 'boom' } })
     await expect(submitSession(SID, [], ['none'], [{ itemCode: 'rw01', correct: false }]))
       .rejects.toThrow('boom')
+  })
+})
+
+describe('sessionDetail — 4개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
+  it('sessions/recordings/writing_answers/reading_marks 응답이 교차되지 않고 그대로 매핑된다', async () => {
+    enqueue('sessions', { data: { id: SID, child_name: '세션전용이름' }, error: null })
+    enqueue('recordings', { data: [{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }], error: null })
+    enqueue('writing_answers', { data: [{ item_code: 'ww01', can_write: true }], error: null })
+    enqueue('reading_marks', { data: [{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }], error: null })
+
+    const result = await sessionDetail(SID)
+
+    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks'])
+    expect(result.session).toEqual({ id: SID, child_name: '세션전용이름' })
+    expect(result.recordings).toEqual([{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }])
+    expect(result.writing).toEqual([{ item_code: 'ww01', can_write: true }])
+    expect(result.marks).toEqual([{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }])
   })
 })
 
