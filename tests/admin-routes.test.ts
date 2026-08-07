@@ -64,6 +64,7 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(JSON.stringify(body.recordings)).not.toContain('audio_path')
     expect(body.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(body.marks).toEqual([{ item_code: 'rw01', correct: true }])
+    expect(body.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
   })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))

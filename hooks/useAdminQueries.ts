@@ -2,7 +2,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '@/lib/http'
-import type { MarkRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
+import type { MarkRow, SentenceScoreRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
 
 /** 관리자 쿼리 키 — 무효화/제거 호출부가 리터럴을 복사하다 어긋나지 않도록 한 곳에 정의. */
 export const adminKeys = {
@@ -24,6 +24,8 @@ export interface SessionDetailData {
   writing: WritingRow[]
   /** 낱말 해독 의미 낱말의 검사자 현장 채점 — 3단계 채점 화면의 초기값이 된다 */
   marks: MarkRow[]
+  /** 문장 읽기유창성 채점(어절 수) */
+  sentences: SentenceScoreRow[]
 }
 
 /** 관리자 목록 세션. staleTime 동안 재방문/필터 변경 시 재요청 없이 캐시 사용.

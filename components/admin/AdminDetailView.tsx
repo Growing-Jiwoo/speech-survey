@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, KIND_LABEL, MEANING_READ_CODES, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { ITEM_TOTALS, KIND_LABEL, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { contactLabel, gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -17,6 +17,7 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { RecordingsTable, type RecordingsByItem } from '@/components/admin/RecordingsTable'
+import { ScoreSheet } from '@/components/admin/ScoreSheet'
 
 export function AdminDetailView() {
   const id = String(useParams().id)
@@ -77,7 +78,7 @@ export function AdminDetailView() {
     </main>
   )
 
-  const { session: s, writing, marks } = data
+  const { session: s, writing } = data
   const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
   const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
   const missingCount = (RECORDING_PAGES.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
@@ -111,7 +112,8 @@ export function AdminDetailView() {
                   결과지 — {s.child_name} ({s.school_name} {gradeClassLabel(s.grade, s.class_no)}, {s.gender})
                 </p>
                 <p className="text-[11px] text-ink-mute">
-                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({contactLabel(s.teacher_phone, s.teacher_email, s.teacher_contact)}) ·{' '}
+                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({contactLabel(s.teacher_phone, s.teacher_email, s.teacher_contact)})
+                  {' '}· 검사자 {s.examiner_type === 'expert' ? '전문가' : s.examiner_type === 'teacher' ? '교사' : '기록 없음'} ·{' '}
                   {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
                   {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
                   {s.guardian_consented_at
@@ -136,6 +138,11 @@ export function AdminDetailView() {
           <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
           <RecordingsTable byItem={byItem}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
+
+          <ScoreSheet sessionId={id}
+            initialMarks={Object.fromEntries(data.marks.map(m => [m.item_code, m.correct]))}
+            initialSentences={Object.fromEntries(data.sentences.map(s => [s.item_code, s.words]))}
+            writing={Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))} />
 
           <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
           <div className="overflow-x-auto">
@@ -167,16 +174,6 @@ export function AdminDetailView() {
               </tbody>
             </table>
           </div>
-
-          {marks.length > 0 && (
-            <p className="border-t border-line px-5 py-3 text-[11.5px] text-ink-mute">
-              검사 현장에서 표시한 의미 낱말 채점: {marks.filter(m => m.correct).length} / {MEANING_READ_CODES.length} 정반응
-              {marks.length < MEANING_READ_CODES.length && (
-                <> <b className="text-amber">(일부만 표시됨 — {marks.length}/{MEANING_READ_CODES.length}개만 채점됨)</b></>
-              )}
-              {' '}— 녹음을 들으며 확정하는 채점 화면은 3단계에서 추가됩니다.
-            </p>
-          )}
 
           <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
           <div className="flex flex-wrap gap-2 px-5 py-4">
