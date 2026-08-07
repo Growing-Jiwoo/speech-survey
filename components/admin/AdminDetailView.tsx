@@ -86,7 +86,7 @@ export function AdminDetailView() {
   return (
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 print:hidden">
           <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
           {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.
               (파괴적인 [세션 삭제]는 오클릭 방지를 위해 페이지 하단으로 분리) */}
@@ -190,7 +190,7 @@ export function AdminDetailView() {
         </div>
 
         {/* 파괴적 동작은 본문과 분리된 하단 영역에 배치(고빈도 내비 버튼과의 오클릭 방지) */}
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end print:hidden">
           <button type="button" onClick={() => setDelModal(true)}
             className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
             세션 삭제

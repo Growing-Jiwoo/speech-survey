@@ -120,3 +120,21 @@ button, a, label {
   /* 진행 표시 스피너는 예외 — 멈춰 있으면 "죽은 화면"으로 보인다(WCAG 필수 모션 예외) */
   .animate-spin { animation: spinner-rotate 1s linear infinite !important; }
 }
+
+/* 결과지 인쇄 — 관리자 결과지 화면을 그대로 종이에 낸다(인쇄 전용 화면을 따로 두지 않는다).
+   ※ 요소를 숨길 때는 Tailwind의 print: 변형(print:hidden)만 쓴다 — 커스텀 클래스를 따로 두면
+   숨김 방식이 두 갈래가 되어 어느 쪽을 붙였는지 헷갈린다. 여기서는 마크업으로 제어하기 번거로운 것
+   (지연 로드되는 오디오 재생기)과 잉크를 먹는 장식만 처리한다. */
+@media print {
+  @page { margin: 12mm; }
+
+  /* 재생기는 종이에서 의미가 없다 */
+  audio { display: none !important; }
+
+  body { background: #fff; }
+
+  /* 카드 장식 제거 + 페이지 경계에서 표·섹션이 잘리지 않게 */
+  .card, table, section { box-shadow: none !important; break-inside: avoid; }
+
+  a[href]::after { content: ''; }  /* URL 꼬리표 제거 */
+}
