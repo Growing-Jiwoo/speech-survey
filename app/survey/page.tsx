@@ -101,6 +101,9 @@ function SurveyInner() {
 
   if (!st) return null
 
+  if (st.phase === 'mic')
+    return <MicCheck onOk={() => patch({ micDone: true, phase: 'page' })} />
+
   // 중단 규칙을 반영한 진행 목록. marks가 바뀌면 목록이 줄어들 수 있으므로 인덱스를 clamp한다.
   const pages = visiblePages(st)
   const idx = Math.min(st.pageIdx, pages.length - 1)
@@ -108,9 +111,6 @@ function SurveyInner() {
   const isLast = idx === pages.length - 1
 
   function goToIdx(n: number) { patch({ pageIdx: n }); window.scrollTo(0, 0) }
-
-  if (st.phase === 'mic')
-    return <MicCheck onOk={() => patch({ micDone: true, phase: 'page' })} />
 
   function goNext() {
     // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
