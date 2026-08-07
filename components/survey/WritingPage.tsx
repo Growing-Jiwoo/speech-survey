@@ -4,7 +4,7 @@
 // 해당 시점부터 남은 문항의 입력을 잠그고 안내한다.
 'use client'
 import { KIND_LABEL, MEANING_WRITE_CODES, type SurveyItem } from '@/lib/items'
-import { CEILING_N, writingCeilingHit } from '@/lib/survey-flow'
+import { requiredWritingCodes, writingCeilingHit } from '@/lib/survey-flow'
 
 export function WritingPage({ items, value, onChange, onSetAll }: {
   items: SurveyItem[]
@@ -16,11 +16,10 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
 }) {
   const ceiling = writingCeilingHit(value)
   const meaningCount = MEANING_WRITE_CODES.length
-  // 중단 시 잠기지 않는 문항 = 중단 판정에 실제로 쓰인 의미 낱말 코드(앞 N개).
-  // 배열 위치(idx)가 아니라 문항 코드로 판정해야, WRITING_ITEMS의 나열 순서가
-  // 나중에 바뀌더라도(의미/무의미가 섞이더라도) 잠금이 항상 올바른 문항에 걸린다.
-  const keepCodes = new Set(MEANING_WRITE_CODES.slice(0, CEILING_N))
-  const requiredCodes = ceiling ? keepCodes : new Set(items.map(i => i.code))
+  // 중단 시 잠기지 않는 문항 = 중단 판정에 실제로 쓰인 의미 낱말 코드(앞 N개) — lib/survey-flow.ts의
+  // requiredWritingCodes가 문항 코드 기준으로 판정하므로, WRITING_ITEMS의 나열 순서가 나중에
+  // 바뀌더라도(의미/무의미가 섞이더라도) 잠금이 항상 올바른 문항에 걸린다.
+  const requiredCodes = requiredWritingCodes(items, value)
   const answered = items.filter(i => requiredCodes.has(i.code) && value[i.code] !== undefined).length
   const required = requiredCodes.size
 
@@ -40,7 +39,7 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
 
       <ul className="mt-4 flex flex-col gap-2">
         {items.map((item, idx) => {
-          const locked = ceiling && !keepCodes.has(item.code)
+          const locked = ceiling && !requiredCodes.has(item.code)
           // 의미/무의미가 바뀌는 지점에 구분선을 넣어 검사지와 같은 두 묶음으로 보이게 한다.
           const groupStart = idx === 0 || items[idx - 1].kind !== item.kind
           return (

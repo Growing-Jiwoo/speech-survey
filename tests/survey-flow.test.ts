@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { hitsCeiling, readingCeilingHit, writingCeilingHit, visiblePages, canAdvance, CEILING_N } from '@/lib/survey-flow'
+import {
+  hitsCeiling, readingCeilingHit, writingCeilingHit, visiblePages, canAdvance,
+  requiredWritingCodes, CEILING_N,
+} from '@/lib/survey-flow'
 import { pageByCode } from '@/lib/items'
 
 const codes = (marks: Record<string, boolean>) => visiblePages({ marks }).map(p => p.code)
@@ -66,6 +69,22 @@ describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
   })
 })
 
+describe('requiredWritingCodes (낱말 쓰기에서 실제로 요구되는 문항 코드)', () => {
+  const page = pageByCode.get('p_ww')!
+
+  it('중단 아니면 주어진 문항 전체의 코드를 요구', () => {
+    expect(requiredWritingCodes(page.items, {})).toEqual(new Set(page.items.map(i => i.code)))
+  })
+
+  it('중단 걸리면 ww01~03만 요구 — items 배열을 뒤섞거나 걸러도 결과는 동일 (코드 기반, 위치 기반 아님)', () => {
+    const writing = { ww01: false, ww02: false, ww03: false }
+    expect(requiredWritingCodes(page.items, writing)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+    // 의도적으로 순서를 뒤집고 일부만 남긴 배열을 넘겨도(위치 기반이었다면 결과가 달라졌을 것) 동일해야 한다.
+    const reorderedSubset = [...page.items].reverse().slice(0, 4)
+    expect(requiredWritingCodes(reorderedSubset, writing)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+  })
+})
+
 describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
   const empty = { marks: {}, writing: {}, checklist: [] }
 
@@ -108,6 +127,14 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
     const page = pageByCode.get('p_ww')!
     const firstOne = Object.fromEntries(page.items.slice(0, 1).map(i => [i.code, true]))
     expect(canAdvance(page, { ...empty, writing: firstOne })).toBe(false)
+  })
+
+  it('낱말 쓰기 페이지: items 나열 순서가 바뀌어도 중단 규칙은 문항 코드(ww01~03) 기준으로 판정된다', () => {
+    const page = pageByCode.get('p_ww')!
+    // 의미/무의미 순서를 뒤집은 가짜 페이지 — 배열 위치 기준 판정이었다면 여기서 어긋난다.
+    const reorderedPage = { ...page, items: [...page.items].reverse() }
+    const writing = { ww01: false, ww02: false, ww03: false }
+    expect(canAdvance(reorderedPage, { ...empty, writing })).toBe(true)
   })
 
   it('체크리스트 페이지: 1개 이상 선택하면 진행 가능', () => {

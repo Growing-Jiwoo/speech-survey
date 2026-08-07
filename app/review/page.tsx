@@ -11,8 +11,8 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
-import { SECTION_LABEL, isRecordingPage, areaLabel, type Section } from '@/lib/items'
-import { visiblePages } from '@/lib/survey-flow'
+import { SECTION_LABEL, isRecordingPage, areaLabel, PAGES, type Section } from '@/lib/items'
+import { requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
@@ -46,7 +46,10 @@ export default function ReviewPage() {
   const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
   const missingWriting = pages
     .filter(p => p.section === 'word_writing')
-    .flatMap(p => p.items)
+    .flatMap(p => {
+      const required = requiredWritingCodes(p.items, state.writing)
+      return p.items.filter(i => required.has(i.code))
+    })
     .filter(i => state.writing[i.code] === undefined).length
   const missing = missingPages + missingWriting
 
@@ -70,8 +73,9 @@ export default function ReviewPage() {
               const done = p.items.every(i => state.marks[i.code] !== undefined)
               pill = <StatusPill done={done} label={done ? '표시 완료' : '표시 안 함'} />
             } else if (p.section === 'word_writing') {
-              const done = p.items.filter(i => state.writing[i.code] !== undefined).length
-              pill = <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
+              const required = requiredWritingCodes(p.items, state.writing)
+              const done = p.items.filter(i => required.has(i.code) && state.writing[i.code] !== undefined).length
+              pill = <StatusPill done={done === required.size} label={`${done} / ${required.size}`} />
             } else {
               pill = (
                 <span className="text-right text-xs text-ink-soft">
@@ -122,6 +126,11 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
+      {pages.length < PAGES.length && (
+        <p className="mt-1 text-xs text-ink-mute">
+          중단 규칙에 따라 문장 읽기유창성·낱말 쓰기는 생략되었습니다.
+        </p>
+      )}
 
       {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
           검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.

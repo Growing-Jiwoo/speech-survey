@@ -5,7 +5,7 @@
 // ※ 가정 A1: ②로 중단되어도 검사자 체크리스트는 진행한다(아동 과제가 아니라 검사자 관찰 기록).
 // ※ ①과 ②는 서로 다른 방식으로 구현된다: ①은 이 파일의 visiblePages()가 페이지 자체를 제거하고,
 //   ②는 낱말 쓰기 화면이 직접 남은 문항을 잠그는 방식(추후 태스크)으로 구현된다. writingCeilingHit 참고.
-import { MEANING_READ_CODES, MEANING_WRITE_CODES, PAGES, type SurveyPage } from './items'
+import { MEANING_READ_CODES, MEANING_WRITE_CODES, PAGES, type SurveyItem, type SurveyPage } from './items'
 
 /** 중단 판정 개수 — "첫 N개 연속 오반응" */
 export const CEILING_N = 3
@@ -31,6 +31,19 @@ export function writingCeilingHit(writing: Partial<Record<string, boolean>>): bo
   return hitsCeiling(MEANING_WRITE_CODES.map(c => writing[c]))
 }
 
+/**
+ * 낱말 쓰기에서 실제로 응답이 요구되는 문항 코드 집합.
+ * 중단 규칙 ②에 걸리면 의미 낱말 앞 CEILING_N개만 요구하고, 그렇지 않으면 페이지의 모든 문항을 요구한다.
+ * 낱말 쓰기 화면의 잠금(WritingPage)·다음 버튼 활성화(canAdvance)·검토 화면의 완료 집계가
+ * 모두 이 함수 하나로 "요구되는 문항"을 판정해 배열 위치가 아닌 문항 코드로 안전하게 동작한다.
+ */
+export function requiredWritingCodes(
+  items: SurveyItem[], writing: Partial<Record<string, boolean>>,
+): Set<string> {
+  if (writingCeilingHit(writing)) return new Set(MEANING_WRITE_CODES.slice(0, CEILING_N))
+  return new Set(items.map(i => i.code))
+}
+
 /** 진행 상태에서 실제로 실시할 페이지 목록. 중단 규칙 ①에 걸리면 문장·쓰기 페이지가 빠진다. */
 export function visiblePages(s: { marks: Partial<Record<string, boolean>> }): SurveyPage[] {
   if (!readingCeilingHit(s.marks)) return PAGES
@@ -48,9 +61,9 @@ export function canAdvance(page: SurveyPage, s: {
   checklist: string[]
 }): boolean {
   const markDone = page.items.every(i => s.marks[i.code] !== undefined)
-  // 중단 규칙 ②에 걸리면 앞 3개까지만 요구한다 — 판정식은 이 파일 한 곳에만 둔다.
-  const writingRequired = writingCeilingHit(s.writing) ? CEILING_N : page.items.length
-  const writingDone = page.items.slice(0, writingRequired).every(i => s.writing[i.code] !== undefined)
+  // 중단 규칙 ②에 걸리면 의미 낱말 앞 3개(문항 코드 기준)만 요구한다 — 판정식은 이 파일 한 곳에만 둔다.
+  const writingDone = [...requiredWritingCodes(page.items, s.writing)]
+    .every(code => s.writing[code] !== undefined)
   return (page.code !== 'p_rw_meaning_mark' || markDone)
     && (page.section !== 'word_writing' || writingDone)
     && (page.section !== 'checklist' || s.checklist.length > 0)
