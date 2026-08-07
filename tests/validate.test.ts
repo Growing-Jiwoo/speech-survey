@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validName, validBirthYmd, validGrade, validClassNo, validGender, validContact } from '@/lib/validate'
+import { validName, validBirthYmd, validGrade, validClassNo, validGender, validPhone, validEmail } from '@/lib/validate'
 
 describe('validName', () => {
   it('한글 이름 허용', () => expect(validName('김도연')).toBe(true))
@@ -58,10 +58,11 @@ describe('validGrade / validClassNo', () => {
     expect(validGrade(1.5)).toBe(false)
     expect(validGrade('1' as unknown)).toBe(false)
   })
-  it('반 1~99 정수만', () => {
+  it('반 0~99 정수만 (0 = 단일학급, 반 없음)', () => {
+    expect(validClassNo(0)).toBe(true)
     expect(validClassNo(1)).toBe(true)
     expect(validClassNo(99)).toBe(true)
-    expect(validClassNo(0)).toBe(false)
+    expect(validClassNo(-1)).toBe(false)
     expect(validClassNo(100)).toBe(false)
   })
 })
@@ -75,23 +76,27 @@ describe('validGender', () => {
   })
 })
 
-describe('validContact (전화 또는 이메일)', () => {
-  it('휴대폰·유선 허용 (하이픈 유무 모두)', () => {
-    expect(validContact('010-1234-5678')).toBe(true)
-    expect(validContact('01012345678')).toBe(true)
-    expect(validContact('02-123-4567')).toBe(true)
-    expect(validContact('031-1234-5678')).toBe(true)
+describe('validPhone / validEmail (칸별 검사)', () => {
+  it('전화번호 형식', () => {
+    expect(validPhone('010-1234-5678')).toBe(true)
+    expect(validPhone('01012345678')).toBe(true)
+    expect(validPhone('02-123-4567')).toBe(true)
+    expect(validPhone('031-1234-5678')).toBe(true)
   })
-  it('이메일 허용', () => {
-    expect(validContact('teacher@school.kr')).toBe(true)
-    expect(validContact('a.b+c@ed.go.kr')).toBe(true)
+  it('이메일 형식', () => {
+    expect(validEmail('teacher@school.kr')).toBe(true)
+    expect(validEmail('a.b+c@ed.go.kr')).toBe(true)
   })
-  it('형식 오류 거부', () => {
-    expect(validContact('1234')).toBe(false)
-    expect(validContact('연락처없음')).toBe(false)
-    expect(validContact('teacher@')).toBe(false)
-    expect(validContact('@school.kr')).toBe(false)
-    expect(validContact('')).toBe(false)
-    expect(validContact('a'.repeat(61))).toBe(false)
+  it('형식이 아니면 거부 — 빈 값도 이 함수 기준으로는 거부(빈 칸 허용 판단은 폼이 한다)', () => {
+    expect(validPhone('1234')).toBe(false)
+    expect(validPhone('연락처없음')).toBe(false)
+    expect(validPhone('')).toBe(false)
+    expect(validEmail('teacher@')).toBe(false)
+    expect(validEmail('@school.kr')).toBe(false)
+    expect(validEmail('')).toBe(false)
+  })
+  it('전화 자리에 이메일을 넣으면 거부(칸이 나뉘었으므로 서로 섞이지 않는다)', () => {
+    expect(validPhone('teacher@school.kr')).toBe(false)
+    expect(validEmail('010-1234-5678')).toBe(false)
   })
 })
