@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  countSessionRecordings, deleteSession, isLoginLocked, sessionDetail, sessionSubmitState, submitSession, uploadRecording,
+  countSessionRecordings, deleteSession, isLoginLocked, saveScores, sessionDetail, sessionSubmitState, submitSession, uploadRecording,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
@@ -124,20 +124,22 @@ describe('submitSession — 현장 채점(marks) 저장', () => {
   })
 })
 
-describe('sessionDetail — 4개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
-  it('sessions/recordings/writing_answers/reading_marks 응답이 교차되지 않고 그대로 매핑된다', async () => {
+describe('sessionDetail — 5개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
+  it('sessions/recordings/writing_answers/reading_marks/sentence_scores 응답이 교차되지 않고 그대로 매핑된다', async () => {
     enqueue('sessions', { data: { id: SID, child_name: '세션전용이름' }, error: null })
     enqueue('recordings', { data: [{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }], error: null })
     enqueue('writing_answers', { data: [{ item_code: 'ww01', can_write: true }], error: null })
     enqueue('reading_marks', { data: [{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }], error: null })
+    enqueue('sentence_scores', { data: [{ item_code: 'rs01', words: 7 }], error: null })
 
     const result = await sessionDetail(SID)
 
-    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks'])
+    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks', 'sentence_scores'])
     expect(result.session).toEqual({ id: SID, child_name: '세션전용이름' })
     expect(result.recordings).toEqual([{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }])
     expect(result.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(result.marks).toEqual([{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }])
+    expect(result.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
   })
 })
 
@@ -238,5 +240,29 @@ describe('countSessionRecordings', () => {
     expect(await countSessionRecordings(SID)).toBe(7)
     enqueue('recordings', { count: null, error: null })
     expect(await countSessionRecordings(SID)).toBe(0)
+  })
+})
+
+describe('saveScores — 관리자 채점 저장', () => {
+  it('낱말 O/X는 reading_marks에, 문장 어절 수는 sentence_scores에 upsert한다', async () => {
+    enqueue('reading_marks', { error: null })
+    enqueue('sentence_scores', { error: null })
+    await saveScores(SID,
+      [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw08', correct: false }],
+      [{ itemCode: 'rs01', words: 7 }])
+    expect(fromCalls).toContain('reading_marks')
+    expect(fromCalls).toContain('sentence_scores')
+  })
+
+  it('빈 배열은 해당 테이블을 건드리지 않는다', async () => {
+    enqueue('reading_marks', { error: null })
+    await saveScores(SID, [{ itemCode: 'rw01', correct: true }], [])
+    expect(fromCalls).not.toContain('sentence_scores')
+  })
+
+  it('저장 실패는 삼키지 않고 throw한다 (채점 결과의 조용한 손실 방지)', async () => {
+    enqueue('reading_marks', { error: { message: 'boom' } })
+    await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], []))
+      .rejects.toThrow('boom')
   })
 })

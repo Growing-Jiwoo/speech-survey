@@ -8,6 +8,7 @@ export interface NewSessionInput {
   childName: string; teacherName: string
   /** 전화·이메일 중 하나는 반드시 non-null (스키마가 보장). 미입력 칸은 null로 저장한다. */
   teacherPhone: string | null; teacherEmail: string | null
+  examinerType: 'teacher' | 'expert'
 }
 
 export async function createSession(s: NewSessionInput): Promise<string> {
@@ -16,6 +17,7 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
     child_name: s.childName, teacher_name: s.teacherName,
     teacher_phone: s.teacherPhone, teacher_email: s.teacherEmail,
+    examiner_type: s.examinerType,
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
@@ -38,6 +40,9 @@ export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
 /** 낱말 해독 의미 낱말의 검사자 현장 채점 */
 export interface ReadingMark { itemCode: string; correct: boolean }
+
+/** 문장 읽기유창성 채점 — 제한 시간 내 정확히 읽은 어절 수 */
+export interface SentenceScore { itemCode: string; words: number }
 
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
@@ -68,6 +73,25 @@ export async function submitSession(
     fail(e3)
   }
   return 'ok'
+}
+
+/**
+ * 관리자 채점 저장. 낱말 O/X는 reading_marks(현장 채점과 같은 테이블 — 관리자가 확정값으로 덮어쓴다),
+ * 문장 어절 수는 sentence_scores에 upsert한다. 제출 여부와 무관하게 언제든 다시 채점할 수 있다.
+ */
+export async function saveScores(
+  sessionId: string, marks: ReadingMark[], sentences: SentenceScore[],
+): Promise<void> {
+  if (marks.length > 0) {
+    const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
+    const { error } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
+  }
+  if (sentences.length > 0) {
+    const rows = sentences.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
+    const { error } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
+  }
 }
 
 /** 세션 존재·제출 상태 조회(업로드/제출 가드용). */
@@ -179,6 +203,8 @@ export interface SessionRow {
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
+  /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
+  examiner_type: 'teacher' | 'expert' | null
 }
 
 export interface RecordingRow {
@@ -188,7 +214,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
@@ -211,22 +237,27 @@ export async function listSessions(): Promise<SessionListRow[]> {
 
 export interface MarkRow { item_code: string; correct: boolean }
 
+export interface SentenceScoreRow { item_code: string; words: number }
+
 export async function sessionDetail(sessionId: string): Promise<{
-  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]; marks: MarkRow[]
+  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+  marks: MarkRow[]; sentences: SentenceScoreRow[]
 }> {
-  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }, { data: mk, error: e4 }] =
-    await Promise.all([
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 },
+    { data: mk, error: e4 }, { data: ss, error: e5 }] = await Promise.all([
       sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
       sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
         .eq('session_id', sessionId).order('item_code').order('attempt_no'),
       sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
       sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
+      sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
     ])
-  fail(e1); fail(e2); fail(e3); fail(e4)
+  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5)
   return {
     session: s as unknown as SessionRow,
     recordings: (recs ?? []) as RecordingRow[],
     writing: (ans ?? []) as WritingRow[],
     marks: (mk ?? []) as MarkRow[],
+    sentences: (ss ?? []) as SentenceScoreRow[],
   }
 }
