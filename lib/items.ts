@@ -121,9 +121,9 @@ export interface SurveyPage {
   practice: boolean
 }
 
-/** ⚠️ 임시 연습 낱말. 담당자에게 받은 연습용 낱말로 교체하고 PRACTICE_PLACEHOLDER를 false로 바꿀 것.
- *  교체 전에는 실제 아동 대상 시범검사를 돌리지 말 것 — 본 문항과의 난이도·중복이 검증되지 않았다. */
-export const PRACTICE_PLACEHOLDER = true
+/** 연습용 낱말 — 담당자 확정: "쉬운 실제 낱말"(무의미 낱말이 아님).
+ *  본 문항과 겹치지 않는 2음절 상용어로 고른다(겹치지 않음은 tests/items.test.ts가 검증).
+ *  바꾸려면 이 배열만 교체하면 된다 — 연습은 녹음·채점하지 않으므로 다른 코드에 영향이 없다. */
 const PRACTICE_WORDS = ['나무', '구름', '바다']
 
 /** 연습 문항은 채점하지 않으므로 orderNo=0으로 둔다(본 문항 1~29와 구분). */
