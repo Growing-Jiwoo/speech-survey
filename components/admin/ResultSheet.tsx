@@ -79,6 +79,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
               ['학교', session.school_name],
               ['학년', gradeClassLabel(session.grade, session.class_no)],
               ['학생명', session.child_name],
+              ['성별', session.gender],
               ['생년월일', session.birth_ymd],
               ['검사일', new Date(session.started_at).toLocaleDateString('ko-KR')],
               ['검사자', examinerLabel(session.examiner_type)],
@@ -93,6 +94,11 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         <p className="mt-2 text-[10.5px] text-ink-mute">
           담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email, session.teacher_contact)})
           {' · '}{session.submitted_at ? '제출 완료' : '진행 중'}
+          {' · '}
+          {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) — 도입 전 수집분은 '기록 없음' */}
+          {session.guardian_consented_at
+            ? `보호자 동의 확인 ${new Date(session.guardian_consented_at).toLocaleDateString('ko-KR')}`
+            : '보호자 동의 기록 없음'}
           {PROVISIONAL_CRITERIA && (
             // 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면·인쇄물 모두에 남긴다.
             <span className="ml-2 rounded border border-amber/50 bg-amber/10 px-1.5 py-0.5 font-bold text-amber print:bg-amber/10">
