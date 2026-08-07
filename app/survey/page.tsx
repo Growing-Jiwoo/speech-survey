@@ -12,6 +12,7 @@ import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistAre
 import { canAdvance, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
+import { Blip } from '@/components/Blip'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ChecklistItem } from '@/components/survey/ChecklistItem'
 import { MarkPage } from '@/components/survey/MarkPage'
@@ -27,6 +28,8 @@ function SurveyInner() {
   // 진행 상태의 단일 소스 — 현재 페이지(pageIdx)·단계(phase)도 여기에만 둔다.
   const [st, setSt] = useState<SurveyState | null>(null)
   const [busy, setBusy] = useState(false)
+  // 검사자가 직접 누르는 일시정지(화면을 덮어 아동의 오터치도 막는다). 녹음/카운트다운 중에는 잠근다.
+  const [paused, setPaused] = useState(false)
   // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다
   const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
   const fromReview = params.get('from') === 'review'
@@ -130,8 +133,9 @@ function SurveyInner() {
   // 녹음/카운트다운 중에는 이 화면에서 항상 잠근다(busy).
   const canNext = !busy && canAdvance(page, st)
 
-  // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "건너뛰기"로 바꿔
-  // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용).
+  // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
+  // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용 —
+  // 응답 거부·모름도 유효한 관찰이다). 담당자 확정: 별도 버튼을 만들지 않고 이 라벨을 쓴다.
   const skipping = !fromReview && !isLast && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0
 
   // 섹션(주제) 진입 안내: 각 섹션의 첫 페이지에 처음 도달하면 안내 화면을 먼저 보여준다.
@@ -141,12 +145,28 @@ function SurveyInner() {
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
     <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6">
       <header className="flex-none">
-        {st.childName && (
-          <p className="mb-2 text-xs font-bold text-ink-soft">
-            <b className="text-blue">{st.childName}</b> 학생
-          </p>
-        )}
+        <div className="mb-2 flex items-center justify-between gap-2">
+          {st.childName ? (
+            <p className="min-w-0 truncate text-xs font-bold text-ink-soft">
+              <b className="text-blue">{st.childName}</b> 학생
+            </p>
+          ) : <span />}
+          {/* 검사자용 조작 — 아동의 큰 [이전/다음] 버튼과 떨어뜨려 헤더에 작게 둔다.
+              녹음·카운트다운 중에는 눌리지 않게 잠근다(그 시도의 소리가 유실되므로). */}
+          <div className="flex flex-none gap-1.5">
+            <button type="button" onClick={() => setPaused(true)} disabled={busy}
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[11px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              일시정지
+            </button>
+            <button type="button" onClick={() => router.push('/')} disabled={busy}
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[11px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              저장하고 나가기
+            </button>
+          </div>
+        </div>
         <ProgressBar current={idx + 1} total={pages.length} />
+        {/* "저장되고 있는지 모르겠다"는 불안을 없애기 위한 상시 안내 — 실제로 답을 누를 때마다 저장된다. */}
+        <p className="mt-1 text-[11px] text-ink-mute">진행 상황은 자동으로 저장돼요. 창을 닫아도 이어서 할 수 있어요.</p>
         {fromReview && (
           <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
         )}
@@ -218,10 +238,23 @@ function SurveyInner() {
         ) : (
           <button onClick={goNext} disabled={!canNext}
             className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
-            {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '건너뛰기' : '다음'}
+            {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '모르겠어요' : '다음'}
           </button>
         )}
       </nav>
+
+      {paused && (
+        // 화면 전체를 덮어 아동이 문항을 보거나 잘못 누르지 못하게 한다(잠깐 자리를 비우는 상황용).
+        <div role="dialog" aria-modal="true" aria-label="검사 일시정지"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-white/95 px-6 text-center backdrop-blur">
+          <Blip variant="idle" className="h-24 w-[100px]" />
+          <h2 className="text-2xl font-bold">잠시 쉬는 중이에요</h2>
+          <p className="text-sm leading-relaxed text-ink-soft">
+            지금까지 한 내용은 저장돼 있어요.<br />준비되면 아래 버튼을 눌러 주세요.
+          </p>
+          <button type="button" onClick={() => setPaused(false)} className="cta max-w-60">이어서 하기</button>
+        </div>
+      )}
     </main>
   )
 }
