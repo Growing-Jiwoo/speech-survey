@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.listSessions).mockResolvedValue([])
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session: { id: SID } as never, recordings: [], writing: [], marks: [],
+    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [],
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
 })
@@ -49,7 +49,7 @@ describe('GET /api/admin/sessions/[id]', () => {
         { item_code: 'rw02', attempt_no: 2, audio_path: `${SID}/rw02_2.webm`, duration_sec: null, created_at: 'z' },
       ],
       writing: [{ item_code: 'ww01', can_write: true }],
-      marks: [{ item_code: 'rw01', correct: true }],
+      marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
     })
     vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
 
