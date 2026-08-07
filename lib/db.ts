@@ -87,9 +87,15 @@ export async function saveScores(
     const { error } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(error)
   }
+  // 문장 점수는 "보낸 것이 전부"(PUT 의미)로 취급해 세션의 문장 점수를 통째로 교체한다.
+  // upsert만 하면 채점자가 화면에서 지운 칸의 옛 값이 DB에 남아, 화면 총점과 저장된 총점이
+  // 어긋난 채로 결과지가 나간다. 한 세션에 최대 4행이라 전체 교체가 부분 삭제 쿼리보다 단순하다.
+  // (낱말 O/X는 화면에 "해제" 동작이 없어 이런 삭제 경로가 필요 없다 — 그래서 위는 upsert만 한다.)
+  const { error: delErr } = await sb().from('sentence_scores').delete().eq('session_id', sessionId)
+  fail(delErr)
   if (sentences.length > 0) {
     const rows = sentences.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
-    const { error } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
+    const { error } = await sb().from('sentence_scores').insert(rows)
     fail(error)
   }
 }

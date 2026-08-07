@@ -254,10 +254,25 @@ describe('saveScores — 관리자 채점 저장', () => {
     expect(fromCalls).toContain('sentence_scores')
   })
 
-  it('빈 배열은 해당 테이블을 건드리지 않는다', async () => {
+  it('낱말이 빈 배열이면 reading_marks를 건드리지 않는다', async () => {
+    enqueue('sentence_scores', { error: null })
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }])
+    expect(fromCalls).not.toContain('reading_marks')
+  })
+
+  it('문장 점수는 통째로 교체한다 — 빈 배열이면 기존 행을 지우기만 한다', async () => {
+    // 채점자가 화면에서 지운 칸의 옛 값이 DB에 남지 않아야 한다(화면·저장값 불일치 방지).
     enqueue('reading_marks', { error: null })
+    enqueue('sentence_scores', { error: null })   // delete
     await saveScores(SID, [{ itemCode: 'rw01', correct: true }], [])
-    expect(fromCalls).not.toContain('sentence_scores')
+    expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(1)
+  })
+
+  it('문장 점수가 있으면 삭제 후 삽입한다 (sentence_scores 두 번 접근)', async () => {
+    enqueue('sentence_scores', { error: null })   // delete
+    enqueue('sentence_scores', { error: null })   // insert
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }])
+    expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(2)
   })
 
   it('저장 실패는 삼키지 않고 throw한다 (채점 결과의 조용한 손실 방지)', async () => {
