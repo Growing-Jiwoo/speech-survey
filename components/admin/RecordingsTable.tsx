@@ -39,7 +39,7 @@ export function RecordingsTable({ byItem, onAudioError }: {
           {RECORDING_PAGES.flatMap((page, pageIdx) => {
             const label = page.section === 'word_reading'
               ? `낱말 (${KIND_LABEL[page.kind!]})` : '문장'
-            const text = page.items.map(i => i.text).join('  ')
+            const text = page.items.map(i => i.text).join(' · ')
             const views = byItem.get(page.code) ?? []
             if (views.length === 0) return [(
               <tr key={page.code} className="border-t border-line/60 bg-rec/5">

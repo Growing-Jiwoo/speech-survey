@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, KIND_LABEL, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { ITEM_TOTALS, KIND_LABEL, MEANING_READ_CODES, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
@@ -169,7 +169,10 @@ export function AdminDetailView() {
 
           {marks.length > 0 && (
             <p className="border-t border-line px-5 py-3 text-[11.5px] text-ink-mute">
-              검사 현장에서 표시한 의미 낱말 채점: {marks.filter(m => m.correct).length} / {marks.length} 정반응
+              검사 현장에서 표시한 의미 낱말 채점: {marks.filter(m => m.correct).length} / {MEANING_READ_CODES.length} 정반응
+              {marks.length < MEANING_READ_CODES.length && (
+                <> <b className="text-amber">(일부만 표시됨 — {marks.length}/{MEANING_READ_CODES.length}개만 채점됨)</b></>
+              )}
               {' '}— 녹음을 들으며 확정하는 채점 화면은 3단계에서 추가됩니다.
             </p>
           )}
