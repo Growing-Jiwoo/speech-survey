@@ -8,6 +8,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { ITEM_TOTALS, KIND_LABEL, MEANING_READ_CODES, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { contactLabel, gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { AudioBusProvider } from '@/components/AudioBus'
@@ -107,10 +108,10 @@ export function AdminDetailView() {
               <Blip variant="logo" className="h-8 w-8" />
               <div>
                 <p className="text-[15px] font-bold">
-                  결과지 — {s.child_name} ({s.school_name} {s.grade}-{s.class_no}, {s.gender})
+                  결과지 — {s.child_name} ({s.school_name} {gradeClassLabel(s.grade, s.class_no)}, {s.gender})
                 </p>
                 <p className="text-[11px] text-ink-mute">
-                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({s.teacher_contact}) ·{' '}
+                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({contactLabel(s.teacher_phone, s.teacher_email, s.teacher_contact)}) ·{' '}
                   {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
                   {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
                   {s.guardian_consented_at
@@ -204,7 +205,7 @@ export function AdminDetailView() {
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-            <b>{s.child_name}</b> ({s.school_name} {s.grade}-{s.class_no})의 정보와
+            <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
             녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
           </p>
         </ConfirmDialog>

@@ -9,6 +9,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
 import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
@@ -71,7 +72,7 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
       col.display({
         id: 'gradeClass', header: '학년/반',
         meta: { sortKey: 'grade', thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
-        cell: ({ row }) => `${row.original.grade}-${row.original.class_no}`,
+        cell: ({ row }) => gradeClassLabel(row.original.grade, row.original.class_no),
       }),
       col.accessor('birth_ymd', {
         id: 'birth', header: '생년월일',
