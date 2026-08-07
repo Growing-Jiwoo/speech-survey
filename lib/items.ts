@@ -1,5 +1,6 @@
 // lib/items.ts — 읽기 선별검사 문항 (출처: [최종] 초등 1학년 선별검사지.pdf)
 import { pad2 } from './format'
+import { DEFAULT_FORM } from './forms'
 
 export type Section = 'word_reading' | 'sentence_reading' | 'word_writing' | 'checklist'
 export type WordKind = 'meaning' | 'nonsense' | null
@@ -13,29 +14,28 @@ export interface SurveyItem {
   maxSec: number    // 녹음 제한(초). 비녹음 문항은 0
 }
 
-const READ_MEANING = ['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법']
-const READ_NONSENSE = ['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥']
-const SENTENCES = [
-  '아이가 아빠와 우유 사러 가서 고기도 사요.',
-  '스라소니가 피리 가져오고 개구리가 해바라기 가지고 와요.',
-  '다람쥐가 두꺼비를 보고 도망가요 그래서 부엉이가 다람쥐를 숨겨줘요.',
-  '쉬는시간에 친구가 나에게 장난을 계속 쳐서 다투었어요.\n학교가 끝난 후에 친구가 다가와서 사과를 했어요.',
-]
-const WRITE_MEANING = ['우비', '까치', '수박', '동상', '생각']
-const WRITE_NONSENSE = ['오거', '끼추', '소벅', '당송', '갈먹']
+// 검사 진행 흐름은 아직 단일 양식(G1)이다. 학년별 분기는 결과지에만 있다.
+// G2 문항이 실제로 들어오면 이 상수를 세션의 학년으로 주입하도록 바꾼다.
+const FORM = DEFAULT_FORM
+
+const READ_MEANING = FORM.readMeaning
+const READ_NONSENSE = FORM.readNonsense
+const SENTENCES = FORM.sentences
+const WRITE_MEANING = FORM.writeMeaning
+const WRITE_NONSENSE = FORM.writeNonsense
 
 export const ITEMS: SurveyItem[] = [
   ...READ_MEANING.map((text, i) => ({
     code: `rw${pad2(i + 1)}`, orderNo: i + 1,
-    section: 'word_reading' as const, kind: 'meaning' as const, text, maxSec: 30,
+    section: 'word_reading' as const, kind: 'meaning' as const, text, maxSec: FORM.limits.wordSec,
   })),
   ...READ_NONSENSE.map((text, i) => ({
     code: `rw${pad2(i + 8)}`, orderNo: i + 8,
-    section: 'word_reading' as const, kind: 'nonsense' as const, text, maxSec: 30,
+    section: 'word_reading' as const, kind: 'nonsense' as const, text, maxSec: FORM.limits.wordSec,
   })),
   ...SENTENCES.map((text, i) => ({
     code: `rs${pad2(i + 1)}`, orderNo: i + 15,
-    section: 'sentence_reading' as const, kind: null, text, maxSec: 40,
+    section: 'sentence_reading' as const, kind: null, text, maxSec: FORM.limits.sentenceSec,
   })),
   ...WRITE_MEANING.map((text, i) => ({
     code: `ww${pad2(i + 1)}`, orderNo: i + 19,
@@ -142,17 +142,17 @@ export const MEANING_WRITE_CODES =
 
 export const PAGES: SurveyPage[] = [
   { code: 'p_practice_rw', section: 'word_reading', role: 'child', kind: 'meaning',
-    items: PRACTICE_ITEMS, limitSec: 30, practice: true },
+    items: PRACTICE_ITEMS, limitSec: FORM.limits.wordSec, practice: true },
   { code: 'p_rw_meaning', section: 'word_reading', role: 'child', kind: 'meaning',
-    items: readWords('meaning'), limitSec: 30, practice: false },
+    items: readWords('meaning'), limitSec: FORM.limits.wordSec, practice: false },
   // 검사지 중단 규칙 판정을 위해 의미 낱말 직후 검사자가 현장에서 O/X를 표시한다.
   { code: 'p_rw_meaning_mark', section: 'word_reading', role: 'examiner', kind: 'meaning',
     items: readWords('meaning'), limitSec: 0, practice: false },
   { code: 'p_rw_nonsense', section: 'word_reading', role: 'child', kind: 'nonsense',
-    items: readWords('nonsense'), limitSec: 30, practice: false },
+    items: readWords('nonsense'), limitSec: FORM.limits.wordSec, practice: false },
   ...ITEMS.filter(i => i.section === 'sentence_reading').map(i => ({
     code: `p_${i.code}`, section: 'sentence_reading' as const, role: 'child' as const,
-    kind: null, items: [i], limitSec: 40, practice: false,
+    kind: null, items: [i], limitSec: FORM.limits.sentenceSec, practice: false,
   })),
   { code: 'p_ww', section: 'word_writing', role: 'examiner', kind: null,
     items: WRITING_ITEMS, limitSec: 0, practice: false },
