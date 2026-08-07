@@ -93,10 +93,6 @@ export const SECTION_INTRO: Record<Section, { title: string; desc: string }> = {
   checklist: { title: '마무리 확인', desc: '마지막으로 선생님이 확인하는 단계예요.' },
 }
 
-/** 각 섹션의 "첫 문항" 코드 — 이 문항에 진입할 때 섹션 안내를 한 번 보여준다. */
-export const SECTION_FIRST_CODES = new Set(
-  SECTION_ORDER.map(sec => ITEMS.find(i => i.section === sec)!.code),
-)
 export const KIND_LABEL: Record<'meaning' | 'nonsense', string> = { meaning: '의미', nonsense: '무의미' }
 
 // ── 페이지 모델 ────────────────────────────────────────────────────────
@@ -165,6 +161,12 @@ export const PAGES: SurveyPage[] = [
 ]
 
 export const pageByCode = new Map(PAGES.map(p => [p.code, p]))
+
+/** 각 섹션의 "첫 페이지" 코드 — 이 페이지에 진입할 때 섹션 안내를 한 번 보여준다.
+ *  연습 페이지가 있는 섹션은 연습이 첫 페이지가 된다(안내 → 연습 → 본 검사 순서). */
+export const SECTION_FIRST_CODES = new Set(
+  SECTION_ORDER.map(sec => PAGES.find(p => p.section === sec)!.code),
+)
 
 /** 녹음이 있는 페이지인지 — "limitSec > 0" 규약이 화면마다 재표현되는 것을 막는다. */
 export const isRecordingPage = (p: SurveyPage): boolean => p.limitSec > 0

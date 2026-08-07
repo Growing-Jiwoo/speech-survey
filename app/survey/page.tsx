@@ -1,49 +1,51 @@
-// app/survey/page.tsx — 검사 진행 화면(29문항 위저드).
-// 문항 타입별 UI는 components/survey/*가 담당하고, 이 페이지는 진행 상태(현재 문항·답 캐시)의
-// 로드/저장과 문항 간 이동만 제어한다. 진행 위치는 localStorage에 저장돼 새로고침·탭 닫힘
-// 후에도 같은 문항에서 재개된다.
+// app/survey/page.tsx — 검사 진행 화면(페이지 위저드).
+// 검사지대로 "한 페이지 = 한 과제 = 한 녹음" 단위로 진행한다. 페이지 종류별 UI는
+// components/survey/*가 담당하고, 이 페이지는 진행 상태(현재 페이지·답 캐시)의 로드/저장과
+// 페이지 간 이동만 제어한다. 진행 위치는 localStorage에 저장돼 새로고침·탭 닫힘 후에도 재개된다.
+// 중단 규칙에 걸리면 visiblePages가 해당 페이지들을 빼므로, 이동 로직은 그 목록만 따라가면 된다.
 'use client'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
-import { ITEMS, SECTION_FIRST_CODES, SECTION_LABEL, toggleChecklistArea } from '@/lib/items'
+import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistArea } from '@/lib/items'
+import { CEILING_N, visiblePages, writingCeilingHit } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ChecklistItem } from '@/components/survey/ChecklistItem'
+import { MarkPage } from '@/components/survey/MarkPage'
 import { MicCheck } from '@/components/survey/MicCheck'
-import { RecordingItem } from '@/components/survey/RecordingItem'
+import { ReadingPage } from '@/components/survey/ReadingPage'
 import { RetryBanner } from '@/components/survey/RetryBanner'
 import { SectionIntro } from '@/components/survey/SectionIntro'
-import { WritingItem } from '@/components/survey/WritingItem'
+import { WritingPage } from '@/components/survey/WritingPage'
 
 function SurveyInner() {
   const router = useRouter()
   const params = useSearchParams()
-  // 진행 상태의 단일 소스 — 현재 문항(idx)·단계(phase)도 여기에만 둔다
-  // (별도 useState로 이중 보관하면 재개 위치가 어긋나는 버그 여지가 생긴다).
+  // 진행 상태의 단일 소스 — 현재 페이지(pageIdx)·단계(phase)도 여기에만 둔다.
   const [st, setSt] = useState<SurveyState | null>(null)
-  const [isRecording, setIsRecording] = useState(false)
-  // 문항 이동 중 업로드가 실패한 녹음: 다른 문항으로 넘어가도 사라지지 않고 배너에서 재시도할 수 있다
+  const [busy, setBusy] = useState(false)
+  // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다
   const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
-    // ?q=N 딥링크(검토 화면에서 문항 클릭): 해당 문항으로 이동한 상태로 복원하고 즉시 저장한다.
-    const q = Number(params.get('q'))
-    const jumped = Number.isInteger(q) && q >= 1 && q <= ITEMS.length
-      ? { ...s, idx: q - 1, phase: 'item' as const }
+    // ?p=N 딥링크(검토 화면에서 페이지 클릭): 해당 페이지로 이동한 상태로 복원하고 즉시 저장한다.
+    const p = Number(params.get('p'))
+    const total = visiblePages(s).length
+    const jumped = Number.isInteger(p) && p >= 1 && p <= total
+      ? { ...s, pageIdx: p - 1, phase: 'page' as const }
       : s
     if (jumped !== s) {
       saveState(jumped)
-      // q는 1회만 소비하고 URL에서 제거한다(from은 유지) — 이후 문항을 이동한 뒤 새로고침해도
-      // stale q가 저장된 위치(idx)를 덮어쓰지 않도록(B10). q 제거로 이 effect가 한 번 더 돌지만
-      // 그때는 q가 없어 되돌아온 상태를 그대로 로드하므로 루프가 아니다.
+      // p는 1회만 소비하고 URL에서 제거한다(from은 유지) — 이후 페이지를 이동한 뒤 새로고침해도
+      // stale p가 저장된 위치를 덮어쓰지 않도록.
       const sp = new URLSearchParams(params.toString())
-      sp.delete('q')
+      sp.delete('p')
       router.replace(sp.toString() ? `/survey?${sp}` : '/survey', { scroll: false })
     }
     // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
@@ -54,11 +56,11 @@ function SurveyInner() {
 
   // 녹음 중 새로고침·탭 닫기 실수 방지(해당 시도의 소리가 유실되므로 확인창을 띄운다)
   useEffect(() => {
-    if (!isRecording) return
+    if (!busy) return
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [isRecording])
+  }, [busy])
 
   // 검사 중 화면 자동 잠금 방지(교사 설명이 길어져도 화면이 꺼지지 않게). 미지원 브라우저는 무시하고,
   // 탭이 백그라운드로 갔다 오면 잠금이 해제되므로 visible 복귀 시 재획득한다.
@@ -79,56 +81,41 @@ function SurveyInner() {
     }
   }, [])
 
-  if (!st) return null
-
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
-  function patch(p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) {
+  const patch = useCallback((p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) => {
     setSt(prev => {
       const merged = { ...prev!, ...(typeof p === 'function' ? p(prev!) : p) }
       saveState(merged)
       return merged
     })
-  }
+  }, [])
 
-  function goToIdx(n: number) { patch({ idx: n }); window.scrollTo(0, 0) }
-
-  if (st.phase === 'mic')
-    return <MicCheck onOk={() => patch({ micDone: true, phase: 'item' })} />
-
-  const item = ITEMS[st.idx]
-  const isLast = st.idx === ITEMS.length - 1
-  const isRecordingSection = item.section === 'word_reading' || item.section === 'sentence_reading'
-  // 낱말 쓰기 문항은 예/아니오 필수, 체크리스트는 최소 1개 선택 필수, 녹음 중에는 이동 불가.
-  // (업로드는 이동 후에도 계속 진행되고, 실패하면 RetryBanner로 재시도할 수 있어 이동을 막지 않는다)
-  const canNext = (item.section !== 'word_writing' || st.writing[item.code] !== undefined)
-    && (item.section !== 'checklist' || st.checklist.length > 0)
-    && !isRecording
-  // 녹음 문항을 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "건너뛰기"로 바꿔(+약한 스타일)
-  // 아동의 오터치 한 번으로 문항이 조용히 통과되지 않도록 의도를 드러낸다. 진행 자체는 허용
-  // (응답 거부도 유효한 관찰일 수 있어 완전 차단하지 않음).
-  const skipping = !fromReview && !isLast && isRecordingSection && (st.recorded[item.code] ?? 0) === 0
-
-  // 섹션(주제) 진입 안내: 각 섹션의 첫 문항에 처음 도달하면 안내 화면을 먼저 보여준다.
-  // 검토에서 특정 문항으로 바로 들어온 경우(fromReview)나 이미 본 섹션은 건너뛴다.
-  const showIntro = !fromReview && SECTION_FIRST_CODES.has(item.code) && !st.introsSeen.includes(item.section)
-  function startSection() {
-    patch(prev => ({ introsSeen: [...prev.introsSeen, item.section] }))
-  }
-
-  function goNext() {
-    // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
-    if (fromReview || isLast) { router.push('/review'); return }
-    goToIdx(st!.idx + 1)
-  }
-
-  /** 업로드 성공 반영: 시도 수 +1, 재시도 대기 목록에서 제거 */
-  function markSaved(code: string) {
+  const markSaved = useCallback((code: string) => {
     patch(prev => ({ recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 } }))
     setPendingRetries(prev => {
       if (!(code in prev)) return prev
       const { [code]: _removed, ...rest } = prev
       return rest
     })
+  }, [patch])
+
+  if (!st) return null
+
+  // 중단 규칙을 반영한 진행 목록. marks가 바뀌면 목록이 줄어들 수 있으므로 인덱스를 clamp한다.
+  const pages = visiblePages(st)
+  const idx = Math.min(st.pageIdx, pages.length - 1)
+  const page = pages[idx]
+  const isLast = idx === pages.length - 1
+
+  function goToIdx(n: number) { patch({ pageIdx: n }); window.scrollTo(0, 0) }
+
+  if (st.phase === 'mic')
+    return <MicCheck onOk={() => patch({ micDone: true, phase: 'page' })} />
+
+  function goNext() {
+    // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
+    if (fromReview || isLast) { router.push('/review'); return }
+    goToIdx(idx + 1)
   }
 
   async function retryUpload(code: string) {
@@ -139,54 +126,78 @@ function SurveyInner() {
     if (ok) markSaved(code)
   }
 
+  // 다음으로 넘어갈 수 있는 조건:
+  //  - 현장 채점 페이지: 낱말 전부 표시
+  //  - 낱말 쓰기: 전부 선택(단, 중단 규칙에 걸리면 앞 3개만)
+  //  - 체크리스트: 최소 1개 선택
+  //  - 녹음/카운트다운 중에는 항상 잠금
+  const markDone = page.items.every(i => st.marks[i.code] !== undefined)
+  // 중단 규칙 ②에 걸리면 앞 3개까지만 요구한다 — 판정식은 survey-flow 한 곳에만 둔다.
+  const writingRequired = writingCeilingHit(st.writing) ? CEILING_N : page.items.length
+  const writingDone = page.items.slice(0, writingRequired).every(i => st.writing[i.code] !== undefined)
+  const canNext = !busy
+    && (page.code !== 'p_rw_meaning_mark' || markDone)
+    && (page.section !== 'word_writing' || writingDone)
+    && (page.section !== 'checklist' || st.checklist.length > 0)
+
+  // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "건너뛰기"로 바꿔
+  // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용).
+  const skipping = !fromReview && !isLast && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0
+
+  // 섹션(주제) 진입 안내: 각 섹션의 첫 페이지에 처음 도달하면 안내 화면을 먼저 보여준다.
+  const showIntro = !fromReview && SECTION_FIRST_CODES.has(page.code) && !st.introsSeen.includes(page.section)
+
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
-    // 화면 전체(h-dvh)를 세 구역으로 나눠, 문항 내용 크기가 바뀌어도 헤더와 [이전/다음] 버튼은
-    // 절대 움직이지 않는다(꿀렁임 제거). 페이지는 스크롤되지 않고, 내용이 넘칠 때만 가운데
-    // 구역 안에서만 스크롤된다. 데스크톱은 폭만 넓혀(2xl) 무대를 크게 보인다.
     <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6">
       <header className="flex-none">
-        {/* 누구의 검사인지 상단에 표시 — 이어하기로 진입했을 때 대상 아동을 바로 확인할 수 있게 */}
         {st.childName && (
           <p className="mb-2 text-xs font-bold text-ink-soft">
             <b className="text-blue">{st.childName}</b> 학생
           </p>
         )}
-        <ProgressBar current={st.idx + 1} total={ITEMS.length} />
+        <ProgressBar current={idx + 1} total={pages.length} />
         {fromReview && (
           <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
         )}
-        {/* 섹션 안내 중에는 문항 번호 라벨을 숨긴다(안내 화면이 주제를 이미 크게 보여줌) */}
         {!showIntro && (
           <h1 className="mt-4 text-xs font-bold text-ink-mute">
-            {item.orderNo}. {SECTION_LABEL[item.section]}
+            {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
           </h1>
         )}
       </header>
 
       {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
-          이 구역 안에서만 스크롤(헤더·내비는 그대로) — 페이지 스크롤이 생기지 않는다. */}
+          이 구역 안에서만 스크롤(헤더·내비는 그대로). */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col justify-center py-4">
           {showIntro ? (
-            <SectionIntro section={item.section} />
+            <SectionIntro section={page.section} />
           ) : (
             <>
-              {(item.section === 'word_reading' || item.section === 'sentence_reading') && (
-                <RecordingItem key={item.code} item={item} sessionId={st.sessionId} sessionToken={st.sessionToken}
-                  attemptCount={st.recorded[item.code] ?? 0} onRecordingChange={setIsRecording}
-                  onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [item.code]: rec }))}
-                  onSaved={() => markSaved(item.code)} />
+              {page.role === 'child' && isRecordingPage(page) && (
+                <ReadingPage key={page.code} page={page} sessionId={st.sessionId} sessionToken={st.sessionToken}
+                  attemptCount={st.recorded[page.code] ?? 0} onRecordingChange={setBusy}
+                  onUploadFailed={rec => setPendingRetries(prev => ({ ...prev, [page.code]: rec }))}
+                  onSaved={() => markSaved(page.code)} />
               )}
 
               <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
-              {item.section === 'word_writing' && (
-                <WritingItem item={item} value={st.writing[item.code]}
-                  onChange={v => patch(prev => ({ writing: { ...prev.writing, [item.code]: v } }))} />
+              {page.code === 'p_rw_meaning_mark' && (
+                <MarkPage items={page.items} marks={st.marks}
+                  onToggle={(code, correct) => patch(prev => ({ marks: { ...prev.marks, [code]: correct } }))} />
               )}
 
-              {item.section === 'checklist' && (
+              {page.section === 'word_writing' && (
+                <WritingPage items={page.items} value={st.writing}
+                  onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))}
+                  onSetAll={v => patch(prev => ({
+                    writing: { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) },
+                  }))} />
+              )}
+
+              {page.section === 'checklist' && (
                 <ChecklistItem selected={st.checklist}
                   onToggle={code => patch(prev => ({ checklist: toggleChecklistArea(prev.checklist, code) }))} />
               )}
@@ -196,13 +207,13 @@ function SurveyInner() {
       </div>
 
       <nav className="flex flex-none gap-2.5 pt-4">
-        <button onClick={() => goToIdx(st.idx - 1)} disabled={st.idx === 0 || isRecording}
+        <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || busy}
           className="btn-ghost h-[52px] flex-1">
           이전
         </button>
         {showIntro ? (
-          // 섹션 안내에서는 [시작하기]가 안내를 닫고 첫 문항을 연다(같은 문항에 머무름)
-          <button onClick={startSection} className="btn-primary h-[52px] flex-[2]">
+          <button onClick={() => patch(prev => ({ introsSeen: [...prev.introsSeen, page.section] }))}
+            className="btn-primary h-[52px] flex-[2]">
             시작하기
           </button>
         ) : (
