@@ -9,3 +9,19 @@ export function fmtDuration(sec: number | null | undefined): string {
   if (sec == null || !Number.isFinite(sec) || sec < 0) return '—'
   return `${Math.floor(sec / 60)}:${pad2(Math.floor(sec % 60))}`
 }
+
+/** 학년·반 표기. 반 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용했다. */
+export function gradeClassLabel(grade: number, classNo: number): string {
+  return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`
+}
+
+/** 담임 연락처 표기. 전화·이메일을 분리 저장하기 전(010 이전) 수집분은 legacy 한 칸에만 값이 있다. */
+export function contactLabel(
+  phone: string | null | undefined,
+  email: string | null | undefined,
+  legacy?: string | null,
+): string {
+  const parts = [phone, email].filter((v): v is string => !!v)
+  if (parts.length > 0) return parts.join(' · ')
+  return legacy || '연락처 없음'
+}
