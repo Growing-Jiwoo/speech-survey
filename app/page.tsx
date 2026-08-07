@@ -269,7 +269,9 @@ export default function StartPage() {
           <FieldError id="err-phone" msg={errors.phone} />
         </div>
 
-        <div>
+        {/* 이메일은 전폭 — 검사자 칸이 늘면서 반칸 셀이 홀수가 되어 마지막 칸이 혼자 남는 것을 막고,
+            아래 "둘 중 하나만" 안내 문구도 한 줄로 편히 놓인다. */}
+        <div className="lg:col-span-2">
           <label className={labelCls} htmlFor="email">담임 이메일</label>
           <input id="email" data-field="email" name="email" value={email} maxLength={60} inputMode="email"
             placeholder="teacher@school.kr"
