@@ -15,38 +15,43 @@ beforeEach(() => {
 })
 
 describe('survey-state', () => {
-  it('newState는 idx=0, phase=mic로 시작', () => {
+  it('newState는 pageIdx=0, phase=mic로 시작하고 marks가 비어 있다', () => {
     const s = newState('sid-1', '홍길동', 'tok')
-    expect(s.idx).toBe(0)
+    expect(s.v).toBe(4)
+    expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
+    expect(s.marks).toEqual({})
   })
 
-  it('save→load 왕복으로 idx·phase·childName 복원', () => {
+  it('save→load 왕복으로 pageIdx·phase·childName·marks 복원', () => {
     const s = newState('sid-1', '홍길동', 'tok')
-    saveState({ ...s, idx: 12, phase: 'item', micDone: true })
+    saveState({ ...s, pageIdx: 3, phase: 'page', micDone: true, marks: { rw01: true, rw02: false } })
     const loaded = loadState()
     expect(loaded?.sessionId).toBe('sid-1')
-    expect(loaded?.idx).toBe(12)
-    expect(loaded?.phase).toBe('item')
+    expect(loaded?.pageIdx).toBe(3)
+    expect(loaded?.phase).toBe('page')
     expect(loaded?.sessionToken).toBe('tok')
-    expect(loaded?.childName).toBe('홍길동')  // 진행 화면·이어하기 표시용
+    expect(loaded?.childName).toBe('홍길동')
+    expect(loaded?.marks).toEqual({ rw01: true, rw02: false })
   })
 
   it('세션별 키 분리 + last 포인터가 최신 세션을 가리킴', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok'), idx: 3 })
-    saveState({ ...newState('sid-2', '김철수', 'tok'), idx: 7 })
+    saveState({ ...newState('sid-1', '홍길동', 'tok'), pageIdx: 1 })
+    saveState({ ...newState('sid-2', '김철수', 'tok'), pageIdx: 2 })
     expect(loadState()?.sessionId).toBe('sid-2')
-    expect(loadState()?.idx).toBe(7)
+    expect(loadState()?.pageIdx).toBe(2)
   })
 
-  it('clearState는 현재 세션과 포인터를 제거해 load가 null', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok'), idx: 3 })
-    clearState()
+  it('구버전(v3) 상태는 로드하지 않는다 — 필드 구조가 달라 재개 위치가 어긋난다', () => {
+    localStorage.setItem('kodys-survey:last', 'old')
+    localStorage.setItem('kodys-survey:old', JSON.stringify({ v: 3, sessionId: 'old', idx: 12 }))
     expect(loadState()).toBeNull()
   })
 
-  it('포인터·데이터 없으면 null', () => {
+  it('clearState는 진행 상태를 파기한다', () => {
+    saveState({ ...newState('sid-1', '홍길동', 'tok'), pageIdx: 2 })
+    clearState()
     expect(loadState()).toBeNull()
   })
 })
