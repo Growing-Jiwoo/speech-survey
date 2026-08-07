@@ -81,7 +81,10 @@ export function ReadingPage({ page, sessionId, sessionToken, attemptCount, onSav
         </p>
         {/* 낱말 페이지는 검사지처럼 두 줄 격자(4+3)로 배치하고, 문장은 원문 그대로 보인다.
             제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치 방지). */}
-        <div className="flex min-h-[152px] items-center justify-center lg:min-h-[220px]">
+        {/* 최소 높이는 "낱말 페이지와 문장 페이지의 카드 높이를 비슷하게 맞춰 녹음 버튼이 위아래로
+            움직이지 않게" 하는 장치다. 실제로 필요한 높이는 낱말 격자 138px · 가장 긴 문장 85px이라
+            lg 220px은 과했고, 그 여유분이 가운데 밴드를 밀어 불필요한 스크롤을 만들었다(176px로 조정). */}
+        <div className="flex min-h-[152px] items-center justify-center lg:min-h-[176px]">
           {words ? (
             <div className="grid w-full grid-cols-4 gap-x-2 gap-y-4 lg:gap-y-7">
               {page.items.map(i => (

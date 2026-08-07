@@ -169,15 +169,18 @@ function SurveyInner() {
           </div>
         </div>
         <ProgressBar current={idx + 1} total={pages.length} />
-        {/* "저장되고 있는지 모르겠다"는 불안을 없애기 위한 상시 안내 — 실제로 답을 누를 때마다 저장된다. */}
-        <p className="mt-1 text-[11px] text-ink-mute">진행 상황은 자동으로 저장돼요. 창을 닫아도 이어서 할 수 있어요.</p>
         {fromReview && (
           <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
         )}
         {!showIntro && (
-          <h1 className="mt-4 text-xs font-bold text-ink-mute">
-            {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
-          </h1>
+          // 자동 저장 안내는 별도 줄을 만들지 않고 이 줄의 남는 오른쪽 공간에 얹는다 —
+          // 세로 공간이 빠듯해(가운데 밴드가 밀려 불필요한 스크롤이 생김) 한 줄도 아깝다.
+          <div className="mt-4 flex items-baseline justify-between gap-2">
+            <h1 className="text-xs font-bold text-ink-mute">
+              {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
+            </h1>
+            <p className="flex-none text-[11px] text-ink-mute">자동 저장됨</p>
+          </div>
         )}
       </header>
 
