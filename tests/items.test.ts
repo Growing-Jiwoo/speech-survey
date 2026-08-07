@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   ITEMS, ITEM_TOTALS, RECORDING_ITEMS, WRITING_ITEMS, CHECKLIST_AREAS,
   areaLabel, isRecordingItem, itemByCode, toggleChecklistArea,
+  PAGES, RECORDING_PAGES, pageByCode, isRecordingPage, maxRecSec,
+  GRACE_SEC, MEANING_READ_CODES, MEANING_WRITE_CODES, PRACTICE_PLACEHOLDER,
 } from '@/lib/items'
 
 describe('ITEMS', () => {
@@ -46,9 +48,6 @@ describe('ITEMS', () => {
     expect(isRecordingItem(itemByCode.get('rw01')!)).toBe(true)
     expect(isRecordingItem(itemByCode.get('ww01')!)).toBe(false)
   })
-  it('ITEM_TOTALS는 진행률 분모(녹음 18, 쓰기 10)', () => {
-    expect(ITEM_TOTALS).toEqual({ rec: 18, write: 10 })
-  })
   it('areaLabel 미지 코드는 코드 그대로 반환 (구버전 데이터 표시 안전망)', () => {
     expect(areaLabel('speech')).toBe('말 (조음/유창성)')
     expect(areaLabel('unknown-code')).toBe('unknown-code')
@@ -78,5 +77,92 @@ describe('toggleChecklistArea (배타 선택)', () => {
   })
   it('영역 추가는 기존 유지 + append', () => {
     expect(toggleChecklistArea(['cognition'], 'speech')).toEqual(['cognition', 'speech'])
+  })
+})
+
+describe('PAGES (화면·녹음 단위)', () => {
+  it('페이지 순서와 코드 — 연습→의미→현장채점→무의미→문장4→쓰기→체크리스트', () => {
+    expect(PAGES.map(p => p.code)).toEqual([
+      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
+      'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
+    ])
+  })
+
+  it('page.code 중복 없음', () => {
+    expect(new Set(PAGES.map(p => p.code)).size).toBe(PAGES.length)
+  })
+
+  it('낱말 해독 페이지는 의미 7개 / 무의미 7개를 묶는다', () => {
+    expect(pageByCode.get('p_rw_meaning')!.items.map(i => i.text))
+      .toEqual(['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법'])
+    expect(pageByCode.get('p_rw_nonsense')!.items.map(i => i.text))
+      .toEqual(['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥'])
+  })
+
+  it('문장 페이지는 문장 1개씩', () => {
+    expect(pageByCode.get('p_rs01')!.items.map(i => i.code)).toEqual(['rs01'])
+    expect(pageByCode.get('p_rs04')!.items[0].text).toContain('사과를 했어요')
+  })
+
+  it('쓰기 페이지는 낱말 10개를 한 번에 묶는다', () => {
+    expect(pageByCode.get('p_ww')!.items).toHaveLength(10)
+    expect(pageByCode.get('p_ww')!.items[0].text).toBe('우비')
+  })
+
+  it('제한 시간(검사지 기준): 낱말 30초, 문장 40초, 비녹음 0초', () => {
+    expect(pageByCode.get('p_rw_meaning')!.limitSec).toBe(30)
+    expect(pageByCode.get('p_rw_nonsense')!.limitSec).toBe(30)
+    expect(pageByCode.get('p_rs01')!.limitSec).toBe(40)
+    expect(pageByCode.get('p_ww')!.limitSec).toBe(0)
+    expect(pageByCode.get('p_cl')!.limitSec).toBe(0)
+  })
+
+  it('녹음 자동 종료 = 제한 + 여유(GRACE_SEC)', () => {
+    expect(GRACE_SEC).toBe(5)
+    expect(maxRecSec(pageByCode.get('p_rw_meaning')!)).toBe(35)
+    expect(maxRecSec(pageByCode.get('p_rs01')!)).toBe(45)
+  })
+
+  it('연습 페이지는 practice=true이고 본 문항과 낱말이 겹치지 않는다', () => {
+    const practice = pageByCode.get('p_practice_rw')!
+    expect(practice.practice).toBe(true)
+    const realTexts = new Set(ITEMS.map(i => i.text))
+    practice.items.forEach(i => expect(realTexts.has(i.text)).toBe(false))
+  })
+
+  it('현장 채점 페이지는 검사자용(role=examiner)이며 의미 낱말 7개를 다룬다', () => {
+    const mark = pageByCode.get('p_rw_meaning_mark')!
+    expect(mark.role).toBe('examiner')
+    expect(mark.items.map(i => i.code)).toEqual(MEANING_READ_CODES)
+    expect(MEANING_READ_CODES).toHaveLength(7)
+  })
+
+  it('아동 조작 페이지 / 검사자 조작 페이지 구분', () => {
+    const roleOf = (c: string) => pageByCode.get(c)!.role
+    expect(roleOf('p_rw_meaning')).toBe('child')
+    expect(roleOf('p_rs01')).toBe('child')
+    expect(roleOf('p_ww')).toBe('examiner')
+    expect(roleOf('p_cl')).toBe('examiner')
+  })
+
+  it('RECORDING_PAGES는 업로드 대상만 — 연습 제외 6페이지', () => {
+    expect(RECORDING_PAGES.map(p => p.code))
+      .toEqual(['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'])
+    expect(RECORDING_PAGES.every(p => !p.practice)).toBe(true)
+    expect(isRecordingPage(pageByCode.get('p_ww')!)).toBe(false)
+  })
+
+  it('ITEM_TOTALS 분모는 페이지 기준(녹음 6, 쓰기 10)', () => {
+    expect(ITEM_TOTALS).toEqual({ rec: 6, write: 10 })
+  })
+
+  it('의미 낱말 코드 목록 (중단 규칙 판정에 쓰임)', () => {
+    expect(MEANING_READ_CODES).toEqual(['rw01', 'rw02', 'rw03', 'rw04', 'rw05', 'rw06', 'rw07'])
+    expect(MEANING_WRITE_CODES).toEqual(['ww01', 'ww02', 'ww03', 'ww04', 'ww05'])
+  })
+
+  it('연습 낱말이 임시 placeholder임을 코드가 명시한다', () => {
+    // 담당자에게 실제 연습용 낱말을 받으면 PRACTICE_WORDS를 교체하고 이 플래그를 false로 바꾼다.
+    expect(PRACTICE_PLACEHOLDER).toBe(true)
   })
 })
