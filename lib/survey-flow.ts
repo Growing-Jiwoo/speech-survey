@@ -36,3 +36,22 @@ export function visiblePages(s: { marks: Partial<Record<string, boolean>> }): Su
   if (!readingCeilingHit(s.marks)) return PAGES
   return PAGES.filter(p => p.section !== 'sentence_reading' && p.section !== 'word_writing')
 }
+
+/**
+ * 현재 페이지에서 [다음]을 누를 수 있는지 — 페이지 종류별 완료 조건.
+ * 낱말 해독 현장 채점: 전부 표시. 낱말 쓰기: 전부 선택(단, 중단 규칙에 걸리면 앞 3개만). 체크리스트: 1개 이상 선택.
+ * (녹음 문항 자체의 완료 여부는 이 함수가 판단하지 않는다 — 호출부에서 busy로 이미 잠겨 있다.)
+ */
+export function canAdvance(page: SurveyPage, s: {
+  marks: Partial<Record<string, boolean>>
+  writing: Partial<Record<string, boolean>>
+  checklist: string[]
+}): boolean {
+  const markDone = page.items.every(i => s.marks[i.code] !== undefined)
+  // 중단 규칙 ②에 걸리면 앞 3개까지만 요구한다 — 판정식은 이 파일 한 곳에만 둔다.
+  const writingRequired = writingCeilingHit(s.writing) ? CEILING_N : page.items.length
+  const writingDone = page.items.slice(0, writingRequired).every(i => s.writing[i.code] !== undefined)
+  return (page.code !== 'p_rw_meaning_mark' || markDone)
+    && (page.section !== 'word_writing' || writingDone)
+    && (page.section !== 'checklist' || s.checklist.length > 0)
+}

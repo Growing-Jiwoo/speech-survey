@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { hitsCeiling, readingCeilingHit, writingCeilingHit, visiblePages, CEILING_N } from '@/lib/survey-flow'
+import { hitsCeiling, readingCeilingHit, writingCeilingHit, visiblePages, canAdvance, CEILING_N } from '@/lib/survey-flow'
+import { pageByCode } from '@/lib/items'
 
 const codes = (marks: Record<string, boolean>) => visiblePages({ marks }).map(p => p.code)
 
@@ -62,5 +63,60 @@ describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
 
   it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 가정 A1)', () => {
     expect(codes({ rw01: false, rw02: false, rw03: false })).toContain('p_cl')
+  })
+})
+
+describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
+  const empty = { marks: {}, writing: {}, checklist: [] }
+
+  it('현장 채점이 아닌 낱말 해독 페이지는 marks/writing/checklist와 무관하게 항상 진행 가능', () => {
+    const page = pageByCode.get('p_rw_meaning')!
+    expect(canAdvance(page, empty)).toBe(true)
+  })
+
+  it('문장 읽기 페이지는 marks/writing/checklist와 무관하게 항상 진행 가능', () => {
+    const page = pageByCode.get('p_rs01')!
+    expect(canAdvance(page, empty)).toBe(true)
+  })
+
+  it('현장 채점 페이지: 낱말 전부 표시해야 진행 가능', () => {
+    const page = pageByCode.get('p_rw_meaning_mark')!
+    const allMarked = Object.fromEntries(page.items.map(i => [i.code, true]))
+    expect(canAdvance(page, { ...empty, marks: allMarked })).toBe(true)
+  })
+
+  it('현장 채점 페이지: 하나라도 미채점이면 진행 불가', () => {
+    const page = pageByCode.get('p_rw_meaning_mark')!
+    const allButLast = Object.fromEntries(page.items.slice(0, -1).map(i => [i.code, true]))
+    expect(canAdvance(page, { ...empty, marks: allButLast })).toBe(false)
+  })
+
+  it('낱말 쓰기 페이지: 전부 선택하면 진행 가능', () => {
+    const page = pageByCode.get('p_ww')!
+    const allWritten = Object.fromEntries(page.items.map(i => [i.code, true]))
+    expect(canAdvance(page, { ...empty, writing: allWritten })).toBe(true)
+  })
+
+  it('낱말 쓰기 페이지: 중단 규칙에 걸리면 앞 3개만 선택해도 진행 가능', () => {
+    const page = pageByCode.get('p_ww')!
+    // ww01~03(의미 낱말) 모두 오반응 → 중단. 앞 3개(page.items 순서 기준)만 채워도 충분.
+    const firstThree = Object.fromEntries(page.items.slice(0, CEILING_N).map(i => [i.code, false]))
+    expect(canAdvance(page, { ...empty, writing: firstThree })).toBe(true)
+  })
+
+  it('낱말 쓰기 페이지: 중단 규칙에 안 걸리고 일부만 선택하면 진행 불가', () => {
+    const page = pageByCode.get('p_ww')!
+    const firstOne = Object.fromEntries(page.items.slice(0, 1).map(i => [i.code, true]))
+    expect(canAdvance(page, { ...empty, writing: firstOne })).toBe(false)
+  })
+
+  it('체크리스트 페이지: 1개 이상 선택하면 진행 가능', () => {
+    const page = pageByCode.get('p_cl')!
+    expect(canAdvance(page, { ...empty, checklist: ['none'] })).toBe(true)
+  })
+
+  it('체크리스트 페이지: 아무것도 선택하지 않으면 진행 불가', () => {
+    const page = pageByCode.get('p_cl')!
+    expect(canAdvance(page, empty)).toBe(false)
   })
 })

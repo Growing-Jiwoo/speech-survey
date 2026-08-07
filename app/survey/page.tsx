@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistArea } from '@/lib/items'
-import { CEILING_N, visiblePages, writingCeilingHit } from '@/lib/survey-flow'
+import { canAdvance, visiblePages } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -126,19 +126,9 @@ function SurveyInner() {
     if (ok) markSaved(code)
   }
 
-  // 다음으로 넘어갈 수 있는 조건:
-  //  - 현장 채점 페이지: 낱말 전부 표시
-  //  - 낱말 쓰기: 전부 선택(단, 중단 규칙에 걸리면 앞 3개만)
-  //  - 체크리스트: 최소 1개 선택
-  //  - 녹음/카운트다운 중에는 항상 잠금
-  const markDone = page.items.every(i => st.marks[i.code] !== undefined)
-  // 중단 규칙 ②에 걸리면 앞 3개까지만 요구한다 — 판정식은 survey-flow 한 곳에만 둔다.
-  const writingRequired = writingCeilingHit(st.writing) ? CEILING_N : page.items.length
-  const writingDone = page.items.slice(0, writingRequired).every(i => st.writing[i.code] !== undefined)
-  const canNext = !busy
-    && (page.code !== 'p_rw_meaning_mark' || markDone)
-    && (page.section !== 'word_writing' || writingDone)
-    && (page.section !== 'checklist' || st.checklist.length > 0)
+  // 다음으로 넘어갈 수 있는 조건(페이지 종류별)은 survey-flow의 canAdvance가 판정한다.
+  // 녹음/카운트다운 중에는 이 화면에서 항상 잠근다(busy).
+  const canNext = !busy && canAdvance(page, st)
 
   // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "건너뛰기"로 바꿔
   // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용).
