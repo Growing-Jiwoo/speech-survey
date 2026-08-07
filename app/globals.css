@@ -126,7 +126,8 @@ button, a, label {
    숨김 방식이 두 갈래가 되어 어느 쪽을 붙였는지 헷갈린다. 여기서는 마크업으로 제어하기 번거로운 것
    (지연 로드되는 오디오 재생기)과 잉크를 먹는 장식만 처리한다. */
 @media print {
-  @page { margin: 12mm; }
+  /* A4 세로, 검사지와 비슷한 여백 */
+  @page { size: A4 portrait; margin: 12mm 10mm; }
 
   /* 재생기는 종이에서 의미가 없다 */
   audio { display: none !important; }
@@ -137,4 +138,25 @@ button, a, label {
   .card, table, section { box-shadow: none !important; break-inside: avoid; }
 
   a[href]::after { content: ''; }  /* URL 꼬리표 제거 */
+
+  /* 결과지 소계 띠·머리글의 배경색이 인쇄에서 사라지지 않도록 */
+  .result-sheet,
+  .result-sheet * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* 결과지 섹션 제목·머리글이 페이지 경계에서 끊기지 않게 */
+  .result-sheet h2,
+  .result-sheet header {
+    break-after: avoid;
+  }
+  .result-sheet > div {
+    break-inside: avoid;
+  }
+
+  /* 낱말 격자는 인쇄에서 가로 스크롤이 없다 — 한 줄에 다 들어가야 한다 */
+  .result-sheet .overflow-x-auto {
+    overflow: visible !important;
+  }
 }
