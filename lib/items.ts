@@ -18,30 +18,24 @@ export interface SurveyItem {
 // G2 문항이 실제로 들어오면 이 상수를 세션의 학년으로 주입하도록 바꾼다.
 const FORM = DEFAULT_FORM
 
-const READ_MEANING = FORM.readMeaning
-const READ_NONSENSE = FORM.readNonsense
-const SENTENCES = FORM.sentences
-const WRITE_MEANING = FORM.writeMeaning
-const WRITE_NONSENSE = FORM.writeNonsense
-
 export const ITEMS: SurveyItem[] = [
-  ...READ_MEANING.map((text, i) => ({
+  ...FORM.readMeaning.map((text, i) => ({
     code: `rw${pad2(i + 1)}`, orderNo: i + 1,
     section: 'word_reading' as const, kind: 'meaning' as const, text, maxSec: FORM.limits.wordSec,
   })),
-  ...READ_NONSENSE.map((text, i) => ({
+  ...FORM.readNonsense.map((text, i) => ({
     code: `rw${pad2(i + 8)}`, orderNo: i + 8,
     section: 'word_reading' as const, kind: 'nonsense' as const, text, maxSec: FORM.limits.wordSec,
   })),
-  ...SENTENCES.map((text, i) => ({
+  ...FORM.sentences.map((text, i) => ({
     code: `rs${pad2(i + 1)}`, orderNo: i + 15,
     section: 'sentence_reading' as const, kind: null, text, maxSec: FORM.limits.sentenceSec,
   })),
-  ...WRITE_MEANING.map((text, i) => ({
+  ...FORM.writeMeaning.map((text, i) => ({
     code: `ww${pad2(i + 1)}`, orderNo: i + 19,
     section: 'word_writing' as const, kind: 'meaning' as const, text, maxSec: 0,
   })),
-  ...WRITE_NONSENSE.map((text, i) => ({
+  ...FORM.writeNonsense.map((text, i) => ({
     code: `ww${pad2(i + 6)}`, orderNo: i + 24,
     section: 'word_writing' as const, kind: 'nonsense' as const, text, maxSec: 0,
   })),
