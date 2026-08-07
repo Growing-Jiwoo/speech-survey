@@ -47,6 +47,8 @@ export const sessionCreateSchema = z.object({
   teacherName: cleaned.pipe(nameSchema),
   teacherPhone: optionalContact,
   teacherEmail: optionalContact,
+  // 검사지 헤더의 "교사 / 전문가" 구분
+  examinerType: z.enum(['teacher', 'expert']),
   // 만 14세 미만 아동 — 법정대리인 서면 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
   // true 리터럴만 허용: 미체크(false/누락) 상태로는 세션 생성 자체가 불가능하다.
   guardianConsent: z.literal(true),

@@ -50,6 +50,7 @@ export async function POST(req: Request) {
       birthYmd: d.birthYmd, grade: d.grade, classNo: d.classNo, gender: d.gender,
       childName: d.name, teacherName: d.teacherName,
       teacherPhone: d.teacherPhone || null, teacherEmail: d.teacherEmail || null,
+      examinerType: d.examinerType,
     })
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
     return NextResponse.json({ sessionId, sessionToken })

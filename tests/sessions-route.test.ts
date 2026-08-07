@@ -10,6 +10,7 @@ const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
   birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
   name: '김도연', teacherName: '박선생', teacherPhone: '010-1234-5678', teacherEmail: '',
+  examinerType: 'teacher',
   guardianConsent: true, // 법정대리인 서면 동의 확인(필수 — 제22조의2)
 }
 
@@ -40,6 +41,7 @@ describe('POST /api/sessions', () => {
       birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
       childName: '김도연', teacherName: '박선생',
       teacherPhone: '010-1234-5678', teacherEmail: null,
+      examinerType: 'teacher',
     })
   })
   it('이름 연속 공백은 서버가 정규화', async () => {

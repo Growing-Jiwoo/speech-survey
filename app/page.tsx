@@ -29,11 +29,11 @@ const CLASS_OPTIONS = [
   ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
 ]
 
-type FieldKey = 'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'phone' | 'email'
+type FieldKey = 'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'examiner' | 'phone' | 'email'
 type FieldErrors = Partial<Record<FieldKey, string>>
 
 /** 화면상 필드 순서 — 검증 실패 시 이 순서의 첫 에러 필드로 포커스를 옮긴다. */
-const FIELD_ORDER: FieldKey[] = ['school', 'birth', 'classNo', 'gender', 'name', 'teacher', 'phone', 'email']
+const FIELD_ORDER: FieldKey[] = ['school', 'birth', 'classNo', 'gender', 'name', 'teacher', 'examiner', 'phone', 'email']
 
 function focusFirstError(errors: FieldErrors) {
   const key = FIELD_ORDER.find(k => errors[k])
@@ -60,6 +60,8 @@ export default function StartPage() {
   const [gender, setGender] = useState<'남' | '여' | ''>('')
   const [name, setName] = useState('')
   const [teacherName, setTeacherName] = useState('')
+  // 검사지 헤더의 "교사 / 전문가" 구분 — 누가 검사를 실시했는지
+  const [examinerType, setExaminerType] = useState<'teacher' | 'expert' | ''>('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -98,6 +100,7 @@ export default function StartPage() {
     if (!validGender(gender)) next.gender = '성별을 선택해 주세요.'
     if (!validName(cleanName)) next.name = '이름은 한글이나 영어로만 쓸 수 있어요.'
     if (!validName(cleanTeacher)) next.teacher = '담임교사명은 한글이나 영어로만 쓸 수 있어요.'
+    if (examinerType === '') next.examiner = '검사자 구분을 선택해 주세요.'
     // 전화·이메일 중 하나는 필수. 입력된 칸만 형식을 본다(담당자 확정).
     if (!cleanPhone && !cleanEmail) next.phone = '전화번호나 이메일 중 하나는 입력해 주세요.'
     else {
@@ -113,6 +116,7 @@ export default function StartPage() {
       birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
       name: cleanName, teacherName: cleanTeacher,
       teacherPhone: cleanPhone, teacherEmail: cleanEmail,
+      examinerType,
       guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
     })
     setBusy(false)
@@ -123,7 +127,7 @@ export default function StartPage() {
   }
 
   const filled = school && year && month && day && classNo !== '' && gender && name.trim() && teacherName.trim()
-    && (phone.trim() || email.trim()) && consent
+    && examinerType && (phone.trim() || email.trim()) && consent
 
   return (
     // 데스크톱(lg+)에서는 교사 입력 효율을 위해 폼을 2열로 넓힌다(모바일·태블릿 세로는 현행 유지).
@@ -239,6 +243,21 @@ export default function StartPage() {
             aria-describedby={errors.teacher ? 'err-teacher' : undefined} aria-invalid={!!errors.teacher}
             onChange={e => setTeacherName(e.target.value)} className={inputCls} />
           <FieldError id="err-teacher" msg={errors.teacher} />
+        </div>
+
+        <div>
+          <span className={labelCls} id="examiner-label">검사자</span>
+          <div className="mt-1.5 flex gap-2.5" data-field="examiner" role="group" aria-labelledby="examiner-label"
+            aria-describedby={errors.examiner ? 'err-examiner' : undefined}>
+            {([['교사', 'teacher'], ['전문가', 'expert']] as const).map(([label, v]) => (
+              <button key={v} type="button" onClick={() => setExaminerType(v)} aria-pressed={examinerType === v}
+                className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
+                  examinerType === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <FieldError id="err-examiner" msg={errors.examiner} />
         </div>
 
         <div>

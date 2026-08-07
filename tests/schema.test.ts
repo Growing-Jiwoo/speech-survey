@@ -5,6 +5,7 @@ const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
   birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
   name: '김도연', teacherName: '박선생', teacherPhone: '010-1234-5678', teacherEmail: '',
+  examinerType: 'teacher',
   guardianConsent: true, // 법정대리인 서면 동의 확인(필수 — 제22조의2)
 }
 
@@ -75,5 +76,17 @@ describe('담임 연락처 — 전화/이메일 분리, 둘 중 하나 필수', 
       ...VALID, teacherPhone: '  010-1234-5678  ', teacherEmail: '' })
     expect(r.success).toBe(true)
     if (r.success) expect(r.data.teacherPhone).toBe('010-1234-5678')
+  })
+})
+
+describe('검사자 구분(examinerType)', () => {
+  it("'teacher'와 'expert'만 허용한다", () => {
+    expect(sessionCreateSchema.safeParse({ ...VALID, examinerType: 'teacher' }).success).toBe(true)
+    expect(sessionCreateSchema.safeParse({ ...VALID, examinerType: 'expert' }).success).toBe(true)
+  })
+  it('그 외 값·누락은 거부한다 (검사지 헤더의 필수 구분란)', () => {
+    expect(sessionCreateSchema.safeParse({ ...VALID, examinerType: '기타' }).success).toBe(false)
+    const { examinerType: _omit, ...without } = VALID
+    expect(sessionCreateSchema.safeParse(without).success).toBe(false)
   })
 })
