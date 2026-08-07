@@ -9,7 +9,7 @@ import * as db from '@/lib/db'
 const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
   birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
-  name: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
+  name: '김도연', teacherName: '박선생', teacherPhone: '010-1234-5678', teacherEmail: '',
   guardianConsent: true, // 법정대리인 서면 동의 확인(필수 — 제22조의2)
 }
 
@@ -38,7 +38,8 @@ describe('POST /api/sessions', () => {
     expect(db.createSession).toHaveBeenCalledWith({
       schoolRegion: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
       birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
-      childName: '김도연', teacherName: '박선생', teacherContact: '010-1234-5678',
+      childName: '김도연', teacherName: '박선생',
+      teacherPhone: '010-1234-5678', teacherEmail: null,
     })
   })
   it('이름 연속 공백은 서버가 정규화', async () => {
@@ -61,11 +62,24 @@ describe('POST /api/sessions', () => {
     expect((await POST(makeReq({ ...VALID, birthYmd: '191301' }))).status).toBe(400))
   it('학년·반 범위 밖 400', async () => {
     expect((await POST(makeReq({ ...VALID, grade: 7 }))).status).toBe(400)
-    expect((await POST(makeReq({ ...VALID, classNo: 0 }))).status).toBe(400)
   })
   it('성별·연락처 형식 오류 400', async () => {
     expect((await POST(makeReq({ ...VALID, gender: 'M' }))).status).toBe(400)
-    expect((await POST(makeReq({ ...VALID, teacherContact: '1234' }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID, teacherPhone: '1234' }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID, teacherPhone: '', teacherEmail: 'a@b' }))).status).toBe(400)
+  })
+  it('반 0(단일학급)으로 세션을 만들 수 있다', async () => {
+    expect((await POST(makeReq({ ...VALID, classNo: 0 }))).status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({ classNo: 0 }))
+  })
+  it('이메일만 입력해도 세션을 만들 수 있다', async () => {
+    expect((await POST(makeReq({ ...VALID, teacherPhone: '', teacherEmail: 'a@b.com' }))).status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ teacherPhone: null, teacherEmail: 'a@b.com' }))
+  })
+  it('연락처를 둘 다 비우면 400', async () => {
+    expect((await POST(makeReq({ ...VALID, teacherPhone: '', teacherEmail: '' }))).status).toBe(400)
+    expect(db.createSession).not.toHaveBeenCalled()
   })
   it('담임교사명 특수문자 400', async () =>
     expect((await POST(makeReq({ ...VALID, teacherName: '박선생1' }))).status).toBe(400))

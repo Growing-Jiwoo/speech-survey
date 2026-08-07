@@ -5,14 +5,17 @@ const fail = (e: { message: string } | null) => { if (e) throw new Error(e.messa
 export interface NewSessionInput {
   schoolRegion: string; schoolId: string; schoolName: string
   birthYmd: string; grade: number; classNo: number; gender: '남' | '여'
-  childName: string; teacherName: string; teacherContact: string
+  childName: string; teacherName: string
+  /** 전화·이메일 중 하나는 반드시 non-null (스키마가 보장). 미입력 칸은 null로 저장한다. */
+  teacherPhone: string | null; teacherEmail: string | null
 }
 
 export async function createSession(s: NewSessionInput): Promise<string> {
   const { data, error } = await sb().from('sessions').insert({
     school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
     birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
-    child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+    child_name: s.childName, teacher_name: s.teacherName,
+    teacher_phone: s.teacherPhone, teacher_email: s.teacherEmail,
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
@@ -170,7 +173,9 @@ export interface SessionRow {
   id: string
   school_region: string; school_id: string; school_name: string
   birth_ymd: string; grade: number; class_no: number; gender: string
-  child_name: string; teacher_name: string; teacher_contact: string
+  child_name: string; teacher_name: string
+  /** 010 이전 수집분은 teacher_contact에만 값이 있다(관리자 화면이 contactLabel로 폴백 표시) */
+  teacher_phone: string | null; teacher_email: string | null; teacher_contact: string | null
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
@@ -183,7 +188,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
