@@ -33,14 +33,18 @@ export async function insertRecording(r: {
 
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
+/** 낱말 해독 의미 낱말의 검사자 현장 채점 */
+export interface ReadingMark { itemCode: string; correct: boolean }
+
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
 /**
- * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만 낱말쓰기를 upsert한다.
+ * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
+ * 낱말쓰기·현장 채점을 upsert한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
  */
 export async function submitSession(
-  sessionId: string, writing: WritingAnswer[], checklist: string[],
+  sessionId: string, writing: WritingAnswer[], checklist: string[], marks: ReadingMark[] = [],
 ): Promise<SubmitResult> {
   const { data, error } = await sb().from('sessions')
     .update({ checklist, submitted_at: new Date().toISOString() })
@@ -54,6 +58,11 @@ export async function submitSession(
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e2)
+  }
+  if (marks.length > 0) {
+    const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
+    const { error: e3 } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(e3)
   }
   return 'ok'
 }
@@ -195,19 +204,24 @@ export async function listSessions(): Promise<SessionListRow[]> {
   return rows
 }
 
+export interface MarkRow { item_code: string; correct: boolean }
+
 export async function sessionDetail(sessionId: string): Promise<{
-  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]; marks: MarkRow[]
 }> {
-  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }] = await Promise.all([
-    sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
-    sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
-      .eq('session_id', sessionId).order('item_code').order('attempt_no'),
-    sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
-  ])
-  fail(e1); fail(e2); fail(e3)
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }, { data: mk, error: e4 }] =
+    await Promise.all([
+      sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
+      sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
+        .eq('session_id', sessionId).order('item_code').order('attempt_no'),
+      sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
+      sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
+    ])
+  fail(e1); fail(e2); fail(e3); fail(e4)
   return {
     session: s as unknown as SessionRow,
     recordings: (recs ?? []) as RecordingRow[],
     writing: (ans ?? []) as WritingRow[],
+    marks: (mk ?? []) as MarkRow[],
   }
 }
