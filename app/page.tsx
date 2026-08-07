@@ -202,6 +202,7 @@ export default function StartPage() {
               <label className={labelCls} htmlFor="classNo">반</label>
               <div className="mt-1.5" data-field="classNo">
                 <Select id="classNo" ariaLabel="반" placeholder="반 선택" value={classNo}
+                  ariaDescribedby={errors.classNo ? 'err-classNo' : undefined} ariaInvalid={!!errors.classNo}
                   onChange={setClassNo} options={CLASS_OPTIONS} />
               </div>
             </div>
