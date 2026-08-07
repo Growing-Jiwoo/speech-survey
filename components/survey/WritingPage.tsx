@@ -16,10 +16,13 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
 }) {
   const ceiling = writingCeilingHit(value)
   const meaningCount = MEANING_WRITE_CODES.length
-  // 중단 시 "이미 표시한 의미 낱말 앞 3개"까지만 유효 — 그 뒤 문항은 잠근다.
-  const lockedFrom = ceiling ? CEILING_N : items.length
-  const answered = items.filter((i, idx) => idx < lockedFrom && value[i.code] !== undefined).length
-  const required = Math.min(lockedFrom, items.length)
+  // 중단 시 잠기지 않는 문항 = 중단 판정에 실제로 쓰인 의미 낱말 코드(앞 N개).
+  // 배열 위치(idx)가 아니라 문항 코드로 판정해야, WRITING_ITEMS의 나열 순서가
+  // 나중에 바뀌더라도(의미/무의미가 섞이더라도) 잠금이 항상 올바른 문항에 걸린다.
+  const keepCodes = new Set(MEANING_WRITE_CODES.slice(0, CEILING_N))
+  const requiredCodes = ceiling ? keepCodes : new Set(items.map(i => i.code))
+  const answered = items.filter(i => requiredCodes.has(i.code) && value[i.code] !== undefined).length
+  const required = requiredCodes.size
 
   return (
     <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
@@ -37,7 +40,7 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
 
       <ul className="mt-4 flex flex-col gap-2">
         {items.map((item, idx) => {
-          const locked = idx >= lockedFrom
+          const locked = ceiling && !keepCodes.has(item.code)
           // 의미/무의미가 바뀌는 지점에 구분선을 넣어 검사지와 같은 두 묶음으로 보이게 한다.
           const groupStart = idx === 0 || items[idx - 1].kind !== item.kind
           return (

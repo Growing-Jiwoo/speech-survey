@@ -165,4 +165,8 @@ describe('PAGES (화면·녹음 단위)', () => {
     // 담당자에게 실제 연습용 낱말을 받으면 PRACTICE_WORDS를 교체하고 이 플래그를 false로 바꾼다.
     expect(PRACTICE_PLACEHOLDER).toBe(true)
   })
+
+  it('WRITING_ITEMS 앞 3개는 의미 낱말이다 (역사적 불변식 — WritingPage는 이제 코드 기반으로 동작해 이 순서에 의존하지 않지만, 데이터 구성 의도를 문서화한다)', () => {
+    expect(WRITING_ITEMS.slice(0, 3).every(i => i.kind === 'meaning')).toBe(true)
+  })
 })
