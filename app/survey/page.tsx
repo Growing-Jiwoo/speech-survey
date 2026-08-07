@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistArea } from '@/lib/items'
-import { canAdvance, visiblePages } from '@/lib/survey-flow'
+import { canAdvance, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -182,9 +182,18 @@ function SurveyInner() {
               {page.section === 'word_writing' && (
                 <WritingPage items={page.items} value={st.writing}
                   onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))}
-                  onSetAll={v => patch(prev => ({
-                    writing: { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) },
-                  }))} />
+                  onSetAll={v => patch(prev => {
+                    // 중단 규칙 ②를 무시하고 10문항 전부에 v를 쓰면, 이 클릭 자체가 중단을 유발하는 경우
+                    // (예: "모두 아니오"를 첫 클릭으로) 중단 이후 문항에도 실제로 실시하지 않은 값이
+                    // 남는다. tentative 상태에서 requiredWritingCodes로 다시 판정해, 그 판정에 필요한
+                    // 코드에만 값을 반영한다 — 문항별로 하나씩 눌러 같은 잠금에 도달했을 때와 동일한 결과.
+                    const tentative = { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
+                    const required = requiredWritingCodes(page.items, tentative)
+                    const applied = Object.fromEntries(
+                      page.items.filter(i => required.has(i.code)).map(i => [i.code, v]),
+                    )
+                    return { writing: { ...prev.writing, ...applied } }
+                  })} />
               )}
 
               {page.section === 'checklist' && (

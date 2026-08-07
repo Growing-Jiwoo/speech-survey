@@ -85,6 +85,29 @@ describe('requiredWritingCodes (낱말 쓰기에서 실제로 요구되는 문�
   })
 })
 
+describe('requiredWritingCodes로 구현하는 낱말 쓰기 일괄 선택("모두 예"/"모두 아니오") 안전성', () => {
+  // app/survey/page.tsx의 onSetAll은 v를 10문항 전체에 적용한 tentative 상태를 만들고,
+  // requiredWritingCodes(page.items, tentative)가 돌려주는 코드에만 실제로 값을 반영한다.
+  // 여기서는 그 tentative 병합 결과를 직접 구성해 requiredWritingCodes에 넣어 검증한다.
+  const page = pageByCode.get('p_ww')!
+
+  it('빈 상태에서 "모두 아니오": 중단이 걸려 앞 3개(의미 낱말)만 요구 — 나머지 7개는 기록되지 않아야 함', () => {
+    const tentative = Object.fromEntries(page.items.map(i => [i.code, false]))
+    expect(requiredWritingCodes(page.items, tentative)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+  })
+
+  it('빈 상태에서 "모두 예": 중단이 걸리지 않아 10개 전체를 요구', () => {
+    const tentative = Object.fromEntries(page.items.map(i => [i.code, true]))
+    expect(requiredWritingCodes(page.items, tentative)).toEqual(new Set(page.items.map(i => i.code)))
+  })
+
+  it('ww01·ww02가 이미 오반응인 상태에서 일괄 "모두 아니오": 이 클릭이 중단을 유발해도 앞 3개만 요구', () => {
+    const before = { ww01: false, ww02: false }
+    const tentative = { ...before, ...Object.fromEntries(page.items.map(i => [i.code, false])) }
+    expect(requiredWritingCodes(page.items, tentative)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+  })
+})
+
 describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
   const empty = { marks: {}, writing: {}, checklist: [] }
 
