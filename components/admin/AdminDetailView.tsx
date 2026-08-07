@@ -6,18 +6,17 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, KIND_LABEL, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { ITEM_TOTALS, RECORDING_PAGES, WRITING_ITEMS } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
-import { contactLabel, gradeClassLabel } from '@/lib/format'
+import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { Badge } from '@/components/Badge'
-import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
-import { RecordingsTable, type RecordingsByItem } from '@/components/admin/RecordingsTable'
-import { ScoreSheet } from '@/components/admin/ScoreSheet'
+import { ResultSheet } from '@/components/admin/ResultSheet'
+import type { Attempt } from '@/components/admin/sheet/PageAudio'
 
 export function AdminDetailView() {
   const id = String(useParams().id)
@@ -53,9 +52,9 @@ export function AdminDetailView() {
     router.replace(listHref)
   }
 
-  // item_code → 시도 목록(정렬은 API가 보장). 결과지 표와 진행 집계가 공유한다.
-  const byItem: RecordingsByItem = useMemo(() => {
-    const m: RecordingsByItem = new Map()
+  // item_code → 시도 목록(정렬은 API가 보장). 결과지와 진행 집계가 공유한다.
+  const byItem = useMemo(() => {
+    const m = new Map<string, Attempt[]>()
     for (const r of data?.recordings ?? []) {
       const list = m.get(r.item_code) ?? []
       list.push({ attempt_no: r.attempt_no, url: r.url, duration_sec: r.duration_sec })
@@ -63,6 +62,8 @@ export function AdminDetailView() {
     }
     return m
   }, [data])
+  // 페이지 코드 → 녹음 시도들(ResultSheet가 낱말 해독·문장 각 줄에서 조회)
+  const attemptsOf = (pageCode: string) => byItem.get(pageCode) ?? []
 
   if (isLoading) return <LoadingOverlay show />
   if (isError || !data) return (
@@ -79,7 +80,7 @@ export function AdminDetailView() {
   )
 
   const { session: s, writing } = data
-  const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
+  const writingByCode = Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))
   const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
   const missingCount = (RECORDING_PAGES.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
 
@@ -103,90 +104,19 @@ export function AdminDetailView() {
             </button>
           </div>
         </div>
+        {/* 수집 상태(녹음·낱말쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
+          <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_PAGES.length}</b></span>
+          <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
+          {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
+        </div>
+
         <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-          <div className="border-b border-line px-5 py-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <Blip variant="logo" className="h-8 w-8" />
-              <div>
-                <p className="text-[15px] font-bold">
-                  결과지 — {s.child_name} ({s.school_name} {gradeClassLabel(s.grade, s.class_no)}, {s.gender})
-                </p>
-                <p className="text-[11px] text-ink-mute">
-                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({contactLabel(s.teacher_phone, s.teacher_email, s.teacher_contact)})
-                  {' '}· 검사자 {s.examiner_type === 'expert' ? '전문가' : s.examiner_type === 'teacher' ? '교사' : '기록 없음'} ·{' '}
-                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
-                  {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
-                  {s.guardian_consented_at
-                    ? `보호자 동의 확인 ${new Date(s.guardian_consented_at).toLocaleDateString('ko-KR')}`
-                    : '보호자 동의 기록 없음'}
-                </p>
-              </div>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_PAGES.length}</b></span>
-                <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
-                {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
-              </div>
-            </div>
-            {s.checklist.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft">확인 필요 영역:</span>
-                {s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-              </div>
-            )}
-          </div>
-
-          <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
-          <RecordingsTable byItem={byItem}
-            onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
-
-          <ScoreSheet sessionId={id}
+          <ResultSheet key={id} sessionId={id} session={s} writing={writingByCode}
             initialMarks={Object.fromEntries(data.marks.map(m => [m.item_code, m.correct]))}
-            initialSentences={Object.fromEntries(data.sentences.map(s => [s.item_code, s.words]))}
-            writing={Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))} />
-
-          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
-              <thead>
-                <tr className="text-left text-xs text-ink-mute">
-                  <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
-                  <th scope="col" className="w-24 px-3 font-medium">구분</th>
-                  <th scope="col" className="px-3 font-medium">낱말</th>
-                  <th scope="col" className="w-28 px-3 pr-5 font-medium">답</th>
-                </tr>
-              </thead>
-              <tbody>
-                {WRITING_ITEMS.map(item => {
-                  const v = writingByCode.get(item.code)
-                  return (
-                    <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
-                      <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
-                      <td className="px-3 text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
-                      <td className="px-3 font-read">{item.text}</td>
-                      <td className="px-3 pr-5">
-                        {v === undefined
-                          ? <Badge tone="mute">미선택</Badge>
-                          : v ? <Badge tone="mint">예</Badge> : <Badge tone="rec">아니오</Badge>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
-          <div className="flex flex-wrap gap-2 px-5 py-4">
-            {s.checklist.length === 0
-              ? <span className="text-sm text-ink-mute">선택 없음</span>
-              : s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-          </div>
-
-          <p className="border-t border-line bg-well px-5 py-3 text-[11.5px] text-ink-mute">
-            채점 기준(검사지): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수.
-            녹음은 마지막 반응이 잘리지 않도록 5초 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.
-            모든 시도(재녹음 포함)가 순서대로 저장됩니다.
-          </p>
+            initialSentences={Object.fromEntries(data.sentences.map(x => [x.item_code, x.words]))}
+            attemptsOf={attemptsOf}
+            onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>
 
         {/* 파괴적 동작은 본문과 분리된 하단 영역에 배치(고빈도 내비 버튼과의 오클릭 방지) */}
