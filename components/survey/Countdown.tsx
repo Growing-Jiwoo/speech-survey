@@ -24,12 +24,18 @@ export function Countdown({ onDone }: { onDone: () => void }) {
   }, [n])
 
   return (
-    <div className="flex flex-col items-center gap-3" role="status" aria-live="assertive">
-      <p className="text-sm font-bold text-ink-soft">준비하세요</p>
-      {/* 매초 key가 바뀌며 리마운트돼 확대 애니메이션이 다시 재생된다. */}
+    // RecordingItem.tsx와 같은 이유로 매초 바뀌는 숫자에는 aria-live를 붙이지 않는다(낭독 스팸 방지).
+    // 화면판독기에는 "카운트다운 시작" 1회(polite)와, 녹음이 실제로 시작되는 "시작!" 1회(alert)만 들려준다.
+    <div className="flex flex-col items-center gap-3">
+      <p className="text-sm font-bold text-ink-soft" aria-live="polite">
+        {n > 0 ? '준비하세요' : null}
+      </p>
+      {/* 매초 key가 바뀌며 리마운트돼 확대 애니메이션이 다시 재생된다. (시각 전용, 낭독 안 됨) */}
       <p key={n} className="font-read text-[88px] font-bold leading-none text-blue motion-safe:animate-[ping_0.35s_ease-out_1] lg:text-[120px]">
         {n > 0 ? n : '시작!'}
       </p>
+      {/* role="alert"는 등장하는 순간 자동으로 강하게(assertive) 낭독된다 — 녹음 시작 신호이므로 한 번만. */}
+      {n <= 0 && <span role="alert" className="sr-only">시작!</span>}
     </div>
   )
 }
