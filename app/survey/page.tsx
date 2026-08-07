@@ -7,6 +7,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistArea } from '@/lib/items'
 import { canAdvance, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
@@ -30,6 +31,9 @@ function SurveyInner() {
   const [busy, setBusy] = useState(false)
   // 검사자가 직접 누르는 일시정지(화면을 덮어 아동의 오터치도 막는다). 녹음/카운트다운 중에는 잠근다.
   const [paused, setPaused] = useState(false)
+  // 일시정지 오버레이도 다이얼로그이므로 ConfirmDialog와 같은 포커스 트랩을 쓴다
+  // (초기 포커스·Tab 순환·Esc로 재개·해제 시 포커스 복귀).
+  const pauseRef = useFocusTrap(paused, () => setPaused(false))
   // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다
   const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
   const fromReview = params.get('from') === 'review'
@@ -245,7 +249,7 @@ function SurveyInner() {
 
       {paused && (
         // 화면 전체를 덮어 아동이 문항을 보거나 잘못 누르지 못하게 한다(잠깐 자리를 비우는 상황용).
-        <div role="dialog" aria-modal="true" aria-label="검사 일시정지"
+        <div ref={pauseRef} role="dialog" aria-modal="true" aria-label="검사 일시정지"
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-white/95 px-6 text-center backdrop-blur">
           <Blip variant="idle" className="h-24 w-[100px]" />
           <h2 className="text-2xl font-bold">잠시 쉬는 중이에요</h2>
