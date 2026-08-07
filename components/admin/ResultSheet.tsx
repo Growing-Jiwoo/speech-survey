@@ -9,7 +9,7 @@ import { formForGrade } from '@/lib/forms'
 import {
   PASS_MARK, PROVISIONAL_CRITERIA, READ_MAX, TASK_MAX, WRITE_MAX, scoreSession,
 } from '@/lib/scoring'
-import { contactLabel, gradeClassLabel } from '@/lib/format'
+import { contactLabel, examinerLabel, gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { ScoreBand } from './sheet/ScoreBand'
@@ -24,9 +24,6 @@ const READ_NONSENSE_ITEMS = ITEMS.filter(i => i.section === 'word_reading' && i.
 const SENTENCE_ITEMS = ITEMS.filter(i => i.section === 'sentence_reading')
 const WRITE_MEANING_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'meaning')
 const WRITE_NONSENSE_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'nonsense')
-
-const examinerLabel = (t: string | null | undefined) =>
-  t === 'expert' ? '전문가' : t === 'teacher' ? '교사' : '기록 없음'
 
 export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError }: {
   sessionId: string
@@ -84,7 +81,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
               ['검사일', new Date(session.started_at).toLocaleDateString('ko-KR')],
               ['검사자', examinerLabel(session.examiner_type)],
             ].map(([k, v]) => (
-              <div key={k as string}>
+              <div key={k}>
                 <dt className="text-ink-mute">{k}</dt>
                 <dd className="font-bold">{v}</dd>
               </div>

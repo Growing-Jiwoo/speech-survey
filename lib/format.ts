@@ -25,3 +25,8 @@ export function contactLabel(
   if (parts.length > 0) return parts.join(' · ')
   return legacy || '연락처 없음'
 }
+
+/** 검사지 헤더의 "교사 / 전문가" 구분 표기. 011 이전 수집분(examiner_type=null)은 '기록 없음'. */
+export function examinerLabel(t: string | null | undefined): string {
+  return t === 'expert' ? '전문가' : t === 'teacher' ? '교사' : '기록 없음'
+}
