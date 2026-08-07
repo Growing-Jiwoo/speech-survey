@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  PASS_MARK, PROVISIONAL_CRITERIA, SENTENCE_MAX, TASK_MAX,
+  PASS_MARK, PROVISIONAL_CRITERIA, SENTENCE_MAX, TASK_MAX, READ_MAX, WRITE_MAX,
   sentenceMaxWords, scoreSession, type ScoreInput,
 } from '@/lib/scoring'
 import { itemByCode } from '@/lib/items'
@@ -100,5 +100,33 @@ describe('scoreSession — Pass/Fail 판정', () => {
   it('과제별로 따로 판정한다', () => {
     const r = scoreSession(empty)
     expect(Object.keys(r.verdict).sort()).toEqual(['sentenceReading', 'wordReading', 'wordWriting'])
+  })
+})
+
+describe('낱말 쓰기 의미/무의미 소계', () => {
+  it('의미·무의미를 나눠 세고 합이 총점과 같다', () => {
+    // ww01~ww05 = 의미, ww06~ww10 = 무의미
+    const writing = {
+      ww01: true, ww02: true, ww03: false, ww04: true, ww05: false,
+      ww06: true, ww07: false, ww08: false, ww09: false, ww10: false,
+    }
+    const r = scoreSession({ marks: {}, sentences: {}, writing })
+    expect(r.writeMeaning).toBe(3)
+    expect(r.writeNonsense).toBe(1)
+    expect(r.wordWriting).toBe(4)
+    expect(r.writeMeaning + r.writeNonsense).toBe(r.wordWriting)
+  })
+  it('미응답(undefined)은 0점으로 센다', () => {
+    const r = scoreSession({ marks: {}, sentences: {}, writing: {} })
+    expect(r.writeMeaning).toBe(0)
+    expect(r.writeNonsense).toBe(0)
+    expect(r.wordWriting).toBe(0)
+  })
+})
+
+describe('과제별 만점', () => {
+  it('의미·무의미 만점의 합이 과제 만점과 같다', () => {
+    expect(WRITE_MAX.meaning + WRITE_MAX.nonsense).toBe(TASK_MAX.wordWriting)
+    expect(READ_MAX.meaning + READ_MAX.nonsense).toBe(TASK_MAX.wordReading)
   })
 })

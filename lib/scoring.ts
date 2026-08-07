@@ -1,6 +1,6 @@
 // lib/scoring.ts — 검사지 채점 규칙(배점·합산·Pass/Fail). 순수 함수만 둔다.
 // 화면·저장 API·인쇄가 모두 이 파일 하나로 점수를 계산해, 표시되는 값과 저장되는 값이 어긋나지 않게 한다.
-import { ITEMS, MEANING_READ_CODES, itemByCode, type SurveyItem } from './items'
+import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, itemByCode, type SurveyItem } from './items'
 
 /** 문장 배점 = 어절 수. 검사지의 7·7·8·14가 문항 텍스트의 어절 수와 정확히 일치하므로
  *  숫자를 따로 적어두지 않고 유도한다 — 문항이 바뀌면 배점이 자동으로 따라간다. */
@@ -12,6 +12,7 @@ const SENTENCE_ITEMS = ITEMS.filter(i => i.section === 'sentence_reading')
 const READ_CODES = ITEMS.filter(i => i.section === 'word_reading').map(i => i.code)
 const NONSENSE_READ_CODES = READ_CODES.filter(c => !MEANING_READ_CODES.includes(c))
 const WRITE_CODES = ITEMS.filter(i => i.section === 'word_writing').map(i => i.code)
+const NONSENSE_WRITE_CODES = WRITE_CODES.filter(c => !MEANING_WRITE_CODES.includes(c))
 
 export const SENTENCE_MAX = SENTENCE_ITEMS.reduce((sum, i) => sum + sentenceMaxWords(i), 0)
 
@@ -20,6 +21,16 @@ export const TASK_MAX = {
   wordReading: READ_CODES.length,
   sentenceReading: SENTENCE_MAX,
   wordWriting: WRITE_CODES.length,
+} as const
+
+/** 검사지의 의미/무의미 소계 만점 — 결과지가 '/ 7', '/ 5'를 이 값으로 찍는다. */
+export const READ_MAX = {
+  meaning: MEANING_READ_CODES.length,
+  nonsense: READ_CODES.length - MEANING_READ_CODES.length,
+} as const
+export const WRITE_MAX = {
+  meaning: MEANING_WRITE_CODES.length,
+  nonsense: NONSENSE_WRITE_CODES.length,
 } as const
 
 /**
@@ -53,6 +64,8 @@ export interface ScoreResult {
   wordNonsense: number
   wordReading: number
   sentenceReading: number
+  writeMeaning: number
+  writeNonsense: number
   wordWriting: number
   verdict: Record<TaskKey, Verdict>
 }
@@ -72,10 +85,12 @@ export function scoreSession(s: ScoreInput): ScoreResult {
   const wordNonsense = countTrue(NONSENSE_READ_CODES, s.marks)
   const wordReading = wordMeaning + wordNonsense
   const sentenceReading = SENTENCE_ITEMS.reduce((sum, i) => sum + clampSentence(i.code, s.sentences[i.code]), 0)
-  const wordWriting = countTrue(WRITE_CODES, s.writing)
+  const writeMeaning = countTrue(MEANING_WRITE_CODES, s.writing)
+  const writeNonsense = countTrue(NONSENSE_WRITE_CODES, s.writing)
+  const wordWriting = writeMeaning + writeNonsense
   const at = (v: number, mark: number): Verdict => (v >= mark ? 'pass' : 'fail')
   return {
-    wordMeaning, wordNonsense, wordReading, sentenceReading, wordWriting,
+    wordMeaning, wordNonsense, wordReading, sentenceReading, writeMeaning, writeNonsense, wordWriting,
     verdict: {
       wordReading: at(wordReading, PASS_MARK.wordReading),
       sentenceReading: at(sentenceReading, PASS_MARK.sentenceReading),
