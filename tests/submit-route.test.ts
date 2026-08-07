@@ -28,12 +28,12 @@ describe('POST /api/sessions/submit', () => {
     const res = await POST(makeReq(VALID()))
     expect(res.status).toBe(200)
     expect(db.submitSession).toHaveBeenCalledWith('sess-1',
-      [{ itemCode: 'ww01', canWrite: true }, { itemCode: 'ww02', canWrite: false }], ['none'])
+      [{ itemCode: 'ww01', canWrite: true }, { itemCode: 'ww02', canWrite: false }], ['none'], [])
   })
   it('답이 하나도 없어도 제출 가능', async () => {
     const res = await POST(makeReq({ sessionId: SID, sessionToken: TOKEN, writing: {}, checklist: [] }))
     expect(res.status).toBe(200)
-    expect(db.submitSession).toHaveBeenCalledWith('sess-1', [], [])
+    expect(db.submitSession).toHaveBeenCalledWith('sess-1', [], [], [])
   })
   it('존재하지 않는 세션 404 (허위 성공 제거)', async () => {
     vi.mocked(db.submitSession).mockResolvedValue('not_found')
@@ -63,7 +63,31 @@ describe('POST /api/sessions/submit', () => {
   it('체크리스트 중복 코드는 dedup되어 저장된다', async () => {
     const res = await POST(makeReq({ ...VALID(), checklist: ['speech', 'speech', 'attention'] }))
     expect(res.status).toBe(200)
-    expect(db.submitSession).toHaveBeenCalledWith(SID, expect.anything(), ['speech', 'attention'])
+    expect(db.submitSession).toHaveBeenCalledWith(SID, expect.anything(), ['speech', 'attention'], [])
+  })
+  it('marks에 의미 낱말 코드와 boolean이 오면 저장된다', async () => {
+    const res = await POST(makeReq({ ...VALID(), marks: { rw01: true, rw02: false } }))
+    expect(res.status).toBe(200)
+    expect(db.submitSession).toHaveBeenCalledWith(SID, expect.anything(), ['none'],
+      [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw02', correct: false }])
+  })
+  it('marks가 없으면 빈 배열로 저장된다 (구버전 클라이언트 호환)', async () => {
+    const res = await POST(makeReq(VALID()))
+    expect(res.status).toBe(200)
+    expect(db.submitSession).toHaveBeenCalledWith(SID, expect.anything(), ['none'], [])
+  })
+  it('의미 낱말이 아닌 코드는 400 (무의미 낱말·쓰기 문항은 현장 채점 대상이 아님)', async () => {
+    expect((await POST(makeReq({ ...VALID(), marks: { rw08: true } }))).status).toBe(400)
+    expect((await POST(makeReq({ ...VALID(), marks: { ww01: true } }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
+  it('marks 값이 boolean이 아니면 400', async () => {
+    expect((await POST(makeReq({ ...VALID(), marks: { rw01: 'yes' } }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
+  it('marks가 배열이면 400 (객체만 허용)', async () => {
+    expect((await POST(makeReq({ ...VALID(), marks: [['rw01', true]] }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
   })
   it('writing이 배열이면 400 (객체만 허용)', async () =>
     expect((await POST(makeReq({ ...VALID(), writing: [['ww01', true]] }))).status).toBe(400))

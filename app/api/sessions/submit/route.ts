@@ -1,15 +1,16 @@
 // POST /api/sessions/submit — 최종 제출(낱말쓰기 답 + 체크리스트 저장, submitted_at 확정).
 // 제출 이후에는 같은 세션의 재제출·녹음 업로드가 모두 거부된다(검사 증적 보호).
 import { NextResponse } from 'next/server'
-import { submitSession, type WritingAnswer } from '@/lib/db'
+import { submitSession, type ReadingMark, type WritingAnswer } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { AREA_CODES, WRITING_ITEMS } from '@/lib/items'
+import { AREA_CODES, MEANING_READ_CODES, WRITING_ITEMS } from '@/lib/items'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
 
 const WRITING_CODES = new Set(WRITING_ITEMS.map(i => i.code))
+const MARK_CODES = new Set(MEANING_READ_CODES)
 const bad = (msg: string) => jsonError(msg, 400)
 
 export async function POST(req: Request) {
@@ -26,13 +27,24 @@ export async function POST(req: Request) {
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
 
+  // 낱말 해독 의미 낱말의 검사자 현장 채점(중단 규칙 판정 근거). 없어도 제출은 통과시킨다.
+  const marks: ReadingMark[] = []
+  if (b.marks !== undefined) {
+    if (typeof b.marks !== 'object' || b.marks === null || Array.isArray(b.marks))
+      return bad('현장 채점 형식 오류')
+    for (const [itemCode, correct] of Object.entries(b.marks)) {
+      if (!MARK_CODES.has(itemCode) || typeof correct !== 'boolean') return bad('현장 채점 형식 오류')
+      marks.push({ itemCode, correct })
+    }
+  }
+
   const invalidToken = () => jsonError('유효하지 않은 세션입니다.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
 
   try {
-    const result = await submitSession(b.sessionId, writing, checklist)
+    const result = await submitSession(b.sessionId, writing, checklist, marks)
     if (result === 'not_found')
       return jsonError('세션을 찾을 수 없습니다.', 404)
     if (result === 'already_submitted')
