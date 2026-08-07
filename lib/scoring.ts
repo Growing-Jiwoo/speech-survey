@@ -26,7 +26,7 @@ export const TASK_MAX = {
 /** 검사지의 의미/무의미 소계 만점 — 결과지가 '/ 7', '/ 5'를 이 값으로 찍는다. */
 export const READ_MAX = {
   meaning: MEANING_READ_CODES.length,
-  nonsense: READ_CODES.length - MEANING_READ_CODES.length,
+  nonsense: NONSENSE_READ_CODES.length,
 } as const
 export const WRITE_MAX = {
   meaning: MEANING_WRITE_CODES.length,
