@@ -1,8 +1,8 @@
-// components/admin/RecordingsTable.tsx — 결과지의 녹음 문항 표.
-// 문항당 모든 시도(재녹음 포함)를 순서대로 보여주고, 시도별 서명 URL 오디오를 재생한다.
+// components/admin/RecordingsTable.tsx — 결과지의 녹음 표(페이지 단위).
+// 페이지마다 모든 시도(재녹음 포함)를 순서대로 보여주고, 시도별 서명 URL 오디오를 재생한다.
 'use client'
 import dynamic from 'next/dynamic'
-import { KIND_LABEL, RECORDING_ITEMS } from '@/lib/items'
+import { KIND_LABEL, RECORDING_PAGES } from '@/lib/items'
 import { fmtDuration } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import type { DetailRecording } from '@/hooks/useAdminQueries'
@@ -36,31 +36,33 @@ export function RecordingsTable({ byItem, onAudioError }: {
           </tr>
         </thead>
         <tbody>
-          {RECORDING_ITEMS.flatMap(item => {
-            const label = item.section === 'word_reading'
-              ? `낱말 (${KIND_LABEL[item.kind!]})` : '문장'
-            const views = byItem.get(item.code) ?? []
+          {RECORDING_PAGES.flatMap((page, pageIdx) => {
+            const label = page.section === 'word_reading'
+              ? `낱말 (${KIND_LABEL[page.kind!]})` : '문장'
+            const text = page.items.map(i => i.text).join('  ')
+            const views = byItem.get(page.code) ?? []
             if (views.length === 0) return [(
-              <tr key={item.code} className="border-t border-line/60 bg-rec/5">
-                <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
+              <tr key={page.code} className="border-t border-line/60 bg-rec/5">
+                <td className="px-5 py-3 text-ink-mute">{pageIdx + 1}</td>
                 <td className="px-3 text-xs text-ink-mute">{label}</td>
-                <td className="px-3 font-read whitespace-pre-line break-keep">{item.text}</td>
+                <td className="px-3 font-read whitespace-pre-line break-keep">{text}</td>
                 <td className="px-3">—</td>
                 <td className="px-3 text-ink-mute">—</td>
                 <td className="px-3 pr-5"><Badge tone="rec">미녹음</Badge></td>
               </tr>
             )]
             return views.map((v, i) => {
-              const over = v.duration_sec != null && v.duration_sec > item.maxSec
+              // 여유 시간(GRACE_SEC)까지는 정상 — 채점 기준(limitSec) 초과만 표시한다.
+              const over = v.duration_sec != null && v.duration_sec > page.limitSec
               return (
-                // 같은 문항의 2번째 시도부터는 번호·구분·제시어를 비워 시각적으로 묶는다
-                <tr key={`${item.code}-${v.attempt_no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
-                  <td className="px-5 py-3 text-ink-mute">{i === 0 ? item.orderNo : ''}</td>
+                // 같은 페이지의 2번째 시도부터는 번호·구분·제시어를 비워 시각적으로 묶는다
+                <tr key={`${page.code}-${v.attempt_no}`} className={i === 0 ? 'border-t border-line/60' : ''}>
+                  <td className="px-5 py-3 text-ink-mute">{i === 0 ? pageIdx + 1 : ''}</td>
                   <td className="px-3 text-xs text-ink-mute">{i === 0 ? label : ''}</td>
-                  <td className="px-3 font-read whitespace-pre-line break-keep">{i === 0 ? item.text : ''}</td>
+                  <td className="px-3 font-read whitespace-pre-line break-keep">{i === 0 ? text : ''}</td>
                   <td className="px-3 text-ink-mute">{views.length > 1 ? `#${v.attempt_no}` : ''}</td>
                   <td className={`px-3 font-read text-[12px] tabular-nums ${over ? 'font-bold text-amber' : 'text-ink-soft'}`}
-                    title={over ? `제한(${item.maxSec}초) 초과` : undefined}>
+                    title={over ? `채점 기준(${page.limitSec}초) 초과분 포함` : undefined}>
                     {fmtDuration(v.duration_sec)}{over && ' !'}
                   </td>
                   <td className="px-3 py-2 pr-5">

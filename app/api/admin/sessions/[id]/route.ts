@@ -13,14 +13,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   if (!UUID_RE.test(id)) return badId()
   try {
-    const { session, recordings, writing } = await sessionDetail(id)
+    const { session, recordings, writing, marks } = await sessionDetail(id)
     const withUrls = await Promise.all(recordings.map(async r => ({
       item_code: r.item_code,
       attempt_no: r.attempt_no,
       url: await signedAudioUrl(r.audio_path),
       duration_sec: r.duration_sec,
     })))
-    return NextResponse.json({ session, recordings: withUrls, writing })
+    return NextResponse.json({ session, recordings: withUrls, writing, marks })
   } catch (e) {
     console.error('[admin/sessions/:id] 조회 실패', e)
     return jsonError('결과지를 불러오지 못했습니다.', 500)

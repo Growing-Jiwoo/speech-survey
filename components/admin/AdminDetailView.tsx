@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { ITEM_TOTALS, KIND_LABEL, RECORDING_PAGES, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
@@ -76,10 +76,10 @@ export function AdminDetailView() {
     </main>
   )
 
-  const { session: s, writing } = data
+  const { session: s, writing, marks } = data
   const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
-  const recordedCount = RECORDING_ITEMS.filter(i => byItem.has(i.code)).length
-  const missingCount = (RECORDING_ITEMS.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
+  const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
+  const missingCount = (RECORDING_PAGES.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
 
   return (
     <AudioBusProvider>
@@ -119,7 +119,7 @@ export function AdminDetailView() {
                 </p>
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_ITEMS.length}</b></span>
+                <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_PAGES.length}</b></span>
                 <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
                 {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
               </div>
@@ -167,6 +167,13 @@ export function AdminDetailView() {
             </table>
           </div>
 
+          {marks.length > 0 && (
+            <p className="border-t border-line px-5 py-3 text-[11.5px] text-ink-mute">
+              검사 현장에서 표시한 의미 낱말 채점: {marks.filter(m => m.correct).length} / {marks.length} 정반응
+              {' '}— 녹음을 들으며 확정하는 채점 화면은 3단계에서 추가됩니다.
+            </p>
+          )}
+
           <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
           <div className="flex flex-wrap gap-2 px-5 py-4">
             {s.checklist.length === 0
@@ -175,7 +182,9 @@ export function AdminDetailView() {
           </div>
 
           <p className="border-t border-line bg-well px-5 py-3 text-[11.5px] text-ink-mute">
-            채점 기준(PDF): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.
+            채점 기준(검사지): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수.
+            녹음은 마지막 반응이 잘리지 않도록 5초 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.
+            모든 시도(재녹음 포함)가 순서대로 저장됩니다.
           </p>
         </div>
 
