@@ -16,7 +16,9 @@ export function TaskSection({ title, hint, children }: {
 }) {
   return (
     <section className="border-t-[10px] border-bg">
-      <h2 className="flex flex-wrap items-baseline gap-x-2.5 bg-bg px-4 py-3">
+      {/* 가운데 정렬 — 화면이 넓어지면 왼쪽 끝에 붙은 제목이 아래 채점표와 멀어져
+          장(章) 머리 구실을 못 한다. 띠 한가운데 두면 폭과 무관하게 구분점으로 읽힌다. */}
+      <h2 className="flex flex-wrap items-baseline justify-center gap-x-2.5 bg-bg px-4 py-3 text-center">
         <span className="text-[16px] font-bold">{title}</span>
         {hint && <span className="text-[12px] text-ink-mute">{hint}</span>}
       </h2>
