@@ -16,11 +16,11 @@ export function TaskSection({ title, hint, children }: {
 }) {
   return (
     <section className="border-t-[10px] border-bg">
-      {/* 가운데 정렬 — 화면이 넓어지면 왼쪽 끝에 붙은 제목이 아래 채점표와 멀어져
-          장(章) 머리 구실을 못 한다. 띠 한가운데 두면 폭과 무관하게 구분점으로 읽힌다. */}
-      <h2 className="flex flex-wrap items-baseline justify-center gap-x-2.5 bg-bg px-4 py-3 text-center">
-        <span className="text-[16px] font-bold">{title}</span>
-        {hint && <span className="text-[12px] text-ink-mute">{hint}</span>}
+      {/* 가로는 좌측 정렬(읽기 시작점), 세로는 띠 한가운데. 제목과 힌트의 글자 크기가 달라
+          baseline으로 맞추면 띠 안에서 아래로 쏠린다 — center로 맞춘다. */}
+      <h2 className="flex min-h-12 flex-wrap items-center gap-x-2.5 bg-bg px-4 py-2.5">
+        <span className="text-[16px] font-bold leading-none">{title}</span>
+        {hint && <span className="text-[12px] leading-none text-ink-mute">{hint}</span>}
       </h2>
       {children}
     </section>
