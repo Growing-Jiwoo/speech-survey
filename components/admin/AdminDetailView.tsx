@@ -27,6 +27,12 @@ export function AdminDetailView() {
   const { data, isLoading, isError, refetch } = useSessionDetailQuery(id)
 
   // 세션 삭제(PII 파기): 확인 모달 → DELETE → 목록 캐시 무효화 후 목록으로 복귀
+  // 저장하지 않은 채점이 있는데 아동을 옮기면 그 채점은 사라진다(다른 아동 화면은 다시 마운트된다).
+  // 녹음을 처음부터 다시 들어야 하므로, 이동 전에 한 번 묻는다.
+  const [dirty, setDirty] = useState(false)
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
+  const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
+
   const [delModal, setDelModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
@@ -91,17 +97,18 @@ export function AdminDetailView() {
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <div className="flex items-center justify-between gap-2 print:hidden">
-          <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
+          <a href={listHref} onClick={e => { e.preventDefault(); go(listHref) }}
+            className="text-sm text-ink-mute underline">← 목록</a>
           {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.
               (파괴적인 [세션 삭제]는 오클릭 방지를 위해 페이지 하단으로 분리) */}
           <div className="flex items-center gap-1.5">
             <button type="button" disabled={!nav.prev}
-              onClick={() => nav.prev && router.push(goHref(nav.prev))}
+              onClick={() => nav.prev && go(goHref(nav.prev))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               ◀ 이전 아동
             </button>
             <button type="button" disabled={!nav.next}
-              onClick={() => nav.next && router.push(goHref(nav.next))}
+              onClick={() => nav.next && go(goHref(nav.next))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               다음 아동 ▶
             </button>
@@ -116,6 +123,7 @@ export function AdminDetailView() {
 
         <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} writing={writingByCode}
+            onDirtyChange={setDirty}
             initialMarks={Object.fromEntries(data.marks.map(m => [m.item_code, m.correct]))}
             initialSentences={Object.fromEntries(data.sentences.map(x => [x.item_code, x.words]))}
             attemptsOf={attemptsOf}
@@ -129,6 +137,17 @@ export function AdminDetailView() {
             세션 삭제
           </button>
         </div>
+
+        <ConfirmDialog open={pendingNav !== null}
+          title="저장하지 않은 채점이 있어요"
+          confirmLabel="저장하지 않고 이동"
+          onConfirm={() => { const to = pendingNav!; setPendingNav(null); setDirty(false); router.push(to) }}
+          onClose={() => setPendingNav(null)}>
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            이동하면 지금 화면의 채점이 <b className="text-rec-deep">사라집니다</b>.
+            녹음을 다시 들어야 하니, 먼저 <b>[채점 저장]</b>을 눌러 주세요.
+          </p>
+        </ConfirmDialog>
 
         <ConfirmDialog open={delModal} busy={deleting} error={delErr} danger
           title="이 세션을 삭제할까요?"

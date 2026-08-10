@@ -4,7 +4,7 @@
 // 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ITEMS, KIND_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 import {
@@ -26,7 +26,7 @@ const SENTENCE_ITEMS = ITEMS.filter(i => i.section === 'sentence_reading')
 const WRITE_MEANING_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'meaning')
 const WRITE_NONSENSE_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'nonsense')
 
-export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError }: {
+export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
   sessionId: string
   session: SessionRow
   /** 낱말 쓰기는 검사 중 수집돼 여기서 다시 채점하지 않는다(예=1점) */
@@ -36,14 +36,34 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   /** 페이지 코드 → 녹음 시도들 */
   attemptsOf: (pageCode: string) => Attempt[]
   onAudioError: () => void
+  /** 저장하지 않은 채점이 있는지 — 상위가 아동 이동·이탈을 막는 데 쓴다 */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const [marks, setMarks] = useState(initialMarks)
   const [sentences, setSentences] = useState(initialSentences)
+  // 저장에 성공한 값 — 화면 상태와 비교해 "저장 안 한 변경"을 판단한다
+  const [savedMarks, setSavedMarks] = useState(initialMarks)
+  const [savedSentences, setSavedSentences] = useState(initialSentences)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
   const form = formForGrade(session.grade)
   const r = scoreSession({ marks, sentences, writing })
+
+  // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
+  // 상위가 막을 수 있도록 알린다. 저장된 값과 비교해 판단한다 — 되돌리면 다시 깨끗해진다.
+  const dirty = JSON.stringify(marks) !== JSON.stringify(savedMarks)
+    || JSON.stringify(sentences) !== JSON.stringify(savedSentences)
+  useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])   // 언마운트 시 해제
+
+  // 탭 닫기·새로고침은 앱이 막을 수 없으므로 브라우저 기본 경고에 맡긴다(검사 화면과 같은 방식).
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
 
   async function save() {
     setSaving(true); setMsg('')
@@ -53,6 +73,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
       '채점 저장에 실패했어요. 다시 시도해 주세요.')
     setSaving(false)
     setMsg(res.ok ? '저장했어요.' : res.error)
+    if (res.ok) { setSavedMarks(marks); setSavedSentences(sentences) }
   }
 
   const setMark = (code: string, v: boolean) => setMarks(m => ({ ...m, [code]: v }))
@@ -183,6 +204,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.wordWriting)
             && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
         </span>
+        {dirty && <span className="text-xs font-bold text-amber">저장하지 않은 채점이 있어요</span>}
         {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
       </div>
 
