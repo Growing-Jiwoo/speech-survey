@@ -17,9 +17,13 @@ export function Subtotal({ cells, total, verdict, complete = true }: {
   // amber는 경고 전용 — 소계 띠는 중립 배경으로(색이 신호 구실을 하게)
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-line bg-well px-4 py-2.5">
+      {/* 채점 전에는 부분 점수도 확정값처럼 보이면 안 된다. 총점만 비워 두면 옆의
+          '무의미 점수 0 / 7'이 "0점을 받았다"로 읽히는데, 실제로는 아직 채점하지 않은 것이다
+          — 이 화면이 가장 경계하는 오독이다. 숫자를 흐리고 '현재'를 붙여 진행 중임을 밝힌다. */}
       {cells?.map(c => (
-        <span key={c.label} className="text-[13px] text-ink-soft">
-          {c.label} <b className="text-[16px] tabular-nums text-ink">{c.value}</b>
+        <span key={c.label} className={`text-[13px] ${complete ? 'text-ink-soft' : 'text-ink-mute'}`}>
+          {!complete && '현재 '}{c.label}{' '}
+          <b className={`text-[16px] tabular-nums ${complete ? 'text-ink' : 'text-ink-mute'}`}>{c.value}</b>
           <span className="text-ink-mute"> / {c.max}</span>
         </span>
       ))}

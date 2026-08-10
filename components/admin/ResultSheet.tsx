@@ -189,7 +189,10 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         </div>
       </TaskSection>
 
-      <div className="flex flex-wrap items-center gap-3 border-t-[10px] border-bg px-4 py-4 print:hidden">
+      {/* 저장 줄은 화면 아래에 붙여 둔다(sticky). 채점은 위에서부터 하는데 저장 버튼이 문서 끝에만
+          있으면 끝까지 스크롤해야 하고, "저장하지 않은 채점이 있어요" 경고도 그때서야 보인다 —
+          정작 채점하는 동안 눈에 띄어야 하는 경고다. 설명 문구는 아래 줄로 내려 띠를 얇게 유지한다. */}
+      <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 print:hidden">
         <button type="button" onClick={save} disabled={saving}
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}
@@ -200,15 +203,15 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
           검사지 PDF 다운로드
         </a>
-        {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
-        <span className="text-[12px] text-ink-mute">
-          저장한 채점 내용으로 만들어집니다
-          {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
-            && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
-        </span>
-        {dirty && <span className="text-xs font-bold text-amber">저장하지 않은 채점이 있어요</span>}
-        {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
+        {dirty && <span className="text-[13px] font-bold text-amber">저장하지 않은 채점이 있어요</span>}
+        {msg && <span aria-live="polite" className="text-[13px] text-ink-soft">{msg}</span>}
       </div>
+      {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
+      <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
+        검사지 PDF는 저장한 채점 내용으로 만들어집니다
+        {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
+          && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
+      </p>
 
       {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}
