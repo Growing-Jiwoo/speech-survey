@@ -161,10 +161,12 @@ describe('PAGES (화면·녹음 단위)', () => {
     expect(MEANING_WRITE_CODES).toEqual(['ww01', 'ww02', 'ww03', 'ww04', 'ww05'])
   })
 
-  it('연습 낱말은 본 문항과 같은 2음절 낱말이다 (담당자 확정: 쉬운 실제 낱말)', () => {
+  it('연습 낱말은 담당자가 확정한 쉬운 실제 낱말이다', () => {
     // 무의미 낱말이 아니라 쉬운 실제 낱말을 쓴다 — "낱말이 쭉 있는 화면"에 익숙해지는 것이 목적이라
     // 연습에서까지 낯선 무의미 낱말을 주면 오히려 당황시킨다.
-    pageByCode.get('p_practice_rw')!.items.forEach(i => expect(i.text).toHaveLength(2))
+    // 길이만 검사하면 '붕밥'·'솔텅' 같은 무의미 낱말도 통과해 이 의도를 전혀 지키지 못한다.
+    // 값을 고정해 바꾸려면 반드시 의도적으로 바꾸게 한다.
+    expect(pageByCode.get('p_practice_rw')!.items.map(i => i.text)).toEqual(['나무', '구름', '바다'])
   })
 
   it('WRITING_ITEMS 앞 3개는 의미 낱말이다 (역사적 불변식 — WritingPage는 이제 코드 기반으로 동작해 이 순서에 의존하지 않지만, 데이터 구성 의도를 문서화한다)', () => {
