@@ -4,7 +4,7 @@
 //  ② 낱말 쓰기 의미 낱말 첫 3개 연속 오반응 → 검사를 중단한다.
 // ※ 가정 A1: ②로 중단되어도 검사자 체크리스트는 진행한다(아동 과제가 아니라 검사자 관찰 기록).
 // ※ ①과 ②는 서로 다른 방식으로 구현된다: ①은 이 파일의 visiblePages()가 페이지 자체를 제거하고,
-//   ②는 낱말 쓰기 화면이 직접 남은 문항을 잠그는 방식(추후 태스크)으로 구현된다. writingCeilingHit 참고.
+//   ②는 낱말 쓰기 화면이 직접 남은 문항을 잠그는 방식으로 구현된다(requiredWritingCodes 참고).
 import { MEANING_READ_CODES, MEANING_WRITE_CODES, PAGES, type SurveyItem, type SurveyPage } from './items'
 
 /** 중단 판정 개수 — "첫 N개 연속 오반응" */
@@ -26,7 +26,7 @@ export function readingCeilingHit(marks: Partial<Record<string, boolean>>): bool
 
 /** 낱말 쓰기 의미 낱말(ww01~ww05) 기준 중단 여부.
  *  ⚠️ visiblePages에는 반영하지 않는다 — 이 규칙은 페이지를 빼는 대신 낱말 쓰기 화면이
- *  직접 남은 문항을 잠그는 방식으로 구현된다(추후 태스크). visiblePages에 잘못 연결하지 말 것. */
+ *  직접 남은 문항을 잠그는 방식으로 구현된다(requiredWritingCodes). visiblePages에 잘못 연결하지 말 것. */
 export function writingCeilingHit(writing: Partial<Record<string, boolean>>): boolean {
   return hitsCeiling(MEANING_WRITE_CODES.map(c => writing[c]))
 }

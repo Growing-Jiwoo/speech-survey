@@ -42,10 +42,6 @@ export const ITEMS: SurveyItem[] = [
   { code: 'cl', orderNo: 29, section: 'checklist', kind: null, text: '', maxSec: 0 },
 ]
 
-/** 녹음 문항 판별의 단일 술어 — "maxSec > 0" 규약이 화면마다 재표현되는 것을 막는다. */
-export const isRecordingItem = (i: SurveyItem): boolean => i.maxSec > 0
-
-export const RECORDING_ITEMS = ITEMS.filter(isRecordingItem)
 export const WRITING_ITEMS = ITEMS.filter(i => i.section === 'word_writing')
 export const itemByCode = new Map(ITEMS.map(i => [i.code, i]))
 

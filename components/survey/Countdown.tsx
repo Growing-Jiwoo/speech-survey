@@ -24,7 +24,7 @@ export function Countdown({ onDone }: { onDone: () => void }) {
   }, [n])
 
   return (
-    // RecordingItem.tsx와 같은 이유로 매초 바뀌는 숫자에는 aria-live를 붙이지 않는다(낭독 스팸 방지).
+    // ReadingPage.tsx와 같은 이유로 매초 바뀌는 숫자에는 aria-live를 붙이지 않는다(낭독 스팸 방지).
     // 화면판독기에는 "카운트다운 시작" 1회(polite)와, 녹음이 실제로 시작되는 "시작!" 1회(alert)만 들려준다.
     <div className="flex flex-col items-center gap-3">
       <p className="text-sm font-bold text-ink-soft" aria-live="polite">
