@@ -11,7 +11,8 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
-import { SECTION_LABEL, isRecordingPage, areaLabel, PAGES, type Section } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
 import { requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
@@ -39,15 +40,16 @@ export default function ReviewPage() {
   if (!st) return null
   const state = st
 
-  // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 낱말쓰기는 예/아니오 미선택.
+  // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 쓰기 과제는 점수 미선택.
   // (체크리스트는 진행 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
   // 연습 페이지는 서버에 남기지 않으므로 완료 판정에서 제외한다.
-  const pages = visiblePages(state)
+  const f = itemsFor(formForGrade(state.grade))
+  const pages = visiblePages(f, state)
   const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
   const missingWriting = pages
-    .filter(p => p.section === 'word_writing')
+    .filter(p => p.section === f.writingSection)
     .flatMap(p => {
-      const required = requiredWritingCodes(p.items, state.writing)
+      const required = requiredWritingCodes(f, p.items, state.writing)
       return p.items.filter(i => required.has(i.code))
     })
     .filter(i => state.writing[i.code] === undefined).length
@@ -70,10 +72,12 @@ export default function ReviewPage() {
               const done = (state.recorded[p.code] ?? 0) > 0
               pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
             } else if (p.code === 'p_rw_meaning_mark') {
-              const done = p.items.every(i => state.marks[i.code] !== undefined)
-              pill = <StatusPill done={done} label={done ? '표시 완료' : '표시 안 함'} />
-            } else if (p.section === 'word_writing') {
-              const required = requiredWritingCodes(p.items, state.writing)
+              // 몇 개를 표시했는지 그대로 보여준다 — "표시 안 함"은 7개 중 3개를 찍은 상태도
+              // 하나도 안 찍은 것처럼 읽혔다. 아래 쓰기 줄과 같은 모양이라 읽는 법도 하나다.
+              const marked = p.items.filter(i => state.marks[i.code] !== undefined).length
+              pill = <StatusPill done={marked === p.items.length} label={`${marked} / ${p.items.length}`} />
+            } else if (p.section === f.writingSection) {
+              const required = requiredWritingCodes(f, p.items, state.writing)
               const done = p.items.filter(i => required.has(i.code) && state.writing[i.code] !== undefined).length
               pill = <StatusPill done={done === required.size} label={`${done} / ${required.size}`} />
             } else {
@@ -83,15 +87,17 @@ export default function ReviewPage() {
                 </span>
               )
             }
+            // 문장은 어느 문장이었는지가 곧 그 단계라 전문을 보여준다(두 줄까지). 나머지는 이름·개수만 —
+            // 낱말 7개를 이어 붙이면 어느 폭에서도 뒤가 잘려 아무것도 알려주지 못한다.
+            const sentence = p.section === 'sentence_reading'
             // ?p=<순번>&from=review — 진행 화면이 해당 페이지로 열리고 "검토로 돌아가기" 링크를 보여준다
-            const label = p.section === 'checklist' ? '검사자 체크리스트'
-              : p.code === 'p_rw_meaning_mark' ? '검사자 확인 (의미 낱말 채점)'
-                : p.items.map(i => i.text).join(' · ')
             return (
               <li key={p.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
                 <Link href={`/survey?p=${no}&from=review`} className="flex min-w-0 items-center gap-2.5">
                   <span className="w-6 flex-none text-sm font-bold text-blue">{no}</span>
-                  <span className="font-read truncate text-sm">{label}</span>
+                  <span className={`font-read min-w-0 text-sm ${sentence ? 'line-clamp-2 leading-snug' : 'truncate'}`}>
+                    {sentence ? p.items[0].text.replace('\n', ' ') : pageLabel(f, p.code)}
+                  </span>
                 </Link>
                 {pill}
               </li>
@@ -126,9 +132,9 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
-      {pages.length < PAGES.length && (
+      {pages.length < f.pages.length && (
         <p className="mt-1 text-xs text-ink-mute">
-          중단 규칙에 따라 문장 읽기유창성·낱말 쓰기는 생략되었습니다.
+          중단 규칙에 따라 문장 읽기유창성·{SECTION_LABEL[f.writingSection]}는 생략되었습니다.
         </p>
       )}
 
@@ -140,7 +146,7 @@ export default function ReviewPage() {
           <div>{renderSection('word_reading')}</div>
           <div className="space-y-4">
             {renderSection('sentence_reading')}
-            {renderSection('word_writing')}
+            {renderSection(f.writingSection)}
           </div>
         </div>
         {renderSection('checklist')}

@@ -14,9 +14,19 @@ Supabase CLI를 쓰지 않는다 — **SQL Editor에서 번호 순서대로 직�
 | `006_login_lockout_decay.sql` | 잠금 만료 후 실패 카운트 리셋(잠금 무한 연장 DoS 완화) |
 | `007_harden_rpc.sql` | RPC EXECUTE 권한 회수·search_path 고정(방어 심층) |
 | `008_guardian_consent.sql` | 법정대리인 동의 확인 시각(`guardian_consented_at`) — 제22조의2 확인 의무의 감사 증적 |
+| `009_reading_marks.sql` | 낱말 해독 의미 낱말의 검사자 현장 채점(O/X) — 중단 규칙 판정 근거 |
+| `010_class_and_contact.sql` | 단일학급(반 0) 허용·담임 연락처 전화/이메일 분리 |
+| `011_scoring.sql` | 어절 수 점수 테이블(`sentence_scores`)·검사자 구분(`examiner_type`) |
+| `012_discontinued.sql` | 중단 규칙 ① 적용 시각(`discontinued_at`) — 진행률 분모 판정 |
 
 ## 설계 메모
 
 - **RLS는 전면 차단**(anon 정책 없음) — 모든 접근은 서버 라우트의 service role 경유.
 - 녹음 파일은 스토리지 버킷 `recordings`에 `{sessionId}/{itemCode}_{attemptNo}.{ext}`로 저장.
+- **`sentence_scores`에는 두 종류의 점수가 섞여 있다** — 문장 읽기유창성(`rs..`, 관리자 채점)과
+  문장 쓰기(`sw..`, G2에서 검사 중 수집). 모양이 `(item_code, words)`로 같아 테이블을 공유한다.
+  관리자 채점 저장(`saveScores`)의 "이번에 안 보낸 행 삭제"는 반드시 `rs..`로 범위를 한정해야 한다
+  — 범위를 두지 않으면 채점을 저장할 때마다 아동의 문장 쓰기 점수가 지워진다(테스트로 고정돼 있다).
+- 쓰기 답의 저장 위치는 과제 종류에 따라 갈린다: 낱말 쓰기(G1) → `writing_answers.can_write`(boolean),
+  문장 쓰기(G2) → `sentence_scores.words`(정수). 읽는 쪽은 `lib/scoring.ts`의 `scoreInputFrom`이 합친다.
 - 스키마를 바꾸면 `lib/db.ts`의 행 타입(SessionRow 등)도 함께 갱신할 것.

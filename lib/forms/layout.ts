@@ -28,6 +28,39 @@ export interface ScoreSlot {
   baselineY: number
 }
 
+/**
+ * 선택지 격자 — 검사지에 **이미 인쇄된** 「0 1 2」 중 획득 점수에 동그라미를 친다.
+ * (빈칸에 숫자를 적는 ScoreSlot과 반대다. G2 문장 쓰기가 이 방식이다.)
+ * 숫자 위치는 텍스트 레이어의 글자 진행 폭이 아니라 600dpi 렌더링에서 실측했다
+ * — 「0 1 2」가 한 덩어리로 그려져 있어 글리프 하나하나의 x를 추출할 수 없다.
+ */
+export interface ChoiceGridLayout {
+  /** 점수 칸의 가로 중심 = 인쇄된 「1」의 중심. 열이 여럿이면 왼쪽부터 */
+  colCx: number[]
+  /** 인접 숫자 사이 거리 (0→1, 1→2) */
+  dx: number
+  /** 문항 행 — **문항 순서대로**. col은 colCx의 인덱스 */
+  rows: { col: number; baselineY: number }[]
+  /** 베이스라인에서 숫자의 세로 중심까지 */
+  cy: number
+  /** 동그라미 반지름 */
+  rx: number
+  ry: number
+}
+
+/**
+ * 쓰기 과제 좌표. `SurveyForm.writing`의 종류와 반드시 짝이 맞아야 한다
+ * (어긋나면 tests/sheet-layout.test.ts가 잡는다).
+ */
+export type WritingLayout =
+  | {
+      kind: 'word'
+      grid: WordGridLayout
+      /** 의미/무의미/총점 소계 */
+      scores: { meaning: ScoreSlot; nonsense: ScoreSlot; total: ScoreSlot }
+    }
+  | { kind: 'sentence'; choices: ChoiceGridLayout; total: ScoreSlot }
+
 /** 머리글 인적사항 칸 — 열 경계 안에서 가운데 정렬 */
 export interface HeaderCol {
   lo: number
@@ -53,15 +86,15 @@ export interface SheetLayout {
   }
 
   wordReading: WordGridLayout
-  wordWriting: WordGridLayout
 
   /** 낱말 해독 소계 — 의미/무의미/총점 */
   readScores: { meaning: ScoreSlot; nonsense: ScoreSlot; total: ScoreSlot }
-  /** 낱말 쓰기 소계 */
-  writeScores: { meaning: ScoreSlot; nonsense: ScoreSlot; total: ScoreSlot }
   /** 문장 4개 점수 + 총점 */
   sentenceScores: ScoreSlot[]
   sentenceTotal: ScoreSlot
+
+  /** 쓰기 과제 — 학년마다 과제 종류가 다르다 */
+  writing: WritingLayout
 
   /** 검사지 본문 글자 크기(pt). 스탬프도 같은 크기로 찍어야 이질감이 없다. */
   fontSize: number

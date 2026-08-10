@@ -27,18 +27,22 @@ export const G1_LAYOUT: SheetLayout = {
 
   // 낱말 해독: 의미 7 + 무의미 7, 셀 56 × 25.5 등간격. 낱말 베이스라인 625.3 − 칸 616.2 = 9.1
   wordReading: { x0: 126, dx: 56, w: 56, h: 25.5, rows: [616.2, 590.7], perRow: 7, baselineDy: 9.1 },
+
   // 낱말 쓰기: 의미 5 + 무의미 5, 셀 78.1 × 25.5. 베이스라인 265.6 − 256.6 = 9.0
-  wordWriting: { x0: 127.5, dx: 78.1, w: 78.1, h: 25.5, rows: [256.6, 231.1], perRow: 5, baselineDy: 9.0 },
+  writing: {
+    kind: 'word',
+    grid: { x0: 127.5, dx: 78.1, w: 78.1, h: 25.5, rows: [256.6, 231.1], perRow: 5, baselineDy: 9.0 },
+    scores: {
+      meaning:  { slashX: 151.8, baselineY: 217.8 },
+      nonsense: { slashX: 318.6, baselineY: 217.8 },
+      total:    { slashX: 482.4, baselineY: 217.8 },
+    },
+  },
 
   readScores: {
     meaning:  { slashX: 155.9, baselineY: 577.6 },
     nonsense: { slashX: 322.7, baselineY: 577.6 },
     total:    { slashX: 486.5, baselineY: 577.6 },
-  },
-  writeScores: {
-    meaning:  { slashX: 151.8, baselineY: 217.8 },
-    nonsense: { slashX: 318.6, baselineY: 217.8 },
-    total:    { slashX: 482.4, baselineY: 217.8 },
   },
   sentenceScores: [
     { slashX: 487.3, baselineY: 487.4 },

@@ -5,11 +5,11 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS } from '@/lib/items'
-import { clampSentence, scoreSession } from '@/lib/scoring'
+import { itemsFor, type FormItems } from '@/lib/items'
+import { clampWords, scoreSession, type ScoreInput } from '@/lib/scoring'
 import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import type { SurveyForm } from '@/lib/forms'
-import type { ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
+import type { ChoiceGridLayout, ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
 
 const ASSETS = path.join(process.cwd(), 'assets')
 const INK = rgb(0.06, 0.09, 0.16)
@@ -19,14 +19,7 @@ const INK = rgb(0.06, 0.09, 0.16)
 const OK = rgb(0x0A / 255, 0x80 / 255, 0x62 / 255)
 const ERR = rgb(0xC1 / 255, 0x3A / 255, 0x3E / 255)
 
-const READ_CODES = ITEMS.filter(i => i.section === 'word_reading').map(i => i.code)
-const SENTENCE_CODES = ITEMS.filter(i => i.section === 'sentence_reading').map(i => i.code)
-const WRITE_CODES = WRITING_ITEMS.map(i => i.code)
-/** 검사지 배열 순서: 의미 낱말 먼저, 그다음 무의미 낱말 */
-const readOrder = [...MEANING_READ_CODES, ...READ_CODES.filter(c => !MEANING_READ_CODES.includes(c))]
-const writeOrder = [...MEANING_WRITE_CODES, ...WRITE_CODES.filter(c => !MEANING_WRITE_CODES.includes(c))]
-
-export interface StampInput {
+export interface StampInput extends ScoreInput {
   form: SurveyForm
   session: {
     school_name: string; grade: number; class_no: number; child_name: string
@@ -34,14 +27,12 @@ export interface StampInput {
     examiner_type: 'teacher' | 'expert' | null
     checklist: string[]
   }
-  marks: Partial<Record<string, boolean>>
-  sentences: Partial<Record<string, number>>
-  writing: Partial<Record<string, boolean>>
 }
 
 export async function stampSheet(input: StampInput): Promise<Uint8Array> {
   const { form, session } = input
   const L = form.layout
+  const f = itemsFor(form)
 
   const [srcPdf, regularBytes, boldBytes] = await Promise.all([
     readFile(path.join(ASSETS, L.pdf)),
@@ -64,13 +55,13 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
       '검사지가 개정됐다면 scripts/extract-form-layout.mjs로 좌표를 다시 뽑아야 합니다.')
   }
 
-  const r = scoreSession({ marks: input.marks, sentences: input.sentences, writing: input.writing })
-
-  const put = (slot: Parameters<typeof score>[2], v: number) => score(page, bold, slot, v, L.fontSize)
+  const r = scoreSession(form, input)
+  const put = (slot: ScoreSlot, v: number) => score(page, bold, slot, v, L.fontSize)
 
   stampHeader(page, font, L, session)
-  stampGrid(page, bold, L.wordReading, readOrder, input.marks, L.fontSize)
-  stampGrid(page, bold, L.wordWriting, writeOrder, input.writing, L.fontSize)
+  // 검사지 배열 순서: 의미 낱말 먼저, 그다음 무의미 낱말
+  stampGrid(page, bold, L.wordReading, [...f.meaningReadCodes, ...f.nonsenseReadCodes],
+    input.marks, L.fontSize)
 
   // 채점이 끝나지 않은 과제는 소계·총점 칸을 비운다.
   // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다
@@ -81,24 +72,54 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
     put(L.readScores.nonsense, r.wordNonsense)
     put(L.readScores.total, r.wordReading)
   }
-  SENTENCE_CODES.forEach((code, i) => {
-    const v = input.sentences[code]
+  f.sentenceItems.forEach((item, i) => {
+    const v = input.sentences[item.code]
     // 미입력 문항은 0을 찍지 않는다 — 0점과 미채점은 다르다.
     // 값은 총점과 같은 clamp를 거쳐야 행의 합과 총점이 어긋나지 않는다(오입력·NaN 방지).
-    if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], clampSentence(code, v))
+    if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], clampWords(f, item.code, v))
   })
   if (r.complete.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
-  if (r.complete.wordWriting) {
-    put(L.writeScores.meaning, r.writeMeaning)
-    put(L.writeScores.nonsense, r.writeNonsense)
-    put(L.writeScores.total, r.wordWriting)
-  }
+
+  stampWriting(page, bold, L.writing, L.fontSize, f, input.writing, r, put)
+
   for (const code of session.checklist) {
     const y = L.checklist.rows[code]
     if (y !== undefined) drawCheck(page, L.checklist, y)
   }
   // Pass/Fail은 찍지 않는다 — 검사지에 해당 칸이 없고, 임시 기준 판정을 공식 문서에 남기지 않기 위함.
   return doc.save()
+}
+
+/**
+ * 쓰기 과제. 검사지가 두 종류라 표기 방식도 다르다:
+ * · 낱말 쓰기(G1)  — 낱말 격자에 O/X를 찍고 의미·무의미·총점 소계를 채운다.
+ * · 문장 쓰기(G2)  — **인쇄된 「0 1 2」 중 획득 점수에 동그라미**를 치고 총점만 채운다.
+ */
+function stampWriting(
+  page: PDFPage, bold: PDFFont, layout: SheetLayout['writing'], fontSize: number, f: FormItems,
+  writing: Partial<Record<string, number>>, r: ReturnType<typeof scoreSession>,
+  put: (slot: ScoreSlot, v: number) => void,
+) {
+  if (layout.kind === 'word') {
+    // 낱말 쓰기 값은 문항 만점이 1이라 1=정반응, 0=오반응이다.
+    const marks = Object.fromEntries(
+      Object.entries(writing).map(([code, v]) => [code, v === undefined ? undefined : v >= 1]),
+    )
+    stampGrid(page, bold, layout.grid,
+      [...f.meaningWriteCodes, ...f.nonsenseWriteCodes], marks, fontSize)
+    if (r.complete.writing) {
+      put(layout.scores.meaning, r.writeMeaning)
+      put(layout.scores.nonsense, r.writeNonsense)
+      put(layout.scores.total, r.writing)
+    }
+    return
+  }
+  f.writingItems.forEach((item, i) => {
+    const v = writing[item.code]
+    if (v === undefined) return          // 미채점은 비워 둔다 (0점과 다르다)
+    circleChoice(page, layout.choices, i, clampWords(f, item.code, v))
+  })
+  if (r.complete.writing) put(layout.total, r.writing)
 }
 
 /** 낱말 격자: 낱말 오른쪽 여백에 O/X. 미실시(undefined)는 비워 둔다.
@@ -123,6 +144,24 @@ function stampGrid(
   })
 }
 
+/**
+ * 인쇄된 「0 1 2」 중 획득 점수에 동그라미.
+ * 색은 0점만 오반응색이다 — 한 어절도 맞히지 못한 것이 중단 규칙 ②의 조건이라,
+ * 검사자가 종이에서 그 행을 바로 찾을 수 있어야 한다.
+ */
+function circleChoice(page: PDFPage, c: ChoiceGridLayout, itemIndex: number, value: number) {
+  const row = c.rows[itemIndex]
+  if (!row) return
+  const cx = c.colCx[row.col]
+  if (cx === undefined) return
+  page.drawEllipse({
+    x: cx + (value - 1) * c.dx,
+    y: row.baselineY + c.cy,
+    xScale: c.rx, yScale: c.ry,
+    borderColor: value === 0 ? ERR : OK, borderWidth: 1.1, opacity: 0,
+  })
+}
+
 /** 점수: '/' 왼쪽에 오른쪽 정렬 */
 function score(page: PDFPage, font: PDFFont, slot: ScoreSlot, value: number, size: number) {
   const s = String(value)
@@ -130,7 +169,7 @@ function score(page: PDFPage, font: PDFFont, slot: ScoreSlot, value: number, siz
   page.drawText(s, { x: slot.slashX - 6 - w, y: slot.baselineY, size, font, color: INK })
 }
 
-function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: StampInput['session']) {
+function stampHeader(page: PDFPage, font: PDFFont, L: SheetLayout, s: StampInput['session']) {
   const h = L.header
   const put = (text: string, col: { lo: number; hi: number }) => {
     if (!text) return

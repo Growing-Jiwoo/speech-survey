@@ -9,7 +9,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Recording } from '@/hooks/useRecorder'
-import { SECTION_FIRST_CODES, SECTION_LABEL, isRecordingPage, toggleChecklistArea } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
 import { canAdvance, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
@@ -21,6 +22,7 @@ import { MicCheck } from '@/components/survey/MicCheck'
 import { ReadingPage } from '@/components/survey/ReadingPage'
 import { RetryBanner } from '@/components/survey/RetryBanner'
 import { SectionIntro } from '@/components/survey/SectionIntro'
+import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
 
 function SurveyInner() {
@@ -43,7 +45,7 @@ function SurveyInner() {
     if (!s) { router.replace('/'); return }
     // ?p=N 딥링크(검토 화면에서 페이지 클릭): 해당 페이지로 이동한 상태로 복원하고 즉시 저장한다.
     const p = Number(params.get('p'))
-    const total = visiblePages(s).length
+    const total = visiblePages(itemsFor(formForGrade(s.grade)), s).length
     const jumped = Number.isInteger(p) && p >= 1 && p <= total
       ? { ...s, pageIdx: p - 1, phase: 'page' as const }
       : s
@@ -111,8 +113,10 @@ function SurveyInner() {
   if (st.phase === 'mic')
     return <MicCheck onOk={() => patch({ micDone: true, phase: 'page' })} />
 
+  // 학년이 검사지(양식)를 정하고, 양식이 문항·페이지·중단 규칙을 정한다.
+  const f = itemsFor(formForGrade(st.grade))
   // 중단 규칙을 반영한 진행 목록. marks가 바뀌면 목록이 줄어들 수 있으므로 인덱스를 clamp한다.
-  const pages = visiblePages(st)
+  const pages = visiblePages(f, st)
   const idx = Math.min(st.pageIdx, pages.length - 1)
   const page = pages[idx]
   const isLast = idx === pages.length - 1
@@ -135,7 +139,7 @@ function SurveyInner() {
 
   // 다음으로 넘어갈 수 있는 조건(페이지 종류별)은 survey-flow의 canAdvance가 판정한다.
   // 녹음/카운트다운 중에는 이 화면에서 항상 잠근다(busy).
-  const canNext = !busy && canAdvance(page, st)
+  const canNext = !busy && canAdvance(f, page, st)
 
   // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
   // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용 —
@@ -143,7 +147,7 @@ function SurveyInner() {
   const skipping = !fromReview && !isLast && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0
 
   // 섹션(주제) 진입 안내: 각 섹션의 첫 페이지에 처음 도달하면 안내 화면을 먼저 보여준다.
-  const showIntro = !fromReview && SECTION_FIRST_CODES.has(page.code) && !st.introsSeen.includes(page.section)
+  const showIntro = !fromReview && f.sectionFirstCodes.has(page.code) && !st.introsSeen.includes(page.section)
 
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
@@ -189,7 +193,7 @@ function SurveyInner() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col justify-center py-4">
           {showIntro ? (
-            <SectionIntro section={page.section} />
+            <SectionIntro section={page.section} sections={f.sections} />
           ) : (
             <>
               {page.role === 'child' && isRecordingPage(page) && (
@@ -199,15 +203,15 @@ function SurveyInner() {
                   onSaved={() => markSaved(page.code)} />
               )}
 
-              <RetryBanner codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
+              <RetryBanner form={f} codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
               {page.code === 'p_rw_meaning_mark' && (
-                <MarkPage items={page.items} marks={st.marks}
+                <MarkPage form={f} items={page.items} marks={st.marks}
                   onToggle={(code, correct) => patch(prev => ({ marks: { ...prev.marks, [code]: correct } }))} />
               )}
 
               {page.section === 'word_writing' && (
-                <WritingPage items={page.items} value={st.writing}
+                <WritingPage form={f} items={page.items} value={st.writing}
                   onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))}
                   onSetAll={v => patch(prev => {
                     // 중단 규칙 ②를 무시하고 10문항 전부에 v를 쓰면, 이 클릭 자체가 중단을 유발하는 경우
@@ -215,12 +219,17 @@ function SurveyInner() {
                     // 남는다. tentative 상태에서 requiredWritingCodes로 다시 판정해, 그 판정에 필요한
                     // 코드에만 값을 반영한다 — 문항별로 하나씩 눌러 같은 잠금에 도달했을 때와 동일한 결과.
                     const tentative = { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
-                    const required = requiredWritingCodes(page.items, tentative)
+                    const required = requiredWritingCodes(f, page.items, tentative)
                     const applied = Object.fromEntries(
                       page.items.filter(i => required.has(i.code)).map(i => [i.code, v]),
                     )
                     return { writing: { ...prev.writing, ...applied } }
                   })} />
+              )}
+
+              {page.section === 'sentence_writing' && (
+                <SentenceWritingPage form={f} items={page.items} value={st.writing}
+                  onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))} />
               )}
 
               {page.section === 'checklist' && (

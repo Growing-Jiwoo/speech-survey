@@ -11,6 +11,7 @@ import type { SessionListRow } from '@/lib/db'
 import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
+import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
 // 컬럼별 정렬 키·셀 클래스를 meta로 실어 헤더/셀 렌더에서 사용한다.
@@ -29,10 +30,9 @@ const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measure
 /** 관리자 세션 목록 — 필터/정렬 상태는 부모(AdminDashboard)가 보유, 여기는 표시와 콜백만.
  * react-table은 컬럼/가상 렌더 골격으로만 쓰고, 정렬·필터는 기존 URL 동기화 로직을 그대로 사용한다
  * (내장 sorting/filtering 모델은 사용하지 않음 — 이중 정렬/충돌 상태를 피하기 위함). */
-export function SessionTable({ rows, total, totals, filters, sort, schools, grades, onFilters, onSort, onReset }: {
+export function SessionTable({ rows, total, filters, sort, schools, grades, onFilters, onSort, onReset }: {
   rows: SessionListRow[]           // 필터·정렬 적용 완료본
   total: number                    // 전체 세션 수 (빈 상태 문구 분기용)
-  totals: Totals
   filters: Filters
   sort: Sort
   schools: string[]
@@ -93,8 +93,9 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         id: 'progress', header: '진행률',
         meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-4', tdClassName: 'px-4' },
         cell: ({ row }) => {
-          const p = sessionProgress(row.original, totals)
-          return <ProgressCell recorded={p.recorded} written={p.written} totals={totals} />
+          // 분모는 행마다 다르다 — 학년별 검사지 문항 수와 중단 규칙이 반영된 값이다.
+          const p = sessionProgress(row.original)
+          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
         },
       }),
       col.display({
@@ -108,12 +109,12 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         id: 'status', header: '상태',
         meta: { thClassName: 'whitespace-nowrap px-4 pr-5', tdClassName: 'whitespace-nowrap px-4 pr-5' },
         cell: ({ row }) => {
-          const p = sessionProgress(row.original, totals)
+          const p = sessionProgress(row.original)
           return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
         },
       }),
     ]
-  }, [totals, detailHref])
+  }, [detailHref])
 
   // tanstack table v8은 React Compiler 미호환 목록에 있으나(내부 캐시 뮤테이션),
   // 자체 메모이제이션으로 동작은 안전하다 — v9 호환판이 나올 때까지 경고만 억제.
@@ -199,6 +200,23 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
           </tbody>
         </table>
       </div>
+      <BadgeLegend
+        title="상태 읽는 법"
+        items={[
+          { badge: <Badge tone="mute">진행 중</Badge>, desc: '아직 제출하지 않은 검사입니다.' },
+          {
+            badge: <Badge tone="amber">제출 · 미완료 있음</Badge>,
+            desc: '제출은 됐지만 녹음이나 쓰기가 비어 있습니다.',
+          },
+          { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았습니다.' },
+          {
+            badge: <Badge tone="amber" size="sm">3개 영역</Badge>,
+            desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',
+          },
+        ]}
+        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준입니다(1학년 쓰기 10문항 · 2학년 5문항).
+          중단 규칙으로 끝난 검사는 낱말 해독까지가 전부라, 그만큼만 채워지면 완료로 봅니다.</>}
+      />
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">
           {total === 0 ? '아직 참여한 세션이 없습니다.' : '조건에 맞는 세션이 없습니다.'}
