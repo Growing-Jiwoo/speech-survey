@@ -15,8 +15,9 @@ URL searchParams**(딥링크·뒤로가기 복원 가능)이고, 데이터는 re
 | `ResultSheet.tsx` | 결과지 본문 — 종이 검사지와 같은 순서로 배치하고, 각 줄에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 둔다. 채점 상태·저장을 소유 |
 | `sheet/ScoreBand.tsx` | 상단 총평 밴드 — 과제별 점수·Pass/Fail. **채점이 끝나지 않은 과제는 판정을 내지 않는다** |
 | `sheet/Subtotal.tsx` | 검사지의 소계 행(의미/무의미/총점). 미완료면 숫자 대신 `—` |
-| `sheet/WordGrid.tsx` | 검사지형 낱말 격자(가로 배열) — 낱말 해독은 채점, 낱말 쓰기는 검사 중 기록(읽기 전용) |
+| `sheet/WordGrid.tsx` | 검사지형 낱말 격자(가로 배열) — 낱말 해독은 채점, 낱말 쓰기(G1)는 검사 중 기록(읽기 전용) |
 | `sheet/SentenceRows.tsx` | 문장 읽기유창성 행 — 문장·녹음·어절 수 입력을 한 줄에 |
+| `sheet/SentenceWriteRows.tsx` | 문장 쓰기(G2) 행 — 검사 중 기록(읽기 전용). 검사지처럼 어절을 나눠 보여 준다 |
 | `sheet/PageAudio.tsx` | 섹션에 인라인으로 붙는 페이지 녹음 — 시도 전환·미녹음·제한시간 초과 표시 |
 
 **공식 출력물은 화면이 아니라 검사지 PDF다**(`/api/admin/sessions/[id]/sheet.pdf`).

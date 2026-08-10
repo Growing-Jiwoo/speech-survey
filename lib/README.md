@@ -7,10 +7,10 @@
 
 | 파일 | 역할 |
 |---|---|
-| `items.ts` | 검사 문항(`ITEMS`, 채점 단위 29문항)과 **페이지 모델**(`PAGES`, 화면·녹음·제한시간 단위)의 단일 소스. 섹션 라벨·체크리스트 영역·`ITEM_TOTALS`(진행률 분모) 포함 |
-| `forms/` | 학년별 검사지 정의(문항·배점·제한시간)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 파일 추가로 끝난다 |
-| `survey-flow.ts` | 검사지의 중단 규칙(첫 3개 연속 오반응)과 페이지 게이팅. `visiblePages`·`requiredWritingCodes`·`canAdvance` |
-| `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 화면·저장 API·인쇄가 이 파일 하나로 계산한다 |
+| `items.ts` | `itemsFor(양식)` — 문항(채점 단위)과 **페이지 모델**(화면·녹음·제한시간 단위), 진행률 분모를 양식에서 만든다. 문항은 학년마다 다르므로 모듈 상수가 아니다 |
+| `forms/` | 학년별 검사지 정의(문항·배점·제한시간·임시 Pass 기준)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 `g*.ts` + `g*-layout.ts` + 원본 PDF 추가로 끝난다 |
+| `survey-flow.ts` | 검사지의 중단 규칙과 페이지 게이팅. 규칙이 양식마다 다르다(낱말 쓰기=의미 첫 3개 연속 / 문장 쓰기=첫 문장). `visiblePages`·`requiredWritingCodes`·`canAdvance` |
+| `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 배점은 전부 **어절 수**에서 유도한다(`itemMaxWords`) — 검사지 숫자를 옮겨 적지 않는다. 저장된 행을 채점 입력으로 바꾸는 `scoreInputFrom`도 여기 |
 | `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용) |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
 | `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름을 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
