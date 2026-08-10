@@ -14,17 +14,18 @@ export function Subtotal({ cells, total, verdict, complete = true }: {
   /** 채점이 끝났는지. false면 숫자를 확정값으로 보이지 않게 하고 판정을 감춘다. */
   complete?: boolean
 }) {
+  // amber는 경고 전용 — 소계 띠는 중립 배경으로(색이 신호 구실을 하게)
   return (
-    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-amber/30 bg-amber/10 px-4 py-2.5 print:bg-amber/10">
+    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-line bg-well px-4 py-2.5">
       {cells?.map(c => (
         <span key={c.label} className="text-[13px] text-ink-soft">
-          {c.label} <b className="text-[15px] tabular-nums text-ink">{c.value}</b>
+          {c.label} <b className="text-[16px] tabular-nums text-ink">{c.value}</b>
           <span className="text-ink-mute"> / {c.max}</span>
         </span>
       ))}
-      <span className="text-[13px] font-bold text-ink-soft">
+      <span className="text-[14px] font-bold text-ink-soft">
         {total.label}{' '}
-        <b className={`text-[19px] tabular-nums ${complete ? 'text-blue' : 'text-ink-mute'}`}>
+        <b className={`text-[20px] tabular-nums ${complete ? 'text-blue' : 'text-ink-mute'}`}>
           {complete ? total.value : '—'}
         </b>
         <span className="text-ink-mute"> / {total.max}</span>
