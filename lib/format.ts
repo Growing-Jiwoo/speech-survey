@@ -26,6 +26,15 @@ export function contactLabel(
   return legacy || '연락처 없음'
 }
 
+/**
+ * 검사일 표기(KST 고정). 검사는 한국 학교에서 이뤄지는데 서버(Vercel)는 UTC라,
+ * 타임존을 고정하지 않으면 아침 검사(08:00 KST = 전날 23:00 UTC)가 공식 결과지에
+ * 하루 전으로 찍힌다. 화면은 브라우저 타임존이라 드러나지 않고 PDF에서만 어긋난다.
+ */
+export function sheetDateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
+}
+
 /** 검사지 헤더의 "교사 / 전문가" 구분 표기. 011 이전 수집분(examiner_type=null)은 '기록 없음'. */
 export function examinerLabel(t: string | null | undefined): string {
   return t === 'expert' ? '전문가' : t === 'teacher' ? '교사' : '기록 없음'

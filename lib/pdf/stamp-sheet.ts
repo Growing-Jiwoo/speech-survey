@@ -7,7 +7,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS } from '@/lib/items'
 import { scoreSession } from '@/lib/scoring'
-import { gradeClassLabel } from '@/lib/format'
+import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import type { SurveyForm } from '@/lib/forms'
 import type { ScoreSlot, WordGridLayout } from '@/lib/forms/layout'
 
@@ -125,7 +125,7 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: S
   put(gradeClassLabel(s.grade, s.class_no), h.grade)
   put(s.child_name, h.childName)
   put(s.birth_ymd, h.birth)
-  put(new Date(s.started_at).toLocaleDateString('ko-KR'), h.testedAt)
+  put(sheetDateLabel(s.started_at), h.testedAt)
   // 검사지 머리글의 "교사 / 전문가" 중 해당 낱말에 동그라미
   const pick = s.examiner_type === 'expert' ? h.examiner.expert
     : s.examiner_type === 'teacher' ? h.examiner.teacher : null

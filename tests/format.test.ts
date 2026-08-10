@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { contactLabel, fmtDuration, gradeClassLabel, pad2 } from '@/lib/format'
+import { contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel } from '@/lib/format'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
   it('정상 값', () => {
@@ -48,5 +48,16 @@ describe('contactLabel (담임 연락처 표기)', () => {
   it('아무것도 없으면 안내 문구', () => {
     expect(contactLabel(null, null)).toBe('연락처 없음')
     expect(contactLabel('', '', '')).toBe('연락처 없음')
+  })
+})
+
+describe('sheetDateLabel (검사일 표기)', () => {
+  it('서버 타임존과 무관하게 KST 기준 날짜를 낸다', () => {
+    // 08:00 KST 검사 = 전날 23:00 UTC. 타임존을 고정하지 않으면 UTC 서버에서 하루 전으로 찍힌다.
+    expect(sheetDateLabel('2026-08-06T23:00:00.000Z')).toBe('2026. 8. 7.')
+    // KST 자정 직전
+    expect(sheetDateLabel('2026-08-07T14:59:00.000Z')).toBe('2026. 8. 7.')
+    // KST 자정 직후 → 다음 날
+    expect(sheetDateLabel('2026-08-07T15:00:00.000Z')).toBe('2026. 8. 8.')
   })
 })
