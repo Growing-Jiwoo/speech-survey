@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CHECKLIST_AREAS, GRACE_SEC, areaLabel, isRecordingPage, itemsFor, maxRecSec,
-  recordingPageLabel, toggleChecklistArea,
+  pageLabel, toggleChecklistArea,
 } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 
@@ -236,14 +236,26 @@ describe('pages (화면·녹음 단위)', () => {
   })
 })
 
-describe('recordingPageLabel — 업로드 재시도 안내', () => {
+describe('pageLabel — 검토 화면 목록·업로드 재시도 안내', () => {
   it('페이지 코드로 사람이 읽는 이름을 만든다 (문항 코드로 조회하면 빈칸이 된다)', () => {
-    expect(recordingPageLabel(g1, 'p_rw_meaning')).toBe('의미 낱말')
-    expect(recordingPageLabel(g1, 'p_rw_nonsense')).toBe('무의미 낱말')
-    expect(recordingPageLabel(g1, 'p_rs03')).toBe('3번 문장')
-    expect(recordingPageLabel(g2, 'p_rs01')).toBe('1번 문장')
+    expect(pageLabel(g1, 'p_practice_rw')).toBe('연습 낱말 3개')
+    expect(pageLabel(g1, 'p_rw_meaning')).toBe('의미 낱말 7개')
+    expect(pageLabel(g1, 'p_rw_nonsense')).toBe('무의미 낱말 7개')
+    expect(pageLabel(g1, 'p_rw_meaning_mark')).toBe('검사자 확인 (의미 낱말 채점)')
+    expect(pageLabel(g1, 'p_rs03')).toBe('3번 문장')
+    expect(pageLabel(g1, 'p_cl')).toBe('검사자 체크리스트')
+  })
+  it('쓰기 과제는 양식에 따라 이름과 문항 수가 다르다', () => {
+    expect(pageLabel(g1, 'p_ww')).toBe('낱말 쓰기 10문항')
+    expect(pageLabel(g2, 'p_sw')).toBe('문장 쓰기 5문항')
+  })
+  it('어떤 라벨도 문항 전문을 이어 붙이지 않는다 (어느 폭에서도 잘리지 않게)', () => {
+    // 낱말 7개를 ' · '로 이으면 데스크톱에서도 뒤가 잘렸다 — 회귀 방지.
+    for (const f of [g1, g2]) {
+      for (const p of f.pages) expect(pageLabel(f, p.code).length).toBeLessThanOrEqual(20)
+    }
   })
   it('모르는 코드는 코드 그대로 (표시가 사라지지 않게)', () => {
-    expect(recordingPageLabel(g1, 'nope')).toBe('nope')
+    expect(pageLabel(g1, 'nope')).toBe('nope')
   })
 })

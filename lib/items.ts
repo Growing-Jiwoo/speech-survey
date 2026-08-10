@@ -141,12 +141,22 @@ export interface FormItems {
   discontinuedTotals: Totals
 }
 
-/** 녹음 페이지를 사람이 읽는 이름으로. 업로드 재시도 배너가 "무엇을 다시 저장하는지" 알린다.
- *  (배너의 키는 문항 코드가 아니라 **페이지 코드**다 — 문항으로 조회하면 이름이 빈칸이 된다.) */
-export function recordingPageLabel(f: FormItems, code: string): string {
+/**
+ * 페이지를 사람이 읽는 이름으로. 검토 화면 목록과 업로드 재시도 배너가 공유한다.
+ * (인자는 문항 코드가 아니라 **페이지 코드**다 — 문항으로 조회하면 이름이 빈칸이 된다.)
+ *
+ * 문항 전문을 이어 붙이지 않는 이유: 검토 화면은 "어느 단계인지 알아보고 눌러서 돌아가는"
+ * 목록이다. 낱말 7개를 ' · '로 이으면 데스크톱 폭에서도 뒤가 잘려(…) 정작 어느 단계인지도,
+ * 무슨 낱말인지도 알려주지 못한다. 이름과 개수만 두면 어느 폭에서도 잘리지 않는다.
+ */
+export function pageLabel(f: FormItems, code: string): string {
   const p = f.pageByCode.get(code)
   if (!p) return code
-  if (p.kind) return `${KIND_LABEL[p.kind]} 낱말`
+  if (p.section === 'checklist') return SECTION_LABEL.checklist
+  if (p.code === 'p_rw_meaning_mark') return '검사자 확인 (의미 낱말 채점)'
+  if (p.section === f.writingSection) return `${SECTION_LABEL[p.section]} ${p.items.length}문항`
+  if (p.practice) return `연습 낱말 ${p.items.length}개`
+  if (p.kind) return `${KIND_LABEL[p.kind]} 낱말 ${p.items.length}개`
   const n = f.sentenceItems.findIndex(i => `p_${i.code}` === p.code)
   return n >= 0 ? `${n + 1}번 문장` : SECTION_LABEL[p.section]
 }

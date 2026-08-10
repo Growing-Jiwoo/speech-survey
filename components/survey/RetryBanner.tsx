@@ -2,7 +2,7 @@
 // 실패한 녹음은 문항을 이동해도 사라지지 않고 여기 남아 다시 저장할 수 있다.
 'use client'
 import { useState } from 'react'
-import { recordingPageLabel, type FormItems } from '@/lib/items'
+import { pageLabel, type FormItems } from '@/lib/items'
 import { Spinner } from '@/components/Spinner'
 
 export function RetryBanner({ form, codes, onRetry }: {
@@ -33,7 +33,7 @@ export function RetryBanner({ form, codes, onRetry }: {
         return (
           <div key={code} className="flex items-center justify-between gap-2">
             <p className="text-xs text-ink-soft">
-              <b className="text-rec-deep">{recordingPageLabel(form, code)}</b> 저장에 실패했어요
+              <b className="text-rec-deep">{pageLabel(form, code)}</b> 저장에 실패했어요
             </p>
             <button onClick={() => retry(code)} disabled={busy}
               className="flex flex-none items-center gap-1.5 rounded-lg bg-rec-deep px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60">
