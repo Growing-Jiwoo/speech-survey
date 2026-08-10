@@ -1,7 +1,8 @@
 // components/admin/ResultSheet.tsx — 관리자 결과지.
 // 종이 검사지([최종] 초등 N학년 선별검사지.pdf)와 같은 순서·구조로 두고,
 // 각 줄에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 놓는다.
-// 인쇄하면 이 화면이 그대로 A4 결과지가 된다(app/globals.css의 @page).
+// 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
+// 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
 import { useState } from 'react'
 import { ITEMS, KIND_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
@@ -170,10 +171,14 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}
         </button>
-        <button type="button" onClick={() => window.print()}
+        {/* 공식 출력은 원본 검사지에 점수를 얹은 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
+            어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다. */}
+        <a href={`/api/admin/sessions/${sessionId}/sheet.pdf`} download
           className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
-          결과지 PDF · 인쇄
-        </button>
+          검사지 PDF 다운로드
+        </a>
+        {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
+        <span className="text-[11px] text-ink-mute">저장한 채점 내용으로 만들어집니다</span>
         {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
       </div>
 
