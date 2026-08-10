@@ -19,7 +19,7 @@ export function StatsCards({ kpis, activeStatus, activeToday, onSelect }: {
         <button key={c.kind} type="button" onClick={() => onSelect(c.kind)} aria-pressed={c.on}
           className={`rounded-2xl border-[1.5px] px-4 py-3 text-left transition ${
             c.on ? 'border-blue bg-blue/5' : 'border-line bg-well hover:border-ink-mute/40'}`}>
-          <p className="text-[11px] font-bold text-ink-mute">{c.label}</p>
+          <p className="text-[12px] font-bold text-ink-mute">{c.label}</p>
           <p className={`font-read text-2xl font-bold ${c.on ? 'text-blue' : 'text-ink'}`}>{c.value}</p>
         </button>
       ))}

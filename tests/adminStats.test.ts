@@ -31,7 +31,8 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
 describe('sessionProgress', () => {
   it('중복 item_code 녹음(재녹음)은 1개로 집계한다', () => {
     const s = mkSession({
-      recordings: [{ item_code: 'rw01' }, { item_code: 'rw01' }, { item_code: 'rw02' }],
+      // 재녹음은 같은 페이지 코드로 여러 번 올라온다
+      recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rw_meaning' }, { item_code: 'p_rw_nonsense' }],
       writing_answers: [{ item_code: 'ww01' }],
     })
     const p = sessionProgress(s)
@@ -62,6 +63,20 @@ describe('sessionProgress', () => {
     expect(p.expected).toEqual({ rec: 6, write: 5 })
     expect(p.incomplete).toBe(false)
   })
+  it('[REGRESSION] 페이지 모델 이전의 문항 단위 녹음은 세지 않는다 (분자가 분모를 넘던 문제)', () => {
+    // 2026-08-07 페이지 모델 도입 전 세션은 rw01…rs04(18건)로 올라가 있다. 걸러내지 않으면
+    // 분모 6에 분자 18이 찍혀 "녹음 18/6"이 된다 — 운영 DB에 실제로 그런 세션이 있다.
+    const s = mkSession({
+      recordings: [
+        ...['rw01', 'rw02', 'rw03', 'rs01', 'rs02'].map(item_code => ({ item_code })),
+        { item_code: 'p_rw_meaning' }, { item_code: 'p_rs01' },
+      ],
+    })
+    const p = sessionProgress(s)
+    expect(p.recorded).toBe(2)
+    expect(p.recorded).toBeLessThanOrEqual(p.expected.rec)
+  })
+
   it('G2 세션에서 문장 쓰기가 4개면 미완료다', () => {
     const s = mkSession({
       grade: 2,

@@ -278,7 +278,7 @@ export default function StartPage() {
             aria-describedby={errors.email ? 'err-email' : undefined} aria-invalid={!!errors.email}
             onChange={e => setEmail(e.target.value)} className={inputCls} />
           <FieldError id="err-email" msg={errors.email} />
-          <p className="mt-1.5 text-[11px] text-ink-mute">전화번호와 이메일 중 하나만 입력해도 괜찮아요.</p>
+          <p className="mt-1.5 text-[12px] text-ink-mute">전화번호와 이메일 중 하나만 입력해도 괜찮아요.</p>
         </div>
 
         {/* 개인정보 수집·이용 고지(개인정보보호법 제15조 제2항의 4대 필수 고지사항) +
@@ -293,7 +293,7 @@ export default function StartPage() {
               </div>
             ))}
           </dl>
-          <p className="mt-2 text-[11px] leading-relaxed text-ink-mute">
+          <p className="mt-2 text-[12px] leading-relaxed text-ink-mute">
             만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.
             학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
           </p>
@@ -307,10 +307,10 @@ export default function StartPage() {
         {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep lg:col-span-2">{formErr}</p>}
         <button type="submit" disabled={busy || !filled} className="cta mt-5 lg:col-span-2">시작하기</button>
         {!consent && (
-          <p className="mt-2 text-center text-[11px] text-ink-mute lg:col-span-2">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
+          <p className="mt-2 text-center text-[12px] text-ink-mute lg:col-span-2">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
         )}
       </form>
-      <p className="mt-auto pt-6 text-center text-[11px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
+      <p className="mt-auto pt-6 text-center text-[12px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
       <LoadingOverlay show={busy} />
     </main>
   )

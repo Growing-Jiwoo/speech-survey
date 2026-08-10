@@ -2,6 +2,8 @@
 // 검사지의 중단 규칙("의미 낱말 첫 3개 연속 오반응 시 문장·쓰기 미실시")은 검사 도중 판정해야 하므로,
 // 녹음 직후 검사자가 방금 들은 반응을 표시한다. 이 값은 관리자 채점의 초기값이 된다.
 // 아동이 아니라 검사자가 보는 화면임을 색·문구로 분명히 한다(아동 화면과 톤을 다르게).
+// 그 표식은 blue다 — amber는 이 화면 안에서 중단 규칙 경고에 쓰므로, 카드까지 amber면
+// 경고가 제 배경색에 묻힌다.
 'use client'
 import { CEILING_N, readingCeilingHit } from '@/lib/survey-flow'
 import { SECTION_LABEL, type FormItems, type SurveyItem } from '@/lib/items'
@@ -17,8 +19,8 @@ export function MarkPage({ form, items, marks, onToggle }: {
   const done = items.filter(i => marks[i.code] !== undefined).length
 
   return (
-    <div className="card mx-auto w-full max-w-2xl border-amber/40 bg-amber/[0.04] p-5 lg:p-7">
-      <p className="text-xs font-bold text-amber lg:text-sm">검사자 확인</p>
+    <div className="card mx-auto w-full max-w-2xl border-blue/40 bg-blue/[0.04] p-5 lg:p-7">
+      <p className="text-xs font-bold text-blue lg:text-sm">검사자 확인</p>
       <h2 className="mt-1 text-[15px] font-bold lg:text-lg">방금 정확하게 읽은 낱말에 표시해 주세요</h2>
       <p className="mt-1 text-xs leading-relaxed text-ink-mute">
         제한 시간({form.form.limits.wordSec}초) 안에 읽은 것만 정반응으로 봅니다. 나중에 녹음을 들으며 고칠 수 있어요.

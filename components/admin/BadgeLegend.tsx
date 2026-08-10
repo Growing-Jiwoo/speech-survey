@@ -22,7 +22,7 @@ export function BadgeLegend({ title = '표시 읽는 법', items, note, columns 
 }) {
   return (
     <div className="border-t border-line bg-well px-4 py-3.5">
-      <p className="text-[11.5px] font-bold text-ink-soft">{title}</p>
+      <p className="text-[12.5px] font-bold text-ink-soft">{title}</p>
       {/* 넓은 화면에서 2열 — 항목이 3~4개라 한 열로 두면 세로로 길어지기만 한다.
           배지 열을 dl 전체가 공유하는 auto 트랙으로 둬야(항목마다 별도 grid로 두지 않고)
           배지 폭이 제각각이어도 설명의 왼쪽 끝이 한 줄로 맞는다 — 눈이 설명 열만 훑을 수 있다. */}

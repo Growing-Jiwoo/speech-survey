@@ -185,7 +185,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         <div className="flex flex-wrap gap-2 px-4 py-3">
           {session.checklist.length === 0
             ? <span className="text-sm text-ink-mute">선택 없음</span>
-            : session.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
+            : session.checklist.map(c => <Badge key={c} tone="mute">{areaLabel(c)}</Badge>)}
         </div>
       </TaskSection>
 

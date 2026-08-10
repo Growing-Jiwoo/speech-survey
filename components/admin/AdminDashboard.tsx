@@ -93,7 +93,7 @@ export function AdminDashboard() {
         <Blip variant="logo" className="h-8 w-8" />
         <div>
           <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
-          <p className="text-[11px] text-ink-mute">행을 누르면 결과지가 열립니다 · 카드와 학교를 누르면 목록이 필터링됩니다</p>
+          <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열립니다 · 카드와 학교를 누르면 목록이 필터링됩니다</p>
         </div>
         <button type="button" onClick={refresh} disabled={isFetching}
           className="ml-auto flex items-center gap-1.5 rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-50">
