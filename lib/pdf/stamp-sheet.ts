@@ -3,7 +3,7 @@
 // 인쇄는 선생님이 아동 한 명당 한 장 하므로 페이지 크기·여백을 건드리지 않는다.
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS } from '@/lib/items'
 import { scoreSession } from '@/lib/scoring'
@@ -13,7 +13,11 @@ import type { ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
 
 const ASSETS = path.join(process.cwd(), 'assets')
 const INK = rgb(0.06, 0.09, 0.16)
-const ERR = rgb(0.78, 0.13, 0.13)
+// 채점 표시는 인쇄된 검사지 글자(먹)와 다른 색이어야 한다 — 같은 색이면 어디까지가
+// 양식이고 어디부터가 채점 결과인지 한눈에 구분되지 않는다.
+// 화면 결과지와 같은 의미색을 쓴다: 정반응 --color-mint, 오반응 --color-rec-deep.
+const OK = rgb(0x0A / 255, 0x80 / 255, 0x62 / 255)
+const ERR = rgb(0xC1 / 255, 0x3A / 255, 0x3E / 255)
 
 const READ_CODES = ITEMS.filter(i => i.section === 'word_reading').map(i => i.code)
 const SENTENCE_CODES = ITEMS.filter(i => i.section === 'sentence_reading').map(i => i.code)
@@ -104,7 +108,7 @@ function stampGrid(
     page.drawText(s, {
       x: g.x0 + g.dx * col + g.w - w - 5,
       y: cellY + g.baselineDy,
-      size, font, color: ok ? INK : ERR,
+      size, font, color: ok ? OK : ERR,
     })
   })
 }
@@ -142,16 +146,23 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: S
   }
 }
 
-/** 확인란(□) 안에 체크 표시. 네모의 실측 사각형 안쪽에만 그린다. */
+/**
+ * 확인란(□) 안에 체크 표시. 네모의 실측 사각형 안쪽에만 그린다.
+ * 두 선분을 각진 마감(Butt)으로 이으면 꺾이는 지점 바깥쪽이 패여 "작대기 두 개를
+ * 붙여 놓은" 모양이 된다. 둥근 마감으로 이어 한 획처럼 보이게 한다.
+ */
 function drawCheck(page: PDFPage, cl: SheetLayout['checklist'], baselineY: number) {
   const cy = baselineY + cl.boxDy
   const half = cl.boxSize / 2
-  const pad = cl.boxSize * 0.18          // 선이 네모 변에 닿지 않도록 안쪽 여백
+  const pad = cl.boxSize * 0.2           // 선이 네모 변에 닿지 않도록 안쪽 여백
   const left = cl.boxCx - half + pad
   const right = cl.boxCx + half - pad
   const top = cy + half - pad
   const bottom = cy - half + pad
-  const kneeX = left + (right - left) * 0.36
-  page.drawLine({ start: { x: left, y: cy }, end: { x: kneeX, y: bottom }, thickness: 1.1, color: INK })
-  page.drawLine({ start: { x: kneeX, y: bottom }, end: { x: right, y: top }, thickness: 1.1, color: INK })
+  // 짧은 팔은 왼쪽 중간 높이에서 내려오고, 긴 팔이 오른쪽 위로 뻗는 표준 체크 비율
+  const knee = { x: left + (right - left) * 0.34, y: bottom }
+  const start = { x: left, y: cy + (top - cy) * 0.15 }
+  const opts = { thickness: 1.15, color: INK, lineCap: LineCapStyle.Round }
+  page.drawLine({ start, end: knee, ...opts })
+  page.drawLine({ start: knee, end: { x: right, y: top }, ...opts })
 }
