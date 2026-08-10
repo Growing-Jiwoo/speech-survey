@@ -14,20 +14,31 @@ export function Subtotal({ cells, total, verdict, complete = true }: {
   /** 채점이 끝났는지. false면 숫자를 확정값으로 보이지 않게 하고 판정을 감춘다. */
   complete?: boolean
 }) {
+  // amber는 경고 전용 — 소계 띠는 중립 배경으로(색이 신호 구실을 하게)
   return (
-    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-amber/30 bg-amber/10 px-4 py-2.5 print:bg-amber/10">
+    <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-line bg-well px-4 py-2.5">
+      {/* 채점 전에는 부분 점수도 확정값처럼 보이면 안 된다. 총점만 비워 두면 옆의
+          '무의미 점수 0 / 7'이 "0점을 받았다"로 읽히는데, 실제로는 아직 채점하지 않은 것이다
+          — 이 화면이 가장 경계하는 오독이다. 숫자를 흐리고 '현재'를 붙여 진행 중임을 밝힌다. */}
       {cells?.map(c => (
-        <span key={c.label} className="text-[13px] text-ink-soft">
-          {c.label} <b className="text-[15px] tabular-nums text-ink">{c.value}</b>
+        <span key={c.label} className={`text-[13px] ${complete ? 'text-ink-soft' : 'text-ink-mute'}`}>
+          {!complete && '현재 '}{c.label}{' '}
+          <b className={`text-[16px] tabular-nums ${complete ? 'text-ink' : 'text-ink-mute'}`}>{c.value}</b>
           <span className="text-ink-mute"> / {c.max}</span>
         </span>
       ))}
-      <span className="text-[13px] font-bold text-ink-soft">
+      <span className="text-[14px] font-bold text-ink-soft">
         {total.label}{' '}
-        <b className={`text-[19px] tabular-nums ${complete ? 'text-blue' : 'text-ink-mute'}`}>
-          {complete ? total.value : '—'}
-        </b>
-        <span className="text-ink-mute"> / {total.max}</span>
+        {/* 미채점일 때 '— / 36'처럼 작대기를 세우면 값이 있는 것처럼 읽히고 모양도 어수선하다.
+            숫자 자리를 비우고 척도만 알려 준다 — 판정은 옆 배지가 한다. */}
+        {complete ? (
+          <>
+            <b className="text-[20px] tabular-nums text-blue">{total.value}</b>
+            <span className="text-ink-mute"> / {total.max}</span>
+          </>
+        ) : (
+          <span className="font-normal text-ink-mute">{total.max}점 만점</span>
+        )}
       </span>
       {/* 채점이 끝나지 않았으면 판정을 내지 않는다(미실시·채점 전을 Fail로 오독하지 않도록) */}
       {!complete

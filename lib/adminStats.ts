@@ -48,8 +48,13 @@ export function expectedTotals(s: Pick<SessionListRow, 'discontinued_at' | 'grad
 export function sessionProgress(s: SessionListRow): {
   recorded: number; written: number; expected: Totals; incomplete: boolean
 } {
-  const writingCodes = new Set(itemsFor(formForGrade(s.grade)).writingItems.map(i => i.code))
-  const recorded = new Set(s.recordings.map(r => r.item_code)).size
+  const f = itemsFor(formForGrade(s.grade))
+  const writingCodes = new Set(f.writingItems.map(i => i.code))
+  // 녹음도 **이 양식의 페이지 코드만** 센다. 걸러내지 않으면 페이지 모델 도입(2026-08-07) 이전에
+  // 문항 단위로 올라간 옛 녹음(rw01…rs04 = 18건)이 그대로 세어져 분자가 분모를 넘는다
+  // ("녹음 18/6"). 실제로 운영 DB에 그런 세션이 남아 있다.
+  const recCodes = new Set(f.recordingPages.map(p => p.code))
+  const recorded = new Set(s.recordings.map(r => r.item_code).filter(c => recCodes.has(c))).size
   const written = [...s.writing_answers, ...s.sentence_scores]
     .filter(r => writingCodes.has(r.item_code)).length
   const expected = expectedTotals(s)

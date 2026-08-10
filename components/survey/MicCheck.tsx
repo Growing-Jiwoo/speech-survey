@@ -58,7 +58,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
       {/* 항상 마운트된 단일 라이브 리전 — 조건부로 갈아끼우면 스크린리더 낭독이 보장되지 않는다 */}
       <p aria-live="polite" className={`mt-3 ${
         micOk === 'ok' ? 'flex items-center gap-1.5 text-sm font-bold text-mint'
-          : micOk === 'quiet' ? 'text-sm text-ink-soft' : 'text-[11px] text-ink-mute'}`}>
+          : micOk === 'quiet' ? 'text-sm text-ink-soft' : 'text-[12px] text-ink-mute'}`}>
         {micOk === 'ok' ? (
           <>
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"

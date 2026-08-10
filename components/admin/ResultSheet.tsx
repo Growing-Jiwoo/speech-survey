@@ -13,8 +13,10 @@ import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { BadgeLegend } from './BadgeLegend'
 import { ScoreBand } from './sheet/ScoreBand'
+import { TaskSection } from './sheet/TaskSection'
 import { Subtotal } from './sheet/Subtotal'
-import { WordGrid } from './sheet/WordGrid'
+import { WordScoreRows } from './sheet/WordScoreRows'
+import { WritingChips } from './sheet/WritingChips'
 import { SentenceRows } from './sheet/SentenceRows'
 import { SentenceWriteRows } from './sheet/SentenceWriteRows'
 import { PageAudio, type Attempt } from './sheet/PageAudio'
@@ -83,11 +85,6 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   })
 
   const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
-  // 낱말 쓰기 격자는 O/X로 보여 준다 — 문항 만점이 1이라 1=정반응이다.
-  const writingMarks = Object.fromEntries(
-    Object.entries(writing).map(([c, v]) => [c, v === undefined ? undefined : v >= 1]),
-  )
-  const writeItemsOf = (kind: 'meaning' | 'nonsense') => f.writingItems.filter(i => i.kind === kind)
 
   return (
     <section className="result-sheet">
@@ -96,9 +93,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-[26px] font-bold leading-none tracking-tight">{form.title}</h1>
-            <p className="mt-1 text-[10.5px] font-bold text-ink-mute">{form.subtitle}</p>
+            <p className="mt-1 text-[12px] font-bold text-ink-mute">{form.subtitle}</p>
           </div>
-          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[11.5px]">
+          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
             {[
               ['학교', session.school_name],
               ['학년', gradeClassLabel(session.grade, session.class_no)],
@@ -115,7 +112,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             ))}
           </dl>
         </div>
-        <p className="mt-2 text-[10.5px] text-ink-mute">
+        <p className="mt-2 text-[12px] text-ink-mute">
           담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email, session.teacher_contact)})
           {' · '}{session.submitted_at ? '제출 완료' : '진행 중'}
           {' · '}
@@ -134,52 +131,39 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
 
       <ScoreBand form={form} result={r} />
 
-      {/* 낱말 해독 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 pb-1.5 pt-3">
-        <h2 className="text-[13px] font-bold">{SECTION_LABEL.word_reading}
-          <span className="ml-2 font-normal text-[11px] text-ink-mute">
-            {form.limits.wordSec}초 동안 정확하게 읽은 낱말 수
-          </span>
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          <PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />
-          <PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />
-        </div>
-      </div>
-      <WordGrid rowLabel="의미 낱말" words={readItemsOf('meaning')} marks={marks} onMark={setMark} />
-      <WordGrid rowLabel="무의미 낱말" words={readItemsOf('nonsense')} marks={marks} onMark={setMark} />
-      <Subtotal
-        cells={[
-          { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
-          { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
-        ]}
-        total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
-        verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+      {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
+      <TaskSection title={SECTION_LABEL.word_reading}
+        hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
+        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark}
+          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
+            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark}
+          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
+            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <Subtotal
+          cells={[
+            { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
+            { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
+          ]}
+          total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
+          verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+      </TaskSection>
 
-      {/* 문장 읽기유창성 */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{SECTION_LABEL.sentence_reading}
-        <span className="ml-2 font-normal text-[11px] text-ink-mute">
-          {form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수
-        </span>
-      </h2>
-      <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
-        attemptsFor={code => attemptsOf(`p_${code}`)}
-        limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
-      <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
-        verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+      <TaskSection title={SECTION_LABEL.sentence_reading}
+        hint={`${form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수`}>
+        <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
+          attemptsFor={code => attemptsOf(`p_${code}`)}
+          limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
+        <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
+          verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+      </TaskSection>
 
       {/* 쓰기 과제 — 검사 중 수집분(읽기 전용). 학년에 따라 낱말 쓰기 또는 문장 쓰기다. */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{writingLabel}
-        <span className="ml-2 font-normal text-[11px] text-ink-mute">
-          검사 중 기록 · 정확하게 쓴 {f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점
-        </span>
-      </h2>
+      <TaskSection title={writingLabel}
+        hint={`검사 중 기록 · 정확하게 쓴 ${f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점`}>
       {f.writingSection === 'word_writing' ? (
         <>
-          <WordGrid rowLabel="의미 낱말" words={writeItemsOf('meaning')} marks={writingMarks} readOnly />
-          <WordGrid rowLabel="무의미 낱말" words={writeItemsOf('nonsense')} marks={writingMarks} readOnly />
+          <WritingChips items={f.writingItems} writing={writing} />
           <Subtotal
             cells={[
               { label: '의미 점수', value: r.writeMeaning, max: writeMax.meaning },
@@ -195,16 +179,20 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             verdict={r.verdict.writing} complete={r.complete.writing} />
         </>
       )}
+      </TaskSection>
 
-      {/* 검사자 체크리스트 */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{SECTION_LABEL.checklist}</h2>
-      <div className="flex flex-wrap gap-2 px-4 pb-3">
-        {session.checklist.length === 0
-          ? <span className="text-sm text-ink-mute">선택 없음</span>
-          : session.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-      </div>
+      <TaskSection title={SECTION_LABEL.checklist}>
+        <div className="flex flex-wrap gap-2 px-4 py-3">
+          {session.checklist.length === 0
+            ? <span className="text-sm text-ink-mute">선택 없음</span>
+            : session.checklist.map(c => <Badge key={c} tone="mute">{areaLabel(c)}</Badge>)}
+        </div>
+      </TaskSection>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4 print:hidden">
+      {/* 저장 줄은 화면 아래에 붙여 둔다(sticky). 채점은 위에서부터 하는데 저장 버튼이 문서 끝에만
+          있으면 끝까지 스크롤해야 하고, "저장하지 않은 채점이 있어요" 경고도 그때서야 보인다 —
+          정작 채점하는 동안 눈에 띄어야 하는 경고다. 설명 문구는 아래 줄로 내려 띠를 얇게 유지한다. */}
+      <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 print:hidden">
         <button type="button" onClick={save} disabled={saving}
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}
@@ -215,15 +203,15 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
           검사지 PDF 다운로드
         </a>
-        {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
-        <span className="text-[11px] text-ink-mute">
-          저장한 채점 내용으로 만들어집니다
-          {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
-            && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
-        </span>
-        {dirty && <span className="text-xs font-bold text-amber">저장하지 않은 채점이 있어요</span>}
-        {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
+        {dirty && <span className="text-[13px] font-bold text-amber">저장하지 않은 채점이 있어요</span>}
+        {msg && <span aria-live="polite" className="text-[13px] text-ink-soft">{msg}</span>}
       </div>
+      {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
+      <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
+        검사지 PDF는 저장한 채점 내용으로 만들어집니다
+        {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
+          && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
+      </p>
 
       {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}

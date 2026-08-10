@@ -157,8 +157,4 @@ button, a, label {
   /* .result-sheet 자신도 <section>이라 위 138행의 일반 section 규칙으로 이미 break-inside: avoid를 받는다.
      138행을 바꿀 때 이 의존을 놓치지 않도록 여기 적어둔다. */
 
-  /* 낱말 격자는 인쇄에서 가로 스크롤이 없다 — 한 줄에 다 들어가야 한다 */
-  .result-sheet .overflow-x-auto {
-    overflow: visible !important;
-  }
 }

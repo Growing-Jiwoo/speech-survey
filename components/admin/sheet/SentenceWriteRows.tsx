@@ -11,7 +11,7 @@ export function SentenceWriteRows({ items, writing }: {
 }) {
   return (
     <div>
-      <div className="flex items-center border-b border-line/60 bg-amber/10 px-4 py-1.5 text-[11.5px] font-bold text-ink-soft print:bg-amber/10">
+      <div className="flex items-center border-b border-line/60 bg-well px-4 py-1.5 text-[12.5px] font-bold text-ink-soft">
         <span className="flex-1">문항</span>
         <span className="w-20 text-right">점수</span>
       </div>
@@ -23,15 +23,17 @@ export function SentenceWriteRows({ items, writing }: {
             <span className="w-4 flex-none text-xs font-bold text-ink-mute">{i + 1}</span>
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {item.text.trim().split(/\s+/).map((w, k) => (
-                <span key={k} className="font-read rounded bg-well px-1.5 py-0.5 text-[15px] print:bg-transparent print:px-0">
+                <span key={k} className="font-read rounded bg-well px-1.5 py-0.5 text-[16px]">
                   {w}
                 </span>
               ))}
             </span>
             <span className="w-20 flex-none text-right text-[13px]"
               aria-label={`${item.text} ${v === undefined ? '미응답' : `${v}점`}`}>
-              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다 */}
-              <b className={`font-read text-[15px] tabular-nums ${v === undefined ? 'text-ink-mute' : v === 0 ? 'text-rec-deep' : 'text-ink'}`}>
+              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다.
+                  0점을 경고색으로 칠하지 않는 이유: 이 숫자는 받은 점수를 적은 것뿐이고
+                  판정이 아니다(인쇄물의 「0 1 2」 동그라미와 같은 규칙). */}
+              <b className={`font-read text-[16px] tabular-nums ${v === undefined ? 'text-ink-mute' : 'text-ink'}`}>
                 {v === undefined ? '—' : v}
               </b>
               <span className="text-ink-mute"> / {max}</span>

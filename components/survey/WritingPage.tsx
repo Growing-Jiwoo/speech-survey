@@ -48,7 +48,7 @@ export function WritingPage({ form, items, value, onChange, onSetAll }: {
           return (
             <li key={item.code} className={groupStart && idx > 0 ? 'mt-3 border-t border-line pt-3' : ''}>
               {groupStart && (
-                <p className="mb-1.5 text-[11px] font-bold text-ink-mute">{KIND_LABEL[item.kind!]} 낱말</p>
+                <p className="mb-1.5 text-[12px] font-bold text-ink-mute">{KIND_LABEL[item.kind!]} 낱말</p>
               )}
               <div className={`flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2 ${locked ? 'opacity-40' : ''}`}>
                 <span className="w-5 flex-none text-xs font-bold text-ink-mute">{item.orderNo}</span>

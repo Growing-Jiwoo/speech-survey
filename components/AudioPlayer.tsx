@@ -9,7 +9,11 @@ import { Spinner } from '@/components/Spinner'
 import { fmtDuration } from '@/lib/format'
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
-const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: `${r}×` }))
+// '1×'의 ×가 채점 O/X의 X로 읽힌다(실사용 피드백) — 기호 대신 말로 쓴다.
+const RATE_LABELS: Record<(typeof RATES)[number], string> = {
+  0.5: '배속 0.5', 0.75: '배속 0.75', 1: '배속 1.0', 1.25: '배속 1.25', 1.5: '배속 1.5',
+}
+const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: RATE_LABELS[r] }))
 
 /** canvas fillStyle은 CSS var()를 해석하지 못하므로, globals.css 변수를 실제 값으로 읽어 온다. */
 function cssVar(name: string): string {
@@ -17,7 +21,14 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-export function AudioPlayer({ src, onError }: { src: string; onError?: () => void }) {
+export function AudioPlayer({ src, durationSec, onError }: {
+  src: string
+  /** DB에 기록된 녹음 길이. 파형이 로드되기 전에도 총 길이를 보여 주려는 초기값이며,
+   *  ready 시 디코드된 실제 길이로 교체된다. 이 값이 있으면 호출부가 길이를 따로 찍을
+   *  필요가 없다 — 같은 숫자가 화면에 두 번 나오던 것을 없앤다. */
+  durationSec?: number | null
+  onError?: () => void
+}) {
   const rootRef = useRef<HTMLDivElement>(null)
   const waveRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
@@ -31,7 +42,7 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   const [playing, setPlaying] = useState(false)
   const [rate, setRate] = useState(1)
   const [cur, setCur] = useState(0)
-  const [dur, setDur] = useState(0)
+  const [dur, setDur] = useState(durationSec ?? 0)
 
   // 1) 화면에 들어온 행만 wavesurfer 인스턴스를 만든다(결과지당 최대 ~26개 동시 생성 방지).
   useEffect(() => {
@@ -93,26 +104,26 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
 
   return (
     <div ref={rootRef} role="group" tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"
-      className="flex w-full max-w-[280px] items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue/40">
+      className="flex w-full max-w-[420px] items-center gap-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue/40">
       <button type="button" onClick={toggle} disabled={!ready} aria-label={playing ? '일시정지' : '재생'}
-        className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-ink text-white disabled:opacity-40">
+        className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-ink text-white disabled:opacity-40">
         {/* 파형 로딩 전에는 재생 버튼 자리에 스피너를 보여 준다(단순 비활성보다 상태가 분명) */}
         {!ready ? (
-          <Spinner className="h-3.5 w-3.5" />
+          <Spinner className="h-4 w-4" />
         ) : playing ? (
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
           </svg>
         ) : (
-          <svg className="ml-0.5 h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <svg className="ml-0.5 h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M8 5v14l11-7z" />
           </svg>
         )}
       </button>
       <div ref={waveRef} className="h-8 min-w-0 flex-1" aria-hidden="true" />
-      <span className="flex-none font-read text-[11px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
+      <span className="flex-none font-read text-[12.5px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
       <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
-        ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[84px] flex-none" />
+        ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[104px] flex-none" />
     </div>
   )
 }

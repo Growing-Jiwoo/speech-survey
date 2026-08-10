@@ -66,32 +66,32 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
       }),
       col.accessor('school_name', {
         id: 'school', header: '학교',
-        meta: { sortKey: 'school', thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
+        meta: { sortKey: 'school', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
         cell: ({ row }) => row.original.school_name,
       }),
       col.display({
         id: 'gradeClass', header: '학년/반',
-        meta: { sortKey: 'grade', thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
+        meta: { sortKey: 'grade', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
         cell: ({ row }) => gradeClassLabel(row.original.grade, row.original.class_no),
       }),
       col.accessor('birth_ymd', {
         id: 'birth', header: '생년월일',
-        meta: { thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4 text-ink-soft' },
+        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },
         cell: ({ row }) => row.original.birth_ymd,
       }),
       col.display({
         id: 'started', header: '참여일',
-        meta: { sortKey: 'started', thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4 text-ink-soft' },
+        meta: { sortKey: 'started', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },
         cell: ({ row }) => new Date(row.original.started_at).toLocaleDateString('ko-KR'),
       }),
       col.display({
         id: 'submitted', header: '제출일',
-        meta: { sortKey: 'submitted', thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4 text-ink-soft' },
+        meta: { sortKey: 'submitted', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },
         cell: ({ row }) => row.original.submitted_at ? new Date(row.original.submitted_at).toLocaleDateString('ko-KR') : '—',
       }),
       col.display({
         id: 'progress', header: '진행률',
-        meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-4', tdClassName: 'px-4' },
+        meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-3', tdClassName: 'px-4' },
         cell: ({ row }) => {
           // 분모는 행마다 다르다 — 학년별 검사지 문항 수와 중단 규칙이 반영된 값이다.
           const p = sessionProgress(row.original)
@@ -99,10 +99,11 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
         },
       }),
       col.display({
-        id: 'checklist', header: '검사자 체크리스트',
-        meta: { thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
+        id: 'checklist', header: '체크리스트',
+        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
         cell: ({ row }) => row.original.checklist.length > 0
-          ? <Badge tone="amber" size="sm">{row.original.checklist.length}개 영역</Badge>
+          // 체크리스트 선택은 경고가 아니다 — amber는 '제출 · 미완료 있음'에만 남긴다.
+          ? <Badge tone="mute" size="sm">{row.original.checklist.length}개 영역</Badge>
           : <span className="text-xs text-ink-mute">—</span>,
       }),
       col.display({
@@ -210,7 +211,7 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
           },
           { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았습니다.' },
           {
-            badge: <Badge tone="amber" size="sm">3개 영역</Badge>,
+            badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
             desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',
           },
         ]}
@@ -247,11 +248,11 @@ function Track({ label, value, max }: { label: string; value: number; max: numbe
   const pct = max === 0 ? 0 : Math.round((value / max) * 100)
   return (
     <div className="flex items-center gap-1.5">
-      <span className="w-7 text-[10px] text-ink-mute">{label}</span>
+      <span className="w-7 text-[12px] text-ink-mute">{label}</span>
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-ink/10">
         <span className={`block h-full rounded-full ${full ? 'bg-mint' : 'bg-rec'}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className={`font-read text-[11px] tabular-nums ${full ? 'text-ink-soft' : 'font-bold text-rec-deep'}`}>{value}/{max}</span>
+      <span className={`font-read text-[12.5px] tabular-nums ${full ? 'text-ink-soft' : 'font-bold text-rec-deep'}`}>{value}/{max}</span>
     </div>
   )
 }

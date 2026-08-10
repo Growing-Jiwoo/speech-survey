@@ -28,13 +28,13 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
         // 0점 Fail로 보이면, 치르지도 않은 과제에서 낙제한 것처럼 읽힌다.
         if (!done) return (
           <div key={key} className="rounded-xl border-[1.5px] border-line bg-well px-4 py-3">
-            <p className="text-[11.5px] font-bold text-ink-mute">{label[key]}</p>
-            <p className="mt-0.5 flex items-baseline gap-1.5">
-              <b className="text-[30px] leading-none text-ink-mute">—</b>
-              <span className="text-[15px] text-ink-mute">/ {taskMax[key]}</span>
-              <span className="ml-auto text-[13px] font-bold text-ink-mute">채점 전</span>
+            <p className="text-[13px] font-bold text-ink-mute">{label[key]}</p>
+            {/* 큰 '—'는 값이 있는 것처럼 읽히고 모양도 어수선하다 — 상태를 글자로 쓴다. */}
+            <p className="mt-1 flex items-baseline gap-2">
+              <b className="text-[22px] leading-none text-ink-mute">채점 전</b>
+              <span className="ml-auto text-[13px] text-ink-mute">{taskMax[key]}점 만점</span>
             </p>
-            <p className="mt-1 text-[10.5px] text-ink-mute">
+            <p className="mt-1.5 text-[12px] text-ink-mute">
               {value > 0 ? `현재 ${value}점 · 남은 문항 채점 필요` : '실시하지 않았거나 채점 전'}
             </p>
           </div>
@@ -43,7 +43,7 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
           <div key={key}
             className={`rounded-xl border-[1.5px] px-4 py-3 ${
               pass ? 'border-mint/50 bg-mint/5' : 'border-rec/50 bg-rec/5'}`}>
-            <p className="text-[11.5px] font-bold text-ink-mute">{label[key]}</p>
+            <p className="text-[13px] font-bold text-ink-mute">{label[key]}</p>
             <p className="mt-0.5 flex items-baseline gap-1.5">
               <b className={`text-[30px] leading-none tabular-nums ${pass ? 'text-mint' : 'text-rec-deep'}`}>
                 {value}
@@ -53,7 +53,7 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
                 {pass ? 'Pass' : 'Fail'}
               </span>
             </p>
-            <p className="mt-1 text-[10.5px] text-ink-mute">기준 {passMark[key]}점 이상</p>
+            <p className="mt-1 text-[12px] text-ink-mute">기준 {passMark[key]}점 이상</p>
           </div>
         )
       })}

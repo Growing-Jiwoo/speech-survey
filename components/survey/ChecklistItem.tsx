@@ -32,7 +32,7 @@ export function ChecklistItem({ selected, onToggle }: {
         })}
       </ul>
       {selected.length === 0 &&
-        <p className="mt-3 text-center text-[11px] text-ink-mute">해당 사항이 없으면 &ldquo;특이사항 없음&rdquo;을 선택해 주세요.</p>}
+        <p className="mt-3 text-center text-[12px] text-ink-mute">해당 사항이 없으면 &ldquo;특이사항 없음&rdquo;을 선택해 주세요.</p>}
     </div>
   )
 }

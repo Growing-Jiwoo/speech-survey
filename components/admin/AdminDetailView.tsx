@@ -127,7 +127,9 @@ export function AdminDetailView() {
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
+        {/* overflow-hidden이면 조상이 스크롤 컨테이너가 되어 내부 sticky(그룹 플레이어 바)가
+            무력화된다 — clip은 같은 모서리 클리핑을 주되 스크롤 컨테이너를 만들지 않는다. */}
+        <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} writing={input.writing}
             onDirtyChange={setDirty}
             initialMarks={input.marks}

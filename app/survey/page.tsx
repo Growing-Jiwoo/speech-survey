@@ -163,11 +163,11 @@ function SurveyInner() {
               녹음·카운트다운 중에는 눌리지 않게 잠근다(그 시도의 소리가 유실되므로). */}
           <div className="flex flex-none gap-1.5">
             <button type="button" onClick={() => setPaused(true)} disabled={busy}
-              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[11px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[12px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
               일시정지
             </button>
             <button type="button" onClick={() => router.push('/')} disabled={busy}
-              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[11px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[12px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
               저장하고 나가기
             </button>
           </div>
@@ -183,7 +183,7 @@ function SurveyInner() {
             <h1 className="text-xs font-bold text-ink-mute">
               {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
             </h1>
-            <p className="flex-none text-[11px] text-ink-mute">자동 저장됨</p>
+            <p className="flex-none text-[12px] text-ink-mute">자동 저장됨</p>
           </div>
         )}
       </header>
