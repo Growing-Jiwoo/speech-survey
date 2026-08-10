@@ -11,6 +11,7 @@ import { PROVISIONAL_CRITERIA, scoreSession, scoringFor } from '@/lib/scoring'
 import { contactLabel, examinerLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
+import { BadgeLegend } from './BadgeLegend'
 import { ScoreBand } from './sheet/ScoreBand'
 import { Subtotal } from './sheet/Subtotal'
 import { WordGrid } from './sheet/WordGrid'
@@ -224,16 +225,37 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
       </div>
 
-      <p className="border-t border-line bg-well px-4 py-2.5 text-[10.5px] leading-relaxed text-ink-mute">
-        채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초, 문장 읽기유창성은 {form.limits.sentenceSec}초 내 정확 반응 수.
-        녹음은 마지막 반응이 잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.
-        {PROVISIONAL_CRITERIA && (
-          <> Pass 기준은 <b>임시값</b>입니다 — 낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
-          문장 읽기유창성 {passMark.sentenceReading} / {taskMax.sentenceReading} ·
-          {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
-          실제 기준표를 받으면 숫자만 교체되며, 이미 채점한 세션도 저장된 점수로 다시 계산됩니다.</>
-        )}
-      </p>
+      {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
+          설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}
+      <BadgeLegend
+        columns={1}
+        items={[
+          {
+            badge: <Badge tone="mute">채점 전</Badge>,
+            desc: <>아직 채점하지 않았거나 중단 규칙으로 <b>실시하지 않은</b> 과제입니다.
+              <b className="text-rec-deep"> 0점이 아닙니다</b> — 검사지 PDF에도 점수 칸이 비어 나갑니다.</>,
+          },
+          {
+            badge: (
+              <span className="flex gap-1">
+                <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
+              </span>
+            ),
+            desc: <>과제별 기준 점수에 따른 판정입니다. 채점이 끝난 과제에만 나오며,
+              <b> 공식 검사지 PDF에는 찍히지 않습니다.</b></>,
+          },
+          ...(PROVISIONAL_CRITERIA ? [{
+            badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
+            desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시입니다 —
+              낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
+              문장 읽기유창성 {passMark.sentenceReading} / {taskMax.sentenceReading} ·
+              {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
+              기준표를 받으면 숫자만 교체되며 이미 채점한 세션도 저장된 점수로 다시 계산됩니다.</>,
+          }] : []),
+        ]}
+        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초, 문장 읽기유창성은 {form.limits.sentenceSec}초 내
+          정확 반응 수. 녹음은 마지막 반응이 잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.</>}
+      />
     </section>
   )
 }
