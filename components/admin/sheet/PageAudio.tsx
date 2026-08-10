@@ -28,8 +28,8 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
 
   if (attempts.length === 0) {
     return (
-      <div className="flex items-center gap-2 print:hidden">
-        <span className="text-[11px] text-ink-mute">{label}</span>
+      <div className="flex items-center gap-2.5 print:hidden">
+        <span className="text-[13px] font-bold text-ink-soft">{label}</span>
         <Badge tone="rec">미녹음</Badge>
       </div>
     )
@@ -40,22 +40,22 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
   const over = cur.duration_sec != null && cur.duration_sec > limitSec
 
   return (
-    <div className="flex flex-wrap items-center gap-2 print:hidden">
-      <span className="text-[11px] text-ink-mute">{label}</span>
+    <div className="flex flex-wrap items-center gap-2.5 print:hidden">
+      <span className="text-[13px] font-bold text-ink-soft">{label}</span>
       {attempts.length > 1 && (
         <div className="flex gap-1">
           {attempts.map((a, i) => (
             <button key={a.attempt_no} type="button" aria-pressed={i === idx}
               aria-label={`${label} ${a.attempt_no}번째 시도`}
               onClick={() => setIdx(i)}
-              className={`h-6 rounded-md border px-1.5 text-[10.5px] font-bold transition ${
+              className={`h-8 rounded-md border px-2.5 text-[12.5px] font-bold transition ${
                 i === idx ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-mute'}`}>
               #{a.attempt_no}
             </button>
           ))}
         </div>
       )}
-      <span className={`font-read text-[11px] tabular-nums ${over ? 'font-bold text-amber' : 'text-ink-soft'}`}
+      <span className={`font-read text-[12.5px] tabular-nums ${over ? 'font-bold text-amber' : 'text-ink-soft'}`}
         title={over ? `채점 기준(${limitSec}초) 초과분 포함` : undefined}>
         {fmtDuration(cur.duration_sec)}{over && ' !'}
       </span>
