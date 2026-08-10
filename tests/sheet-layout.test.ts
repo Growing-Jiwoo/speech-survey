@@ -25,7 +25,7 @@ describe('G1 레이아웃', () => {
     expect(Object.keys(L.checklist.rows).sort()).toEqual(CHECKLIST_AREAS.map(a => a.code).sort())
   })
   it('모든 좌표가 페이지 안에 있다', () => {
-    const xs = [L.wordReading.x0, L.wordWriting.x0, L.checklist.checkX,
+    const xs = [L.wordReading.x0, L.wordWriting.x0, L.checklist.boxCx,
       ...L.sentenceScores.map(s => s.slashX), L.sentenceTotal.slashX]
     const ys = [...L.wordReading.rows, ...L.wordWriting.rows,
       ...Object.values(L.checklist.rows), L.header.baselineY]

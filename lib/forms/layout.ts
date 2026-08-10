@@ -15,6 +15,9 @@ export interface WordGridLayout {
   rows: [number, number]
   /** 한 행의 칸 수 */
   perRow: number
+  /** 칸 아래쪽에서 낱말 베이스라인까지의 거리.
+   *  O/X를 이 베이스라인에 맞춰야 낱말과 같은 줄에 앉는다 — 칸 중앙에 찍으면 낱말보다 떠 보인다. */
+  baselineDy: number
 }
 
 /** 점수 빈칸 — '/' 왼쪽에 오른쪽 정렬로 찍는다 */
@@ -60,6 +63,19 @@ export interface SheetLayout {
   sentenceScores: ScoreSlot[]
   sentenceTotal: ScoreSlot
 
-  /** 체크리스트 — 영역 코드 → 확인란 행의 아래쪽 y. 체크는 checkX를 중심으로 그린다 */
-  checklist: { checkX: number; rows: Record<string, number> }
+  /** 검사지 본문 글자 크기(pt). 스탬프도 같은 크기로 찍어야 이질감이 없다. */
+  fontSize: number
+
+  /**
+   * 체크리스트 확인란(□). rows는 영역 코드 → 그 행 텍스트의 베이스라인 y.
+   * 네모의 실제 범위는 600dpi 렌더링으로 실측했다(글리프 박스 ≠ 글자 진행 폭):
+   * 가로 중심 boxCx, 세로는 baseline+boxDy를 중심으로 한 변 boxSize인 정사각형.
+   * 체크는 반드시 이 사각형 안에 들어가야 한다.
+   */
+  checklist: {
+    boxCx: number
+    boxDy: number
+    boxSize: number
+    rows: Record<string, number>
+  }
 }

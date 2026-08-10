@@ -22,10 +22,13 @@ export const G1_LAYOUT: SheetLayout = {
     },
   },
 
-  // 낱말 해독: 의미 7 + 무의미 7, 셀 56 × 25.5 등간격
-  wordReading: { x0: 126, dx: 56, w: 56, h: 25.5, rows: [616.2, 590.7], perRow: 7 },
-  // 낱말 쓰기: 의미 5 + 무의미 5, 셀 78.1 × 25.5
-  wordWriting: { x0: 127.5, dx: 78.1, w: 78.1, h: 25.5, rows: [256.6, 231.1], perRow: 5 },
+  // 검사지 본문은 전부 10pt다(텍스트 레이어 실측). 스탬프도 같은 크기를 쓴다.
+  fontSize: 10,
+
+  // 낱말 해독: 의미 7 + 무의미 7, 셀 56 × 25.5 등간격. 낱말 베이스라인 625.3 − 칸 616.2 = 9.1
+  wordReading: { x0: 126, dx: 56, w: 56, h: 25.5, rows: [616.2, 590.7], perRow: 7, baselineDy: 9.1 },
+  // 낱말 쓰기: 의미 5 + 무의미 5, 셀 78.1 × 25.5. 베이스라인 265.6 − 256.6 = 9.0
+  wordWriting: { x0: 127.5, dx: 78.1, w: 78.1, h: 25.5, rows: [256.6, 231.1], perRow: 5, baselineDy: 9.0 },
 
   readScores: {
     meaning:  { slashX: 155.9, baselineY: 577.6 },
@@ -46,8 +49,12 @@ export const G1_LAYOUT: SheetLayout = {
   sentenceTotal: { slashX: 482.8, baselineY: 332.9 },
 
   checklist: {
-    checkX: 171.5,
-    // CHECKLIST_AREAS의 code와 같은 키를 쓴다 — 화면과 인쇄물이 같은 영역 코드를 공유한다.
-    rows: { none: 106.9, cognition: 84.8, language: 62.7, speech: 40.6, attention: 18.5 },
+    // 600dpi 실측: 네모 x 168.12~174.72, y(베이스라인 114.2 행) 114.00~120.60 → 한 변 6.6
+    boxCx: 171.42,
+    boxDy: 3.1,
+    boxSize: 6.6,
+    // 값은 각 행 텍스트의 베이스라인. CHECKLIST_AREAS의 code와 같은 키를 쓴다
+    // — 화면과 인쇄물이 같은 영역 코드를 공유한다.
+    rows: { none: 114.2, cognition: 92.1, language: 70.0, speech: 47.8, attention: 25.7 },
   },
 }

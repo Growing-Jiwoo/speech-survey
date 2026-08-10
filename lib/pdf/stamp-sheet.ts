@@ -9,7 +9,7 @@ import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS } from '@
 import { scoreSession } from '@/lib/scoring'
 import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import type { SurveyForm } from '@/lib/forms'
-import type { ScoreSlot, WordGridLayout } from '@/lib/forms/layout'
+import type { ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
 
 const ASSETS = path.join(process.cwd(), 'assets')
 const INK = rgb(0.06, 0.09, 0.16)
@@ -39,13 +39,17 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
   const { form, session } = input
   const L = form.layout
 
-  const [srcPdf, fontBytes] = await Promise.all([
+  const [srcPdf, regularBytes, boldBytes] = await Promise.all([
     readFile(path.join(ASSETS, L.pdf)),
     readFile(path.join(ASSETS, 'fonts', 'NanumGothic.ttf')),
+    readFile(path.join(ASSETS, 'fonts', 'NanumGothicBold.ttf')),
   ])
   const doc = await PDFDocument.load(srcPdf)
   doc.registerFontkit(fontkit)
-  const font = await doc.embedFont(fontBytes, { subset: true })
+  // 검사지 본문과 같은 서체(NanumGothic). 점수·O/X는 옆의 분모('/ 7')와 같은 굵기라야
+  // 원래 인쇄된 숫자처럼 보인다 — 정체는 인적사항처럼 본문에 섞이는 값에만 쓴다.
+  const font = await doc.embedFont(regularBytes, { subset: true })
+  const bold = await doc.embedFont(boldBytes, { subset: true })
   const page = doc.getPages()[0]
 
   // 좌표는 이 크기를 전제로 뽑혔다. 개정본을 크기까지 바꿔 넣으면 전부 어긋나므로 먼저 막는다.
@@ -58,57 +62,58 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
 
   const r = scoreSession({ marks: input.marks, sentences: input.sentences, writing: input.writing })
 
+  const put = (slot: Parameters<typeof score>[2], v: number) => score(page, bold, slot, v, L.fontSize)
+
   stampHeader(page, font, L, session)
-  stampGrid(page, font, L.wordReading, readOrder, input.marks)
-  stampGrid(page, font, L.wordWriting, writeOrder, input.writing)
-  score(page, font, L.readScores.meaning, r.wordMeaning)
-  score(page, font, L.readScores.nonsense, r.wordNonsense)
-  score(page, font, L.readScores.total, r.wordReading)
+  stampGrid(page, bold, L.wordReading, readOrder, input.marks, L.fontSize)
+  stampGrid(page, bold, L.wordWriting, writeOrder, input.writing, L.fontSize)
+  put(L.readScores.meaning, r.wordMeaning)
+  put(L.readScores.nonsense, r.wordNonsense)
+  put(L.readScores.total, r.wordReading)
   SENTENCE_CODES.forEach((code, i) => {
     const v = input.sentences[code]
     // 미입력 문항은 0을 찍지 않는다 — 0점과 미채점은 다르다.
-    if (v !== undefined && L.sentenceScores[i]) score(page, font, L.sentenceScores[i], v)
+    if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], v)
   })
-  score(page, font, L.sentenceTotal, r.sentenceReading)
-  score(page, font, L.writeScores.meaning, r.writeMeaning)
-  score(page, font, L.writeScores.nonsense, r.writeNonsense)
-  score(page, font, L.writeScores.total, r.wordWriting)
+  put(L.sentenceTotal, r.sentenceReading)
+  put(L.writeScores.meaning, r.writeMeaning)
+  put(L.writeScores.nonsense, r.writeNonsense)
+  put(L.writeScores.total, r.wordWriting)
   for (const code of session.checklist) {
     const y = L.checklist.rows[code]
-    if (y !== undefined) drawCheck(page, L.checklist.checkX, y)
+    if (y !== undefined) drawCheck(page, L.checklist, y)
   }
   // Pass/Fail은 찍지 않는다 — 검사지에 해당 칸이 없고, 임시 기준 판정을 공식 문서에 남기지 않기 위함.
   return doc.save()
 }
 
-/** 낱말 격자: 셀 우상단에 O/X. 미실시(undefined)는 비워 둔다. */
+/** 낱말 격자: 낱말 오른쪽 여백에 O/X. 미실시(undefined)는 비워 둔다.
+ *  베이스라인을 낱말과 맞춘다 — 칸 위쪽에 찍으면 채점 대상보다 떠 보인다. */
 function stampGrid(
   page: PDFPage, font: PDFFont, g: WordGridLayout,
-  codes: string[], marks: Partial<Record<string, boolean>>,
+  codes: string[], marks: Partial<Record<string, boolean>>, size: number,
 ) {
   codes.forEach((code, i) => {
     const ok = marks[code]
     if (ok === undefined) return
     const col = i % g.perRow
-    const y = g.rows[Math.floor(i / g.perRow)]
-    if (y === undefined) return
+    const cellY = g.rows[Math.floor(i / g.perRow)]
+    if (cellY === undefined) return
     const s = ok ? 'O' : 'X'
-    const size = 11
     const w = font.widthOfTextAtSize(s, size)
     page.drawText(s, {
-      x: g.x0 + g.dx * col + g.w - w - 4,
-      y: y + g.h - size - 1.5,
+      x: g.x0 + g.dx * col + g.w - w - 5,
+      y: cellY + g.baselineDy,
       size, font, color: ok ? INK : ERR,
     })
   })
 }
 
 /** 점수: '/' 왼쪽에 오른쪽 정렬 */
-function score(page: PDFPage, font: PDFFont, slot: ScoreSlot, value: number) {
+function score(page: PDFPage, font: PDFFont, slot: ScoreSlot, value: number, size: number) {
   const s = String(value)
-  const size = 12
   const w = font.widthOfTextAtSize(s, size)
-  page.drawText(s, { x: slot.slashX - 7 - w, y: slot.baselineY, size, font, color: INK })
+  page.drawText(s, { x: slot.slashX - 6 - w, y: slot.baselineY, size, font, color: INK })
 }
 
 function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: StampInput['session']) {
@@ -137,8 +142,16 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: S
   }
 }
 
-/** 확인란(□) 안에 체크 표시 */
-function drawCheck(page: PDFPage, cx: number, y: number) {
-  page.drawLine({ start: { x: cx - 4, y: y + 10.5 }, end: { x: cx - 1, y: y + 6.5 }, thickness: 1.6, color: INK })
-  page.drawLine({ start: { x: cx - 1, y: y + 6.5 }, end: { x: cx + 5, y: y + 15 }, thickness: 1.6, color: INK })
+/** 확인란(□) 안에 체크 표시. 네모의 실측 사각형 안쪽에만 그린다. */
+function drawCheck(page: PDFPage, cl: SheetLayout['checklist'], baselineY: number) {
+  const cy = baselineY + cl.boxDy
+  const half = cl.boxSize / 2
+  const pad = cl.boxSize * 0.18          // 선이 네모 변에 닿지 않도록 안쪽 여백
+  const left = cl.boxCx - half + pad
+  const right = cl.boxCx + half - pad
+  const top = cy + half - pad
+  const bottom = cy - half + pad
+  const kneeX = left + (right - left) * 0.36
+  page.drawLine({ start: { x: left, y: cy }, end: { x: kneeX, y: bottom }, thickness: 1.1, color: INK })
+  page.drawLine({ start: { x: kneeX, y: bottom }, end: { x: right, y: top }, thickness: 1.1, color: INK })
 }
