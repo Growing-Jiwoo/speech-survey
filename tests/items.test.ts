@@ -31,7 +31,7 @@ describe('ITEMS', () => {
   it('PDF 문구 대조 (표본)', () => {
     expect(itemByCode.get('rw01')!.text).toBe('어디')
     expect(itemByCode.get('rw08')!.text).toBe('아로')
-    expect(itemByCode.get('rw14')!.text).toBe('봉밥')
+    expect(itemByCode.get('rw14')!.text).toBe('붕밥')
     expect(itemByCode.get('rs01')!.text).toBe('아이가 아빠와 우유 사러 가서 고기도 사요.')
     expect(itemByCode.get('rs04')!.text).toContain('사과를 했어요')
     expect(itemByCode.get('ww01')!.text).toBe('우비')
@@ -96,7 +96,7 @@ describe('PAGES (화면·녹음 단위)', () => {
     expect(pageByCode.get('p_rw_meaning')!.items.map(i => i.text))
       .toEqual(['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법'])
     expect(pageByCode.get('p_rw_nonsense')!.items.map(i => i.text))
-      .toEqual(['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥'])
+      .toEqual(['아로', '부림', '영추', '주곡', '구말', '솔텅', '붕밥'])
   })
 
   it('문장 페이지는 문장 1개씩', () => {

@@ -8,7 +8,7 @@ export const G1: SurveyForm = {
   subtitle: 'Korean Dyslexia Screening Test',
   grades: [1],
   readMeaning: ['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법'],
-  readNonsense: ['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥'],
+  readNonsense: ['아로', '부림', '영추', '주곡', '구말', '솔텅', '붕밥'],
   sentences: [
     '아이가 아빠와 우유 사러 가서 고기도 사요.',
     '스라소니가 피리 가져오고 개구리가 해바라기 가지고 와요.',
