@@ -14,11 +14,13 @@
   },
   "dependencies": {
     "@node-rs/argon2": "2.0.2",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@supabase/supabase-js": "2.110.2",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-table": "8.21.3",
     "@tanstack/react-virtual": "3.14.6",
     "next": "16.2.10",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "wavesurfer.js": "7.12.10",
