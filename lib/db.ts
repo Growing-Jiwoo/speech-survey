@@ -53,9 +53,13 @@ export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
  */
 export async function submitSession(
   sessionId: string, writing: WritingAnswer[], checklist: string[], marks: ReadingMark[] = [],
+  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
+   *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
+  discontinued = false,
 ): Promise<SubmitResult> {
+  const now = new Date().toISOString()
   const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: new Date().toISOString() })
+    .update({ checklist, submitted_at: now, discontinued_at: discontinued ? now : null })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
@@ -218,6 +222,8 @@ export interface SessionRow {
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
   /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
   examiner_type: 'teacher' | 'expert' | null
+  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않은 시각(012). 제출 시점에 확정된다 */
+  discontinued_at: string | null
 }
 
 export interface RecordingRow {
@@ -227,7 +233,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type, discontinued_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

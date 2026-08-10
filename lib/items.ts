@@ -169,3 +169,10 @@ export const maxRecSec = (p: SurveyPage): number => p.limitSec + GRACE_SEC
 
 /** 진행률 분모 — 화면·녹음 단위(페이지)와 쓰기 문항 수. 관리자 목록·결과지가 같은 값을 쓴다. */
 export const ITEM_TOTALS = { rec: RECORDING_PAGES.length, write: WRITING_ITEMS.length }
+
+/** 중단 규칙 ①이 적용된 세션의 진행률 분모 — 문장·낱말 쓰기를 실시하지 않으므로
+ *  낱말 해독 녹음까지가 "전부"다. 전체 분모로 재면 규칙대로 끝난 검사가 미완료로 남는다. */
+export const DISCONTINUED_ITEM_TOTALS = {
+  rec: RECORDING_PAGES.filter(p => p.section === 'word_reading').length,
+  write: 0,
+}

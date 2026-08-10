@@ -3,6 +3,7 @@ import type { SessionListRow } from '@/lib/db'
 import {
   sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds,
+  expectedTotals,
 } from '@/lib/adminStats'
 
 /** 테스트 픽스처 */
@@ -16,7 +17,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
-    examiner_type: null,
+    examiner_type: null, discontinued_at: null,
     recordings: [], writing_answers: [],
     ...over,
   }
@@ -240,5 +241,42 @@ describe('URL 직렬화', () => {
     const sort = { key: 'progress' as const, dir: 'asc' as const }
     const qs = filtersToQuery(filters, sort)
     expect(parseFilters(new URLSearchParams(qs))).toEqual({ filters, sort })
+  })
+})
+
+describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 검사를 미완료로 세지 않기 위함)', () => {
+  const T = { rec: 6, write: 10 }
+
+  it('중단된 세션은 낱말 해독 녹음 2건만으로 완료다', () => {
+    const s = mkSession({
+      discontinued_at: '2026-08-10T01:00:00.000Z',
+      recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rw_nonsense' }],
+      writing_answers: [],
+    })
+    expect(sessionProgress(s, T).incomplete).toBe(false)
+  })
+
+  it('중단되지 않은 같은 데이터는 미완료다', () => {
+    const s = mkSession({
+      discontinued_at: null,
+      recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rw_nonsense' }],
+      writing_answers: [],
+    })
+    expect(sessionProgress(s, T).incomplete).toBe(true)
+  })
+
+  it('중단됐어도 낱말 해독 녹음이 비면 미완료다', () => {
+    const s = mkSession({
+      discontinued_at: '2026-08-10T01:00:00.000Z',
+      recordings: [{ item_code: 'p_rw_meaning' }],
+      writing_answers: [],
+    })
+    expect(sessionProgress(s, T).incomplete).toBe(true)
+  })
+
+  it('expectedTotals: 중단 여부로 분모가 갈린다', () => {
+    expect(expectedTotals({ discontinued_at: null }, T)).toEqual(T)
+    expect(expectedTotals({ discontinued_at: '2026-08-10T01:00:00.000Z' }, T))
+      .toEqual({ rec: 2, write: 0 })
   })
 })

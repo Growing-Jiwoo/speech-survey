@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { ITEM_TOTALS, RECORDING_PAGES, WRITING_ITEMS } from '@/lib/items'
-import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { adjacentSessionIds, expectedTotals, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
@@ -82,7 +82,10 @@ export function AdminDetailView() {
   const { session: s, writing } = data
   const writingByCode = Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))
   const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
-  const missingCount = (RECORDING_PAGES.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
+  // 중단 규칙 ①이 걸린 세션은 문장·낱말 쓰기를 실시하지 않는다 — 전체 프로토콜을 분모로 삼으면
+  // 규칙대로 정상 종료된 검사가 계속 "미완료"로 보여, 더 받을 것이 없는 아동을 쫓게 된다.
+  const expected = expectedTotals(s, ITEM_TOTALS)
+  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writing.length)
 
   return (
     <AudioBusProvider>

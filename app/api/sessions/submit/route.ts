@@ -5,6 +5,7 @@ import { submitSession, type ReadingMark, type WritingAnswer } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { AREA_CODES, MEANING_READ_CODES, WRITING_ITEMS } from '@/lib/items'
+import { readingCeilingHit } from '@/lib/survey-flow'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -44,7 +45,12 @@ export async function POST(req: Request) {
     return invalidToken()
 
   try {
-    const result = await submitSession(b.sessionId, writing, checklist, marks)
+    // 중단 규칙 ①은 현장 채점(의미 낱말 O/X)만으로 판정된다. 검사 당시의 사실이므로
+    // 여기서 한 번 굳혀 저장한다 — 나중에 관리자가 채점을 고쳐도 뒤집히지 않아야 한다.
+    const discontinued = readingCeilingHit(
+      Object.fromEntries(marks.map(m => [m.itemCode, m.correct])),
+    )
+    const result = await submitSession(b.sessionId, writing, checklist, marks, discontinued)
     if (result === 'not_found')
       return jsonError('세션을 찾을 수 없습니다.', 404)
     if (result === 'already_submitted')

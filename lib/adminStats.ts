@@ -1,3 +1,4 @@
+import { DISCONTINUED_ITEM_TOTALS } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
 
 // ---------- 타입 ----------
@@ -32,12 +33,19 @@ export function kstDateKey(d: Date): string {
 // ---------- 집계 ----------
 
 /** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다 */
+/** 이 세션에서 "전부"에 해당하는 분모. 중단 규칙 ①이 걸린 세션은 문장·낱말 쓰기를
+ *  실시하지 않으므로 전체 프로토콜로 재면 규칙대로 끝난 검사가 영원히 미완료로 남는다. */
+export function expectedTotals(s: Pick<SessionListRow, 'discontinued_at'>, totals: Totals): Totals {
+  return s.discontinued_at ? DISCONTINUED_ITEM_TOTALS : totals
+}
+
 export function sessionProgress(s: SessionListRow, totals: Totals): {
   recorded: number; written: number; incomplete: boolean
 } {
   const recorded = new Set(s.recordings.map(r => r.item_code)).size
   const written = s.writing_answers.length
-  return { recorded, written, incomplete: recorded < totals.rec || written < totals.write }
+  const exp = expectedTotals(s, totals)
+  return { recorded, written, incomplete: recorded < exp.rec || written < exp.write }
 }
 
 export interface Kpis { total: number; submitted: number; inProgress: number; today: number }
