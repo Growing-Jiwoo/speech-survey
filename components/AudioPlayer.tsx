@@ -21,7 +21,14 @@ function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 }
 
-export function AudioPlayer({ src, onError }: { src: string; onError?: () => void }) {
+export function AudioPlayer({ src, durationSec, onError }: {
+  src: string
+  /** DB에 기록된 녹음 길이. 파형이 로드되기 전에도 총 길이를 보여 주려는 초기값이며,
+   *  ready 시 디코드된 실제 길이로 교체된다. 이 값이 있으면 호출부가 길이를 따로 찍을
+   *  필요가 없다 — 같은 숫자가 화면에 두 번 나오던 것을 없앤다. */
+  durationSec?: number | null
+  onError?: () => void
+}) {
   const rootRef = useRef<HTMLDivElement>(null)
   const waveRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
@@ -35,7 +42,7 @@ export function AudioPlayer({ src, onError }: { src: string; onError?: () => voi
   const [playing, setPlaying] = useState(false)
   const [rate, setRate] = useState(1)
   const [cur, setCur] = useState(0)
-  const [dur, setDur] = useState(0)
+  const [dur, setDur] = useState(durationSec ?? 0)
 
   // 1) 화면에 들어온 행만 wavesurfer 인스턴스를 만든다(결과지당 최대 ~26개 동시 생성 방지).
   useEffect(() => {

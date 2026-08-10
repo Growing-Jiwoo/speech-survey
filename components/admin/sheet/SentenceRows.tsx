@@ -41,8 +41,9 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
                 <span className="text-[13px] text-ink-mute">/ {max}</span>
               </div>
             </div>
+            {/* 라벨 없이 플레이어만 — 바로 위에 번호와 문장 전문이 있어 '1번 문장'은 군더더기다 */}
             <div className="mt-2 pl-8">
-              <PageAudio label={`${i + 1}번 문장`} attempts={attemptsFor(item.code)}
+              <PageAudio attempts={attemptsFor(item.code)}
                 limitSec={limitSec} onAudioError={onAudioError} />
             </div>
           </div>
