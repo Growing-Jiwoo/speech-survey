@@ -48,7 +48,9 @@ export async function POST(req: Request) {
     const sessionId = await createSession({
       schoolRegion: d.region, schoolId: d.schoolId, schoolName: d.schoolName,
       birthYmd: d.birthYmd, grade: d.grade, classNo: d.classNo, gender: d.gender,
-      childName: d.name, teacherName: d.teacherName, teacherContact: d.teacherContact,
+      childName: d.name, teacherName: d.teacherName,
+      teacherPhone: d.teacherPhone || null, teacherEmail: d.teacherEmail || null,
+      examinerType: d.examinerType,
     })
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
     return NextResponse.json({ sessionId, sessionToken })

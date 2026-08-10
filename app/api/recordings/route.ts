@@ -6,16 +6,16 @@ import { audioExt } from '@/lib/audio-ext'
 import { isAllowedAudioMime, sniffAudio, safeContentType } from '@/lib/audio-validate'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { itemByCode } from '@/lib/items'
+import { isRecordingPage, pageByCode } from '@/lib/items'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MAX_BYTES = 5 * 1024 * 1024   // 최대 40초 opus 녹음의 수 배 여유 — 스토리지 남용 방지
-const MAX_ATTEMPTS = 10             // 문항당 재녹음 상한
-const MAX_DURATION_SEC = 120        // numeric(5,2) 오버플로 방지 + 비정상 장시간 차단(현재 문항 최대 40초 대비 여유)
-const MAX_PER_SESSION = 200         // 세션당 총 녹음 상한(문항 18 × 재시도 10 + 여유) — 스토리지/DB 남용 방지
+const MAX_BYTES = 5 * 1024 * 1024   // 최대 45초 opus 녹음의 수 배 여유 — 스토리지 남용 방지
+const MAX_ATTEMPTS = 10             // 페이지당 재녹음 상한
+const MAX_DURATION_SEC = 120        // numeric(5,2) 오버플로 방지 + 비정상 장시간 차단(현재 페이지 최대 45초 대비 여유)
+const MAX_PER_SESSION = 200         // 세션당 총 녹음 상한 — 스토리지/DB 남용 방지
 
 export async function POST(req: Request) {
   const fd = await req.formData().catch(() => null)
@@ -25,8 +25,10 @@ export async function POST(req: Request) {
   const itemCode = String(fd?.get('itemCode') ?? '')
   const attemptNo = Number(fd?.get('attemptNo'))
   const durationSec = Number(fd?.get('durationSec') ?? 0)
-  const item = itemByCode.get(itemCode)
-  if (!(audio instanceof File) || !UUID_RE.test(sessionId) || !item || item.maxSec === 0
+  // 녹음 단위는 페이지다(검사지: 한 페이지 전체를 제한 시간 안에 읽는다).
+  // 연습 페이지는 아동 연습용이라 서버에 남기지 않는다.
+  const page = pageByCode.get(itemCode)
+  if (!(audio instanceof File) || !UUID_RE.test(sessionId) || !page || !isRecordingPage(page) || page.practice
     || !Number.isInteger(attemptNo) || attemptNo < 1 || attemptNo > MAX_ATTEMPTS
     || !Number.isFinite(durationSec) || durationSec < 0 || durationSec > MAX_DURATION_SEC)
     return jsonError('필수 항목 누락', 400)

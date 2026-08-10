@@ -9,6 +9,7 @@ vi.mock('@/lib/db', () => ({
 
 import { GET as LIST } from '@/app/api/admin/sessions/route'
 import { GET as DETAIL, DELETE } from '@/app/api/admin/sessions/[id]/route'
+import { GET as SHEET } from '@/app/api/admin/sessions/[id]/sheet.pdf/route'
 import { POST as LOGOUT } from '@/app/api/admin/logout/route'
 import * as db from '@/lib/db'
 
@@ -20,7 +21,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.listSessions).mockResolvedValue([])
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session: { id: SID } as never, recordings: [], writing: [],
+    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [],
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
 })
@@ -49,6 +50,7 @@ describe('GET /api/admin/sessions/[id]', () => {
         { item_code: 'rw02', attempt_no: 2, audio_path: `${SID}/rw02_2.webm`, duration_sec: null, created_at: 'z' },
       ],
       writing: [{ item_code: 'ww01', can_write: true }],
+      marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
     })
     vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
 
@@ -62,6 +64,8 @@ describe('GET /api/admin/sessions/[id]', () => {
     ])
     expect(JSON.stringify(body.recordings)).not.toContain('audio_path')
     expect(body.writing).toEqual([{ item_code: 'ww01', can_write: true }])
+    expect(body.marks).toEqual([{ item_code: 'rw01', correct: true }])
+    expect(body.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
   })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))
@@ -92,6 +96,46 @@ describe('DELETE /api/admin/sessions/[id]', () => {
     const res = await DELETE(req('DELETE'), ctx(SID))
     expect(res.status).toBe(500)
     expect((await res.json()).error).not.toMatch(/storage internal/)
+  })
+})
+
+describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
+  const detail = (started_at: string) => ({
+    session: {
+      id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_name: '홍길동',
+      birth_ymd: '170310', started_at,
+      examiner_type: 'expert', checklist: [],
+    } as never,
+    recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
+    marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+  })
+
+  it('PDF를 첨부 파일로 내려준다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-07T06:25:08.000Z'))
+    const res = await SHEET(req(), ctx(SID))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/pdf')
+    expect(res.headers.get('content-disposition')).toMatch(/attachment/)
+    const buf = await res.arrayBuffer()
+    // PDF 매직 넘버
+    expect(new TextDecoder().decode(buf.slice(0, 4))).toBe('%PDF')
+  })
+  it('파일명 날짜는 KST 기준 — UTC로 계산하면 아침 검사가 하루 전으로 찍힌다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-06T23:00:00.000Z'))
+    const res = await SHEET(req(), ctx(SID))
+    expect(res.headers.get('content-disposition')).toContain('2026-08-07')
+    expect(res.headers.get('content-disposition')).not.toContain('2026-08-06')
+  })
+  it('UUID가 아닌 id 400', async () => {
+    const res = await SHEET(req(), ctx('not-a-uuid'))
+    expect(res.status).toBe(400)
+    expect(db.sessionDetail).not.toHaveBeenCalled()
+  })
+  it('DB 오류 시 500 + 일반화된 메시지', async () => {
+    vi.mocked(db.sessionDetail).mockRejectedValueOnce(new Error('relation does not exist'))
+    const res = await SHEET(req(), ctx(SID))
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/relation/)
   })
 })
 

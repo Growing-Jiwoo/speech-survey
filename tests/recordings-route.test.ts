@@ -22,7 +22,7 @@ function makeReq(over: Record<string, string | Blob> = {}) {
   fd.set('audio', WEBM(), 'audio')
   fd.set('sessionId', SID)
   fd.set('sessionToken', TOKEN)
-  fd.set('itemCode', 'rw01')
+  fd.set('itemCode', 'p_rw_meaning')
   fd.set('attemptNo', '1')
   fd.set('durationSec', '3.20')
   for (const [k, v] of Object.entries(over)) fd.set(k, v)
@@ -40,9 +40,10 @@ describe('POST /api/recordings', () => {
   it('업로드 + 녹음 기록(서버 고정 Content-Type)', async () => {
     const res = await POST(makeReq())
     expect(res.status).toBe(200)
-    expect(db.uploadRecording).toHaveBeenCalledWith(`${SID}/rw01_1.webm`, expect.any(Buffer), 'audio/webm')
+    expect(db.uploadRecording).toHaveBeenCalledWith(`${SID}/p_rw_meaning_1.webm`, expect.any(Buffer), 'audio/webm')
     expect(db.insertRecording).toHaveBeenCalledWith({
-      sessionId: SID, itemCode: 'rw01', attemptNo: 1, audioPath: `${SID}/rw01_1.webm`, durationSec: 3.2,
+      sessionId: SID, itemCode: 'p_rw_meaning', attemptNo: 1,
+      audioPath: `${SID}/p_rw_meaning_1.webm`, durationSec: 3.2,
     })
   })
   it('토큰 없음/위조 401', async () => {
@@ -59,10 +60,26 @@ describe('POST /api/recordings', () => {
     const badMime = new Blob([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3, 4])], { type: 'text/html' })
     expect((await POST(makeReq({ audio: badMime }))).status).toBe(400)
   })
-  it('녹음 문항이 아닌 코드 400 (ww01, cl, 미지 코드)', async () => {
-    expect((await POST(makeReq({ itemCode: 'ww01' }))).status).toBe(400)
-    expect((await POST(makeReq({ itemCode: 'cl' }))).status).toBe(400)
+  it('녹음 페이지가 아닌 코드 400 (쓰기·체크리스트·미지 코드)', async () => {
+    expect((await POST(makeReq({ itemCode: 'p_ww' }))).status).toBe(400)
+    expect((await POST(makeReq({ itemCode: 'p_cl' }))).status).toBe(400)
     expect((await POST(makeReq({ itemCode: 'zz99' }))).status).toBe(400)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+
+  it('개별 문항 코드는 더 이상 허용하지 않는다 (녹음 단위가 페이지로 바뀜)', async () => {
+    expect((await POST(makeReq({ itemCode: 'rw01' }))).status).toBe(400)
+    expect((await POST(makeReq({ itemCode: 'rs01' }))).status).toBe(400)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+
+  it('연습 페이지 코드는 거부한다 (아동 연습용 — 서버에 남기지 않는다)', async () => {
+    expect((await POST(makeReq({ itemCode: 'p_practice_rw' }))).status).toBe(400)
+    expect(db.uploadRecording).not.toHaveBeenCalled()
+  })
+
+  it('문장 페이지 코드는 허용된다', async () => {
+    expect((await POST(makeReq({ itemCode: 'p_rs04' }))).status).toBe(200)
   })
   it('sessionId가 UUID가 아니면 400', async () =>
     expect((await POST(makeReq({ sessionId: '../etc/passwd' }))).status).toBe(400))
@@ -102,6 +119,6 @@ describe('POST /api/recordings', () => {
   it('insert 실패 시 502 + 업로드 객체 보상 정리', async () => {
     vi.mocked(db.insertRecording).mockRejectedValueOnce(new Error('db down'))
     expect((await POST(makeReq())).status).toBe(502)
-    expect(db.removeStorageObject).toHaveBeenCalledWith(`${SID}/rw01_1.webm`)
+    expect(db.removeStorageObject).toHaveBeenCalledWith(`${SID}/p_rw_meaning_1.webm`)
   })
 })

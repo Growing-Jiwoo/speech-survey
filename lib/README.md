@@ -7,10 +7,13 @@
 
 | 파일 | 역할 |
 |---|---|
-| `items.ts` | 검사 문항 정의의 단일 소스(29문항, 코드 상수 — DB 시드 아님). 섹션 라벨·체크리스트 영역·`ITEM_TOTALS`(진행률 분모)·`isRecordingItem` 술어 포함 |
+| `items.ts` | 검사 문항(`ITEMS`, 채점 단위 29문항)과 **페이지 모델**(`PAGES`, 화면·녹음·제한시간 단위)의 단일 소스. 섹션 라벨·체크리스트 영역·`ITEM_TOTALS`(진행률 분모) 포함 |
+| `forms/` | 학년별 검사지 정의(문항·배점·제한시간)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 파일 추가로 끝난다 |
+| `survey-flow.ts` | 검사지의 중단 규칙(첫 3개 연속 오반응)과 페이지 게이팅. `visiblePages`·`requiredWritingCodes`·`canAdvance` |
+| `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 화면·저장 API·인쇄가 이 파일 하나로 계산한다 |
 | `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용) |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
-| `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기하고, PII(이름 등)는 저장하지 않는다 |
+| `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름을 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
 | `adminStats.ts` | 관리자 목록의 KPI·학교별 집계·필터/정렬·URL(searchParams) 직렬화. KST 일자 키(`kstDateKey`) 기준 "오늘" 판정 |
 
 ## 서버 전용 (클라이언트 컴포넌트에서 import 금지)
@@ -24,6 +27,9 @@
 | `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(Edge middleware·Node 라우트 공용) |
 | `audio-validate.ts` | 업로드 오디오 MIME allowlist + 매직바이트 스니핑(저장형 XSS 차단) |
 | `audio-ext.ts` | 저장 파일 확장자 결정(표기용 — 재생은 Content-Type 기준) |
+| `pdf/` | 공식 검사지 PDF 스탬핑 — 원본 PDF(`assets/forms/`)에 점수만 얹는다 |
+| `consent.ts` | 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) |
+| `login-policy.ts` | 관리자 로그인 실패 누적·잠금 정책 |
 
 ## 클라이언트 유틸
 
@@ -32,5 +38,6 @@
 | `http.ts` | `requestJson/postJson`(던지지 않는 결과형) + `fetchJson`(react-query용) + 네트워크 오류 카피 단일화 |
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
-| `format.ts` | `fmtDuration`(m:ss)·`pad2` 등 표시 포맷 |
+| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`examinerLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷 |
+| `platform.ts` | 브라우저·플랫폼 판별(녹음 지원 여부 안내용) |
 | `schools.ts` | 지역(시도교육청) 상수와 학교 타입 — 학교 목록 데이터는 `public/schools/*.json` |

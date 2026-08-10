@@ -16,13 +16,16 @@ const EST_OPTION_H = 41
  * 키보드: 포커스는 항상 트리거에 두고 aria-activedescendant로 활성 옵션만 옮기는
  * ARIA listbox 패턴 — ↑/↓(열기·이동) · Home/End · Enter/Space(선택) · Esc(닫기).
  */
-export function Select({ id, value, options, placeholder, onChange, ariaLabel, disabled, className = '', size = 'lg' }: {
+export function Select({ id, value, options, placeholder, onChange, ariaLabel, ariaDescribedby, ariaInvalid, disabled, className = '', size = 'lg' }: {
   id?: string
   value: string
   options: SelectOption[]
   placeholder: string
   onChange: (value: string) => void
   ariaLabel?: string
+  /** 오류 메시지 요소의 id — 폼 검증 실패 시 트리거가 그 메시지를 가리키게 한다(네이티브 input과 동일). */
+  ariaDescribedby?: string
+  ariaInvalid?: boolean
   disabled?: boolean
   className?: string
   /** 'lg'(기본, 검사 화면용 큰 터치 타깃) | 'sm'(관리자 툴바 등 밀도 높은 화면용) */
@@ -120,6 +123,7 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, d
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button ref={triggerRef} type="button" id={id} aria-label={ariaLabel}
+        aria-describedby={ariaDescribedby} aria-invalid={ariaInvalid}
         role="combobox" aria-haspopup="listbox" aria-expanded={isOpen} aria-controls={listboxId}
         aria-activedescendant={isOpen && active >= 0 ? optionId(active) : undefined}
         disabled={disabled} onClick={() => (isOpen ? setOpen(false) : openList())} onKeyDown={onTriggerKeyDown}

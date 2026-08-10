@@ -11,7 +11,8 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
-import { ITEMS, SECTION_LABEL, areaLabel, isRecordingItem, type Section } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, areaLabel, PAGES, type Section } from '@/lib/items'
+import { requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
@@ -38,26 +39,43 @@ export default function ReviewPage() {
   if (!st) return null
   const state = st
 
-  // 미완료 판정: 녹음 문항은 저장된 시도 0회, 낱말쓰기는 예/아니오 미선택.
-  // (체크리스트는 설문 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
-  const missing = ITEMS.filter(i =>
-    (isRecordingItem(i) && !(state.recorded[i.code] > 0)) ||
-    (i.section === 'word_writing' && state.writing[i.code] === undefined)).length
+  // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 낱말쓰기는 예/아니오 미선택.
+  // (체크리스트는 진행 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
+  // 연습 페이지는 서버에 남기지 않으므로 완료 판정에서 제외한다.
+  const pages = visiblePages(state)
+  const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
+  const missingWriting = pages
+    .filter(p => p.section === 'word_writing')
+    .flatMap(p => {
+      const required = requiredWritingCodes(p.items, state.writing)
+      return p.items.filter(i => required.has(i.code))
+    })
+    .filter(i => state.writing[i.code] === undefined).length
+  const missing = missingPages + missingWriting
 
   /** 섹션 하나를 카드로 렌더 — 얇은 구분선 행 + 작은 상태 배지의 차분한 목록. */
   function renderSection(section: Section) {
+    const rows = pages.filter(p => p.section === section)
+    if (rows.length === 0) return null   // 중단 규칙으로 미실시된 섹션
     return (
       <section className="card p-4 lg:p-5">
         <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
         <ul className="mt-1 flex flex-col">
-          {ITEMS.filter(i => i.section === section).map(i => {
+          {rows.map(p => {
+            const no = pages.indexOf(p) + 1
             let pill: React.ReactNode
-            if (isRecordingItem(i)) {
-              const done = (state.recorded[i.code] ?? 0) > 0
+            if (p.practice) {
+              pill = <span className="text-right text-xs text-ink-mute">연습 (채점 안 함)</span>
+            } else if (isRecordingPage(p)) {
+              const done = (state.recorded[p.code] ?? 0) > 0
               pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
-            } else if (i.section === 'word_writing') {
-              const v = state.writing[i.code]
-              pill = <StatusPill done={v !== undefined} label={v === true ? '예' : v === false ? '아니오' : '미선택'} />
+            } else if (p.code === 'p_rw_meaning_mark') {
+              const done = p.items.every(i => state.marks[i.code] !== undefined)
+              pill = <StatusPill done={done} label={done ? '표시 완료' : '표시 안 함'} />
+            } else if (p.section === 'word_writing') {
+              const required = requiredWritingCodes(p.items, state.writing)
+              const done = p.items.filter(i => required.has(i.code) && state.writing[i.code] !== undefined).length
+              pill = <StatusPill done={done === required.size} label={`${done} / ${required.size}`} />
             } else {
               pill = (
                 <span className="text-right text-xs text-ink-soft">
@@ -65,12 +83,15 @@ export default function ReviewPage() {
                 </span>
               )
             }
+            // ?p=<순번>&from=review — 진행 화면이 해당 페이지로 열리고 "검토로 돌아가기" 링크를 보여준다
+            const label = p.section === 'checklist' ? '검사자 체크리스트'
+              : p.code === 'p_rw_meaning_mark' ? '검사자 확인 (의미 낱말 채점)'
+                : p.items.map(i => i.text).join(' · ')
             return (
-              <li key={i.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
-                {/* ?q=<orderNo>&from=review — 설문 화면이 해당 문항으로 열리고 "검토로 돌아가기" 링크를 보여준다 */}
-                <Link href={`/survey?q=${i.orderNo}&from=review`} className="flex min-w-0 items-center gap-2.5">
-                  <span className="w-6 flex-none text-sm font-bold text-blue">{i.orderNo}</span>
-                  <span className="font-read truncate text-sm">{i.text || '검사자 체크리스트'}</span>
+              <li key={p.code} className="flex items-center justify-between gap-3 border-t border-line/60 py-2.5 first:border-t-0">
+                <Link href={`/survey?p=${no}&from=review`} className="flex min-w-0 items-center gap-2.5">
+                  <span className="w-6 flex-none text-sm font-bold text-blue">{no}</span>
+                  <span className="font-read truncate text-sm">{label}</span>
                 </Link>
                 {pill}
               </li>
@@ -85,7 +106,8 @@ export default function ReviewPage() {
     if (!st) return
     setBusy(true); setErr('')
     const r = await postJson('/api/sessions/submit', {
-      sessionId: st.sessionId, sessionToken: st.sessionToken, writing: st.writing, checklist: st.checklist,
+      sessionId: st.sessionId, sessionToken: st.sessionToken,
+      writing: st.writing, checklist: st.checklist, marks: st.marks,
     }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
@@ -99,11 +121,16 @@ export default function ReviewPage() {
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">검사 검토</span>
       </div>
-      <h1 className="mt-6 text-xl font-bold">문항별 완료 여부를 확인해 주세요</h1>
+      <h1 className="mt-6 text-xl font-bold">단계별 완료 여부를 확인해 주세요</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-        문항 번호를 누르면 해당 문항으로 이동해요.
-        {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b> 문항이 완료되지 않았어요.</>}
+        단계 번호를 누르면 해당 화면으로 이동해요.
+        {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
+      {pages.length < PAGES.length && (
+        <p className="mt-1 text-xs text-ink-mute">
+          중단 규칙에 따라 문장 읽기유창성·낱말 쓰기는 생략되었습니다.
+        </p>
+      )}
 
       {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
           검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.
@@ -120,7 +147,7 @@ export default function ReviewPage() {
       </div>
 
       <div className="mt-6 flex gap-2.5 pb-2">
-        <button onClick={() => router.push(`/survey?q=${ITEMS.length}`)} className="btn-ghost h-[52px] flex-1">
+        <button onClick={() => router.push(`/survey?p=${pages.length}`)} className="btn-ghost h-[52px] flex-1">
           이전
         </button>
         <button onClick={() => setModal(true)} className="btn-primary h-[52px] flex-[2]">
@@ -137,7 +164,7 @@ export default function ReviewPage() {
         </p>
         {missing > 0 && (
           <p className="mt-3 rounded-xl bg-rec/10 px-3 py-2 text-center text-[13px] font-bold text-rec-deep">
-            아직 {missing}개 문항이 완료되지 않았어요.
+            아직 {missing}개가 완료되지 않았어요.
           </p>
         )}
       </ConfirmDialog>

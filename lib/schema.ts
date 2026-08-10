@@ -17,9 +17,19 @@ export const birthYmdSchema = z.string().regex(/^\d{6}$/).refine(v => {
 })
 
 export const gradeSchema = z.number().int().min(1).max(6)
-export const classNoSchema = z.number().int().min(1).max(99)
+/** 반 번호. 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용.
+ *  화면 드롭다운은 20까지만 제공하지만(app/page.tsx의 MAX_CLASS_NO), DB·스키마는 넓게 두어
+ *  나중에 범위를 늘릴 때 마이그레이션이 필요 없게 한다. */
+export const classNoSchema = z.number().int().min(0).max(99)
 export const genderSchema = z.enum(['남', '여'])
-export const contactSchema = z.string().min(1).max(60).refine(v => PHONE_RE.test(v) || EMAIL_RE.test(v))
+
+/** 담임 연락처 — 전화·이메일을 각각 받고 둘 중 하나만 있으면 된다(담당자 확정).
+ *  빈 문자열 = 미입력. 공백만 입력한 칸도 trim 후 미입력으로 본다. */
+const optionalContact = z.string().max(60).default('').transform(s => s.trim())
+
+/** 폼에서 칸별로 검사할 때 쓰는 단일 필드 스키마(빈 값 허용 안 함) */
+export const phoneSchema = z.string().regex(PHONE_RE)
+export const emailSchema = z.string().regex(EMAIL_RE)
 
 /** 문자열 정규화: trim + 연속 공백 1칸 (기존 라우트 cleanStr와 동일 규칙). */
 const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
@@ -35,10 +45,19 @@ export const sessionCreateSchema = z.object({
   gender: genderSchema,
   name: cleaned.pipe(nameSchema),
   teacherName: cleaned.pipe(nameSchema),
-  teacherContact: contactSchema,
+  teacherPhone: optionalContact,
+  teacherEmail: optionalContact,
+  // 검사지 헤더의 "교사 / 전문가" 구분
+  examinerType: z.enum(['teacher', 'expert']),
   // 만 14세 미만 아동 — 법정대리인 서면 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
   // true 리터럴만 허용: 미체크(false/누락) 상태로는 세션 생성 자체가 불가능하다.
   guardianConsent: z.literal(true),
 })
+  .refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
+    { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
+  .refine(d => d.teacherPhone === '' || PHONE_RE.test(d.teacherPhone),
+    { path: ['teacherPhone'], message: '전화번호 형식이 올바르지 않습니다.' })
+  .refine(d => d.teacherEmail === '' || EMAIL_RE.test(d.teacherEmail),
+    { path: ['teacherEmail'], message: '이메일 형식이 올바르지 않습니다.' })
 
 export type SessionCreateInput = z.infer<typeof sessionCreateSchema>

@@ -12,7 +12,7 @@ import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { pad2 } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { clearState, loadState, newState, saveState } from '@/lib/survey-state'
-import { validBirthYmd, validClassNo, validContact, validGender, validName } from '@/lib/validate'
+import { validBirthYmd, validClassNo, validEmail, validGender, validName, validPhone } from '@/lib/validate'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
@@ -21,11 +21,19 @@ const NOW_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 12 }, (_, i) => NOW_YEAR - 5 - i) // 초등 연령대 여유 범위
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
-type FieldKey = 'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'contact'
+/** 반 드롭다운 상한. 담당자 요청(15학급을 잘 넘지 않음)보다 넉넉히 잡았다 — 늘리려면 이 숫자만 바꾸면 된다. */
+const MAX_CLASS_NO = 20
+/** 반 선택지: 단일학급(반 없음) = 0, 그 외 1~MAX_CLASS_NO */
+const CLASS_OPTIONS = [
+  { value: '0', label: '단일학급 (반 없음)' },
+  ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
+]
+
+type FieldKey = 'school' | 'birth' | 'classNo' | 'gender' | 'name' | 'teacher' | 'examiner' | 'phone' | 'email'
 type FieldErrors = Partial<Record<FieldKey, string>>
 
 /** 화면상 필드 순서 — 검증 실패 시 이 순서의 첫 에러 필드로 포커스를 옮긴다. */
-const FIELD_ORDER: FieldKey[] = ['school', 'birth', 'classNo', 'gender', 'name', 'teacher', 'contact']
+const FIELD_ORDER: FieldKey[] = ['school', 'birth', 'classNo', 'gender', 'name', 'teacher', 'examiner', 'phone', 'email']
 
 function focusFirstError(errors: FieldErrors) {
   const key = FIELD_ORDER.find(k => errors[k])
@@ -52,7 +60,10 @@ export default function StartPage() {
   const [gender, setGender] = useState<'남' | '여' | ''>('')
   const [name, setName] = useState('')
   const [teacherName, setTeacherName] = useState('')
-  const [contact, setContact] = useState('')
+  // 검사지 헤더의 "교사 / 전문가" 구분 — 누가 검사를 실시했는지
+  const [examinerType, setExaminerType] = useState<'teacher' | 'expert' | ''>('')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -75,18 +86,27 @@ export default function StartPage() {
   async function begin() {
     const cleanName = name.trim().replace(/\s+/g, ' ')
     const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
-    const cleanContact = contact.trim()
+    const cleanPhone = phone.trim()
+    const cleanEmail = email.trim()
     // 생년월일은 서버 스키마(birthYmdSchema)와 같은 YYMMDD 6자리로 조립한다
     const birthYmd = year && month && day ? `${String(year).slice(2)}${pad2(Number(month))}${pad2(Number(day))}` : ''
 
     const next: FieldErrors = {}
     if (!school) next.school = '학교를 선택해 주세요.'
     if (!validBirthYmd(birthYmd)) next.birth = '생년월일을 선택해 주세요.'
-    if (!validClassNo(Number(classNo))) next.classNo = '반은 1~99 사이 숫자로 입력해 주세요.'
+    // classNo === '' 검사를 빼면 안 된다: Number('')는 0이고 0은 이제 유효한 값(단일학급)이라
+    // 미선택이 조용히 통과한다.
+    if (classNo === '' || !validClassNo(Number(classNo))) next.classNo = '반을 선택해 주세요.'
     if (!validGender(gender)) next.gender = '성별을 선택해 주세요.'
     if (!validName(cleanName)) next.name = '이름은 한글이나 영어로만 쓸 수 있어요.'
     if (!validName(cleanTeacher)) next.teacher = '담임교사명은 한글이나 영어로만 쓸 수 있어요.'
-    if (!validContact(cleanContact)) next.contact = '연락처는 전화번호 또는 이메일 형식으로 입력해 주세요.'
+    if (examinerType === '') next.examiner = '검사자 구분을 선택해 주세요.'
+    // 전화·이메일 중 하나는 필수. 입력된 칸만 형식을 본다(담당자 확정).
+    if (!cleanPhone && !cleanEmail) next.phone = '전화번호나 이메일 중 하나는 입력해 주세요.'
+    else {
+      if (cleanPhone && !validPhone(cleanPhone)) next.phone = '전화번호 형식으로 입력해 주세요. (예: 010-1234-5678)'
+      if (cleanEmail && !validEmail(cleanEmail)) next.email = '이메일 형식으로 입력해 주세요.'
+    }
     setErrors(next)
     if (Object.keys(next).length > 0) { focusFirstError(next); return }
 
@@ -94,7 +114,9 @@ export default function StartPage() {
     const r = await postJson<{ sessionId: string; sessionToken: string }>('/api/sessions', {
       region: school!.region, schoolId: school!.schoolId, schoolName: school!.schoolName,
       birthYmd, grade: Number(grade), classNo: Number(classNo), gender,
-      name: cleanName, teacherName: cleanTeacher, teacherContact: cleanContact,
+      name: cleanName, teacherName: cleanTeacher,
+      teacherPhone: cleanPhone, teacherEmail: cleanEmail,
+      examinerType,
       guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
     })
     setBusy(false)
@@ -104,7 +126,8 @@ export default function StartPage() {
     router.push('/survey')
   }
 
-  const filled = school && year && month && day && classNo && gender && name.trim() && teacherName.trim() && contact.trim() && consent
+  const filled = school && year && month && day && classNo !== '' && gender && name.trim() && teacherName.trim()
+    && examinerType && (phone.trim() || email.trim()) && consent
 
   return (
     // 데스크톱(lg+)에서는 교사 입력 효율을 위해 폼을 2열로 넓힌다(모바일·태블릿 세로는 현행 유지).
@@ -181,9 +204,11 @@ export default function StartPage() {
             </div>
             <div className="flex-1">
               <label className={labelCls} htmlFor="classNo">반</label>
-              <input id="classNo" data-field="classNo" name="classNo" value={classNo} inputMode="numeric" maxLength={2}
-                aria-describedby={errors.classNo ? 'err-classNo' : undefined} aria-invalid={!!errors.classNo}
-                onChange={e => setClassNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+              <div className="mt-1.5" data-field="classNo">
+                <Select id="classNo" ariaLabel="반" placeholder="반 선택" value={classNo}
+                  ariaDescribedby={errors.classNo ? 'err-classNo' : undefined} ariaInvalid={!!errors.classNo}
+                  onChange={setClassNo} options={CLASS_OPTIONS} />
+              </div>
             </div>
           </div>
           <FieldError id="err-classNo" msg={errors.classNo} />
@@ -220,12 +245,40 @@ export default function StartPage() {
           <FieldError id="err-teacher" msg={errors.teacher} />
         </div>
 
+        <div>
+          <span className={labelCls} id="examiner-label">검사자</span>
+          <div className="mt-1.5 flex gap-2.5" data-field="examiner" role="group" aria-labelledby="examiner-label"
+            aria-describedby={errors.examiner ? 'err-examiner' : undefined}>
+            {([['교사', 'teacher'], ['전문가', 'expert']] as const).map(([label, v]) => (
+              <button key={v} type="button" onClick={() => setExaminerType(v)} aria-pressed={examinerType === v}
+                className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
+                  examinerType === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <FieldError id="err-examiner" msg={errors.examiner} />
+        </div>
+
+        <div>
+          <label className={labelCls} htmlFor="phone">담임 전화번호</label>
+          <input id="phone" data-field="phone" name="phone" value={phone} maxLength={60} inputMode="tel"
+            placeholder="010-1234-5678"
+            aria-describedby={errors.phone ? 'err-phone' : undefined} aria-invalid={!!errors.phone}
+            onChange={e => setPhone(e.target.value)} className={inputCls} />
+          <FieldError id="err-phone" msg={errors.phone} />
+        </div>
+
+        {/* 이메일은 전폭 — 검사자 칸이 늘면서 반칸 셀이 홀수가 되어 마지막 칸이 혼자 남는 것을 막고,
+            아래 "둘 중 하나만" 안내 문구도 한 줄로 편히 놓인다. */}
         <div className="lg:col-span-2">
-          <label className={labelCls} htmlFor="contact">담임 연락처</label>
-          <input id="contact" data-field="contact" name="contact" value={contact} maxLength={60} placeholder="전화번호 또는 이메일"
-            aria-describedby={errors.contact ? 'err-contact' : undefined} aria-invalid={!!errors.contact}
-            onChange={e => setContact(e.target.value)} className={inputCls} />
-          <FieldError id="err-contact" msg={errors.contact} />
+          <label className={labelCls} htmlFor="email">담임 이메일</label>
+          <input id="email" data-field="email" name="email" value={email} maxLength={60} inputMode="email"
+            placeholder="teacher@school.kr"
+            aria-describedby={errors.email ? 'err-email' : undefined} aria-invalid={!!errors.email}
+            onChange={e => setEmail(e.target.value)} className={inputCls} />
+          <FieldError id="err-email" msg={errors.email} />
+          <p className="mt-1.5 text-[11px] text-ink-mute">전화번호와 이메일 중 하나만 입력해도 괜찮아요.</p>
         </div>
 
         {/* 개인정보 수집·이용 고지(개인정보보호법 제15조 제2항의 4대 필수 고지사항) +

@@ -5,14 +5,19 @@ const fail = (e: { message: string } | null) => { if (e) throw new Error(e.messa
 export interface NewSessionInput {
   schoolRegion: string; schoolId: string; schoolName: string
   birthYmd: string; grade: number; classNo: number; gender: '남' | '여'
-  childName: string; teacherName: string; teacherContact: string
+  childName: string; teacherName: string
+  /** 전화·이메일 중 하나는 반드시 non-null (스키마가 보장). 미입력 칸은 null로 저장한다. */
+  teacherPhone: string | null; teacherEmail: string | null
+  examinerType: 'teacher' | 'expert'
 }
 
 export async function createSession(s: NewSessionInput): Promise<string> {
   const { data, error } = await sb().from('sessions').insert({
     school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
     birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
-    child_name: s.childName, teacher_name: s.teacherName, teacher_contact: s.teacherContact,
+    child_name: s.childName, teacher_name: s.teacherName,
+    teacher_phone: s.teacherPhone, teacher_email: s.teacherEmail,
+    examiner_type: s.examinerType,
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
@@ -33,17 +38,28 @@ export async function insertRecording(r: {
 
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
+/** 낱말 해독 의미 낱말의 검사자 현장 채점 */
+export interface ReadingMark { itemCode: string; correct: boolean }
+
+/** 문장 읽기유창성 채점 — 제한 시간 내 정확히 읽은 어절 수 */
+export interface SentenceScore { itemCode: string; words: number }
+
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
 /**
- * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만 낱말쓰기를 upsert한다.
+ * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
+ * 낱말쓰기·현장 채점을 upsert한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
  */
 export async function submitSession(
-  sessionId: string, writing: WritingAnswer[], checklist: string[],
+  sessionId: string, writing: WritingAnswer[], checklist: string[], marks: ReadingMark[] = [],
+  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
+   *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
+  discontinued = false,
 ): Promise<SubmitResult> {
+  const now = new Date().toISOString()
   const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: new Date().toISOString() })
+    .update({ checklist, submitted_at: now, discontinued_at: discontinued ? now : null })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
@@ -55,7 +71,44 @@ export async function submitSession(
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e2)
   }
+  if (marks.length > 0) {
+    const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
+    const { error: e3 } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(e3)
+  }
   return 'ok'
+}
+
+/**
+ * 관리자 채점 저장. 낱말 O/X는 reading_marks(현장 채점과 같은 테이블 — 관리자가 확정값으로 덮어쓴다),
+ * 문장 어절 수는 sentence_scores에 upsert한다. 제출 여부와 무관하게 언제든 다시 채점할 수 있다.
+ */
+export async function saveScores(
+  sessionId: string, marks: ReadingMark[], sentences: SentenceScore[],
+): Promise<void> {
+  if (marks.length > 0) {
+    const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
+    const { error } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
+  }
+  // 문장 점수는 "보낸 것이 전부"(PUT 의미)로 취급해 세션의 문장 점수를 교체한다.
+  // upsert만 하면 채점자가 화면에서 지운 칸의 옛 값이 DB에 남아, 화면 총점과 저장된 총점이
+  // 어긋난 채로 결과지가 나간다.
+  // 순서가 중요하다: 먼저 지우고 넣으면, 넣기가 실패했을 때(네트워크·제약 위반) 이미 지워진
+  // 기존 점수가 복구되지 않는다 — 채점자의 작업이 통째로 사라진다. 그래서 넣기를 먼저 하고
+  // 이번에 보내지 않은 행만 지운다. 중간에 실패해도 기존 값은 남는다.
+  // (낱말 O/X는 화면에 "해제" 동작이 없어 이런 삭제 경로가 필요 없다 — 그래서 위는 upsert만 한다.)
+  if (sentences.length > 0) {
+    const rows = sentences.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
+    const { error } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(error)
+  }
+  const keep = sentences.map(s => s.itemCode)
+  const stale = sb().from('sentence_scores').delete().eq('session_id', sessionId)
+  const { error: delErr } = await (keep.length > 0
+    ? stale.not('item_code', 'in', `(${keep.join(',')})`)
+    : stale)
+  fail(delErr)
 }
 
 /** 세션 존재·제출 상태 조회(업로드/제출 가드용). */
@@ -161,10 +214,16 @@ export interface SessionRow {
   id: string
   school_region: string; school_id: string; school_name: string
   birth_ymd: string; grade: number; class_no: number; gender: string
-  child_name: string; teacher_name: string; teacher_contact: string
+  child_name: string; teacher_name: string
+  /** 010 이전 수집분은 teacher_contact에만 값이 있다(관리자 화면이 contactLabel로 폴백 표시) */
+  teacher_phone: string | null; teacher_email: string | null; teacher_contact: string | null
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
+  /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
+  examiner_type: 'teacher' | 'expert' | null
+  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않은 시각(012). 제출 시점에 확정된다 */
+  discontinued_at: string | null
 }
 
 export interface RecordingRow {
@@ -174,7 +233,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type, discontinued_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
@@ -195,19 +254,29 @@ export async function listSessions(): Promise<SessionListRow[]> {
   return rows
 }
 
+export interface MarkRow { item_code: string; correct: boolean }
+
+export interface SentenceScoreRow { item_code: string; words: number }
+
 export async function sessionDetail(sessionId: string): Promise<{
   session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+  marks: MarkRow[]; sentences: SentenceScoreRow[]
 }> {
-  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 }] = await Promise.all([
-    sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
-    sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
-      .eq('session_id', sessionId).order('item_code').order('attempt_no'),
-    sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
-  ])
-  fail(e1); fail(e2); fail(e3)
+  const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 },
+    { data: mk, error: e4 }, { data: ss, error: e5 }] = await Promise.all([
+      sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
+      sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
+        .eq('session_id', sessionId).order('item_code').order('attempt_no'),
+      sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
+      sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
+      sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
+    ])
+  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5)
   return {
     session: s as unknown as SessionRow,
     recordings: (recs ?? []) as RecordingRow[],
     writing: (ans ?? []) as WritingRow[],
+    marks: (mk ?? []) as MarkRow[],
+    sentences: (ss ?? []) as SentenceScoreRow[],
   }
 }

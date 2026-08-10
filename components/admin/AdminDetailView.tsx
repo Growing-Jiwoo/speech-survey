@@ -6,16 +6,17 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, KIND_LABEL, RECORDING_ITEMS, SECTION_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
-import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { ITEM_TOTALS, RECORDING_PAGES, WRITING_ITEMS } from '@/lib/items'
+import { adjacentSessionIds, expectedTotals, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { Badge } from '@/components/Badge'
-import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
-import { RecordingsTable, type RecordingsByItem } from '@/components/admin/RecordingsTable'
+import { ResultSheet } from '@/components/admin/ResultSheet'
+import type { Attempt } from '@/components/admin/sheet/PageAudio'
 
 export function AdminDetailView() {
   const id = String(useParams().id)
@@ -26,6 +27,12 @@ export function AdminDetailView() {
   const { data, isLoading, isError, refetch } = useSessionDetailQuery(id)
 
   // 세션 삭제(PII 파기): 확인 모달 → DELETE → 목록 캐시 무효화 후 목록으로 복귀
+  // 저장하지 않은 채점이 있는데 아동을 옮기면 그 채점은 사라진다(다른 아동 화면은 다시 마운트된다).
+  // 녹음을 처음부터 다시 들어야 하므로, 이동 전에 한 번 묻는다.
+  const [dirty, setDirty] = useState(false)
+  const [pendingNav, setPendingNav] = useState<string | null>(null)
+  const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
+
   const [delModal, setDelModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
@@ -51,9 +58,9 @@ export function AdminDetailView() {
     router.replace(listHref)
   }
 
-  // item_code → 시도 목록(정렬은 API가 보장). 결과지 표와 진행 집계가 공유한다.
-  const byItem: RecordingsByItem = useMemo(() => {
-    const m: RecordingsByItem = new Map()
+  // item_code → 시도 목록(정렬은 API가 보장). 결과지와 진행 집계가 공유한다.
+  const byItem = useMemo(() => {
+    const m = new Map<string, Attempt[]>()
     for (const r of data?.recordings ?? []) {
       const list = m.get(r.item_code) ?? []
       list.push({ attempt_no: r.attempt_no, url: r.url, duration_sec: r.duration_sec })
@@ -61,6 +68,8 @@ export function AdminDetailView() {
     }
     return m
   }, [data])
+  // 페이지 코드 → 녹음 시도들(ResultSheet가 낱말 해독·문장 각 줄에서 조회)
+  const attemptsOf = (pageCode: string) => byItem.get(pageCode) ?? []
 
   if (isLoading) return <LoadingOverlay show />
   if (isError || !data) return (
@@ -77,122 +86,75 @@ export function AdminDetailView() {
   )
 
   const { session: s, writing } = data
-  const writingByCode = new Map(writing.map(w => [w.item_code, w.can_write]))
-  const recordedCount = RECORDING_ITEMS.filter(i => byItem.has(i.code)).length
-  const missingCount = (RECORDING_ITEMS.length - recordedCount) + (WRITING_ITEMS.length - writing.length)
+  const writingByCode = Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))
+  const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
+  // 중단 규칙 ①이 걸린 세션은 문장·낱말 쓰기를 실시하지 않는다 — 전체 프로토콜을 분모로 삼으면
+  // 규칙대로 정상 종료된 검사가 계속 "미완료"로 보여, 더 받을 것이 없는 아동을 쫓게 된다.
+  const expected = expectedTotals(s, ITEM_TOTALS)
+  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writing.length)
 
   return (
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-        <div className="flex items-center justify-between gap-2">
-          <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
+        <div className="flex items-center justify-between gap-2 print:hidden">
+          <a href={listHref} onClick={e => { e.preventDefault(); go(listHref) }}
+            className="text-sm text-ink-mute underline">← 목록</a>
           {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.
               (파괴적인 [세션 삭제]는 오클릭 방지를 위해 페이지 하단으로 분리) */}
           <div className="flex items-center gap-1.5">
             <button type="button" disabled={!nav.prev}
-              onClick={() => nav.prev && router.push(goHref(nav.prev))}
+              onClick={() => nav.prev && go(goHref(nav.prev))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               ◀ 이전 아동
             </button>
             <button type="button" disabled={!nav.next}
-              onClick={() => nav.next && router.push(goHref(nav.next))}
+              onClick={() => nav.next && go(goHref(nav.next))}
               className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
               다음 아동 ▶
             </button>
           </div>
         </div>
+        {/* 수집 상태(녹음·낱말쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
+          <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_PAGES.length}</b></span>
+          <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
+          {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
+        </div>
+
         <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-          <div className="border-b border-line px-5 py-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <Blip variant="logo" className="h-8 w-8" />
-              <div>
-                <p className="text-[15px] font-bold">
-                  결과지 — {s.child_name} ({s.school_name} {s.grade}-{s.class_no}, {s.gender})
-                </p>
-                <p className="text-[11px] text-ink-mute">
-                  생년월일 {s.birth_ymd} · 담임 {s.teacher_name} ({s.teacher_contact}) ·{' '}
-                  {new Date(s.started_at).toLocaleString('ko-KR')} · {s.submitted_at ? '제출 완료' : '진행 중'} ·{' '}
-                  {/* 법정대리인 동의 확인 기록(제22조의2) — 도입 전 수집분은 '기록 없음' */}
-                  {s.guardian_consented_at
-                    ? `보호자 동의 확인 ${new Date(s.guardian_consented_at).toLocaleDateString('ko-KR')}`
-                    : '보호자 동의 기록 없음'}
-                </p>
-              </div>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_ITEMS.length}</b></span>
-                <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
-                {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
-              </div>
-            </div>
-            {s.checklist.length > 0 && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-bold text-ink-soft">확인 필요 영역:</span>
-                {s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-              </div>
-            )}
-          </div>
-
-          <h2 className="px-5 pt-4 text-[13px] font-bold text-ink-soft">녹음 문항 (낱말 해독 · 문장 읽기유창성)</h2>
-          <RecordingsTable byItem={byItem}
+          <ResultSheet key={id} sessionId={id} session={s} writing={writingByCode}
+            onDirtyChange={setDirty}
+            initialMarks={Object.fromEntries(data.marks.map(m => [m.item_code, m.correct]))}
+            initialSentences={Object.fromEntries(data.sentences.map(x => [x.item_code, x.words]))}
+            attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
-
-          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">낱말 쓰기 (예/아니오)</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-sm">
-              <thead>
-                <tr className="text-left text-xs text-ink-mute">
-                  <th scope="col" className="w-11 px-5 py-3 font-medium">#</th>
-                  <th scope="col" className="w-24 px-3 font-medium">구분</th>
-                  <th scope="col" className="px-3 font-medium">낱말</th>
-                  <th scope="col" className="w-28 px-3 pr-5 font-medium">답</th>
-                </tr>
-              </thead>
-              <tbody>
-                {WRITING_ITEMS.map(item => {
-                  const v = writingByCode.get(item.code)
-                  return (
-                    <tr key={item.code} className={`border-t border-line/60 ${v === undefined ? 'bg-rec/5' : ''}`}>
-                      <td className="px-5 py-3 text-ink-mute">{item.orderNo}</td>
-                      <td className="px-3 text-xs text-ink-mute">{KIND_LABEL[item.kind!]}</td>
-                      <td className="px-3 font-read">{item.text}</td>
-                      <td className="px-3 pr-5">
-                        {v === undefined
-                          ? <Badge tone="mute">미선택</Badge>
-                          : v ? <Badge tone="mint">예</Badge> : <Badge tone="rec">아니오</Badge>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <h2 className="border-t border-line px-5 pt-4 text-[13px] font-bold text-ink-soft">{SECTION_LABEL.checklist}</h2>
-          <div className="flex flex-wrap gap-2 px-5 py-4">
-            {s.checklist.length === 0
-              ? <span className="text-sm text-ink-mute">선택 없음</span>
-              : s.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-          </div>
-
-          <p className="border-t border-line bg-well px-5 py-3 text-[11.5px] text-ink-mute">
-            채점 기준(PDF): 낱말 해독은 30초, 문장 읽기유창성은 40초 내 정확 반응 수. 모든 시도(재녹음 포함)가 순서대로 저장됩니다.
-          </p>
         </div>
 
         {/* 파괴적 동작은 본문과 분리된 하단 영역에 배치(고빈도 내비 버튼과의 오클릭 방지) */}
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex justify-end print:hidden">
           <button type="button" onClick={() => setDelModal(true)}
             className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
             세션 삭제
           </button>
         </div>
 
+        <ConfirmDialog open={pendingNav !== null}
+          title="저장하지 않은 채점이 있어요"
+          confirmLabel="저장하지 않고 이동"
+          onConfirm={() => { const to = pendingNav!; setPendingNav(null); setDirty(false); router.push(to) }}
+          onClose={() => setPendingNav(null)}>
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            이동하면 지금 화면의 채점이 <b className="text-rec-deep">사라집니다</b>.
+            녹음을 다시 들어야 하니, 먼저 <b>[채점 저장]</b>을 눌러 주세요.
+          </p>
+        </ConfirmDialog>
+
         <ConfirmDialog open={delModal} busy={deleting} error={delErr} danger
           title="이 세션을 삭제할까요?"
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-            <b>{s.child_name}</b> ({s.school_name} {s.grade}-{s.class_no})의 정보와
+            <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
             녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
           </p>
         </ConfirmDialog>
