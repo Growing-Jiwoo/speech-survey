@@ -1,6 +1,7 @@
 // lib/forms/g1.ts — KODYS-G1 (초등 1학년) 검사지 정의.
 // 출처: [최종] 초등 1학년 선별검사지.pdf
 import type { SurveyForm } from './index'
+import { G1_LAYOUT } from './g1-layout'
 
 export const G1: SurveyForm = {
   id: 'KODYS-G1',
@@ -18,4 +19,5 @@ export const G1: SurveyForm = {
   writeMeaning: ['우비', '까치', '수박', '동상', '생각'],
   writeNonsense: ['오거', '끼추', '소벅', '당송', '갈먹'],
   limits: { wordSec: 30, sentenceSec: 40 },
+  layout: G1_LAYOUT,
 }

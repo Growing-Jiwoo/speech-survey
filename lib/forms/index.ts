@@ -2,6 +2,7 @@
 // 검사지(종이)가 학년마다 다르므로, 문항·배점·머리글을 양식 데이터로 두고
 // 결과지 화면이 이 정의로부터 렌더링한다. 새 학년 = 양식 파일 추가 + FORMS 등록.
 import { G1 } from './g1'
+import type { SheetLayout } from './layout'
 
 export interface SurveyForm {
   /** 결과지에 표기되는 양식 식별자 — 어떤 검사지로 채점했는지 기록에 남긴다 */
@@ -19,6 +20,8 @@ export interface SurveyForm {
   writeNonsense: string[]
   /** 검사지 제한 시간(초) — 채점 기준 */
   limits: { wordSec: number; sentenceSec: number }
+  /** 공식 검사지 PDF 출력용 좌표. 없으면 그 학년은 PDF 출력을 제공하지 않는다. */
+  layout: SheetLayout
 }
 
 export const FORMS: SurveyForm[] = [G1]
