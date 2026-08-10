@@ -10,7 +10,7 @@ import { formForGrade } from '@/lib/forms'
 import {
   PASS_MARK, PROVISIONAL_CRITERIA, READ_MAX, TASK_MAX, WRITE_MAX, scoreSession,
 } from '@/lib/scoring'
-import { contactLabel, examinerLabel, gradeClassLabel } from '@/lib/format'
+import { contactLabel, examinerLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { ScoreBand } from './sheet/ScoreBand'
@@ -79,7 +79,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
               ['학생명', session.child_name],
               ['성별', session.gender],
               ['생년월일', session.birth_ymd],
-              ['검사일', new Date(session.started_at).toLocaleDateString('ko-KR')],
+              ['검사일', sheetDateLabel(session.started_at)],
               ['검사자', examinerLabel(session.examiner_type)],
             ].map(([k, v]) => (
               <div key={k}>
