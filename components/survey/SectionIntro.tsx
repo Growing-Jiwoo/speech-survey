@@ -3,15 +3,19 @@
 // 하는지"를 아이 눈높이로 크게 알려 준다. [시작하기]는 상위 페이지의 하단 버튼이 담당한다.
 'use client'
 import { Blip } from '@/components/Blip'
-import { SECTION_INTRO, SECTION_ORDER, type Section } from '@/lib/items'
+import { SECTION_INTRO, type Section } from '@/lib/items'
 
-export function SectionIntro({ section }: { section: Section }) {
+export function SectionIntro({ section, sections }: {
+  section: Section
+  /** 이 양식의 섹션 순서(단계) — 학년마다 쓰기 과제가 달라 목록도 양식에서 온다 */
+  sections: Section[]
+}) {
   const intro = SECTION_INTRO[section]
-  const step = SECTION_ORDER.indexOf(section) + 1
+  const step = sections.indexOf(section) + 1
   return (
     <div className="flex flex-col items-center text-center">
       <span className="rounded-full bg-blue/10 px-4 py-1.5 text-sm font-bold text-blue lg:text-base">
-        {step}단계 · 총 {SECTION_ORDER.length}단계
+        {step}단계 · 총 {sections.length}단계
       </span>
       <Blip variant="idle" className="mt-6 h-24 w-[100px] lg:h-32 lg:w-[136px]" />
       <h2 className="mt-6 text-3xl font-bold lg:text-5xl">{intro.title}</h2>

@@ -5,19 +5,24 @@
 
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다. */
-const SCHEMA_V = 4
+const SCHEMA_V = 5
 
 export interface SurveyState {
   v: typeof SCHEMA_V
   sessionId: string
   sessionToken: string               // /api/sessions가 발급 — 녹음/제출 요청에 동봉
   childName: string                  // 진행 화면·이어하기 안내 표시용(서버 세션 행이 원본)
+  /** 학년 — 어떤 검사지(양식)로 진행할지 고르는 값. 서버 세션 행이 원본이며 여기 사본을 둔다.
+   *  formForGrade(grade)가 문항·페이지·중단 규칙을 전부 결정한다. */
+  grade: number
   micDone: boolean
   pageIdx: number                    // 현재 페이지 인덱스(0-based, visiblePages 기준)
   phase: 'mic' | 'page'              // 마이크 확인 단계 / 페이지 단계
   recorded: Record<string, number>   // pageCode → 저장된 시도 수
   marks: Record<string, boolean>     // 낱말 해독 의미 낱말 itemCode → 정반응 여부(검사자 현장 채점)
-  writing: Record<string, boolean>   // itemCode → 예(true)/아니오(false)
+  /** 쓰기 과제 itemCode → 정확히 쓴 어절 수. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1,
+   *  문장 쓰기(G2)는 0~2다 — 두 과제의 채점 규칙이 "어절당 1점"으로 같아 한 모양으로 담는다. */
+  writing: Record<string, number>
   checklist: string[]                // 선택된 영역 코드
   introsSeen: string[]               // 진입 안내를 이미 본 섹션 코드(새로고침·왕복에도 재노출 방지)
 }
@@ -26,9 +31,11 @@ const PREFIX = 'kodys-survey:'
 const LAST_KEY = 'kodys-survey:last'
 const keyOf = (sessionId: string) => `${PREFIX}${sessionId}`
 
-export function newState(sessionId: string, childName: string, sessionToken: string): SurveyState {
+export function newState(
+  sessionId: string, childName: string, sessionToken: string, grade: number,
+): SurveyState {
   return {
-    v: SCHEMA_V, sessionId, sessionToken, childName,
+    v: SCHEMA_V, sessionId, sessionToken, childName, grade,
     micDone: false, pageIdx: 0, phase: 'mic',
     recorded: {}, marks: {}, writing: {}, checklist: [], introsSeen: [],
   }

@@ -1,7 +1,7 @@
 // components/admin/sheet/SentenceRows.tsx — 검사지의 문장 읽기유창성 칸.
 // 문장 하나가 곧 녹음 페이지 하나이므로, 문장·녹음·점수 입력을 한 줄에 둔다.
 'use client'
-import { sentenceMaxWords } from '@/lib/scoring'
+import { itemMaxWords } from '@/lib/scoring'
 import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
@@ -21,7 +21,7 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
         <span className="w-24 text-right">점수</span>
       </div>
       {items.map((item, i) => {
-        const max = sentenceMaxWords(item)
+        const max = itemMaxWords(item)
         return (
           <div key={item.code} className="flex items-start gap-3 border-b border-line/60 px-4 py-2.5">
             <span className="w-4 flex-none pt-1 text-xs font-bold text-ink-mute">{i + 1}</span>

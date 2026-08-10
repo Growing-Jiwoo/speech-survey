@@ -24,8 +24,13 @@ export const G1: SurveyForm = {
     '다람쥐가 두꺼비를 보고 도망가요 그래서 부엉이가 다람쥐를 숨겨줘요.',
     '쉬는시간에 친구가 나에게 장난을 계속 쳐서 다투었어요.\n학교가 끝난 후에 친구가 다가와서 사과를 했어요.',
   ],
-  writeMeaning: ['우비', '까치', '수박', '동상', '생각'],
-  writeNonsense: ['오거', '끼추', '소벅', '당송', '갈먹'],
+  writing: {
+    kind: 'word',
+    meaning: ['우비', '까치', '수박', '동상', '생각'],
+    nonsense: ['오거', '끼추', '소벅', '당송', '갈먹'],
+  },
   limits: { wordSec: 30, sentenceSec: 40 },
+  // 임시값(만점의 약 65%). 실제 기준표가 오면 이 숫자만 바꾸면 되고 채점된 세션도 다시 계산된다.
+  passMark: { wordReading: 9, sentenceReading: 23, writing: 6 },
   layout: G1_LAYOUT,
 }

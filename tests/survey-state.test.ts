@@ -16,8 +16,8 @@ beforeEach(() => {
 
 describe('survey-state', () => {
   it('newState는 pageIdx=0, phase=mic로 시작하고 marks가 비어 있다', () => {
-    const s = newState('sid-1', '홍길동', 'tok')
-    expect(s.v).toBe(4)
+    const s = newState('sid-1', '홍길동', 'tok', 1)
+    expect(s.v).toBe(5)
     expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
@@ -25,7 +25,7 @@ describe('survey-state', () => {
   })
 
   it('save→load 왕복으로 pageIdx·phase·childName·marks 복원', () => {
-    const s = newState('sid-1', '홍길동', 'tok')
+    const s = newState('sid-1', '홍길동', 'tok', 1)
     saveState({ ...s, pageIdx: 3, phase: 'page', micDone: true, marks: { rw01: true, rw02: false } })
     const loaded = loadState()
     expect(loaded?.sessionId).toBe('sid-1')
@@ -37,8 +37,8 @@ describe('survey-state', () => {
   })
 
   it('세션별 키 분리 + last 포인터가 최신 세션을 가리킴', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok'), pageIdx: 1 })
-    saveState({ ...newState('sid-2', '김철수', 'tok'), pageIdx: 2 })
+    saveState({ ...newState('sid-1', '홍길동', 'tok', 1), pageIdx: 1 })
+    saveState({ ...newState('sid-2', '김철수', 'tok', 2), pageIdx: 2 })
     expect(loadState()?.sessionId).toBe('sid-2')
     expect(loadState()?.pageIdx).toBe(2)
   })
@@ -50,7 +50,7 @@ describe('survey-state', () => {
   })
 
   it('clearState는 진행 상태를 파기한다', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok'), pageIdx: 2 })
+    saveState({ ...newState('sid-1', '홍길동', 'tok', 1), pageIdx: 2 })
     clearState()
     expect(loadState()).toBeNull()
   })
@@ -84,7 +84,7 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
   it('saveState는 저장 실패(쿼터 초과 등) 시 예외를 전파하지 않는다', () => {
     const broken = { ...localStorage, setItem: () => { throw new Error('QuotaExceededError') } }
     ;(globalThis as unknown as { localStorage: Storage }).localStorage = broken as Storage
-    expect(() => saveState(newState('sid-1', '홍길동', 'tok'))).not.toThrow()
+    expect(() => saveState(newState('sid-1', '홍길동', 'tok', 1))).not.toThrow()
   })
 
   it('clearState는 localStorage 접근 실패 시에도 예외를 전파하지 않는다', () => {

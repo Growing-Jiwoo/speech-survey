@@ -1,5 +1,9 @@
-import { DISCONTINUED_ITEM_TOTALS } from '@/lib/items'
+import { itemsFor } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
+import type { Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
+
+export type { Totals }
 
 // ---------- 타입 ----------
 
@@ -16,8 +20,6 @@ export interface Filters {
 export type SortKey = 'name' | 'school' | 'grade' | 'started' | 'submitted' | 'progress'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 
-export interface Totals { rec: number; write: number }
-
 export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, today: false }
 export const DEFAULT_SORT: Sort = { key: 'started', dir: 'desc' }
 
@@ -32,20 +34,26 @@ export function kstDateKey(d: Date): string {
 
 // ---------- 집계 ----------
 
-/** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다 */
-/** 이 세션에서 "전부"에 해당하는 분모. 중단 규칙 ①이 걸린 세션은 문장·낱말 쓰기를
- *  실시하지 않으므로 전체 프로토콜로 재면 규칙대로 끝난 검사가 영원히 미완료로 남는다. */
-export function expectedTotals(s: Pick<SessionListRow, 'discontinued_at'>, totals: Totals): Totals {
-  return s.discontinued_at ? DISCONTINUED_ITEM_TOTALS : totals
+/** 이 세션에서 "전부"에 해당하는 분모. 학년마다 검사지가 달라 문항 수가 다르고(G1 낱말 쓰기 10 ↔
+ *  G2 문장 쓰기 5), 중단 규칙 ①이 걸린 세션은 문장·쓰기 과제를 아예 실시하지 않는다 —
+ *  전체 프로토콜로 재면 규칙대로 끝난 검사가 영원히 미완료로 남는다. */
+export function expectedTotals(s: Pick<SessionListRow, 'discontinued_at' | 'grade'>): Totals {
+  const f = itemsFor(formForGrade(s.grade))
+  return s.discontinued_at ? f.discontinuedTotals : f.totals
 }
 
-export function sessionProgress(s: SessionListRow, totals: Totals): {
-  recorded: number; written: number; incomplete: boolean
+/** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다.
+ *  쓰기 답은 과제 종류에 따라 저장 위치가 다르다(낱말 쓰기 → writing_answers,
+ *  문장 쓰기 → sentence_scores). 양식의 문항 코드로 걸러 어느 쪽이든 같은 수를 센다. */
+export function sessionProgress(s: SessionListRow): {
+  recorded: number; written: number; expected: Totals; incomplete: boolean
 } {
+  const writingCodes = new Set(itemsFor(formForGrade(s.grade)).writingItems.map(i => i.code))
   const recorded = new Set(s.recordings.map(r => r.item_code)).size
-  const written = s.writing_answers.length
-  const exp = expectedTotals(s, totals)
-  return { recorded, written, incomplete: recorded < exp.rec || written < exp.write }
+  const written = [...s.writing_answers, ...s.sentence_scores]
+    .filter(r => writingCodes.has(r.item_code)).length
+  const expected = expectedTotals(s)
+  return { recorded, written, expected, incomplete: recorded < expected.rec || written < expected.write }
 }
 
 export interface Kpis { total: number; submitted: number; inProgress: number; today: number }
@@ -108,15 +116,16 @@ export function filterSessions(sessions: SessionListRow[], f: Filters, todayKey:
   })
 }
 
-export function sortSessions(rows: SessionListRow[], sort: Sort, totals: Totals): SessionListRow[] {
-  const denom = totals.rec + totals.write
+export function sortSessions(rows: SessionListRow[], sort: Sort): SessionListRow[] {
   // 미제출(제출일 없음)은 방향과 무관하게 항상 목록 끝으로 보내기 위한 sentinel.
   const NO_SUBMIT = { asc: Number.POSITIVE_INFINITY, desc: Number.NEGATIVE_INFINITY }
   // progress 정렬 값은 사전 계산 — 비교자 안에서 행마다 반복 호출하면(내부에서 Set 생성)
   // 5,000행 기준 수만 회의 불필요한 할당이 생긴다.
+  // 분모는 행마다 다르다(학년별 문항 수 · 중단 규칙) — 비율로 재야 학년이 섞인 목록에서 공정하다.
   const progressOf = sort.key === 'progress'
     ? new Map(rows.map(s => {
-        const p = sessionProgress(s, totals)
+        const p = sessionProgress(s)
+        const denom = p.expected.rec + p.expected.write
         return [s.id, denom === 0 ? 0 : (p.recorded + p.written) / denom] as const
       }))
     : null

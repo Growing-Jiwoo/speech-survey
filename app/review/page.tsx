@@ -11,7 +11,8 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
-import { SECTION_LABEL, isRecordingPage, areaLabel, PAGES, type Section } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, type Section } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
 import { requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
@@ -39,15 +40,16 @@ export default function ReviewPage() {
   if (!st) return null
   const state = st
 
-  // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 낱말쓰기는 예/아니오 미선택.
+  // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 쓰기 과제는 점수 미선택.
   // (체크리스트는 진행 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
   // 연습 페이지는 서버에 남기지 않으므로 완료 판정에서 제외한다.
-  const pages = visiblePages(state)
+  const f = itemsFor(formForGrade(state.grade))
+  const pages = visiblePages(f, state)
   const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
   const missingWriting = pages
-    .filter(p => p.section === 'word_writing')
+    .filter(p => p.section === f.writingSection)
     .flatMap(p => {
-      const required = requiredWritingCodes(p.items, state.writing)
+      const required = requiredWritingCodes(f, p.items, state.writing)
       return p.items.filter(i => required.has(i.code))
     })
     .filter(i => state.writing[i.code] === undefined).length
@@ -72,8 +74,8 @@ export default function ReviewPage() {
             } else if (p.code === 'p_rw_meaning_mark') {
               const done = p.items.every(i => state.marks[i.code] !== undefined)
               pill = <StatusPill done={done} label={done ? '표시 완료' : '표시 안 함'} />
-            } else if (p.section === 'word_writing') {
-              const required = requiredWritingCodes(p.items, state.writing)
+            } else if (p.section === f.writingSection) {
+              const required = requiredWritingCodes(f, p.items, state.writing)
               const done = p.items.filter(i => required.has(i.code) && state.writing[i.code] !== undefined).length
               pill = <StatusPill done={done === required.size} label={`${done} / ${required.size}`} />
             } else {
@@ -126,9 +128,9 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
-      {pages.length < PAGES.length && (
+      {pages.length < f.pages.length && (
         <p className="mt-1 text-xs text-ink-mute">
-          중단 규칙에 따라 문장 읽기유창성·낱말 쓰기는 생략되었습니다.
+          중단 규칙에 따라 문장 읽기유창성·{SECTION_LABEL[f.writingSection]}는 생략되었습니다.
         </p>
       )}
 
@@ -140,7 +142,7 @@ export default function ReviewPage() {
           <div>{renderSection('word_reading')}</div>
           <div className="space-y-4">
             {renderSection('sentence_reading')}
-            {renderSection('word_writing')}
+            {renderSection(f.writingSection)}
           </div>
         </div>
         {renderSection('checklist')}

@@ -5,6 +5,11 @@ import {
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds,
   expectedTotals,
 } from '@/lib/adminStats'
+import { itemsFor } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
+
+const RECORDING_CODES = itemsFor(formForGrade(1)).recordingPages.map(p => p.code)
+const G1_WRITE = itemsFor(formForGrade(1)).writingItems.map(i => i.code)
 
 /** 테스트 픽스처 */
 export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
@@ -18,12 +23,10 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
     examiner_type: null, discontinued_at: null,
-    recordings: [], writing_answers: [],
+    recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }
 }
-
-const TOTALS = { rec: 18, write: 10 }
 
 describe('sessionProgress', () => {
   it('중복 item_code 녹음(재녹음)은 1개로 집계한다', () => {
@@ -31,14 +34,41 @@ describe('sessionProgress', () => {
       recordings: [{ item_code: 'rw01' }, { item_code: 'rw01' }, { item_code: 'rw02' }],
       writing_answers: [{ item_code: 'ww01' }],
     })
-    expect(sessionProgress(s, TOTALS)).toEqual({ recorded: 2, written: 1, incomplete: true })
+    const p = sessionProgress(s)
+    expect(p.recorded).toBe(2)
+    expect(p.written).toBe(1)
+    expect(p.incomplete).toBe(true)
   })
-  it('녹음·쓰기 모두 만점이면 incomplete=false', () => {
+  it('녹음·쓰기 모두 만점이면 incomplete=false (G1: 녹음 6 · 쓰기 10)', () => {
     const s = mkSession({
-      recordings: Array.from({ length: 18 }, (_, i) => ({ item_code: `r${i}` })),
-      writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `w${i}` })),
+      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
+      writing_answers: G1_WRITE.map(item_code => ({ item_code })),
     })
-    expect(sessionProgress(s, TOTALS).incomplete).toBe(false)
+    expect(sessionProgress(s).incomplete).toBe(false)
+  })
+  it('G2는 문장 쓰기 5문항이 sentence_scores에 들어 있어도 센다', () => {
+    const s = mkSession({
+      grade: 2,
+      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
+      writing_answers: [],
+      sentence_scores: [
+        // 문장 읽기유창성(rs..)은 쓰기 진행률에 포함되지 않는다
+        { item_code: 'rs01' }, { item_code: 'rs02' },
+        ...['sw01', 'sw02', 'sw03', 'sw04', 'sw05'].map(item_code => ({ item_code })),
+      ],
+    })
+    const p = sessionProgress(s)
+    expect(p.written).toBe(5)
+    expect(p.expected).toEqual({ rec: 6, write: 5 })
+    expect(p.incomplete).toBe(false)
+  })
+  it('G2 세션에서 문장 쓰기가 4개면 미완료다', () => {
+    const s = mkSession({
+      grade: 2,
+      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
+      sentence_scores: ['sw01', 'sw02', 'sw03', 'sw04'].map(item_code => ({ item_code })),
+    })
+    expect(sessionProgress(s).incomplete).toBe(true)
   })
 })
 
@@ -139,38 +169,37 @@ describe('filterSessions', () => {
 })
 
 describe('sortSessions', () => {
-  const TOTALS2 = { rec: 18, write: 10 }
   const a = mkSession({ child_name: '가', school_name: '나나초', started_at: '2026-07-14T01:00:00.000Z',
-    recordings: [{ item_code: 'r1' }], writing_answers: [] })
+    recordings: [{ item_code: 'p_rw_meaning' }], writing_answers: [] })
   const b = mkSession({ child_name: '나', school_name: '가가초', started_at: '2026-07-13T01:00:00.000Z',
-    recordings: [], writing_answers: [{ item_code: 'w1' }, { item_code: 'w2' }] })
+    recordings: [], writing_answers: [{ item_code: 'ww01' }, { item_code: 'ww02' }] })
 
   it('started 내림차순(기본)·오름차순', () => {
-    expect(sortSessions([b, a], { key: 'started', dir: 'desc' }, TOTALS2)[0]).toBe(a)
-    expect(sortSessions([a, b], { key: 'started', dir: 'asc' }, TOTALS2)[0]).toBe(b)
+    expect(sortSessions([b, a], { key: 'started', dir: 'desc' })[0]).toBe(a)
+    expect(sortSessions([a, b], { key: 'started', dir: 'asc' })[0]).toBe(b)
   })
   it('name·school은 한국어 로케일 비교', () => {
-    expect(sortSessions([b, a], { key: 'name', dir: 'asc' }, TOTALS2)[0]).toBe(a)
-    expect(sortSessions([a, b], { key: 'school', dir: 'asc' }, TOTALS2)[0]).toBe(b)
+    expect(sortSessions([b, a], { key: 'name', dir: 'asc' })[0]).toBe(a)
+    expect(sortSessions([a, b], { key: 'school', dir: 'asc' })[0]).toBe(b)
   })
   it('progress는 (녹음+쓰기)/(전체 문항) 비율 기준', () => {
-    expect(sortSessions([b, a], { key: 'progress', dir: 'asc' }, TOTALS2)[0]).toBe(a)
-    expect(sortSessions([a, b], { key: 'progress', dir: 'desc' }, TOTALS2)[0]).toBe(b)
+    expect(sortSessions([b, a], { key: 'progress', dir: 'asc' })[0]).toBe(a)
+    expect(sortSessions([a, b], { key: 'progress', dir: 'desc' })[0]).toBe(b)
   })
   it('grade는 학년→반 순, 동일 학년·반은 이름 2차 정렬', () => {
     const g1c2n = mkSession({ child_name: '나', grade: 1, class_no: 2 })
     const g1c2a = mkSession({ child_name: '가', grade: 1, class_no: 2 })
     const g2c1 = mkSession({ child_name: '다', grade: 2, class_no: 1 })
-    const sorted = sortSessions([g2c1, g1c2n, g1c2a], { key: 'grade', dir: 'asc' }, TOTALS2)
+    const sorted = sortSessions([g2c1, g1c2n, g1c2a], { key: 'grade', dir: 'asc' })
     expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
   })
   it('submitted는 제출일 기준, 미제출은 최하위(asc/desc 공통으로 뒤로)', () => {
     const late = mkSession({ child_name: '나', submitted_at: '2026-07-14T05:00:00.000Z' })
     const early = mkSession({ child_name: '가', submitted_at: '2026-07-14T01:00:00.000Z' })
     const none = mkSession({ child_name: '다', submitted_at: null })
-    const asc = sortSessions([none, late, early], { key: 'submitted', dir: 'asc' }, TOTALS2)
+    const asc = sortSessions([none, late, early], { key: 'submitted', dir: 'asc' })
     expect(asc.map(s => s.child_name)).toEqual(['가', '나', '다'])
-    const desc = sortSessions([none, early, late], { key: 'submitted', dir: 'desc' }, TOTALS2)
+    const desc = sortSessions([none, early, late], { key: 'submitted', dir: 'desc' })
     expect(desc.map(s => s.child_name)).toEqual(['나', '가', '다'])
   })
   it('[REGRESSION] submitted 정렬에서 미제출 세션 여러 개가 있을 때 2차 정렬(이름)이 적용된다 (asc)', () => {
@@ -178,7 +207,7 @@ describe('sortSessions', () => {
     const s다 = mkSession({ child_name: '다', submitted_at: null })
     const s나 = mkSession({ child_name: '나', submitted_at: null })
     const s가 = mkSession({ child_name: '가', submitted_at: null })
-    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'asc' }, TOTALS2)
+    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'asc' })
     expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
   })
   it('[REGRESSION] submitted 정렬에서 미제출 세션 여러 개가 있을 때 2차 정렬(이름)이 적용된다 (desc)', () => {
@@ -187,12 +216,12 @@ describe('sortSessions', () => {
     const s다 = mkSession({ child_name: '다', submitted_at: null })
     const s나 = mkSession({ child_name: '나', submitted_at: null })
     const s가 = mkSession({ child_name: '가', submitted_at: null })
-    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'desc' }, TOTALS2)
+    const sorted = sortSessions([s다, s나, s가], { key: 'submitted', dir: 'desc' })
     expect(sorted.map(s => s.child_name)).toEqual(['가', '나', '다'])
   })
   it('원본 배열을 변형하지 않는다', () => {
     const arr = [a, b]
-    sortSessions(arr, { key: 'name', dir: 'desc' }, TOTALS2)
+    sortSessions(arr, { key: 'name', dir: 'desc' })
     expect(arr[0]).toBe(a)
   })
 })
@@ -245,7 +274,6 @@ describe('URL 직렬화', () => {
 })
 
 describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 검사를 미완료로 세지 않기 위함)', () => {
-  const T = { rec: 6, write: 10 }
 
   it('중단된 세션은 낱말 해독 녹음 2건만으로 완료다', () => {
     const s = mkSession({
@@ -253,7 +281,7 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
       recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rw_nonsense' }],
       writing_answers: [],
     })
-    expect(sessionProgress(s, T).incomplete).toBe(false)
+    expect(sessionProgress(s).incomplete).toBe(false)
   })
 
   it('중단되지 않은 같은 데이터는 미완료다', () => {
@@ -262,7 +290,7 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
       recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rw_nonsense' }],
       writing_answers: [],
     })
-    expect(sessionProgress(s, T).incomplete).toBe(true)
+    expect(sessionProgress(s).incomplete).toBe(true)
   })
 
   it('중단됐어도 낱말 해독 녹음이 비면 미완료다', () => {
@@ -271,12 +299,15 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
       recordings: [{ item_code: 'p_rw_meaning' }],
       writing_answers: [],
     })
-    expect(sessionProgress(s, T).incomplete).toBe(true)
+    expect(sessionProgress(s).incomplete).toBe(true)
   })
 
-  it('expectedTotals: 중단 여부로 분모가 갈린다', () => {
-    expect(expectedTotals({ discontinued_at: null }, T)).toEqual(T)
-    expect(expectedTotals({ discontinued_at: '2026-08-10T01:00:00.000Z' }, T))
+  it('expectedTotals: 중단 여부와 학년으로 분모가 갈린다', () => {
+    expect(expectedTotals({ discontinued_at: null, grade: 1 })).toEqual({ rec: 6, write: 10 })
+    expect(expectedTotals({ discontinued_at: null, grade: 2 })).toEqual({ rec: 6, write: 5 })
+    expect(expectedTotals({ discontinued_at: '2026-08-10T01:00:00.000Z', grade: 1 }))
+      .toEqual({ rec: 2, write: 0 })
+    expect(expectedTotals({ discontinued_at: '2026-08-10T01:00:00.000Z', grade: 2 }))
       .toEqual({ rec: 2, write: 0 })
   })
 })

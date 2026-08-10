@@ -1,12 +1,13 @@
 // POST /api/recordings — 녹음 파일 업로드(스토리지) + 메타 기록(DB).
 // 검증 순서: 형식 → 세션 토큰 → 크기 → 매직바이트 → 세션 상태(미제출) → 총량 상한.
 import { NextResponse } from 'next/server'
-import { insertRecording, uploadRecording, countSessionRecordings, removeStorageObject, sessionSubmitState } from '@/lib/db'
+import { insertRecording, uploadRecording, countSessionRecordings, removeStorageObject, sessionState } from '@/lib/db'
 import { audioExt } from '@/lib/audio-ext'
 import { isAllowedAudioMime, sniffAudio, safeContentType } from '@/lib/audio-validate'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { isRecordingPage, pageByCode } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
+import { isRecordingPage, itemsFor } from '@/lib/items'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -25,10 +26,9 @@ export async function POST(req: Request) {
   const itemCode = String(fd?.get('itemCode') ?? '')
   const attemptNo = Number(fd?.get('attemptNo'))
   const durationSec = Number(fd?.get('durationSec') ?? 0)
-  // 녹음 단위는 페이지다(검사지: 한 페이지 전체를 제한 시간 안에 읽는다).
-  // 연습 페이지는 아동 연습용이라 서버에 남기지 않는다.
-  const page = pageByCode.get(itemCode)
-  if (!(audio instanceof File) || !UUID_RE.test(sessionId) || !page || !isRecordingPage(page) || page.practice
+  // itemCode가 유효한 페이지인지는 세션의 학년을 알아야 판정할 수 있어 아래에서 확인한다.
+  // 여기서는 **저장 경로에 들어가도 안전한 모양**인지만 먼저 막는다(경로 탈출·제어문자 차단).
+  if (!(audio instanceof File) || !UUID_RE.test(sessionId) || !/^[a-z0-9_]{1,32}$/.test(itemCode)
     || !Number.isInteger(attemptNo) || attemptNo < 1 || attemptNo > MAX_ATTEMPTS
     || !Number.isFinite(durationSec) || durationSec < 0 || durationSec > MAX_DURATION_SEC)
     return jsonError('필수 항목 누락', 400)
@@ -49,11 +49,18 @@ export async function POST(req: Request) {
 
   try {
     // 제출 완료 후 업로드 차단(검사 증적 사후 변조 방지). 세션 미존재도 여기서 걸러낸다.
-    const state = await sessionSubmitState(sessionId)
+    const { state, grade } = await sessionState(sessionId)
     if (state === 'missing')
       return jsonError('세션을 찾을 수 없습니다.', 404)
     if (state === 'submitted')
       return jsonError('이미 제출된 검사입니다.', 409)
+    // 녹음 단위는 페이지다(검사지: 한 페이지 전체를 제한 시간 안에 읽는다).
+    // 어떤 페이지가 존재하는지는 **세션의 학년(검사지)** 이 정한다 — 다른 학년의 페이지 코드로
+    // 올라온 녹음은 어느 화면에서도 읽히지 않는 고아 파일이 된다.
+    // 연습 페이지는 아동 연습용이라 서버에 남기지 않는다.
+    const page = itemsFor(formForGrade(grade)).pageByCode.get(itemCode)
+    if (!page || !isRecordingPage(page) || page.practice)
+      return jsonError('필수 항목 누락', 400)
     if ((await countSessionRecordings(sessionId)) >= MAX_PER_SESSION)
       return jsonError('녹음 개수 상한을 초과했습니다.', 429)
     await uploadRecording(audioPath, Buffer.from(bytes), mime)

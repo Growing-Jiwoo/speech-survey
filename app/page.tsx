@@ -122,7 +122,7 @@ export default function StartPage() {
     setBusy(false)
     if (!r.ok) { setFormErr(r.error); return }
     clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
-    saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken))
+    saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken, Number(grade)))
     router.push('/survey')
   }
 

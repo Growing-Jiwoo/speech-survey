@@ -43,10 +43,16 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  countSessionRecordings, deleteSession, isLoginLocked, saveScores, sessionDetail, sessionSubmitState, submitSession, uploadRecording,
+  countSessionRecordings, deleteSession, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
+/** submitSession 호출 헬퍼 — 테스트가 신경 쓰는 필드만 넘긴다 */
+const submit = (over: Partial<Parameters<typeof submitSession>[0]> = {}) => submitSession({
+  sessionId: SID, writing: [], sentenceWriting: [], checklist: [], marks: [], discontinued: false,
+  ...over,
+})
+
 const enqueue = (table: string, result: unknown) => {
   const q = tableQueues.get(table) ?? []
   q.push(result)
@@ -66,14 +72,14 @@ describe('submitSession — 미제출 세션만 갱신하고 결과를 구분한
   it('업데이트 성공 + 낱말쓰기 있음 → writing_answers upsert 후 ok', async () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('writing_answers', { error: null })
-    const result = await submitSession(SID, [{ itemCode: 'ww01', canWrite: true }], ['none'])
+    const result = await submit({ writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'] })
     expect(result).toBe('ok')
     expect(fromCalls).toEqual(['sessions', 'writing_answers'])
   })
 
   it('낱말쓰기가 비어 있으면 writing_answers를 건드리지 않는다', async () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
-    const result = await submitSession(SID, [], [])
+    const result = await submit({})
     expect(result).toBe('ok')
     expect(fromCalls).toEqual(['sessions'])
   })
@@ -81,19 +87,19 @@ describe('submitSession — 미제출 세션만 갱신하고 결과를 구분한
   it('업데이트 0건 + 세션이 이미 제출됨 → already_submitted (409 신호)', async () => {
     enqueue('sessions', { data: [], error: null })                                  // update … is('submitted_at', null)
     enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null }) // 상태 재조회
-    expect(await submitSession(SID, [], [])).toBe('already_submitted')
+    expect(await submit({})).toBe('already_submitted')
   })
 
   it('업데이트 0건 + 세션 미존재 → not_found (404 신호)', async () => {
     enqueue('sessions', { data: [], error: null })
     enqueue('sessions', { data: null, error: null })
-    expect(await submitSession(SID, [], [])).toBe('not_found')
+    expect(await submit({})).toBe('not_found')
   })
 
   it('낱말쓰기 upsert 실패는 예외로 전파된다', async () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('writing_answers', { error: { message: 'duplicate key' } })
-    await expect(submitSession(SID, [{ itemCode: 'ww01', canWrite: false }], [])).rejects.toThrow('duplicate key')
+    await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
   })
 })
 
@@ -102,8 +108,10 @@ describe('submitSession — 현장 채점(marks) 저장', () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('writing_answers', { error: null })
     enqueue('reading_marks', { error: null })
-    const r = await submitSession(SID, [{ itemCode: 'ww01', canWrite: true }], ['none'],
-      [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw02', correct: false }])
+    const r = await submit({
+      writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'],
+      marks: [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw02', correct: false }],
+    })
     expect(r).toBe('ok')
     expect(fromCalls).toContain('reading_marks')
   })
@@ -111,7 +119,7 @@ describe('submitSession — 현장 채점(marks) 저장', () => {
   it('marks가 비어 있으면 reading_marks를 건드리지 않는다', async () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('writing_answers', { error: null })
-    const r = await submitSession(SID, [{ itemCode: 'ww01', canWrite: true }], ['none'])
+    const r = await submit({ writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'] })
     expect(r).toBe('ok')
     expect(fromCalls).not.toContain('reading_marks')
   })
@@ -119,7 +127,7 @@ describe('submitSession — 현장 채점(marks) 저장', () => {
   it('reading_marks 저장 실패는 삼키지 않고 throw한다 (채점 근거의 조용한 손실 방지)', async () => {
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('reading_marks', { error: { message: 'boom' } })
-    await expect(submitSession(SID, [], ['none'], [{ itemCode: 'rw01', correct: false }]))
+    await expect(submit({ checklist: ['none'], marks: [{ itemCode: 'rw01', correct: false }] }))
       .rejects.toThrow('boom')
   })
 })
@@ -143,18 +151,22 @@ describe('sessionDetail — 5개 병렬 조회 결과가 각자 올바른 필드
   })
 })
 
-describe('sessionSubmitState', () => {
+describe('sessionState', () => {
   it('행 없음 → missing', async () => {
     enqueue('sessions', { data: null, error: null })
-    expect(await sessionSubmitState(SID)).toBe('missing')
+    expect((await sessionState(SID)).state).toBe('missing')
   })
   it('submitted_at null → open', async () => {
-    enqueue('sessions', { data: { submitted_at: null }, error: null })
-    expect(await sessionSubmitState(SID)).toBe('open')
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    expect((await sessionState(SID)).state).toBe('open')
   })
   it('submitted_at 존재 → submitted', async () => {
-    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null })
-    expect(await sessionSubmitState(SID)).toBe('submitted')
+    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z', grade: 2 }, error: null })
+    expect((await sessionState(SID)).state).toBe('submitted')
+  })
+  it('학년을 함께 돌려준다 — 라우트가 세션의 검사지로 문항 코드를 검증한다', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 2 }, error: null })
+    expect((await sessionState(SID)).grade).toBe(2)
   })
 })
 
@@ -243,20 +255,22 @@ describe('countSessionRecordings', () => {
   })
 })
 
+const RS = ['rs01', 'rs02', 'rs03', 'rs04']
+
 describe('saveScores — 관리자 채점 저장', () => {
   it('낱말 O/X는 reading_marks에, 문장 어절 수는 sentence_scores에 upsert한다', async () => {
     enqueue('reading_marks', { error: null })
     enqueue('sentence_scores', { error: null })
     await saveScores(SID,
       [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw08', correct: false }],
-      [{ itemCode: 'rs01', words: 7 }])
+      [{ itemCode: 'rs01', words: 7 }], RS)
     expect(fromCalls).toContain('reading_marks')
     expect(fromCalls).toContain('sentence_scores')
   })
 
   it('낱말이 빈 배열이면 reading_marks를 건드리지 않는다', async () => {
     enqueue('sentence_scores', { error: null })
-    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }])
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }], RS)
     expect(fromCalls).not.toContain('reading_marks')
   })
 
@@ -264,20 +278,20 @@ describe('saveScores — 관리자 채점 저장', () => {
     // 채점자가 화면에서 지운 칸의 옛 값이 DB에 남지 않아야 한다(화면·저장값 불일치 방지).
     enqueue('reading_marks', { error: null })
     enqueue('sentence_scores', { error: null })   // delete
-    await saveScores(SID, [{ itemCode: 'rw01', correct: true }], [])
+    await saveScores(SID, [{ itemCode: 'rw01', correct: true }], [], RS)
     expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(1)
   })
 
   it('문장 점수가 있으면 삭제 후 삽입한다 (sentence_scores 두 번 접근)', async () => {
     enqueue('sentence_scores', { error: null })   // delete
     enqueue('sentence_scores', { error: null })   // insert
-    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }])
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }], RS)
     expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(2)
   })
 
   it('저장 실패는 삼키지 않고 throw한다 (채점 결과의 조용한 손실 방지)', async () => {
     enqueue('reading_marks', { error: { message: 'boom' } })
-    await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], []))
+    await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], [], RS))
       .rejects.toThrow('boom')
   })
 })

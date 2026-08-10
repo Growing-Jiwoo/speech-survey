@@ -1,15 +1,13 @@
 // components/admin/ResultSheet.tsx — 관리자 결과지.
-// 종이 검사지([최종] 초등 N학년 선별검사지.pdf)와 같은 순서·구조로 두고,
+// 종이 검사지(assets/forms/kodys-g*.pdf)와 같은 순서·구조로 두고,
 // 각 줄에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 놓는다.
 // 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
 import { useEffect, useState } from 'react'
-import { ITEMS, KIND_LABEL, WRITING_ITEMS, areaLabel } from '@/lib/items'
+import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import {
-  PASS_MARK, PROVISIONAL_CRITERIA, READ_MAX, TASK_MAX, WRITE_MAX, scoreSession,
-} from '@/lib/scoring'
+import { PROVISIONAL_CRITERIA, scoreSession, scoringFor } from '@/lib/scoring'
 import { contactLabel, examinerLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
@@ -17,22 +15,18 @@ import { ScoreBand } from './sheet/ScoreBand'
 import { Subtotal } from './sheet/Subtotal'
 import { WordGrid } from './sheet/WordGrid'
 import { SentenceRows } from './sheet/SentenceRows'
+import { SentenceWriteRows } from './sheet/SentenceWriteRows'
 import { PageAudio, type Attempt } from './sheet/PageAudio'
 import type { SessionRow } from '@/lib/db'
-
-const READ_MEANING_ITEMS = ITEMS.filter(i => i.section === 'word_reading' && i.kind === 'meaning')
-const READ_NONSENSE_ITEMS = ITEMS.filter(i => i.section === 'word_reading' && i.kind === 'nonsense')
-const SENTENCE_ITEMS = ITEMS.filter(i => i.section === 'sentence_reading')
-const WRITE_MEANING_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'meaning')
-const WRITE_NONSENSE_ITEMS = WRITING_ITEMS.filter(i => i.kind === 'nonsense')
 
 export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
   sessionId: string
   session: SessionRow
-  /** 낱말 쓰기는 검사 중 수집돼 여기서 다시 채점하지 않는다(예=1점) */
-  writing: Record<string, boolean>
-  initialMarks: Record<string, boolean>
-  initialSentences: Record<string, number>
+  /** 쓰기 과제는 검사 중 수집돼 여기서 다시 채점하지 않는다. 값은 정확히 쓴 어절 수. */
+  writing: Partial<Record<string, number>>
+  initialMarks: Partial<Record<string, boolean>>
+  /** 문장 읽기유창성 점수만 (문장 쓰기는 writing으로 들어온다) */
+  initialSentences: Partial<Record<string, number>>
   /** 페이지 코드 → 녹음 시도들 */
   attemptsOf: (pageCode: string) => Attempt[]
   onAudioError: () => void
@@ -48,7 +42,10 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const [msg, setMsg] = useState('')
 
   const form = formForGrade(session.grade)
-  const r = scoreSession({ marks, sentences, writing })
+  const f = itemsFor(form)
+  const { taskMax, readMax, writeMax, passMark } = scoringFor(form)
+  const r = scoreSession(form, { marks, sentences, writing })
+  const writingLabel = SECTION_LABEL[f.writingSection]
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
   // 상위가 막을 수 있도록 알린다. 저장된 값과 비교해 판단한다 — 되돌리면 다시 깨끗해진다.
@@ -83,6 +80,13 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
     else next[code] = v
     return next
   })
+
+  const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
+  // 낱말 쓰기 격자는 O/X로 보여 준다 — 문항 만점이 1이라 1=정반응이다.
+  const writingMarks = Object.fromEntries(
+    Object.entries(writing).map(([c, v]) => [c, v === undefined ? undefined : v >= 1]),
+  )
+  const writeItemsOf = (kind: 'meaning' | 'nonsense') => f.writingItems.filter(i => i.kind === kind)
 
   return (
     <section className="result-sheet">
@@ -127,11 +131,11 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         </p>
       </header>
 
-      <ScoreBand result={r} />
+      <ScoreBand form={form} result={r} />
 
       {/* 낱말 해독 */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 pb-1.5 pt-3">
-        <h2 className="text-[13px] font-bold">낱말 해독
+        <h2 className="text-[13px] font-bold">{SECTION_LABEL.word_reading}
           <span className="ml-2 font-normal text-[11px] text-ink-mute">
             {form.limits.wordSec}초 동안 정확하게 읽은 낱말 수
           </span>
@@ -143,44 +147,56 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />
         </div>
       </div>
-      <WordGrid rowLabel="의미 낱말" words={READ_MEANING_ITEMS} marks={marks} onMark={setMark} />
-      <WordGrid rowLabel="무의미 낱말" words={READ_NONSENSE_ITEMS} marks={marks} onMark={setMark} />
+      <WordGrid rowLabel="의미 낱말" words={readItemsOf('meaning')} marks={marks} onMark={setMark} />
+      <WordGrid rowLabel="무의미 낱말" words={readItemsOf('nonsense')} marks={marks} onMark={setMark} />
       <Subtotal
         cells={[
-          { label: '의미 점수', value: r.wordMeaning, max: READ_MAX.meaning },
-          { label: '무의미 점수', value: r.wordNonsense, max: READ_MAX.nonsense },
+          { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
+          { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
         ]}
-        total={{ label: '총 점수', value: r.wordReading, max: TASK_MAX.wordReading }}
+        total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
         verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
 
       {/* 문장 읽기유창성 */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">문장 읽기유창성
+      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{SECTION_LABEL.sentence_reading}
         <span className="ml-2 font-normal text-[11px] text-ink-mute">
           {form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수
         </span>
       </h2>
-      <SentenceRows items={SENTENCE_ITEMS} sentences={sentences} onChange={setSentence}
+      <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
         attemptsFor={code => attemptsOf(`p_${code}`)}
         limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
-      <Subtotal total={{ label: '총점', value: r.sentenceReading, max: TASK_MAX.sentenceReading }}
+      <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
         verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
 
-      {/* 낱말 쓰기 — 검사 중 수집분(읽기 전용) */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">낱말 쓰기
-        <span className="ml-2 font-normal text-[11px] text-ink-mute">검사 중 기록 · 정확하게 쓴 낱말 1점</span>
+      {/* 쓰기 과제 — 검사 중 수집분(읽기 전용). 학년에 따라 낱말 쓰기 또는 문장 쓰기다. */}
+      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{writingLabel}
+        <span className="ml-2 font-normal text-[11px] text-ink-mute">
+          검사 중 기록 · 정확하게 쓴 {f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점
+        </span>
       </h2>
-      <WordGrid rowLabel="의미 낱말" words={WRITE_MEANING_ITEMS} marks={writing} readOnly />
-      <WordGrid rowLabel="무의미 낱말" words={WRITE_NONSENSE_ITEMS} marks={writing} readOnly />
-      <Subtotal
-        cells={[
-          { label: '의미 점수', value: r.writeMeaning, max: WRITE_MAX.meaning },
-          { label: '무의미 점수', value: r.writeNonsense, max: WRITE_MAX.nonsense },
-        ]}
-        total={{ label: '총 점수', value: r.wordWriting, max: TASK_MAX.wordWriting }}
-        verdict={r.verdict.wordWriting} complete={r.complete.wordWriting} />
+      {f.writingSection === 'word_writing' ? (
+        <>
+          <WordGrid rowLabel="의미 낱말" words={writeItemsOf('meaning')} marks={writingMarks} readOnly />
+          <WordGrid rowLabel="무의미 낱말" words={writeItemsOf('nonsense')} marks={writingMarks} readOnly />
+          <Subtotal
+            cells={[
+              { label: '의미 점수', value: r.writeMeaning, max: writeMax.meaning },
+              { label: '무의미 점수', value: r.writeNonsense, max: writeMax.nonsense },
+            ]}
+            total={{ label: '총 점수', value: r.writing, max: taskMax.writing }}
+            verdict={r.verdict.writing} complete={r.complete.writing} />
+        </>
+      ) : (
+        <>
+          <SentenceWriteRows items={f.writingItems} writing={writing} />
+          <Subtotal total={{ label: '총점', value: r.writing, max: taskMax.writing }}
+            verdict={r.verdict.writing} complete={r.complete.writing} />
+        </>
+      )}
 
       {/* 검사자 체크리스트 */}
-      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">검사자 체크리스트</h2>
+      <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">{SECTION_LABEL.checklist}</h2>
       <div className="flex flex-wrap gap-2 px-4 pb-3">
         {session.checklist.length === 0
           ? <span className="text-sm text-ink-mute">선택 없음</span>
@@ -201,7 +217,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
         <span className="text-[11px] text-ink-mute">
           저장한 채점 내용으로 만들어집니다
-          {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.wordWriting)
+          {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
             && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
         </span>
         {dirty && <span className="text-xs font-bold text-amber">저장하지 않은 채점이 있어요</span>}
@@ -212,9 +228,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초, 문장 읽기유창성은 {form.limits.sentenceSec}초 내 정확 반응 수.
         녹음은 마지막 반응이 잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.
         {PROVISIONAL_CRITERIA && (
-          <> Pass 기준은 <b>임시값</b>입니다 — 낱말 해독 {PASS_MARK.wordReading} / {TASK_MAX.wordReading} ·
-          문장 읽기유창성 {PASS_MARK.sentenceReading} / {TASK_MAX.sentenceReading} ·
-          낱말 쓰기 {PASS_MARK.wordWriting} / {TASK_MAX.wordWriting}.
+          <> Pass 기준은 <b>임시값</b>입니다 — 낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
+          문장 읽기유창성 {passMark.sentenceReading} / {taskMax.sentenceReading} ·
+          {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
           실제 기준표를 받으면 숫자만 교체되며, 이미 채점한 세션도 저장된 점수로 다시 계산됩니다.</>
         )}
       </p>

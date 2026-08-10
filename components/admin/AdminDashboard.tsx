@@ -7,7 +7,6 @@ import {
   gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
   type Filters, type Sort, type SortKey,
 } from '@/lib/adminStats'
-import { ITEM_TOTALS } from '@/lib/items'
 import { adminKeys, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { postJson } from '@/lib/http'
 import { Blip } from '@/components/Blip'
@@ -15,9 +14,6 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { StatsCards, type KpiKind } from '@/components/admin/StatsCards'
 import { SchoolBreakdown } from '@/components/admin/SchoolBreakdown'
 import { SessionTable } from '@/components/admin/SessionTable'
-
-// 진행률 분모는 문항 정의(lib/items)에서 직접 가져온다 — prop 드릴링과 이원화 방지.
-const totals = ITEM_TOTALS
 
 /** /admin 대시보드 — 세션은 react-query로 캐싱, 필터·정렬 상태의 단일 소스는 URL searchParams */
 export function AdminDashboard() {
@@ -48,8 +44,9 @@ export function AdminDashboard() {
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
+  // 진행률 분모는 행마다 다르다(학년별 검사지·중단 규칙) — sessionProgress가 행에서 직접 구한다.
   const rows = useMemo(
-    () => sortSessions(filterSessions(list, filters, todayKey), sort, totals),
+    () => sortSessions(filterSessions(list, filters, todayKey), sort),
     [list, filters, sort, todayKey],
   )
 
@@ -115,7 +112,7 @@ export function AdminDashboard() {
       <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
-      <SessionTable rows={rows} total={sessions.length} totals={totals} filters={filters} sort={sort}
+      <SessionTable rows={rows} total={sessions.length} filters={filters} sort={sort}
         schools={schools} grades={grades}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />
     </div>

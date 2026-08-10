@@ -6,7 +6,9 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { ITEM_TOTALS, RECORDING_PAGES, WRITING_ITEMS } from '@/lib/items'
+import { SECTION_LABEL, itemsFor } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
+import { scoreInputFrom } from '@/lib/scoring'
 import { adjacentSessionIds, expectedTotals, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -42,7 +44,7 @@ export function AdminDetailView() {
   const nav = useMemo(() => {
     if (!sessions) return { prev: null, next: null }
     const { filters, sort } = parseFilters(new URLSearchParams(back ?? ''))
-    const rows = sortSessions(filterSessions(sessions, filters, kstDateKey(new Date())), sort, ITEM_TOTALS)
+    const rows = sortSessions(filterSessions(sessions, filters, kstDateKey(new Date())), sort)
     return adjacentSessionIds(rows, id)
   }, [sessions, back, id])
 
@@ -85,13 +87,17 @@ export function AdminDetailView() {
     </main>
   )
 
-  const { session: s, writing } = data
-  const writingByCode = Object.fromEntries(writing.map(w => [w.item_code, w.can_write]))
-  const recordedCount = RECORDING_PAGES.filter(p => byItem.has(p.code)).length
-  // 중단 규칙 ①이 걸린 세션은 문장·낱말 쓰기를 실시하지 않는다 — 전체 프로토콜을 분모로 삼으면
+  const { session: s } = data
+  // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다.
+  const f = itemsFor(formForGrade(s.grade))
+  // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
+  const input = scoreInputFrom(f, data)
+  const writtenCount = Object.keys(input.writing).length
+  const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
+  // 중단 규칙 ①이 걸린 세션은 문장·쓰기 과제를 실시하지 않는다 — 전체 프로토콜을 분모로 삼으면
   // 규칙대로 정상 종료된 검사가 계속 "미완료"로 보여, 더 받을 것이 없는 아동을 쫓게 된다.
-  const expected = expectedTotals(s, ITEM_TOTALS)
-  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writing.length)
+  const expected = expectedTotals(s)
+  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writtenCount)
 
   return (
     <AudioBusProvider>
@@ -114,18 +120,18 @@ export function AdminDetailView() {
             </button>
           </div>
         </div>
-        {/* 수집 상태(녹음·낱말쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
+        {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
-          <span className="kpi">녹음 <b>{recordedCount} / {RECORDING_PAGES.length}</b></span>
-          <span className="kpi">낱말쓰기 <b>{writing.length} / {WRITING_ITEMS.length}</b></span>
+          <span className="kpi">녹음 <b>{recordedCount} / {f.recordingPages.length}</b></span>
+          <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {f.writingItems.length}</b></span>
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
         </div>
 
         <div className="mt-3 overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-          <ResultSheet key={id} sessionId={id} session={s} writing={writingByCode}
+          <ResultSheet key={id} sessionId={id} session={s} writing={input.writing}
             onDirtyChange={setDirty}
-            initialMarks={Object.fromEntries(data.marks.map(m => [m.item_code, m.correct]))}
-            initialSentences={Object.fromEntries(data.sentences.map(x => [x.item_code, x.words]))}
+            initialMarks={input.marks}
+            initialSentences={input.sentences}
             attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>

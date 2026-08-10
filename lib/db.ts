@@ -36,40 +36,55 @@ export async function insertRecording(r: {
   fail(error)
 }
 
+/** 낱말 쓰기(G1) 답 — 문항 만점이 1이라 boolean으로 담는다 */
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
 /** 낱말 해독 의미 낱말의 검사자 현장 채점 */
 export interface ReadingMark { itemCode: string; correct: boolean }
 
-/** 문장 읽기유창성 채점 — 제한 시간 내 정확히 읽은 어절 수 */
+/** 어절 수 점수 — 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 같은 테이블을 쓴다 */
 export interface SentenceScore { itemCode: string; words: number }
 
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
+export interface SubmitInput {
+  sessionId: string
+  /** 낱말 쓰기 양식(G1)에서만 채워진다 */
+  writing: WritingAnswer[]
+  /** 문장 쓰기 양식(G2)에서만 채워진다 */
+  sentenceWriting: SentenceScore[]
+  checklist: string[]
+  marks: ReadingMark[]
+  /** 중단 규칙 ①로 문장·쓰기 과제를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
+   *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
+  discontinued: boolean
+}
+
 /**
  * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
- * 낱말쓰기·현장 채점을 upsert한다.
+ * 쓰기 답·현장 채점을 upsert한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
  */
-export async function submitSession(
-  sessionId: string, writing: WritingAnswer[], checklist: string[], marks: ReadingMark[] = [],
-  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
-   *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
-  discontinued = false,
-): Promise<SubmitResult> {
+export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
+  const { sessionId, writing, sentenceWriting, checklist, marks, discontinued } = input
   const now = new Date().toISOString()
   const { data, error } = await sb().from('sessions')
     .update({ checklist, submitted_at: now, discontinued_at: discontinued ? now : null })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
-    const state = await sessionSubmitState(sessionId)
+    const { state } = await sessionState(sessionId)
     return state === 'submitted' ? 'already_submitted' : 'not_found'
   }
   if (writing.length > 0) {
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e2)
+  }
+  if (sentenceWriting.length > 0) {
+    const rows = sentenceWriting.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
+    const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
+    fail(e4)
   }
   if (marks.length > 0) {
     const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
@@ -85,6 +100,10 @@ export async function submitSession(
  */
 export async function saveScores(
   sessionId: string, marks: ReadingMark[], sentences: SentenceScore[],
+  /** 관리자 채점이 소유하는 문장 코드(rs..). 아래 "안 보낸 것 삭제"의 범위를 이 집합으로 제한한다 —
+   *  같은 테이블에 검사 중 수집된 문장 쓰기 점수(sw..)가 함께 들어 있어, 범위를 두지 않으면
+   *  관리자가 채점을 저장할 때마다 아동의 문장 쓰기 점수가 통째로 지워진다. */
+  ownedCodes: string[],
 ): Promise<void> {
   if (marks.length > 0) {
     const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
@@ -104,20 +123,26 @@ export async function saveScores(
     fail(error)
   }
   const keep = sentences.map(s => s.itemCode)
-  const stale = sb().from('sentence_scores').delete().eq('session_id', sessionId)
+  const stale = sb().from('sentence_scores').delete()
+    .eq('session_id', sessionId)
+    .in('item_code', ownedCodes)
   const { error: delErr } = await (keep.length > 0
     ? stale.not('item_code', 'in', `(${keep.join(',')})`)
     : stale)
   fail(delErr)
 }
 
-/** 세션 존재·제출 상태 조회(업로드/제출 가드용). */
-export async function sessionSubmitState(sessionId: string): Promise<'missing' | 'open' | 'submitted'> {
+/** 세션 존재·제출 상태 + 학년 조회(업로드/제출 가드용).
+ *  학년을 함께 돌려주는 이유: 어떤 문항 코드가 유효한지는 학년(검사지)에 따라 다르므로
+ *  라우트가 세션의 양식으로 검증해야 한다. 어차피 같은 행을 읽으니 질의는 늘지 않는다. */
+export async function sessionState(sessionId: string): Promise<{
+  state: 'missing' | 'open' | 'submitted'; grade: number
+}> {
   const { data, error } = await sb().from('sessions')
-    .select('submitted_at').eq('id', sessionId).maybeSingle()
+    .select('submitted_at, grade').eq('id', sessionId).maybeSingle()
   fail(error)
-  if (!data) return 'missing'
-  return data.submitted_at ? 'submitted' : 'open'
+  if (!data) return { state: 'missing', grade: 0 }
+  return { state: data.submitted_at ? 'submitted' : 'open', grade: data.grade as number }
 }
 
 /** 세션당 녹음 행 수(업로드 총량 상한 검사용). */
@@ -238,13 +263,15 @@ const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grad
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
   writing_answers: { item_code: string }[]
+  /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
+  sentence_scores: { item_code: string }[]
 }
 
 const MAX_LIST_ROWS = 5000
 
 export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code)`)
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code), sentence_scores(item_code)`)
     .order('started_at', { ascending: false })
     .limit(MAX_LIST_ROWS)
   fail(error)

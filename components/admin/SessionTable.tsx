@@ -29,10 +29,9 @@ const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measure
 /** 관리자 세션 목록 — 필터/정렬 상태는 부모(AdminDashboard)가 보유, 여기는 표시와 콜백만.
  * react-table은 컬럼/가상 렌더 골격으로만 쓰고, 정렬·필터는 기존 URL 동기화 로직을 그대로 사용한다
  * (내장 sorting/filtering 모델은 사용하지 않음 — 이중 정렬/충돌 상태를 피하기 위함). */
-export function SessionTable({ rows, total, totals, filters, sort, schools, grades, onFilters, onSort, onReset }: {
+export function SessionTable({ rows, total, filters, sort, schools, grades, onFilters, onSort, onReset }: {
   rows: SessionListRow[]           // 필터·정렬 적용 완료본
   total: number                    // 전체 세션 수 (빈 상태 문구 분기용)
-  totals: Totals
   filters: Filters
   sort: Sort
   schools: string[]
@@ -93,8 +92,9 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         id: 'progress', header: '진행률',
         meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-4', tdClassName: 'px-4' },
         cell: ({ row }) => {
-          const p = sessionProgress(row.original, totals)
-          return <ProgressCell recorded={p.recorded} written={p.written} totals={totals} />
+          // 분모는 행마다 다르다 — 학년별 검사지 문항 수와 중단 규칙이 반영된 값이다.
+          const p = sessionProgress(row.original)
+          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
         },
       }),
       col.display({
@@ -108,12 +108,12 @@ export function SessionTable({ rows, total, totals, filters, sort, schools, grad
         id: 'status', header: '상태',
         meta: { thClassName: 'whitespace-nowrap px-4 pr-5', tdClassName: 'whitespace-nowrap px-4 pr-5' },
         cell: ({ row }) => {
-          const p = sessionProgress(row.original, totals)
+          const p = sessionProgress(row.original)
           return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
         },
       }),
     ]
-  }, [totals, detailHref])
+  }, [detailHref])
 
   // tanstack table v8은 React Compiler 미호환 목록에 있으나(내부 캐시 뮤테이션),
   // 자체 메모이제이션으로 동작은 안전하다 — v9 호환판이 나올 때까지 경고만 억제.
