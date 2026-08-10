@@ -30,8 +30,10 @@ export function SentenceWriteRows({ items, writing }: {
             </span>
             <span className="w-20 flex-none text-right text-[13px]"
               aria-label={`${item.text} ${v === undefined ? '미응답' : `${v}점`}`}>
-              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다 */}
-              <b className={`font-read text-[16px] tabular-nums ${v === undefined ? 'text-ink-mute' : v === 0 ? 'text-rec-deep' : 'text-ink'}`}>
+              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다.
+                  0점을 경고색으로 칠하지 않는 이유: 이 숫자는 받은 점수를 적은 것뿐이고
+                  판정이 아니다(인쇄물의 「0 1 2」 동그라미와 같은 규칙). */}
+              <b className={`font-read text-[16px] tabular-nums ${v === undefined ? 'text-ink-mute' : 'text-ink'}`}>
                 {v === undefined ? '—' : v}
               </b>
               <span className="text-ink-mute"> / {max}</span>

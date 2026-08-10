@@ -146,8 +146,10 @@ function stampGrid(
 
 /**
  * 인쇄된 「0 1 2」 중 획득 점수에 동그라미.
- * 색은 0점만 오반응색이다 — 한 어절도 맞히지 못한 것이 중단 규칙 ②의 조건이라,
- * 검사자가 종이에서 그 행을 바로 찾을 수 있어야 한다.
+ *
+ * 점수와 무관하게 한 색이다. 낱말 격자의 O/X는 정오 **판정**이라 색이 뜻을 갖지만,
+ * 이 동그라미는 받은 점수를 **표기**하는 것뿐이라 0점을 오반응색으로 칠하면 판단을
+ * 얹게 된다(0점은 두 어절 다 틀린 것이지 문항을 틀린 것이 아니다).
  */
 function circleChoice(page: PDFPage, c: ChoiceGridLayout, itemIndex: number, value: number) {
   const row = c.rows[itemIndex]
@@ -158,7 +160,7 @@ function circleChoice(page: PDFPage, c: ChoiceGridLayout, itemIndex: number, val
     x: cx + (value - 1) * c.dx,
     y: row.baselineY + c.cy,
     xScale: c.rx, yScale: c.ry,
-    borderColor: value === 0 ? ERR : OK, borderWidth: 1.1, opacity: 0,
+    borderColor: OK, borderWidth: 1.1, opacity: 0,
   })
 }
 
