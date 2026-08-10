@@ -28,7 +28,7 @@ export function WordScoreRows({ audio, items, marks, onMark }: {
       </div>
       {/* 640px부터 2열 — 세로 길이를 절반으로 줄이고, 한 행이 넓어져 낱말과 O/X가
           멀어지는 것도 막는다(행 폭이 좁을수록 낱말↔버튼 시선 이동이 짧다) */}
-      <ul className="grid gap-x-10 px-4 pb-3 pt-2 sm:grid-cols-2">
+      <ul className="grid gap-x-10 px-4 py-3 sm:grid-cols-2">
         {items.map(item => {
           const v = marks[item.code]
           return (

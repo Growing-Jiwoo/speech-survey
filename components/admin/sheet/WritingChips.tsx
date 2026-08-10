@@ -13,7 +13,7 @@ export function WritingChips({ items, writing }: {
     .filter(g => g.items.length > 0)
   return (
     // 위아래를 같게 준다 — pb만 있어 과제 제목 띠에 첫 줄이 붙어 있었다.
-    <div className="flex flex-col gap-3 px-4 py-4">
+    <div className="flex flex-col gap-3 px-4 py-3">
       {groups.map(g => (
         <div key={g.kind} className="flex flex-wrap items-center gap-2">
           <span className="w-16 flex-none text-[12.5px] font-bold text-ink-mute">
