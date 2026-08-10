@@ -13,6 +13,7 @@ import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { BadgeLegend } from './BadgeLegend'
 import { ScoreBand } from './sheet/ScoreBand'
+import { TaskSection } from './sheet/TaskSection'
 import { Subtotal } from './sheet/Subtotal'
 import { WordScoreRows } from './sheet/WordScoreRows'
 import { WritingChips } from './sheet/WritingChips'
@@ -131,43 +132,35 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
       <ScoreBand form={form} result={r} />
 
       {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
-      <h2 className="border-t border-line px-4 pb-2 pt-4 text-[16px] font-bold">{SECTION_LABEL.word_reading}
-        <span className="ml-2 text-[12px] font-normal text-ink-mute">
-          {form.limits.wordSec}초 동안 정확하게 읽은 낱말 수
-        </span>
-      </h2>
-      <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark}
-        audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
-          limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
-      <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark}
-        audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
-          limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
-      <Subtotal
-        cells={[
-          { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
-          { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
-        ]}
-        total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
-        verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+      <TaskSection title={SECTION_LABEL.word_reading}
+        hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
+        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark}
+          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
+            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark}
+          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
+            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <Subtotal
+          cells={[
+            { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
+            { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
+          ]}
+          total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
+          verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+      </TaskSection>
 
-      {/* 문장 읽기유창성 */}
-      <h2 className="border-t border-line px-4 pb-2 pt-4 text-[16px] font-bold">{SECTION_LABEL.sentence_reading}
-        <span className="ml-2 text-[12px] font-normal text-ink-mute">
-          {form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수
-        </span>
-      </h2>
-      <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
-        attemptsFor={code => attemptsOf(`p_${code}`)}
-        limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
-      <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
-        verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+      <TaskSection title={SECTION_LABEL.sentence_reading}
+        hint={`${form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수`}>
+        <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
+          attemptsFor={code => attemptsOf(`p_${code}`)}
+          limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
+        <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
+          verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+      </TaskSection>
 
       {/* 쓰기 과제 — 검사 중 수집분(읽기 전용). 학년에 따라 낱말 쓰기 또는 문장 쓰기다. */}
-      <h2 className="border-t border-line px-4 pb-2 pt-4 text-[16px] font-bold">{writingLabel}
-        <span className="ml-2 text-[12px] font-normal text-ink-mute">
-          검사 중 기록 · 정확하게 쓴 {f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점
-        </span>
-      </h2>
+      <TaskSection title={writingLabel}
+        hint={`검사 중 기록 · 정확하게 쓴 ${f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점`}>
       {f.writingSection === 'word_writing' ? (
         <>
           <WritingChips items={f.writingItems} writing={writing} />
@@ -186,16 +179,17 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             verdict={r.verdict.writing} complete={r.complete.writing} />
         </>
       )}
+      </TaskSection>
 
-      {/* 검사자 체크리스트 */}
-      <h2 className="border-t border-line px-4 pb-2 pt-4 text-[16px] font-bold">{SECTION_LABEL.checklist}</h2>
-      <div className="flex flex-wrap gap-2 px-4 pb-3">
-        {session.checklist.length === 0
-          ? <span className="text-sm text-ink-mute">선택 없음</span>
-          : session.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
-      </div>
+      <TaskSection title={SECTION_LABEL.checklist}>
+        <div className="flex flex-wrap gap-2 px-4 py-3">
+          {session.checklist.length === 0
+            ? <span className="text-sm text-ink-mute">선택 없음</span>
+            : session.checklist.map(c => <Badge key={c} tone="amber">{areaLabel(c)}</Badge>)}
+        </div>
+      </TaskSection>
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-4 print:hidden">
+      <div className="flex flex-wrap items-center gap-3 border-t-[10px] border-bg px-4 py-4 print:hidden">
         <button type="button" onClick={save} disabled={saving}
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}

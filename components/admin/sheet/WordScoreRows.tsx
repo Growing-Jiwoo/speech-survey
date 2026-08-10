@@ -20,13 +20,15 @@ export function WordScoreRows({ audio, items, marks, onMark }: {
   onMark: (code: string, v: boolean) => void
 }) {
   return (
-    <div className="relative border-t border-line/60">
-      <div className="sticky top-0 z-10 border-b border-line/60 bg-white px-4 py-2.5">
+    <div className="relative border-t border-line">
+      {/* 그룹 머리 — 과제 제목(연한 밴드)보다 한 단계 아래. 아래 경계선을 굵게 둬서
+          행 묶음이 어디서 시작하는지 눈에 걸리게 한다. sticky는 배경이 불투명해야 한다. */}
+      <div className="sticky top-0 z-10 border-b-2 border-line bg-white px-4 py-2.5">
         {audio}
       </div>
       {/* 640px부터 2열 — 세로 길이를 절반으로 줄이고, 한 행이 넓어져 낱말과 O/X가
           멀어지는 것도 막는다(행 폭이 좁을수록 낱말↔버튼 시선 이동이 짧다) */}
-      <ul className="grid gap-x-10 px-4 py-2 sm:grid-cols-2">
+      <ul className="grid gap-x-10 px-4 pb-3 pt-2 sm:grid-cols-2">
         {items.map(item => {
           const v = marks[item.code]
           return (

@@ -31,7 +31,7 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
   if (attempts.length === 0) {
     return (
       <div className="flex items-center gap-2.5 print:hidden">
-        {label && <span className="text-[13px] font-bold text-ink-soft">{label}</span>}
+        {label && <span className="text-[14px] font-bold text-ink">{label}</span>}
         <Badge tone="rec">미녹음</Badge>
       </div>
     )
@@ -43,16 +43,18 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
 
   return (
     <div className="flex flex-wrap items-center gap-2.5 print:hidden">
-      {label && <span className="text-[13px] font-bold text-ink-soft">{label}</span>}
+      {label && <span className="text-[14px] font-bold text-ink">{label}</span>}
+      {/* 재녹음이 있을 때만 나온다. '#1'은 무슨 번호인지 안 읽혀서 '1차'로 쓴다. */}
       {attempts.length > 1 && (
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          <span className="mr-0.5 text-[12px] text-ink-mute">재녹음</span>
           {attempts.map((a, i) => (
             <button key={a.attempt_no} type="button" aria-pressed={i === idx}
               aria-label={`${label ?? '녹음'} ${a.attempt_no}번째 시도`}
               onClick={() => setIdx(i)}
               className={`h-8 rounded-md border px-2.5 text-[12.5px] font-bold transition ${
                 i === idx ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-mute'}`}>
-              #{a.attempt_no}
+              {a.attempt_no}차
             </button>
           ))}
         </div>

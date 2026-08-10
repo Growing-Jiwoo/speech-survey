@@ -25,10 +25,16 @@ export function Subtotal({ cells, total, verdict, complete = true }: {
       ))}
       <span className="text-[14px] font-bold text-ink-soft">
         {total.label}{' '}
-        <b className={`text-[20px] tabular-nums ${complete ? 'text-blue' : 'text-ink-mute'}`}>
-          {complete ? total.value : '—'}
-        </b>
-        <span className="text-ink-mute"> / {total.max}</span>
+        {/* 미채점일 때 '— / 36'처럼 작대기를 세우면 값이 있는 것처럼 읽히고 모양도 어수선하다.
+            숫자 자리를 비우고 척도만 알려 준다 — 판정은 옆 배지가 한다. */}
+        {complete ? (
+          <>
+            <b className="text-[20px] tabular-nums text-blue">{total.value}</b>
+            <span className="text-ink-mute"> / {total.max}</span>
+          </>
+        ) : (
+          <span className="font-normal text-ink-mute">{total.max}점 만점</span>
+        )}
       </span>
       {/* 채점이 끝나지 않았으면 판정을 내지 않는다(미실시·채점 전을 Fail로 오독하지 않도록) */}
       {!complete
