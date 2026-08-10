@@ -14,7 +14,7 @@
 
 ### Task 0: 브랜치 생성
 
-- [ ] **Step 1: feat/kodys-g2에서 분기**
+- [x] **Step 1: feat/kodys-g2에서 분기**
 
 ```bash
 git checkout feat/kodys-g2 && git checkout -b feat/result-sheet-workbench
@@ -26,7 +26,7 @@ git checkout feat/kodys-g2 && git checkout -b feat/result-sheet-workbench
 
 **Files:** Modify: `components/AudioPlayer.tsx`
 
-- [ ] **Step 1: RATE_OPTIONS 라벨 교체**
+- [x] **Step 1: RATE_OPTIONS 라벨 교체**
 
 `const RATE_OPTIONS = RATES.map(...)` 줄을 다음으로 교체. O/X 채점 화면에서 `1×`의 ×가 오답 X로 읽혔다(사용자 확인) — × 기호를 어디에도 남기지 않는다.
 
@@ -38,7 +38,7 @@ const RATE_LABELS: Record<(typeof RATES)[number], string> = {
 const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: RATE_LABELS[r] }))
 ```
 
-- [ ] **Step 2: 컨트롤 크기 승격**
+- [x] **Step 2: 컨트롤 크기 승격**
 
 return JSX에서 세 곳 교체:
 
@@ -57,7 +57,7 @@ className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-
 
 컨테이너 `max-w-[280px]` → `max-w-[420px]` (파형이 좁아 시크 정밀도가 떨어졌다).
 
-- [ ] **Step 3: 검증 후 커밋**
+- [x] **Step 3: 검증 후 커밋**
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "fix(audio): 배속 라벨 1×→'배속 1.0' — ×가 오답 X로 읽히던 혼동 제거"
@@ -69,7 +69,7 @@ npx tsc --noEmit && git add -A && git commit -m "fix(audio): 배속 라벨 1×�
 
 **Files:** Modify: `components/admin/sheet/PageAudio.tsx`
 
-- [ ] **Step 1: 라벨·칩·시간 크기 교체**
+- [x] **Step 1: 라벨·칩·시간 크기 교체**
 
 ```tsx
 // 라벨: text-[11px] → text-[13px] font-bold (sticky 바에서 그룹 이름 역할)
@@ -85,7 +85,7 @@ className={`h-8 rounded-md border px-2.5 text-[12.5px] font-bold transition ${
 
 미녹음 분기의 라벨도 `text-[11px]` → `text-[13px] font-bold`. 그 외 구조 무변경.
 
-- [ ] **Step 2: 검증 후 커밋**
+- [x] **Step 2: 검증 후 커밋**
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "feat(admin): 결과지 플레이어 컨트롤 크기 승격 (11px대 전멸)"
@@ -97,7 +97,7 @@ npx tsc --noEmit && git add -A && git commit -m "feat(admin): 결과지 플레�
 
 **Files:** Create: `components/admin/sheet/WordScoreRows.tsx`
 
-- [ ] **Step 1: 컴포넌트 작성**
+- [x] **Step 1: 컴포넌트 작성**
 
 ```tsx
 // components/admin/sheet/WordScoreRows.tsx — 낱말 해독 채점: 그룹(의미/무의미) 하나의
@@ -156,7 +156,7 @@ export function WordScoreRows({ audio, items, marks, onMark }: {
 }
 ```
 
-- [ ] **Step 2: 검증 후 커밋** (`npx tsc --noEmit` — 아직 미사용이라 통과만 확인)
+- [x] **Step 2: 검증 후 커밋** (`npx tsc --noEmit` — 아직 미사용이라 통과만 확인)
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "feat(admin): 낱말 채점 행 리스트 + sticky 플레이어 (WordScoreRows)"
@@ -168,7 +168,7 @@ npx tsc --noEmit && git add -A && git commit -m "feat(admin): 낱말 채점 행 
 
 **Files:** Create: `components/admin/sheet/WritingChips.tsx`
 
-- [ ] **Step 1: 컴포넌트 작성**
+- [x] **Step 1: 컴포넌트 작성**
 
 ```tsx
 // components/admin/sheet/WritingChips.tsx — 낱말 쓰기(검사 중 기록, 읽기 전용) 칩 흐름.
@@ -213,7 +213,7 @@ export function WritingChips({ items, writing }: {
 }
 ```
 
-- [ ] **Step 2: 검증 후 커밋**
+- [x] **Step 2: 검증 후 커밋**
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "feat(admin): 낱말 쓰기 기록을 칩 흐름으로 (읽기 전용에 10행을 쓰지 않는다)"
@@ -225,7 +225,7 @@ npx tsc --noEmit && git add -A && git commit -m "feat(admin): 낱말 쓰기 기�
 
 **Files:** Modify: `components/admin/sheet/SentenceRows.tsx`
 
-- [ ] **Step 1: 파일 전체 교체**
+- [x] **Step 1: 파일 전체 교체**
 
 ```tsx
 // components/admin/sheet/SentenceRows.tsx — 문장 읽기유창성 채점 행.
@@ -286,7 +286,7 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
 주의: 기존 파일의 amber 머리행(`문항/점수`)과 인쇄용 `print:` 클래스는 의도적으로 제거 —
 화면 인쇄는 참고용이고(공식 출력 = PDF), 점수 입력의 aria-label과 `/ 7` 표기가 열 이름을 대신한다.
 
-- [ ] **Step 2: 검증 후 커밋**
+- [x] **Step 2: 검증 후 커밋**
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "feat(admin): 문장 채점 행 재구성 — 플레이어에 자기 줄, 점수 입력 승격"
@@ -298,7 +298,7 @@ npx tsc --noEmit && git add -A && git commit -m "feat(admin): 문장 채점 행 
 
 **Files:** Modify: `components/admin/sheet/Subtotal.tsx`, `components/admin/sheet/ScoreBand.tsx`, `components/admin/sheet/SentenceWriteRows.tsx`
 
-- [ ] **Step 1: Subtotal 띠를 중립으로**
+- [x] **Step 1: Subtotal 띠를 중립으로**
 
 컨테이너 className 교체 (amber는 경고 전용 원칙):
 
@@ -309,17 +309,17 @@ npx tsc --noEmit && git add -A && git commit -m "feat(admin): 문장 채점 행 
 크기 승격: 부분 점수 라벨 `text-[13px]` 유지·값 `text-[15px]` → `text-[16px]`,
 총점 라벨 `text-[13px]` → `text-[14px]`, 총점 값 `text-[19px]` → `text-[20px]`.
 
-- [ ] **Step 2: ScoreBand 라벨 승격**
+- [x] **Step 2: ScoreBand 라벨 승격**
 
 두 곳의 과제 라벨 `text-[11.5px]` → `text-[13px]`, 하단 힌트 `text-[10.5px]` → `text-[12px]`.
 구조·색 로직 무변경.
 
-- [ ] **Step 3: SentenceWriteRows(G2 문장 쓰기 기록) 승격**
+- [x] **Step 3: SentenceWriteRows(G2 문장 쓰기 기록) 승격**
 
 머리행 `bg-amber/10` → `bg-well`·`text-[11.5px]` → `text-[12.5px]`, 어절 칩 `text-[15px]` →
 `text-[16px]`, 점수 `text-[13px]/[15px]` → `text-[13px]/[16px]`. 구조 무변경.
 
-- [ ] **Step 4: 검증 후 커밋**
+- [x] **Step 4: 검증 후 커밋**
 
 ```bash
 npx tsc --noEmit && git add -A && git commit -m "style(admin): 소계·총평·문장쓰기 기록 — amber 띠를 중립으로, 12px 바닥값"
@@ -331,7 +331,7 @@ npx tsc --noEmit && git add -A && git commit -m "style(admin): 소계·총평·�
 
 **Files:** Modify: `components/admin/ResultSheet.tsx` · Delete: `components/admin/sheet/WordGrid.tsx`
 
-- [ ] **Step 1: import 교체**
+- [x] **Step 1: import 교체**
 
 ```tsx
 // 삭제: import { WordGrid } from './sheet/WordGrid'
@@ -339,7 +339,7 @@ import { WordScoreRows } from './sheet/WordScoreRows'
 import { WritingChips } from './sheet/WritingChips'
 ```
 
-- [ ] **Step 2: 낱말 해독 섹션 교체**
+- [x] **Step 2: 낱말 해독 섹션 교체**
 
 기존 섹션 헤더(PageAudio 2개 포함)와 `<WordGrid …/>` 2줄을 다음으로 교체 — 플레이어가
 sticky 바로 내려가므로 h2에는 제목과 기준 힌트만 남는다:
@@ -359,7 +359,7 @@ sticky 바로 내려가므로 h2에는 제목과 기준 힌트만 남는다:
     limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
 ```
 
-- [ ] **Step 3: 쓰기 섹션(G1 분기) 교체**
+- [x] **Step 3: 쓰기 섹션(G1 분기) 교체**
 
 `<WordGrid rowLabel="의미 낱말" … readOnly />` 2줄을 한 줄로:
 
@@ -369,7 +369,7 @@ sticky 바로 내려가므로 h2에는 제목과 기준 힌트만 남는다:
 
 (이때 `writingMarks`·`writeItemsOf` 파생값은 더 이상 쓰이지 않으면 함께 삭제.)
 
-- [ ] **Step 4: 섹션 제목·머리글 타이포 일괄 승격**
+- [x] **Step 4: 섹션 제목·머리글 타이포 일괄 승격**
 
 - 모든 섹션 h2: `text-[13px]` → `text-[16px]`, 안의 힌트 `text-[11px]` → `text-[12px]`,
   h2 패딩 `pb-1.5 pt-3` → `pb-2 pt-4`
@@ -377,7 +377,7 @@ sticky 바로 내려가므로 h2에는 제목과 기준 힌트만 남는다:
 - 담임·동의 줄과 하단 안내문: `text-[10.5px]` → `text-[12px]`
 - 저장 버튼 옆 안내: `text-[11px]` → `text-[12px]`
 
-- [ ] **Step 5: WordGrid 삭제 + 전체 검증 후 커밋**
+- [x] **Step 5: WordGrid 삭제 + 전체 검증 후 커밋**
 
 ```bash
 rm components/admin/sheet/WordGrid.tsx
@@ -392,7 +392,7 @@ Expected: 테스트 전체 통과(로직 무변경), grep으로 `WordGrid` 참�
 
 ### Task 8: 브라우저 검증 (실녹음 세션)
 
-- [ ] **Step 1: 동선테스트 세션으로 확인** (`/admin/201ce890-a9e0-428e-a8b2-435cbc23d5c8`)
+- [x] **Step 1: 동선테스트 세션으로 확인** (`/admin/201ce890-a9e0-428e-a8b2-435cbc23d5c8`)
 
 - 데스크톱(1280+): 낱말 2열 그리드, sticky 바가 그룹 경계에서 교대하는지
 - 모바일(375): 행 리스트 잘림 없음, 플레이어 줄바꿈 정상
@@ -401,6 +401,6 @@ Expected: 테스트 전체 통과(로직 무변경), grep으로 `WordGrid` 참�
 - 미녹음 세션(김하늘)도 열어 미녹음 배지가 그룹당 1개인지
 - 문서 README(`components/admin/README.md`)의 WordGrid 행을 새 컴포넌트로 갱신
 
-- [ ] **Step 2: 스크린샷을 사용자에게 제시하고 채택/폐기 판단 받기**
+- [x] **Step 2: 스크린샷을 사용자에게 제시하고 채택/폐기 판단 받기**
 
 채택 → push + PR. 폐기 → 브랜치 삭제로 원상복구(main·kodys-g2 무영향).
