@@ -6,7 +6,7 @@ import path from 'node:path'
 import { LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
 import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS } from '@/lib/items'
-import { scoreSession } from '@/lib/scoring'
+import { clampSentence, scoreSession } from '@/lib/scoring'
 import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import type { SurveyForm } from '@/lib/forms'
 import type { ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
@@ -71,18 +71,28 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
   stampHeader(page, font, L, session)
   stampGrid(page, bold, L.wordReading, readOrder, input.marks, L.fontSize)
   stampGrid(page, bold, L.wordWriting, writeOrder, input.writing, L.fontSize)
-  put(L.readScores.meaning, r.wordMeaning)
-  put(L.readScores.nonsense, r.wordNonsense)
-  put(L.readScores.total, r.wordReading)
+
+  // 채점이 끝나지 않은 과제는 소계·총점 칸을 비운다.
+  // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다
+  // — 중단 규칙으로 건너뛴 과제나 아직 채점 전인 과제가 그렇다.
+  // 종이 검사지에서도 채점하지 않은 칸은 비워 두므로, 빈칸이 곧 올바른 표기다.
+  if (r.complete.wordReading) {
+    put(L.readScores.meaning, r.wordMeaning)
+    put(L.readScores.nonsense, r.wordNonsense)
+    put(L.readScores.total, r.wordReading)
+  }
   SENTENCE_CODES.forEach((code, i) => {
     const v = input.sentences[code]
     // 미입력 문항은 0을 찍지 않는다 — 0점과 미채점은 다르다.
-    if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], v)
+    // 값은 총점과 같은 clamp를 거쳐야 행의 합과 총점이 어긋나지 않는다(오입력·NaN 방지).
+    if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], clampSentence(code, v))
   })
-  put(L.sentenceTotal, r.sentenceReading)
-  put(L.writeScores.meaning, r.writeMeaning)
-  put(L.writeScores.nonsense, r.writeNonsense)
-  put(L.writeScores.total, r.wordWriting)
+  if (r.complete.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
+  if (r.complete.wordWriting) {
+    put(L.writeScores.meaning, r.writeMeaning)
+    put(L.writeScores.nonsense, r.writeNonsense)
+    put(L.writeScores.total, r.wordWriting)
+  }
   for (const code of session.checklist) {
     const y = L.checklist.rows[code]
     if (y !== undefined) drawCheck(page, L.checklist, y)
@@ -124,11 +134,21 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SurveyForm['layout'], s: S
   const h = L.header
   const put = (text: string, col: { lo: number; hi: number }) => {
     if (!text) return
-    // 열이 좁아 학교명이 넘칠 수 있다 — 칸 안에 들어갈 때까지 줄인다(최소 6pt).
+    const avail = col.hi - col.lo - 4
+    // 칸이 좁아 긴 학교명은 들어가지 않는다 — 먼저 줄이고(최소 6pt), 그래도 넘치면 잘라낸다.
+    // 실제 학교 목록 6,320곳 중 250곳이 6pt에서도 넘치는데, 가운데 정렬로 흘려보내면
+    // 양옆 칸(제목·학년/반)을 덮어 아동의 학년이 읽히지 않는다. 이름이 잘리는 편이 낫다.
     let size = 9
-    while (size > 6 && font.widthOfTextAtSize(text, size) > col.hi - col.lo - 4) size -= 0.5
-    const w = font.widthOfTextAtSize(text, size)
-    page.drawText(text, { x: (col.lo + col.hi) / 2 - w / 2, y: h.baselineY, size, font, color: INK })
+    while (size > 6 && font.widthOfTextAtSize(text, size) > avail) size -= 0.5
+    let t = text
+    if (font.widthOfTextAtSize(t, size) > avail) {
+      while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > avail) t = t.slice(0, -1)
+      t += '…'
+    }
+    const w = font.widthOfTextAtSize(t, size)
+    // 잘린 경우에도 칸을 넘지 않도록 좌우 경계 안으로 가둔다.
+    const x = Math.max(col.lo + 2, (col.lo + col.hi) / 2 - w / 2)
+    page.drawText(t, { x, y: h.baselineY, size, font, color: INK })
   }
   put(s.school_name, h.school)
   put(gradeClassLabel(s.grade, s.class_no), h.grade)

@@ -130,7 +130,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           { label: '무의미 점수', value: r.wordNonsense, max: READ_MAX.nonsense },
         ]}
         total={{ label: '총 점수', value: r.wordReading, max: TASK_MAX.wordReading }}
-        verdict={r.verdict.wordReading} />
+        verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
 
       {/* 문장 읽기유창성 */}
       <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">문장 읽기유창성
@@ -142,7 +142,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         attemptsFor={code => attemptsOf(`p_${code}`)}
         limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
       <Subtotal total={{ label: '총점', value: r.sentenceReading, max: TASK_MAX.sentenceReading }}
-        verdict={r.verdict.sentenceReading} />
+        verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
 
       {/* 낱말 쓰기 — 검사 중 수집분(읽기 전용) */}
       <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">낱말 쓰기
@@ -156,7 +156,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           { label: '무의미 점수', value: r.writeNonsense, max: WRITE_MAX.nonsense },
         ]}
         total={{ label: '총 점수', value: r.wordWriting, max: TASK_MAX.wordWriting }}
-        verdict={r.verdict.wordWriting} />
+        verdict={r.verdict.wordWriting} complete={r.complete.wordWriting} />
 
       {/* 검사자 체크리스트 */}
       <h2 className="border-t border-line px-4 pb-1.5 pt-3 text-[13px] font-bold">검사자 체크리스트</h2>
@@ -178,7 +178,11 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           검사지 PDF 다운로드
         </a>
         {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
-        <span className="text-[11px] text-ink-mute">저장한 채점 내용으로 만들어집니다</span>
+        <span className="text-[11px] text-ink-mute">
+          저장한 채점 내용으로 만들어집니다
+          {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.wordWriting)
+            && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
+        </span>
         {msg && <span aria-live="polite" className="text-xs text-ink-soft">{msg}</span>}
       </div>
 

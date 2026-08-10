@@ -1,6 +1,7 @@
 // lib/scoring.ts — 검사지 채점 규칙(배점·합산·Pass/Fail). 순수 함수만 둔다.
 // 화면·저장 API·인쇄가 모두 이 파일 하나로 점수를 계산해, 표시되는 값과 저장되는 값이 어긋나지 않게 한다.
-import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, itemByCode, type SurveyItem } from './items'
+import { ITEMS, MEANING_READ_CODES, MEANING_WRITE_CODES, WRITING_ITEMS, itemByCode, type SurveyItem } from './items'
+import { requiredWritingCodes } from './survey-flow'
 
 /** 문장 배점 = 어절 수. 검사지의 7·7·8·14가 문항 텍스트의 어절 수와 정확히 일치하므로
  *  숫자를 따로 적어두지 않고 유도한다 — 문항이 바뀌면 배점이 자동으로 따라간다. */
@@ -68,17 +69,30 @@ export interface ScoreResult {
   writeNonsense: number
   wordWriting: number
   verdict: Record<TaskKey, Verdict>
+  /**
+   * 과제별 채점 완료 여부. 이것이 false면 **숫자도 판정도 확정된 값이 아니다.**
+   *
+   * 없는 데이터를 0으로 세는 것과 "0점을 받았다"는 전혀 다르다. 중단 규칙으로 실시하지
+   * 않은 과제(문장·낱말 쓰기)나 아직 채점 전인 과제까지 0점 Fail로 표시하면, 치르지도
+   * 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은 칸을 비운다.
+   */
+  complete: Record<TaskKey, boolean>
 }
 
 const countTrue = (codes: string[], m: Partial<Record<string, boolean>>) =>
   codes.reduce((n, c) => n + (m[c] === true ? 1 : 0), 0)
 
-/** 문항 만점을 넘거나 음수인 입력은 잘라낸다 — 오입력이 총점을 왜곡하지 않도록. */
-function clampSentence(code: string, raw: number | undefined): number {
+/** 문항 만점을 넘거나 음수인 입력은 잘라낸다 — 오입력이 총점을 왜곡하지 않도록.
+ *  총점만이 아니라 **개별 문항을 표시·인쇄할 때도** 이 값을 써야 행의 합과 총점이 어긋나지 않는다. */
+export function clampSentence(code: string, raw: number | undefined): number {
   const item = itemByCode.get(code)
   if (!item || raw == null || !Number.isFinite(raw)) return 0
   return Math.max(0, Math.min(Math.floor(raw), sentenceMaxWords(item)))
 }
+
+/** 해당 코드들이 "모두" 채점됐는지 — 하나라도 비면 그 과제는 아직 확정된 점수가 없다. */
+const allAnswered = (codes: Iterable<string>, m: Partial<Record<string, unknown>>) =>
+  [...codes].every(c => m[c] !== undefined)
 
 export function scoreSession(s: ScoreInput): ScoreResult {
   const wordMeaning = countTrue(MEANING_READ_CODES, s.marks)
@@ -95,6 +109,12 @@ export function scoreSession(s: ScoreInput): ScoreResult {
       wordReading: at(wordReading, PASS_MARK.wordReading),
       sentenceReading: at(sentenceReading, PASS_MARK.sentenceReading),
       wordWriting: at(wordWriting, PASS_MARK.wordWriting),
+    },
+    complete: {
+      wordReading: allAnswered(READ_CODES, s.marks),
+      sentenceReading: allAnswered(SENTENCE_ITEMS.map(i => i.code), s.sentences),
+      // 낱말 쓰기는 중단 규칙 ②에 걸리면 앞 3개만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
+      wordWriting: allAnswered(requiredWritingCodes(WRITING_ITEMS, s.writing), s.writing),
     },
   }
 }

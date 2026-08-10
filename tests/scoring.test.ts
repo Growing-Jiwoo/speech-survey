@@ -3,7 +3,10 @@ import {
   PASS_MARK, PROVISIONAL_CRITERIA, SENTENCE_MAX, TASK_MAX, READ_MAX, WRITE_MAX,
   sentenceMaxWords, scoreSession, type ScoreInput,
 } from '@/lib/scoring'
-import { itemByCode } from '@/lib/items'
+import { ITEMS, MEANING_READ_CODES, itemByCode } from '@/lib/items'
+
+const READ_ALL = ITEMS.filter(i => i.section === 'word_reading').map(i => i.code)
+const WRITE_ALL = ITEMS.filter(i => i.section === 'word_writing').map(i => i.code)
 
 const empty: ScoreInput = { marks: {}, sentences: {}, writing: {} }
 
@@ -128,5 +131,51 @@ describe('과제별 만점', () => {
   it('의미·무의미 만점의 합이 과제 만점과 같다', () => {
     expect(WRITE_MAX.meaning + WRITE_MAX.nonsense).toBe(TASK_MAX.wordWriting)
     expect(READ_MAX.meaning + READ_MAX.nonsense).toBe(TASK_MAX.wordReading)
+  })
+})
+
+describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하지 않기 위한 근거)', () => {
+  const allRead = Object.fromEntries(READ_ALL.map(c => [c, true]))
+  const allSent = { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }
+  const allWrite = Object.fromEntries(WRITE_ALL.map(c => [c, true]))
+
+  it('갓 제출된 세션은 어느 과제도 완료가 아니다', () => {
+    const r = scoreSession({ marks: {}, sentences: {}, writing: {} })
+    expect(r.complete).toEqual({ wordReading: false, sentenceReading: false, wordWriting: false })
+  })
+
+  it('현장 채점(의미 7개)만 있으면 낱말 해독은 아직 미완료다', () => {
+    // 무의미 낱말은 검사자가 현장에서 표시하지 않는다 — 관리자가 녹음을 듣고 채점해야 완료다.
+    const meaningOnly = Object.fromEntries(MEANING_READ_CODES.map(c => [c, true]))
+    const r = scoreSession({ marks: meaningOnly, sentences: {}, writing: {} })
+    expect(r.wordReading).toBe(7)
+    expect(r.complete.wordReading).toBe(false)
+  })
+
+  it('전부 채점하면 완료로 바뀐다', () => {
+    const r = scoreSession({ marks: allRead, sentences: allSent, writing: allWrite })
+    expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, wordWriting: true })
+  })
+
+  it('중단 규칙 ①: 문장·낱말 쓰기를 실시하지 않은 세션은 그 과제가 완료가 아니다', () => {
+    // 첫 3개 의미 낱말 오반응 → 문장·쓰기 미실시. 낱말 해독 자체는 무의미까지 실시된다.
+    const marks = { ...allRead, rw01: false, rw02: false, rw03: false }
+    const r = scoreSession({ marks, sentences: {}, writing: {} })
+    expect(r.complete.wordReading).toBe(true)
+    expect(r.complete.sentenceReading).toBe(false)
+    expect(r.complete.wordWriting).toBe(false)
+    // 점수는 0이지만 완료가 아니므로 화면·인쇄물은 이 0을 확정값으로 쓰지 않는다.
+    expect(r.sentenceReading).toBe(0)
+  })
+
+  it('중단 규칙 ②: 낱말 쓰기 앞 3개만 요구되면 그것만 채워도 완료다', () => {
+    const writing = { ww01: false, ww02: false, ww03: false }
+    const r = scoreSession({ marks: allRead, sentences: allSent, writing })
+    expect(r.complete.wordWriting).toBe(true)
+  })
+
+  it('문장 하나라도 비면 미완료다', () => {
+    const r = scoreSession({ marks: allRead, sentences: { rs01: 7, rs02: 7, rs03: 8 }, writing: allWrite })
+    expect(r.complete.sentenceReading).toBe(false)
   })
 })

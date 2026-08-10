@@ -13,7 +13,23 @@ export function ScoreBand({ result }: { result: ScoreResult }) {
     <div className="grid gap-2 px-5 py-4 sm:grid-cols-3">
       {TASKS.map(t => {
         const value = t.get(result)
+        const done = result.complete[t.key]
         const pass = result.verdict[t.key] === 'pass'
+        // 채점이 끝나지 않은 과제는 판정을 내지 않는다 — 실시하지 않았거나 채점 전인 과제까지
+        // 0점 Fail로 보이면, 치르지도 않은 과제에서 낙제한 것처럼 읽힌다.
+        if (!done) return (
+          <div key={t.key} className="rounded-xl border-[1.5px] border-line bg-well px-4 py-3">
+            <p className="text-[11.5px] font-bold text-ink-mute">{t.label}</p>
+            <p className="mt-0.5 flex items-baseline gap-1.5">
+              <b className="text-[30px] leading-none text-ink-mute">—</b>
+              <span className="text-[15px] text-ink-mute">/ {TASK_MAX[t.key]}</span>
+              <span className="ml-auto text-[13px] font-bold text-ink-mute">채점 전</span>
+            </p>
+            <p className="mt-1 text-[10.5px] text-ink-mute">
+              {value > 0 ? `현재 ${value}점 · 남은 문항 채점 필요` : '실시하지 않았거나 채점 전'}
+            </p>
+          </div>
+        )
         return (
           <div key={t.key}
             className={`rounded-xl border-[1.5px] px-4 py-3 ${

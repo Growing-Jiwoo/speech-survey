@@ -6,11 +6,13 @@ import type { Verdict } from '@/lib/scoring'
 
 interface Cell { label: string; value: number; max: number }
 
-export function Subtotal({ cells, total, verdict }: {
+export function Subtotal({ cells, total, verdict, complete = true }: {
   /** 의미/무의미 같은 부분 점수. 없으면(문장) 총점만 표시한다 */
   cells?: Cell[]
   total: Cell
   verdict?: Verdict
+  /** 채점이 끝났는지. false면 숫자를 확정값으로 보이지 않게 하고 판정을 감춘다. */
+  complete?: boolean
 }) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-1.5 border-y border-amber/30 bg-amber/10 px-4 py-2.5 print:bg-amber/10">
@@ -21,14 +23,18 @@ export function Subtotal({ cells, total, verdict }: {
         </span>
       ))}
       <span className="text-[13px] font-bold text-ink-soft">
-        {total.label} <b className="text-[19px] tabular-nums text-blue">{total.value}</b>
+        {total.label}{' '}
+        <b className={`text-[19px] tabular-nums ${complete ? 'text-blue' : 'text-ink-mute'}`}>
+          {complete ? total.value : '—'}
+        </b>
         <span className="text-ink-mute"> / {total.max}</span>
       </span>
-      {verdict && (
-        verdict === 'pass'
+      {/* 채점이 끝나지 않았으면 판정을 내지 않는다(미실시·채점 전을 Fail로 오독하지 않도록) */}
+      {!complete
+        ? <Badge tone="mute" size="lg">채점 전</Badge>
+        : verdict && (verdict === 'pass'
           ? <Badge tone="mint" size="lg">Pass</Badge>
-          : <Badge tone="rec" size="lg">Fail</Badge>
-      )}
+          : <Badge tone="rec" size="lg">Fail</Badge>)}
     </div>
   )
 }
