@@ -177,19 +177,14 @@ describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하�
       .toEqual({ wordReading: true, sentenceReading: true, writing: true })
   })
 
-  it('중단 규칙 ①: 문장·쓰기를 실시하지 않은 세션은 그 과제가 완료가 아니다', () => {
-    // 첫 3개 의미 낱말 오반응 → 문장·쓰기 미실시. 낱말 해독 자체는 무의미까지 실시된다.
+  it('옛 규칙으로 전 문항 실시된 세션도 낱말 해독은 완료다 (소급 세션)', () => {
+    // 무의미까지 채점된 세션 — 새 규칙 ①이 걸려도 complete는 유지된다.
     const r = score({ marks: { ...allRead, rw01: false, rw02: false, rw03: false } })
     expect(r.complete.wordReading).toBe(true)
     expect(r.complete.sentenceReading).toBe(false)
     expect(r.complete.writing).toBe(false)
     // 점수는 0이지만 완료가 아니므로 화면·인쇄물은 이 0을 확정값으로 쓰지 않는다.
     expect(r.sentenceReading).toBe(0)
-  })
-
-  it('중단 규칙 ②(G1): 낱말 쓰기 앞 3개만 요구되면 그것만 채워도 완료다', () => {
-    const r = score({ marks: allRead, sentences: allSent, writing: { ww01: 0, ww02: 0, ww03: 0 } })
-    expect(r.complete.writing).toBe(true)
   })
 
   it('중단 규칙 ②(G2): 첫 문장이 0점이면 그것만 채워도 완료다', () => {

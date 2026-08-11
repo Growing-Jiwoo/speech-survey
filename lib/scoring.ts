@@ -97,6 +97,7 @@ export interface ScoreResult {
    * 기준이라(낱말 해독 9/14), 의미 7문항만 실시한 세션에 들이대면 근거가 성립하지 않는다.
    * 중단은 척도 위의 값이 아니라 그 자체가 결론이다. 화면은 `중단` 배지를 내고
    * PDF는 소계·총점 칸을 비운다(스펙 "검사지 PDF" 절).
+   * complete보다 먼저 본다: discontinued가 true면 complete 값과 무관하게 '중단'으로 표시한다.
    */
   discontinued: Record<TaskKey, boolean>
 }
@@ -177,7 +178,7 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
       // ①이 걸리면 무의미는 실시하지 않으므로 의미 7문항이 "실시된 전부"다.
       wordReading: allAnswered(discReading ? f.meaningReadCodes : f.readItems.map(i => i.code), s.marks),
       sentenceReading: allAnswered(f.sentenceItems.map(i => i.code), s.sentences),
-      // 쓰기는 중단 규칙 ②에 걸리면 앞 몇 개만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
+      // 쓰기는 중단 규칙 ②에 걸리면 1번만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
       writing: allAnswered(requiredWritingCodes(f, f.writingItems, s.writing), s.writing),
     },
     discontinued: {
