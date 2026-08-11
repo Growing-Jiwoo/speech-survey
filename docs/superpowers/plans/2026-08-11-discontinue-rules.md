@@ -55,6 +55,19 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 
 Subagent-Driven (`superpowers:subagent-driven-development`). 태스크마다 구현자 1 + 스펙 리뷰어 1 + 품질 리뷰어 1. 모델 배분은 Task 1·5·6·9 = Opus, 2+3·4·7 = Sonnet, 8 = Haiku.
 
+### ⚠️ PR 만들기 전에 — gh 계정을 되돌려야 한다
+
+현재 `gh` 활성 계정은 **`ipf-jiwookim`이고 이 저장소에 `READ`뿐이다**(public이라 나오는 기본
+열람 권한). 같은 저장소 내 브랜치로 PR을 열려면 write가 필요하므로 **`gh pr create`가 실패한다.**
+머지도 마찬가지다. 마무리 단계에서:
+
+```bash
+gh auth switch --user Growing-Jiwoo   # 저장소 소유자
+```
+
+`git push`는 영향 없다 — 원격이 SSH 별칭(`github.com-growingjiwoo:…`)이라 gh 토큰이 아니라
+SSH 키로 인증한다. 브랜치는 이미 푸시돼 있다(`origin/feat/discontinue-rules`).
+
 ---
 
 ### Task 1: `lib/survey-flow.ts` — 규칙 교체 ✅ 완료 (`9d75c3a` + `dbae32e`)
