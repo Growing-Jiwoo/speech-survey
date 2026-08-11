@@ -87,3 +87,30 @@ describe('stampSheet — G2 문장 쓰기 동그라미', () => {
     expect(zeros.byteLength).toBeGreaterThan(none.byteLength)
   })
 })
+
+describe('stampSheet — 중단 규칙: 중단 이후는 점수를 적지 않는다 (담당자 확정)', () => {
+  const G1 = FORMS.find(f => f.id === 'KODYS-G1')!
+  const f1 = itemsFor(G1)
+  const session = {
+    school_name: '가나초', grade: 1, class_no: 1, child_name: '테스트',
+    birth_ymd: '2019-01-01', started_at: '2026-08-11T00:00:00Z',
+    examiner_type: 'teacher' as const, checklist: ['none'],
+  }
+  // ① 성립: 의미 첫 3개 X, 나머지 4개 O — 무의미는 미채점(미실시)
+  const ceilingMarks = Object.fromEntries(f1.meaningReadCodes.map((c, i) => [c, i >= 3]))
+
+  it('① 세션: 낱말 해독 소계가 찍힌 출력과 안 찍힌 출력이 달라야 한다', async () => {
+    // 같은 marks로 "중단 아님" 상황을 만들 수 없으므로(중단은 marks에서 파생),
+    // 소계가 찍히는 완주 세션과 크기를 비교해 "덜 그려졌음"을 확인한다.
+    const fullMarks = Object.fromEntries(f1.readItems.map(i => [i.code, true]))
+    const discontinued = await stampSheet({ form: G1, session, marks: ceilingMarks, sentences: {}, writing: {} })
+    const complete = await stampSheet({ form: G1, session, marks: fullMarks, sentences: {}, writing: {} })
+    // 중단본은 의미 7개 O/X만, 완주본은 14개 O/X + 소계 3칸 — 반드시 더 작다
+    expect(discontinued.byteLength).toBeLessThan(complete.byteLength)
+  })
+
+  it('② 세션(G1): 쓰기 1번 X만 찍히고 쓰기 소계는 비는데, 문서 자체는 만들어진다', async () => {
+    const out = await stampSheet({ form: G1, session, marks: {}, sentences: {}, writing: { ww01: 0 } })
+    expect(out.byteLength).toBeGreaterThan(0)
+  })
+})

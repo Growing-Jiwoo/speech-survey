@@ -63,11 +63,11 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
   stampGrid(page, bold, L.wordReading, [...f.meaningReadCodes, ...f.nonsenseReadCodes],
     input.marks, L.fontSize)
 
-  // 채점이 끝나지 않은 과제는 소계·총점 칸을 비운다.
-  // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다
-  // — 중단 규칙으로 건너뛴 과제나 아직 채점 전인 과제가 그렇다.
+  // 채점이 끝나지 않았거나 **중단으로 실시하지 않은** 과제는 소계·총점 칸을 비운다.
+  // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다.
+  // 중단 이후에는 아무 점수도 적지 않는다(담당자 확정) — 빈칸이 곧 표기다.
   // 종이 검사지에서도 채점하지 않은 칸은 비워 두므로, 빈칸이 곧 올바른 표기다.
-  if (r.complete.wordReading) {
+  if (r.complete.wordReading && !r.discontinued.wordReading) {
     put(L.readScores.meaning, r.wordMeaning)
     put(L.readScores.nonsense, r.wordNonsense)
     put(L.readScores.total, r.wordReading)
@@ -78,7 +78,7 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
     // 값은 총점과 같은 clamp를 거쳐야 행의 합과 총점이 어긋나지 않는다(오입력·NaN 방지).
     if (v !== undefined && L.sentenceScores[i]) put(L.sentenceScores[i], clampWords(f, item.code, v))
   })
-  if (r.complete.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
+  if (r.complete.sentenceReading && !r.discontinued.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
 
   stampWriting(page, bold, L.writing, L.fontSize, f, input.writing, r, put)
 
@@ -107,7 +107,7 @@ function stampWriting(
     )
     stampGrid(page, bold, layout.grid,
       [...f.meaningWriteCodes, ...f.nonsenseWriteCodes], marks, fontSize)
-    if (r.complete.writing) {
+    if (r.complete.writing && !r.discontinued.writing) {
       put(layout.scores.meaning, r.writeMeaning)
       put(layout.scores.nonsense, r.writeNonsense)
       put(layout.scores.total, r.writing)
@@ -119,7 +119,7 @@ function stampWriting(
     if (v === undefined) return          // 미채점은 비워 둔다 (0점과 다르다)
     circleChoice(page, layout.choices, i, clampWords(f, item.code, v))
   })
-  if (r.complete.writing) put(layout.total, r.writing)
+  if (r.complete.writing && !r.discontinued.writing) put(layout.total, r.writing)
 }
 
 /** 낱말 격자: 낱말 오른쪽 여백에 O/X. 미실시(undefined)는 비워 둔다.
