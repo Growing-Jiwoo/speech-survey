@@ -137,7 +137,11 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 - 전체 스위트가 초록인 것은 안전 신호가 아니라 **커버리지 구멍**이다 — Task 5·7이 완성되기 전까지는 그렇다.
 - `components/survey/MarkPage.tsx`·`WritingPage.tsx` 배너가 현재 **검사자에게 사실과 다른 내용을 보여준다.** Task 6이 고친다.
 
-### 🚫 배포 금지 — Task 5·6·7이 전부 끝나기 전까지
+### ✅ 배포 금지 해소됨 (Task 7 완료 시점, `9685aae`) — 아래는 경위 기록
+
+당초 Task 5·6·7 완료를 조건으로 걸었던 배포 금지가 전부 풀렸다. `ScoreBand`는 `중단` 카드를
+내고(`0fe040e`), `stamp-sheet.ts`는 무의미 소계·총점을 비운다(`a31a60e`+`296a690`). 이하는
+왜 이 게이트가 필요했는지의 기록이다.
 
 Task 4(`c297ab8`)가 `complete.wordReading`을 ① 세션에서 `false → true`로 뒤집었다. 이 자체는
 계획대로지만, 그 값을 아직 옛 방식으로 읽는 두 곳이 **지금 이 순간 악화됐다**:
