@@ -661,8 +661,13 @@ complete.wordReading이 ① 세션에서 true가 되므로(의미 7문항 완료
 
 **Files:**
 - Modify: `app/survey/page.tsx`
+- Modify: `components/survey/MarkPage.tsx` (배너 문구 — **지금 두 군데 틀렸다**)
 - Modify: `components/survey/WritingPage.tsx` (배너 문구)
 - Test: 없음(컴포넌트 테스트 부재 — 이 저장소 관례). 검증은 tsc/lint + Task 9 브라우저 확인.
+
+> ⚠️ **Task 1 리뷰에서 추가된 파일:** `MarkPage.tsx`는 계획 초안에 없었다. Task 1이 규칙을
+> 바꾸면서 이 배너가 **사실과 다른 내용을 검사자에게 보여주는 상태**가 됐다 — 배포 전에
+> 반드시 고쳐야 한다.
 
 - [ ] **Step 1: 모달 문구 상수와 상태 추가**
 
@@ -795,7 +800,31 @@ JSX에서 두 컴포넌트의 `onChange`를 교체:
 
 ※ ① 확인 → `goNext()` — `visiblePages`가 이미 무의미·문장을 뺐으므로 다음 페이지가 쓰기다. 별도 이동 로직 없음. 직후 쓰기 섹션의 `SectionIntro`가 뜨는 것은 의도된 연쇄다(스펙). ② 확인 → 다음 페이지가 체크리스트다.
 
-- [ ] **Step 3: `WritingPage` 배너 문구 갱신 (G1)**
+- [ ] **Step 3a: `MarkPage` 배너 문구 갱신 — 지금 두 군데 틀렸다**
+
+`components/survey/MarkPage.tsx`의 배너(현재 51~58행)는 Task 1 이후 **사실과 다르다**:
+
+> "…문장 읽기유창성과 **낱말 쓰기는 실시하지 않습니다.** **무의미 낱말까지 진행한 뒤** 마무리 단계로 넘어갑니다."
+
+쓰기는 이제 **실시**하고, 무의미 낱말은 **실시하지 않는다** — 둘 다 뒤집혔다. 교체:
+
+```tsx
+      {ceiling && (
+        // 담당자 확정(2026-08-11): 무의미 낱말·문장 읽기유창성을 실시하지 않고 쓰기로 넘어간다.
+        // (검사지 인쇄 문구는 "문장 읽기유창성과 낱말 쓰기 미실시" — 폐기됐다. 스펙 참고)
+        <p className="mt-4 rounded-xl border border-amber/50 bg-amber/10 px-3 py-2.5 text-[13px] font-bold leading-relaxed text-amber">
+          의미 낱말 첫 {CEILING_N}개가 모두 오반응이라, 중단 규칙에 따라{' '}
+          <b>무의미 낱말과 문장 읽기유창성은 실시하지 않습니다.</b>
+          {' '}남은 의미 낱말을 마저 표시한 뒤 {SECTION_LABEL[form.writingSection]} 과제로 넘어갑니다.
+        </p>
+      )}
+```
+
+"남은 의미 낱말을 마저 표시한 뒤"가 중요하다 — 검사자는 3개째 X 이후에도 4~7번을 계속 채점해야 하는데(낱말 해독 판정을 의미 7문항으로 낸다), 배너만 보면 바로 넘어가야 하는 줄 안다.
+
+`SECTION_LABEL`·`CEILING_N` import가 이미 있는지 확인하고 없으면 추가한다.
+
+- [ ] **Step 3b: `WritingPage` 배너 문구 갱신 (G1)**
 
 `components/survey/WritingPage.tsx`:
 - import에서 `CEILING_N` 제거: `import { requiredWritingCodes, writingCeilingHit } from '@/lib/survey-flow'`
@@ -822,7 +851,7 @@ Expected: 전부 PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/survey/page.tsx components/survey/WritingPage.tsx
+git add app/survey/page.tsx components/survey/MarkPage.tsx components/survey/WritingPage.tsx
 git commit -m "feat(survey): 중단 안내 모달 — ①은 [다음]에서, ②는 입력 즉시
 
 ① 채점 화면에서 [다음]에 거는 이유: 의미 7문항은 전부 채점한다(아동은
@@ -831,7 +860,10 @@ git commit -m "feat(survey): 중단 안내 모달 — ①은 [다음]에서, ②
 
 확인은 goNext() 하나다 — visiblePages가 이미 다음 페이지를 정해 놓았다.
 취소(다시 채점/다시 입력)가 오입력 복구 경로가 된다. 문구는 담당자가
-나중에 수정한다고 해 CEILING_COPY 한 곳에 모았다."
+나중에 수정한다고 해 CEILING_COPY 한 곳에 모았다.
+
+MarkPage·WritingPage의 인라인 배너도 규칙 변경분을 반영한다 — 각각
+'쓰기 미실시'(이제 실시함)와 '첫 3개'(이제 1번 하나)로 어긋나 있었다."
 ```
 
 ---
