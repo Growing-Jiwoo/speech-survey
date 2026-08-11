@@ -295,7 +295,7 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
     const s = mkSession({
       discontinued_at: '2026-08-10T01:00:00.000Z',
       recordings: [{ item_code: 'p_rw_meaning' }],
-      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: false })),
+      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
     })
     expect(sessionProgress(s).incomplete).toBe(false)
   })
