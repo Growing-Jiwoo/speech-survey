@@ -6,7 +6,7 @@ import { itemMaxWords } from '@/lib/scoring'
 import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
-export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec, onAudioError }: {
+export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec, onAudioError, locked = false }: {
   items: SurveyItem[]
   sentences: Partial<Record<string, number>>
   onChange: (code: string, v: number | undefined) => void
@@ -14,6 +14,8 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
   attemptsFor: (code: string) => Attempt[]
   limitSec: number
   onAudioError: () => void
+  /** 중단 규칙으로 실시하지 않은 과제 — 점수 입력을 잠그고 미녹음 경고 대신 미실시를 낸다 */
+  locked?: boolean
 }) {
   return (
     <div>
@@ -27,7 +29,7 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
                 {item.text}
               </p>
               <div className="flex flex-none items-center gap-1.5 pt-0.5">
-                <input type="number" min={0} max={max} inputMode="numeric"
+                <input type="number" min={0} max={max} inputMode="numeric" disabled={locked}
                   aria-label={`${i + 1}번 문장 정확 어절 수 (최대 ${max})`}
                   value={sentences[item.code] ?? ''}
                   onChange={e => {
@@ -37,14 +39,14 @@ export function SentenceRows({ items, sentences, onChange, attemptsFor, limitSec
                     if (Number.isNaN(n)) return
                     onChange(item.code, Math.max(0, Math.min(Math.floor(n), max)))
                   }}
-                  className="h-11 w-16 rounded-lg border-[1.5px] border-line bg-well px-2 text-center text-base tabular-nums outline-none focus:border-blue" />
+                  className="h-11 w-16 rounded-lg border-[1.5px] border-line bg-well px-2 text-center text-base tabular-nums outline-none focus:border-blue disabled:opacity-40" />
                 <span className="text-[13px] text-ink-mute">/ {max}</span>
               </div>
             </div>
             {/* 라벨 없이 플레이어만 — 바로 위에 번호와 문장 전문이 있어 '1번 문장'은 군더더기다 */}
             <div className="mt-2 pl-8">
               <PageAudio attempts={attemptsFor(item.code)}
-                limitSec={limitSec} onAudioError={onAudioError} />
+                limitSec={limitSec} onAudioError={onAudioError} notAdministered={locked} />
             </div>
           </div>
         )

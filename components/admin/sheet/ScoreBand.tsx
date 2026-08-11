@@ -26,6 +26,24 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
         const pass = result.verdict[key] === 'pass'
         // 채점이 끝나지 않은 과제는 판정을 내지 않는다 — 실시하지 않았거나 채점 전인 과제까지
         // 0점 Fail로 보이면, 치르지도 않은 과제에서 낙제한 것처럼 읽힌다.
+        // 중단 규칙이 걸린 과제 — Pass/Fail을 내지 않는다. passMark는 전체 실시를
+        // 전제한 기준이라 부분 실시 점수에 들이대면 근거가 성립하지 않는다(스펙 참고).
+        if (result.discontinued[key]) return (
+          <div key={key} className="rounded-xl border-[1.5px] border-line bg-well px-4 py-3">
+            <p className="text-[13px] font-bold text-ink-mute">{label[key]}</p>
+            <p className="mt-1 flex items-baseline gap-2">
+              <b className="text-[22px] leading-none text-ink">중단</b>
+              <span className="ml-auto text-[13px] text-ink-mute">{taskMax[key]}점 만점</span>
+            </p>
+            <p className="mt-1.5 text-[12px] text-ink-mute">
+              {key === 'writing'
+                ? `1번 문항 오반응 · 실시분 ${value}점`
+                : key === 'wordReading'
+                  ? `의미 낱말 첫 3개 연속 오반응 · 실시분 ${value}점`
+                  : '낱말 해독 중단으로 실시하지 않음'}
+            </p>
+          </div>
+        )
         if (!done) return (
           <div key={key} className="rounded-xl border-[1.5px] border-line bg-well px-4 py-3">
             <p className="text-[13px] font-bold text-ink-mute">{label[key]}</p>
