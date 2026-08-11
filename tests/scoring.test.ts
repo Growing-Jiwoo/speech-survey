@@ -242,3 +242,40 @@ describe('scoreInputFrom — 저장된 행을 채점 입력으로', () => {
     expect(scoreSession(G2, input).writing).toBe(2)
   })
 })
+
+describe('중단 규칙과 채점 (discontinued — 판정을 Pass/Fail이 아니라 중단으로)', () => {
+  const MEANING = g1.meaningReadCodes
+  const ceilingMarks = Object.fromEntries(MEANING.map((c, i) => [c, i >= 3]))  // 첫 3개 X, 나머지 O
+
+  it('① 세션: 의미 7문항만 채점되면 낱말 해독은 완료다 (무의미는 미실시)', () => {
+    const r = score({ marks: ceilingMarks })
+    expect(r.complete.wordReading).toBe(true)
+    expect(r.wordReading).toBe(4)          // 의미 4문항 정반응, 무의미 기여 0
+  })
+
+  it('① 세션: discontinued가 낱말 해독·문장 읽기유창성에 선다', () => {
+    const r = score({ marks: ceilingMarks })
+    expect(r.discontinued).toEqual({ wordReading: true, sentenceReading: true, writing: false })
+  })
+
+  it('중단 아닌 세션: 의미만 채점됐으면 여전히 미완료다 (기존 동작 보존)', () => {
+    const okMarks = Object.fromEntries(MEANING.map(c => [c, true]))
+    const r = score({ marks: okMarks })
+    expect(r.complete.wordReading).toBe(false)
+    expect(r.discontinued.wordReading).toBe(false)
+  })
+
+  it('② 세션: 쓰기 1번 0점이면 discontinued.writing — 1번만으로 완료다', () => {
+    const r = score({ writing: { ww01: 0 } })
+    expect(r.discontinued.writing).toBe(true)
+    expect(r.complete.writing).toBe(true)
+    const r2 = score({ writing: { sw01: 0 } }, G2)
+    expect(r2.discontinued.writing).toBe(true)
+    expect(r2.complete.writing).toBe(true)
+  })
+
+  it('중단이 없으면 discontinued는 전부 false — Pass/Fail 경로가 그대로다', () => {
+    expect(score({}).discontinued)
+      .toEqual({ wordReading: false, sentenceReading: false, writing: false })
+  })
+})
