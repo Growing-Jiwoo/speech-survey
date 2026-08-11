@@ -33,7 +33,8 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 |---|---|---|---|
 | 1 survey-flow | ✅ | ✅ 통과 | ✅ 승인 (Important 2건 반영 완료) |
 | 2+3 items/db/adminStats | ✅ `15497c3`+`131b35b`+`e5e0b9b` | ✅ 통과(1건 수정 후) | ✅ 승인 (Important 2건 반영 완료) |
-| 4~9 | ⏸ 미착수 | | |
+| 4 scoring | ✅ `c297ab8` | ✅ 통과 | ⏸ Important 2건 수정 중 |
+| 5~9 | ⏸ 미착수 | | |
 
 ### Task 2+3 리뷰에서 실제로 잡힌 것 (참고)
 
@@ -47,9 +48,27 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 
 ### 알려진 상태 (정상 — 고치려 들지 말 것)
 
-- `lib/scoring.ts`·`components/admin/*`·`lib/pdf/*`·`app/survey/*`가 **아직 옛 규칙 전제**다. Task 4~7이 담당한다.
-- 전체 스위트가 초록인 것은 안전 신호가 아니라 **커버리지 구멍**이다 — 중단 세션 시나리오를 덮는 테스트가 아직 없다. Task 4·5·7에서 새 테스트를 반드시 **먼저** 써라.
-- `components/survey/MarkPage.tsx`·`WritingPage.tsx` 배너가 현재 **검사자에게 사실과 다른 내용을 보여준다.** Task 6이 고친다. **이 브랜치를 Task 6 이전 상태로 배포하지 말 것.**
+- `components/admin/*`·`lib/pdf/*`·`app/survey/*`가 **아직 옛 규칙 전제**다. Task 5~7이 담당한다.
+- 전체 스위트가 초록인 것은 안전 신호가 아니라 **커버리지 구멍**이다 — Task 5·7이 완성되기 전까지는 그렇다.
+- `components/survey/MarkPage.tsx`·`WritingPage.tsx` 배너가 현재 **검사자에게 사실과 다른 내용을 보여준다.** Task 6이 고친다.
+
+### 🚫 배포 금지 — Task 5·6·7이 전부 끝나기 전까지
+
+Task 4(`c297ab8`)가 `complete.wordReading`을 ① 세션에서 `false → true`로 뒤집었다. 이 자체는
+계획대로지만, 그 값을 아직 옛 방식으로 읽는 두 곳이 **지금 이 순간 악화됐다**:
+
+- `components/admin/sheet/ScoreBand.tsx` — ① 세션이 "채점 전"이 아니라 **`4 / 14` 빨간 숫자 +
+  `Fail` 배지**로 뜬다.
+- `lib/pdf/stamp-sheet.ts:70-74` — `complete.wordReading` 조건만 보고 무의미 소계·총점을 찍는다.
+  ① 세션 검사지 PDF에 **무의미 소계 `0`, 총점 `4`가 인쇄된다.**
+
+**이게 가상의 우려가 아니다.** 실 Supabase에 규칙① 조건(의미 낱말 rw01·02·03 전부 오반응)을
+충족하는 세션이 이미 있다 — `76d956b2`(김테스트, `discontinued_at: null`, 제출 완료). HANDOFF
+기록상 가짜 테스트 껍데기라 임상 위험은 없지만, **이 시나리오가 지금 DB에 실재한다는 증거**다.
+실제 아동 세션이 같은 조건에 놓이면 그대로 겪는다.
+
+Task 5(`!discontinued` 조건 추가)와 Task 7(`중단` 배지)이 끝나야 해소된다. 그 전까지 관리자
+화면·PDF 다운로드를 **실사용하지 말 것**(dev 환경 확인 정도는 무방).
 
 ### 실행 방식
 
