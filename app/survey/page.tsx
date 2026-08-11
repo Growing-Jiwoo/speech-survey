@@ -163,7 +163,7 @@ function SurveyInner() {
   // 입력 즉시(3개째 X)에 띄우지 않는 이유: 의미 7문항은 전부 채점한다(아동은 이미 다
   // 읽었고 채점은 사후 표시다 — 스펙 "확정 규칙 ①").
   function tryNext() {
-    if (page.code === 'p_rw_meaning_mark' && readingCeilingHit(f, st!.marks)) {
+    if (!fromReview && page.code === 'p_rw_meaning_mark' && readingCeilingHit(f, st!.marks)) {
       setCeilingModal('reading'); return
     }
     goNext()
@@ -174,7 +174,7 @@ function SurveyInner() {
   // 오입력 복구 경로다.
   function changeWriting(code: string, v: number) {
     patch(prev => ({ writing: { ...prev.writing, [code]: v } }))
-    if (!writingModalSeen && writingCeilingHit(f, { ...st!.writing, [code]: v })) {
+    if (!fromReview && !writingModalSeen && writingCeilingHit(f, { ...st!.writing, [code]: v })) {
       setWritingModalSeen(true)
       setCeilingModal(f.writingSection)
     }
@@ -278,7 +278,7 @@ function SurveyInner() {
                       return { writing: { ...prev.writing, ...applied } }
                     })
                     // "모두 아니오" 첫 클릭이 곧 중단을 유발한다 — 1번에 v가 들어간 상태로 판정
-                    if (!writingModalSeen && writingCeilingHit(f, { ...st.writing, [f.writingItems[0].code]: v })) {
+                    if (!fromReview && !writingModalSeen && writingCeilingHit(f, { ...st.writing, [f.writingItems[0].code]: v })) {
                       setWritingModalSeen(true)
                       setCeilingModal(f.writingSection)
                     }
