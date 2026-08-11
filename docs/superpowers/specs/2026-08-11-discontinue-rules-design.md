@@ -221,7 +221,24 @@
 
 `stamp-sheet.ts`의 소계·총점 조건이 지금은 `r.complete.*` 하나다. 스펙대로
 `complete.wordReading`이 ① 세션에서 **true**가 되므로, 그대로 두면 "무의미 0 / 7 · 총 1 / 14"가
-찍힌다. 조건을 `complete && !discontinued`로 좁힌다.
+찍힌다.
+
+⚠️ **낱말 해독 한 곳만 조건이 둘로 갈린다** — 위 표(210~211행)대로 의미 점수는 중단 이전에
+실시된 것이라 계속 찍고, 무의미·총점만 비운다. 하나로 뭉쳐 `complete && !discontinued`로
+묶으면 의미 점수까지 지워져 표와 모순된다:
+
+```ts
+// 의미 낱말은 중단이 발생하기 전에 실시·채점됐다 — 그 소계는 남긴다(위 표).
+if (r.complete.wordReading) put(L.readScores.meaning, r.wordMeaning)
+// 무의미·총점은 ①이 걸리면 실시하지 않은 것이라 비운다.
+if (r.complete.wordReading && !r.discontinued.wordReading) {
+  put(L.readScores.nonsense, r.wordNonsense)
+  put(L.readScores.total, r.wordReading)
+}
+```
+
+문장 읽기유창성 총점·쓰기 소계(양식별 두 곳)는 표에서 중단 시 전부 비우므로 각각 단일
+조건 `complete && !discontinued`로 충분하다.
 
 문항별 표시(`stampGrid`·`circleChoice`·문장 점수)는 값이 `undefined`면 이미 건너뛰므로
 변경 없다. 실시하지 않은 문항은 값 자체가 없다.
