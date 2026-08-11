@@ -38,12 +38,14 @@ export const isWritingWrong = (score: number | undefined): boolean | undefined =
  *  ⚠️ visiblePages에는 반영하지 않는다 — 이 규칙은 페이지를 빼는 대신 쓰기 화면이
  *  직접 남은 문항을 잠그는 방식으로 구현된다(requiredWritingCodes). 잘못 연결하지 말 것. */
 export function writingCeilingHit(f: FormItems, writing: Partial<Record<string, number>>): boolean {
-  return hitsCeiling(f.writingItems.map(i => isWritingWrong(writing[i.code])), 1)
+  return hitsCeiling(f.writingItems.slice(0, 1).map(i => isWritingWrong(writing[i.code])), 1)
 }
 
 /**
  * 쓰기 과제에서 실제로 응답이 요구되는 문항 코드 집합.
  * 중단 규칙 ②에 걸리면 판정에 쓰인 1번 문항만 요구하고, 그렇지 않으면 페이지의 모든 문항을 요구한다.
+ * 중단 시에는 인자 `items`와 무관하게 **양식의 1번 문항**(`f.writingItems[0]`)을 요구한다 —
+ * 넘어온 배열이 뒤섞이거나 일부만 담겨 있어도 판정이 흔들리지 않는다.
  * 쓰기 화면의 잠금·다음 버튼 활성화(canAdvance)·검토 화면의 완료 집계가 모두 이 함수 하나로
  * "요구되는 문항"을 판정해, 배열 위치가 아닌 문항 코드로 안전하게 동작한다.
  */
@@ -51,7 +53,7 @@ export function requiredWritingCodes(
   f: FormItems, items: SurveyItem[], writing: Partial<Record<string, number>>,
 ): Set<string> {
   if (!writingCeilingHit(f, writing)) return new Set(items.map(i => i.code))
-  return new Set([f.writingItems[0].code])
+  return new Set(f.writingItems.slice(0, 1).map(i => i.code))
 }
 
 export interface FlowState {
@@ -65,14 +67,16 @@ export function visiblePages(f: FormItems, s: Pick<FlowState, 'marks'>) {
   if (!readingCeilingHit(f, s.marks)) return f.pages
   // 무의미 낱말은 섹션이 의미 낱말과 같아(word_reading) 섹션 필터로는 걸러지지 않는다 —
   // kind로 가른다(연습·의미·현장채점 페이지는 모두 kind가 'meaning'이다).
+  // "무엇을 빼는가"가 아니라 **무엇을 남기는가**로 적는다 — 새 양식이 실시하면 안 되는
+  // 페이지를 추가해도 조용히 통과하지 않는다(kind !== 'nonsense'였다면 kind: null이 통과했다).
   return f.pages.filter(p =>
-    (p.section === 'word_reading' && p.kind !== 'nonsense')
+    (p.section === 'word_reading' && p.kind === 'meaning')
     || p.section === f.writingSection || p.section === 'checklist')
 }
 
 /**
  * 현재 페이지에서 [다음]을 누를 수 있는지 — 페이지 종류별 완료 조건.
- * 낱말 해독 현장 채점: 전부 표시. 쓰기: 전부 입력(단, 중단 규칙에 걸리면 앞 n개만).
+ * 낱말 해독 현장 채점: 전부 표시. 쓰기: 전부 입력(단, 중단 규칙에 걸리면 1번 문항만).
  * 체크리스트: 1개 이상 선택.
  * (녹음 문항 자체의 완료 여부는 이 함수가 판단하지 않는다 — 호출부에서 busy로 이미 잠겨 있다.)
  */

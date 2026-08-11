@@ -28,7 +28,7 @@ describe('hitsCeiling (앞 N개 연속 오반응)', () => {
     expect(hitsCeiling([true, true, undefined])).toBe(false)
     expect(hitsCeiling([])).toBe(false)
   })
-  it('n=1이면 첫 항목만 본다 (문장 쓰기 규칙)', () => {
+  it('n=1이면 첫 항목만 본다 (쓰기 중단 규칙 — 양식 무관)', () => {
     expect(hitsCeiling([true, false, false], 1)).toBe(true)
     expect(hitsCeiling([false, true, true], 1)).toBe(false)
     expect(hitsCeiling([undefined], 1)).toBe(false)
@@ -100,8 +100,29 @@ describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
     ])
   })
 
-  it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 가정 A1)', () => {
+  it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 담당자 확정)', () => {
     expect(codes({ rw01: false, rw02: false, rw03: false })).toContain('p_cl')
+  })
+})
+
+describe('규칙 ①+② 동시 성립 (①이 쓰기를 남기면서 처음 생긴 경로)', () => {
+  it('① 후 진입한 쓰기에서 1번이 0점이면 그 문항만 요구된다', () => {
+    const marks = { rw01: false, rw02: false, rw03: false }
+    const pages = visiblePages(g1, { marks })
+    const writingPage = pages.find(p => p.section === 'word_writing')!
+    expect(writingPage.code).toBe('p_ww')
+    expect(requiredWritingCodes(g1, writingPage.items, { ww01: 0 })).toEqual(new Set(['ww01']))
+    expect(canAdvance(g1, writingPage, { marks, writing: { ww01: 0 }, checklist: [] })).toBe(true)
+  })
+  it('G2도 같다', () => {
+    const marks = { rw01: false, rw02: false, rw03: false }
+    const writingPage = visiblePages(g2, { marks }).find(p => p.section === 'sentence_writing')!
+    expect(writingPage.code).toBe('p_sw')
+    expect(requiredWritingCodes(g2, writingPage.items, { sw01: 0 })).toEqual(new Set(['sw01']))
+  })
+  it('규칙 ②가 의존하는 "1번 문항"은 양식의 첫 코드다 (위치 기반 의존의 명시적 고정)', () => {
+    expect(g1.writingItems[0].code).toBe('ww01')
+    expect(g2.writingItems[0].code).toBe('sw01')
   })
 })
 

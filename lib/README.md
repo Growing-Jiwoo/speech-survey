@@ -9,7 +9,7 @@
 |---|---|
 | `items.ts` | `itemsFor(양식)` — 문항(채점 단위)과 **페이지 모델**(화면·녹음·제한시간 단위), 진행률 분모를 양식에서 만든다. 문항은 학년마다 다르므로 모듈 상수가 아니다 |
 | `forms/` | 학년별 검사지 정의(문항·배점·제한시간·임시 Pass 기준)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 `g*.ts` + `g*-layout.ts` + 원본 PDF 추가로 끝난다 |
-| `survey-flow.ts` | 검사지의 중단 규칙과 페이지 게이팅. 규칙이 양식마다 다르다(낱말 쓰기=의미 첫 3개 연속 / 문장 쓰기=첫 문장). `visiblePages`·`requiredWritingCodes`·`canAdvance` |
+| `survey-flow.ts` | 중단 규칙과 페이지 게이팅. ① 의미 낱말 첫 3개 연속 오반응 → 무의미 낱말·문장 미실시, ② 쓰기 1번 문항 오반응 → 즉시 중단(양식 무관). 담당자 확정안이며 **검사지 인쇄 문구와 다르다**. `visiblePages`·`requiredWritingCodes`·`canAdvance` |
 | `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 배점은 전부 **어절 수**에서 유도한다(`itemMaxWords`) — 검사지 숫자를 옮겨 적지 않는다. 저장된 행을 채점 입력으로 바꾸는 `scoreInputFrom`도 여기 |
 | `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용) |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
