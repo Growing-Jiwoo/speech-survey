@@ -55,7 +55,8 @@ export interface SubmitInput {
   sentenceWriting: SentenceScore[]
   checklist: string[]
   marks: ReadingMark[]
-  /** 중단 규칙 ①로 문장·쓰기 과제를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
+  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않았는지(쓰기는 실시한다 —
+   *  담당자 확정 2026-08-11) — 검사 당시의 사실이므로 제출 시점에 굳힌다.
    *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
   discontinued: boolean
 }
@@ -247,7 +248,8 @@ export interface SessionRow {
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
   /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
   examiner_type: 'teacher' | 'expert' | null
-  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않은 시각(012). 제출 시점에 확정된다 */
+  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않은 시각(012, 주석은 013에서 갱신).
+   *  쓰기 과제는 실시한다(담당자 확정 2026-08-11). 제출 시점에 확정된다 */
   discontinued_at: string | null
 }
 
