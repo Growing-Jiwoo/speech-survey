@@ -136,9 +136,6 @@ export interface FormItems {
   recordingPages: SurveyPage[]
   /** 진행률 분모 — 화면·녹음 단위(페이지)와 쓰기 문항 수. */
   totals: Totals
-  /** 중단 규칙 ①이 적용된 세션의 진행률 분모 — 문장·쓰기 과제를 실시하지 않으므로
-   *  낱말 해독 녹음까지가 "전부"다. 전체 분모로 재면 규칙대로 끝난 검사가 미완료로 남는다. */
-  discontinuedTotals: Totals
 }
 
 /**
@@ -258,9 +255,5 @@ function build(form: SurveyForm): FormItems {
     sectionFirstCodes: new Set(sections.map(sec => pages.find(p => p.section === sec)!.code)),
     recordingPages,
     totals: { rec: recordingPages.length, write: writingItems.length },
-    discontinuedTotals: {
-      rec: recordingPages.filter(p => p.section === 'word_reading').length,
-      write: 0,
-    },
   }
 }

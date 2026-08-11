@@ -262,16 +262,17 @@ const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grad
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
-  writing_answers: { item_code: string }[]
+  /** 진행률 분모 파생(규칙 ②)에 값이 필요해 can_write까지 싣는다 */
+  writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
-  sentence_scores: { item_code: string }[]
+  sentence_scores: { item_code: string; words: number }[]
 }
 
 const MAX_LIST_ROWS = 5000
 
 export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code), sentence_scores(item_code)`)
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words)`)
     .order('started_at', { ascending: false })
     .limit(MAX_LIST_ROWS)
   fail(error)

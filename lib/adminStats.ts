@@ -1,7 +1,9 @@
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import type { Totals } from '@/lib/items'
+import type { FormItems, Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
+import { scoreInputFrom } from '@/lib/scoring'
+import { writingCeilingHit } from '@/lib/survey-flow'
 
 export type { Totals }
 
@@ -34,12 +36,28 @@ export function kstDateKey(d: Date): string {
 
 // ---------- 집계 ----------
 
-/** 이 세션에서 "전부"에 해당하는 분모. 학년마다 검사지가 달라 문항 수가 다르고(G1 낱말 쓰기 10 ↔
- *  G2 문장 쓰기 5), 중단 규칙 ①이 걸린 세션은 문장·쓰기 과제를 아예 실시하지 않는다 —
- *  전체 프로토콜로 재면 규칙대로 끝난 검사가 영원히 미완료로 남는다. */
-export function expectedTotals(s: Pick<SessionListRow, 'discontinued_at' | 'grade'>): Totals {
+/** 이 세션에서 "전부"에 해당하는 분모. 중단 규칙이 실시 범위를 줄인다:
+ *  · 규칙 ①(discontinued_at) — 무의미 낱말·문장을 실시하지 않아 녹음 분모가 1(의미 낱말)
+ *  · 규칙 ② — 쓰기 1번 문항 오반응이면 쓰기 분모가 1
+ *  ②는 컬럼이 아니라 저장된 쓰기 답에서 파생한다. 관리자가 1번을 0→1로 고치면 분모가
+ *  전체로 돌아와 "미완료"가 되는데, 그 아동은 중단되지 말았어야 했으므로 그것이 정확하다
+ *  (컬럼으로 박으면 잘못 중단된 검사가 영원히 "정상 완료"로 남는다 — 스펙 참고). */
+export function expectedTotalsFor(
+  f: FormItems, discontinued: boolean, writing: Partial<Record<string, number>>,
+): Totals {
+  return {
+    rec: (discontinued ? f.recordingPages.filter(p => p.kind === 'meaning') : f.recordingPages).length,
+    write: writingCeilingHit(f, writing) ? 1 : f.writingItems.length,
+  }
+}
+
+export function expectedTotals(
+  s: Pick<SessionListRow, 'discontinued_at' | 'grade' | 'writing_answers' | 'sentence_scores'>,
+): Totals {
   const f = itemsFor(formForGrade(s.grade))
-  return s.discontinued_at ? f.discontinuedTotals : f.totals
+  // 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다.
+  const { writing } = scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, writing: s.writing_answers })
+  return expectedTotalsFor(f, !!s.discontinued_at, writing)
 }
 
 /** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다.
