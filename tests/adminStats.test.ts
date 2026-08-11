@@ -201,6 +201,21 @@ describe('sortSessions', () => {
     expect(sortSessions([b, a], { key: 'progress', dir: 'asc' })[0]).toBe(a)
     expect(sortSessions([a, b], { key: 'progress', dir: 'desc' })[0]).toBe(b)
   })
+  it('[REGRESSION] 규칙 ②가 옛 세션에 소급 적용돼 분자>분모가 돼도 progress는 1을 넘지 않는다 ' +
+    '(실측: 세션 e0ac9d94 — discontinued_at:null인데 ww01=false라 쓰기 분모가 1로 줄어 10/1이 됨)', () => {
+    const full = mkSession({
+      child_name: '가', discontinued_at: null,
+      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
+      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
+    })
+    const retroactivelyOverfull = mkSession({
+      child_name: '나', discontinued_at: null, recordings: [],
+      // ww01만 false(규칙 ② 판정 문항) — 나머지 9개는 응답 있음. 클램프 없으면 10/7≈1.43으로
+      // 위 full(16/16=1)보다 커져 다 끝난 세션을 밀어낸다.
+      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: item_code !== 'ww01' })),
+    })
+    expect(sortSessions([retroactivelyOverfull, full], { key: 'progress', dir: 'desc' })[0]).toBe(full)
+  })
   it('grade는 학년→반 순, 동일 학년·반은 이름 2차 정렬', () => {
     const g1c2n = mkSession({ child_name: '나', grade: 1, class_no: 2 })
     const g1c2a = mkSession({ child_name: '가', grade: 1, class_no: 2 })
@@ -298,6 +313,7 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
       writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
     })
     expect(sessionProgress(s).incomplete).toBe(false)
+    expect(sessionProgress(s).expected).toEqual({ rec: 1, write: 10 })
   })
 
   it('① 세션이라도 쓰기가 비면 미완료다 (쓰기는 실시하는 과제다)', () => {
@@ -316,6 +332,7 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
       writing_answers: [{ item_code: 'ww01', can_write: false }],
     })
     expect(sessionProgress(s).incomplete).toBe(false)
+    expect(sessionProgress(s).expected).toEqual({ rec: 1, write: 1 })
   })
 
   it('중단되지 않은 같은 데이터는 미완료다', () => {

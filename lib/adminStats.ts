@@ -149,7 +149,10 @@ export function sortSessions(rows: SessionListRow[], sort: Sort): SessionListRow
     ? new Map(rows.map(s => {
         const p = sessionProgress(s)
         const denom = p.expected.rec + p.expected.write
-        return [s.id, denom === 0 ? 0 : (p.recorded + p.written) / denom] as const
+        // 규칙 ②가 옛 세션에 소급 적용되면 분자가 분모를 넘을 수 있다(실측: 세션
+        // e0ac9d94 — discontinued_at:null인데 ww01=false라 분모가 1로 줄어 10/1이 됨) —
+        // 다 끝난 세션보다 위로 오지 않도록 1에서 clamp.
+        return [s.id, denom === 0 ? 0 : Math.min(1, (p.recorded + p.written) / denom)] as const
       }))
     : null
   const value = (s: SessionListRow): string | number => {
