@@ -24,8 +24,6 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
         const value = VALUE[key](result)
         const done = result.complete[key]
         const pass = result.verdict[key] === 'pass'
-        // 채점이 끝나지 않은 과제는 판정을 내지 않는다 — 실시하지 않았거나 채점 전인 과제까지
-        // 0점 Fail로 보이면, 치르지도 않은 과제에서 낙제한 것처럼 읽힌다.
         // 중단 규칙이 걸린 과제 — Pass/Fail을 내지 않는다. passMark는 전체 실시를
         // 전제한 기준이라 부분 실시 점수에 들이대면 근거가 성립하지 않는다(스펙 참고).
         if (result.discontinued[key]) return (
@@ -44,6 +42,8 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
             </p>
           </div>
         )
+        // 채점이 끝나지 않은 과제는 판정을 내지 않는다 — 실시하지 않았거나 채점 전인 과제까지
+        // 0점 Fail로 보이면, 치르지도 않은 과제에서 낙제한 것처럼 읽힌다.
         if (!done) return (
           <div key={key} className="rounded-xl border-[1.5px] border-line bg-well px-4 py-3">
             <p className="text-[13px] font-bold text-ink-mute">{label[key]}</p>

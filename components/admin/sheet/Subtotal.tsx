@@ -29,7 +29,7 @@ export function Subtotal({ cells, total, verdict, complete = true, discontinued 
           — 이 화면이 가장 경계하는 오독이다. 숫자를 흐리고 '현재'를 붙여 진행 중임을 밝힌다. */}
       {cells?.map(c => c.na ? (
         <span key={c.label} className="text-[13px] text-ink-mute">
-          {c.label} <b className="text-[14px]">미실시</b>
+          {c.label} <b className="text-[16px]">미실시</b>
         </span>
       ) : (
         <span key={c.label} className={`text-[13px] ${complete ? 'text-ink-soft' : 'text-ink-mute'}`}>
