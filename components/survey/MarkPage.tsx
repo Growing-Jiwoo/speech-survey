@@ -49,11 +49,12 @@ export function MarkPage({ form, items, marks, onToggle }: {
       </ul>
 
       {ceiling && (
-        // 검사지: 의미 낱말 첫 3개 연속 오반응 시 문장 읽기유창성·쓰기 과제를 실시하지 않는다.
+        // 담당자 확정(2026-08-11): 무의미 낱말·문장 읽기유창성을 실시하지 않고 쓰기로 넘어간다.
+        // (검사지 인쇄 문구는 "문장 읽기유창성과 낱말 쓰기 미실시" — 폐기됐다. 스펙 참고)
         <p className="mt-4 rounded-xl border border-amber/50 bg-amber/10 px-3 py-2.5 text-[13px] font-bold leading-relaxed text-amber">
-          의미 낱말 첫 {CEILING_N}개가 모두 오반응이라, 검사지 기준에 따라{' '}
-          <b>문장 읽기유창성과 {SECTION_LABEL[form.writingSection]}는 실시하지 않습니다.</b>
-          무의미 낱말까지 진행한 뒤 마무리 단계로 넘어갑니다.
+          의미 낱말 첫 {CEILING_N}개가 모두 오반응이라, 중단 규칙에 따라{' '}
+          <b>무의미 낱말과 문장 읽기유창성은 실시하지 않습니다.</b>
+          {' '}남은 의미 낱말을 마저 표시한 뒤 {SECTION_LABEL[form.writingSection]} 과제로 넘어갑니다.
         </p>
       )}
 
