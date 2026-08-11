@@ -33,8 +33,17 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 |---|---|---|---|
 | 1 survey-flow | ✅ | ✅ 통과 | ✅ 승인 (Important 2건 반영 완료) |
 | 2+3 items/db/adminStats | ✅ `15497c3`+`131b35b`+`e5e0b9b` | ✅ 통과(1건 수정 후) | ✅ 승인 (Important 2건 반영 완료) |
-| 4 scoring | ✅ `c297ab8` | ✅ 통과 | ⏸ Important 2건 수정 중 |
+| 4 scoring | ✅ `c297ab8`+`526db99` | ✅ 통과 | ✅ 승인 (Important 2건 반영 완료) |
 | 5~9 | ⏸ 미착수 | | |
+
+### Task 4 리뷰에서 실제로 잡힌 것 (참고)
+
+- **품질 리뷰 Important 1(배포 게이트)**: `complete.wordReading`이 ① 세션에서 true가 되면서
+  `ScoreBand`·`stamp-sheet`가 즉시 악화됐다 — 위 "🚫 배포 금지" 절 참고. 실 DB에 조건을
+  충족하는 세션(`76d956b2`, 테스트 껍데기)이 이미 있음을 직접 조회로 확인.
+- **품질 리뷰 Important 2·3**: `tests/scoring.test.ts`에 옛 n=3 규칙 이름 아래 새 규칙(n=1)을
+  통과시키던 테스트 2개 — 하나는 삭제(신설 블록이 완전히 포함), 하나는 이름·주석만 소급
+  세션 설명으로 교정. `526db99`에서 반영.
 
 ### Task 2+3 리뷰에서 실제로 잡힌 것 (참고)
 
@@ -44,7 +53,9 @@ dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테�
 
 ### ▶ 재개할 때 첫 할 일
 
-**Task 4부터 계획대로 이어간다.** Task 2+3은 구현·스펙 리뷰·품질 리뷰 전부 완료됐다(위 참고 절).
+**Task 5부터 계획대로 이어간다.** Task 1·2+3·4 모두 구현·스펙 리뷰·품질 리뷰 전부 완료됐다(위 참고 절).
+Task 5(`stamp-sheet.ts`의 `complete && !discontinued` 조건)가 끝나면 "🚫 배포 금지" 절의
+악화 중 절반(PDF)이 풀린다 — 나머지 절반(ScoreBand)은 Task 7이 담당한다.
 
 ### 알려진 상태 (정상 — 고치려 들지 말 것)
 
