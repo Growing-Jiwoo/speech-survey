@@ -11,7 +11,7 @@ import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { canAdvance, readingCeilingHit, requiredWritingCodes, visiblePages, writingCeilingHit } from '@/lib/survey-flow'
+import { CEILING_N, canAdvance, readingCeilingHit, requiredWritingCodes, visiblePages, writingCeilingHit } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { Blip } from '@/components/Blip'
@@ -33,7 +33,7 @@ import { WritingPage } from '@/components/survey/WritingPage'
 const CEILING_COPY = {
   reading: {
     title: '낱말 해독을 중단합니다',
-    body: '의미 낱말 첫 3개 연속 오반응하여 낱말 해독과 문장 읽기유창성 과제를 중단합니다. 쓰기 과제로 넘어갑니다.',
+    body: `의미 낱말 첫 ${CEILING_N}개 연속 오반응하여 낱말 해독과 문장 읽기유창성 과제를 중단합니다. 쓰기 과제로 넘어갑니다.`,
     confirm: '쓰기 과제로 이동',
     cancel: '다시 채점',
   },
@@ -171,13 +171,18 @@ function SurveyInner() {
 
   // 규칙 ②: 이 입력으로 중단이 성립하면 즉시 안내한다(1번 하나로 판정이 끝나 더 받을
   // 입력이 없다). 취소하면 화면에 머물러 점수를 고칠 수 있다 — ConfirmDialog의 취소가
-  // 오입력 복구 경로다.
+  // 오입력 복구 경로다. 두 발화 지점(문항별 입력·일괄 버튼)이 "이 입력 이후 상태" 하나로
+  // 같은 판정을 쓴다 — 어느 문항이 판정을 정하는지는 survey-flow만 안다.
+  function maybeWritingCeiling(next: Partial<Record<string, number>>) {
+    if (fromReview || writingModalSeen || !writingCeilingHit(f, next)) return
+    setWritingModalSeen(true)
+    setCeilingModal(f.writingSection)
+  }
+
   function changeWriting(code: string, v: number) {
-    patch(prev => ({ writing: { ...prev.writing, [code]: v } }))
-    if (!fromReview && !writingModalSeen && writingCeilingHit(f, { ...st!.writing, [code]: v })) {
-      setWritingModalSeen(true)
-      setCeilingModal(f.writingSection)
-    }
+    const next = { ...st!.writing, [code]: v }
+    patch({ writing: next })
+    maybeWritingCeiling(next)
   }
 
   async function retryUpload(code: string) {
@@ -265,23 +270,16 @@ function SurveyInner() {
                 <WritingPage form={f} items={page.items} value={st.writing}
                   onChange={changeWriting}
                   onSetAll={v => {
-                    patch(prev => {
-                      // 중단 규칙 ②를 무시하고 10문항 전부에 v를 쓰면, 이 클릭 자체가 중단을 유발하는 경우
-                      // (예: "모두 아니오"를 첫 클릭으로) 중단 이후 문항에도 실제로 실시하지 않은 값이
-                      // 남는다. tentative 상태에서 requiredWritingCodes로 다시 판정해, 그 판정에 필요한
-                      // 코드에만 값을 반영한다 — 문항별로 하나씩 눌러 같은 잠금에 도달했을 때와 동일한 결과.
-                      const tentative = { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
-                      const required = requiredWritingCodes(f, page.items, tentative)
-                      const applied = Object.fromEntries(
-                        page.items.filter(i => required.has(i.code)).map(i => [i.code, v]),
-                      )
-                      return { writing: { ...prev.writing, ...applied } }
-                    })
-                    // "모두 아니오" 첫 클릭이 곧 중단을 유발한다 — 1번에 v가 들어간 상태로 판정
-                    if (!fromReview && !writingModalSeen && writingCeilingHit(f, { ...st.writing, [f.writingItems[0].code]: v })) {
-                      setWritingModalSeen(true)
-                      setCeilingModal(f.writingSection)
-                    }
+                    // 중단 규칙 ②를 무시하고 10문항 전부에 v를 쓰면, 이 클릭 자체가 중단을 유발하는 경우
+                    // (예: "모두 아니오"를 첫 클릭으로) 중단 이후 문항에도 실제로 실시하지 않은 값이
+                    // 남는다. tentative 상태에서 requiredWritingCodes로 다시 판정해, 그 판정에 필요한
+                    // 코드에만 값을 반영한다 — 문항별로 하나씩 눌러 같은 잠금에 도달했을 때와 동일한 결과.
+                    const tentative = { ...st.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
+                    const required = requiredWritingCodes(f, page.items, tentative)
+                    const next = { ...st.writing, ...Object.fromEntries(
+                      page.items.filter(i => required.has(i.code)).map(i => [i.code, v])) }
+                    patch({ writing: next })
+                    maybeWritingCeiling(next)
                   }} />
               )}
 
