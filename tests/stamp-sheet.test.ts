@@ -3,6 +3,22 @@ import { PDFDocument } from 'pdf-lib'
 import { stampSheet } from '@/lib/pdf/stamp-sheet'
 import { FORMS, formForGrade, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
+import type { ScoreSlot } from '@/lib/forms/layout'
+
+/** 점수 칸('/' 왼쪽 20pt 안)에 **우리가 찍은** 숫자, 없으면 null.
+ *  중단 표기는 "빈칸"이라 바이트 크기 비교로는 확인할 수 없다 — 좌표로 읽어야 한다.
+ *  베이스라인 y가 레이아웃 값과 정확히 같은 것만 센다: 검사지에 원래 인쇄된 '/ 7'은
+ *  같은 줄이어도 y가 미세하게 다르므로(577.58 vs 577.6) 이걸로 갈린다.
+ *  빈 문자열 항목은 건너뛴다 — pdfjs가 글자 사이에 폭 0짜리 조각을 끼워 넣는다. */
+async function stampedAt(bytes: Uint8Array, slot: ScoreSlot): Promise<string | null> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes) }).promise
+  const { items } = await (await doc.getPage(1)).getTextContent()
+  const hit = items.find(i =>
+    'str' in i && i.str !== '' && i.transform[5] === slot.baselineY
+    && i.transform[4] < slot.slashX && i.transform[4] > slot.slashX - 20)
+  return hit && 'str' in hit ? hit.str : null
+}
 
 const baseSession = {
   school_name: '경기초등학교', class_no: 3, child_name: '홍길동',
@@ -99,18 +115,39 @@ describe('stampSheet — 중단 규칙: 중단 이후는 점수를 적지 않는
   // ① 성립: 의미 첫 3개 X, 나머지 4개 O — 무의미는 미채점(미실시)
   const ceilingMarks = Object.fromEntries(f1.meaningReadCodes.map((c, i) => [c, i >= 3]))
 
-  it('① 세션: 낱말 해독 소계가 찍힌 출력과 안 찍힌 출력이 달라야 한다', async () => {
-    // 같은 marks로 "중단 아님" 상황을 만들 수 없으므로(중단은 marks에서 파생),
-    // 소계가 찍히는 완주 세션과 크기를 비교해 "덜 그려졌음"을 확인한다.
-    const fullMarks = Object.fromEntries(f1.readItems.map(i => [i.code, true]))
-    const discontinued = await stampSheet({ form: G1, session, marks: ceilingMarks, sentences: {}, writing: {} })
-    const complete = await stampSheet({ form: G1, session, marks: fullMarks, sentences: {}, writing: {} })
-    // 중단본은 의미 7개 O/X만, 완주본은 14개 O/X + 소계 3칸 — 반드시 더 작다
-    expect(discontinued.byteLength).toBeLessThan(complete.byteLength)
+  it('① 세션: 의미 점수는 찍히고 무의미·총점은 빈다', async () => {
+    const bytes = await stampSheet({ form: G1, session, marks: ceilingMarks, sentences: {}, writing: {} })
+    expect(await stampedAt(bytes, G1.layout.readScores.meaning)).toBe('4')
+    expect(await stampedAt(bytes, G1.layout.readScores.nonsense)).toBeNull()
+    expect(await stampedAt(bytes, G1.layout.readScores.total)).toBeNull()
   })
 
-  it('② 세션(G1): 쓰기 1번 X만 찍히고 쓰기 소계는 비는데, 문서 자체는 만들어진다', async () => {
+  it('① 세션: 문장 읽기유창성 총점도 빈다 (미실시)', async () => {
+    // 문장은 아예 미실시라 sentences가 비어 complete도 false지만, 채워 넣어도 비어야 한다.
+    const sentences = Object.fromEntries(f1.sentenceItems.map(i => [i.code, 1]))
+    const bytes = await stampSheet({ form: G1, session, marks: ceilingMarks, sentences, writing: {} })
+    expect(await stampedAt(bytes, G1.layout.sentenceTotal)).toBeNull()
+  })
+
+  it('② 세션(G1): 쓰기 1번 X만 찍히고 쓰기 소계 3칸은 전부 빈다', async () => {
     const out = await stampSheet({ form: G1, session, marks: {}, sentences: {}, writing: { ww01: 0 } })
-    expect(out.byteLength).toBeGreaterThan(0)
+    const w = G1.layout.writing
+    expect(w.kind).toBe('word')
+    if (w.kind !== 'word') return
+    expect(await stampedAt(out, w.scores.meaning)).toBeNull()
+    expect(await stampedAt(out, w.scores.nonsense)).toBeNull()
+    expect(await stampedAt(out, w.scores.total)).toBeNull()
+  })
+
+  it('② 세션(G2): 문장 쓰기 총점도 빈다', async () => {
+    const G2 = formForGrade(2)
+    const f2 = itemsFor(G2)
+    const w = G2.layout.writing
+    expect(w.kind).toBe('sentence')
+    if (w.kind !== 'sentence') return
+    // 1번만 0점, 나머지는 만점 — 중단이 없었다면 총점이 찍힐 조건이다.
+    const writing = Object.fromEntries(f2.writingItems.map((i, n) => [i.code, n === 0 ? 0 : 2]))
+    const out = await stampSheet({ form: G2, session: sessionFor(G2), marks: {}, sentences: {}, writing })
+    expect(await stampedAt(out, w.total)).toBeNull()
   })
 })

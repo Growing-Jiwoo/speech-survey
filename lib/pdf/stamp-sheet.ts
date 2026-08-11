@@ -67,8 +67,11 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
   // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다.
   // 중단 이후에는 아무 점수도 적지 않는다(담당자 확정) — 빈칸이 곧 표기다.
   // 종이 검사지에서도 채점하지 않은 칸은 비워 두므로, 빈칸이 곧 올바른 표기다.
+  //
+  // 의미 낱말은 중단이 발생하기 전에 실시·채점됐다 — 그 소계는 남긴다(스펙 표).
+  if (r.complete.wordReading) put(L.readScores.meaning, r.wordMeaning)
+  // 무의미·총점은 ①이 걸리면 실시하지 않은 것이라 비운다.
   if (r.complete.wordReading && !r.discontinued.wordReading) {
-    put(L.readScores.meaning, r.wordMeaning)
     put(L.readScores.nonsense, r.wordNonsense)
     put(L.readScores.total, r.wordReading)
   }
