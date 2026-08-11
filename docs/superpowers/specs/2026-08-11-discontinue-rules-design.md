@@ -113,13 +113,25 @@
 (`readingCeilingHit`). 의도된 분리다: "이 칸에 무엇을 그리는가"는 데이터가 답할 수 있지만,
 "이 과제가 끝난 것인가"는 규칙만이 답할 수 있다(무응답이 미실시인지 미채점인지 구분되지 않는다).
 
-### 낱말 해독은 완료로 본다
+### 낱말 해독 — 완료로 보되 Pass/Fail이 아니라 `중단`으로 표시한다
 
-`complete.wordReading`은 ①이 걸리면 **의미 코드만** 요구한다. 판정이 나온다(첫 3개가
-오반응이라 사실상 Fail 확정). 판정을 감추면 중단 세션의 결과지가 빈 문서가 되는데, 정작
-중단의 근거가 그 낱말 해독이다.
+`complete.wordReading`은 ①이 걸리면 **의미 코드만** 요구한다("더 채점할 것이 없다"는 뜻).
+판정을 감추면 중단 세션의 결과지가 빈 문서가 되는데, 정작 중단의 근거가 그 낱말 해독이다.
 
-`/14` 총점과 무의미 소계 칸은 "미실시"로 적는다.
+**그러나 Pass/Fail 배지를 내지 않는다.** `passMark.wordReading = 9`는 `/14` 기준인데
+①이 걸린 세션의 실시분은 의미 7문항뿐이다. 기준에 못 미쳐 Fail이 나오고 결론 자체는
+임상적으로 옳지만(첫 3개 연속 오반응), **근거 표시가 성립하지 않는다** — 7점짜리 과제에
+9점을 요구한 셈이다.
+
+판정 자리에는 `중단` 배지를 낸다. 중단은 Pass/Fail 척도에 밀어넣을 것이 아니라 **그 자체가
+결론**이다. 만점 표기는 `/14`를 유지하고(실제 척도), 무의미 소계 칸만 "미실시"로 적는다.
+
+만점을 실시분(`/7`)으로 축소하는 안은 택하지 않았다 — `scoringFor`의 만점이 동적이 되면
+채점·PDF 스탬핑까지 번지는데, 얻는 것은 표기 하나다.
+
+구현은 `ScoreResult`에 **`discontinued: Record<TaskKey, boolean>`** 을 추가한다.
+`Verdict` 타입은 건드리지 않는다(PDF가 쓰는 타입이며 공식 출력물에 판정은 찍히지 않는다).
+배지 선택 우선순위: `discontinued` → `중단` · `!complete` → `채점 전` · 그 외 Pass/Fail.
 
 ### 진행률 분모
 
@@ -152,16 +164,49 @@
 않는다. 만약 배포 전에 생기더라도 `incomplete` 판정은 `recorded < expected`라 과다 계상이
 미완료로 잡히지는 않는다.
 
+## 관리자 화면
+
+중단 규칙이 바뀌면 **관리자 결과지가 실시하지 않은 과제를 채점 대상으로 계속 취급한다.**
+검사 화면만 고치면 관리자가 없는 녹음을 찾아다니고, 실시하지 않은 문항을 채점할 수 있다.
+
+### 이미 맞는 것 — 변경하지 않는다
+
+- `lib/pdf/stamp-sheet.ts` — `undefined`는 찍지 않는다. 미실시 칸이 저절로 빈다.
+- `sheet/ScoreBand.tsx` · 문장 `Subtotal` — `complete=false`면 "채점 전 / 실시하지 않았거나
+  채점 전". 문장 읽기유창성 미실시에 이미 정확하다.
+- `BadgeLegend.tsx` — "중단 규칙으로 **실시하지 않은** 과제입니다. **0점이 아닙니다**" 설명
+  이미 있음.
+
+기존 설계가 "미실시 ≠ 0점"을 이미 관통하고 있어 손댈 곳이 그만큼 줄었다.
+
+### 고쳐야 하는 것
+
+| # | 위치 | 문제 | 처리 |
+|---|---|---|---|
+| 1 | `sheet/Subtotal.tsx` | ① 세션에서 "무의미 점수 **0** / 7"이 확정값으로 찍힌다. `Subtotal.tsx:22` 주석이 *"이 화면이 가장 경계하는 오독"* 이라 못 박은 바로 그것 | `Cell`에 미실시 상태 추가 → "미실시". 판정 자리는 `중단` 배지 |
+| 2 | `sheet/ScoreBand.tsx` | 낱말 해독 카드가 Pass/Fail을 낸다 | `discontinued`면 `중단` |
+| 3 | `sheet/PageAudio.tsx` | ① 세션에 빨간 `미녹음` 배지가 5개(무의미 1 + 문장 4). 실시하지 않은 과제인데 "녹음이 빠졌다"고 경고해 관리자가 없는 파일을 찾게 된다 — PR #24가 잡은 경보 피로의 재발 | 회색 `미실시`로 분기 |
+| 4 | `sheet/WordScoreRows.tsx` · `sheet/SentenceRows.tsx` | 실시하지 않은 무의미 낱말 O/X와 문장 점수 입력이 열려 있다. 찍으면 총점이 오염된다 | 잠금(읽기 전용) |
+| 5 | `AdminDetailView.tsx:124` | KPI 분모가 `f.recordingPages.length`(=6) 고정이라 ① 세션이 "녹음 **1 / 6**"으로 뜬다. `missingCount`는 `expectedTotals`를 써서 따라오는데 화면 숫자만 안 따라온다 — PR #24의 "녹음 18/6"과 같은 버그 계열 | `expectedTotals` 사용 |
+| 6 | `sheet/WritingChips.tsx` · `sheet/SentenceWriteRows.tsx` | ②로 실시하지 않은 쓰기 2~5번이 X나 0점으로 보이면 안 된다 | 미입력을 미실시로 그리는지 확인 후 필요 시 분기 |
+
+### 미실시 판정의 단일 근거
+
+여섯 곳이 각자 "이 칸은 미실시인가"를 다시 판정하면 어긋난다. `ResultSheet`가 한 번 계산해
+하위 컴포넌트에 내려보낸다 — 판정 로직은 `lib/survey-flow.ts`의 기존 두 함수가 그대로 답한다.
+
 ## 변경 지점
 
 | 파일 | 변경 |
 |---|---|
 | `lib/survey-flow.ts` | `visiblePages()` 조건 교체(무의미 낱말 페이지도 제외) · `writingCeilingRule()` **삭제**(n=1 통일로 양식 분기 소멸) |
-| `lib/scoring.ts` | `complete.wordReading` — ① 시 의미 코드만 요구 |
+| `lib/scoring.ts` | `complete.wordReading` — ① 시 의미 코드만 요구 · `ScoreResult.discontinued` 추가 |
 | `lib/items.ts` | `discontinuedTotals` 정적 필드 제거 |
 | `lib/adminStats.ts` | `expectedTotals()` — 위 4조합 |
 | `app/survey/page.tsx` | 모달 2개 + ② 로컬 dismiss state |
-| `components/admin/ResultSheet.tsx` | 미실시 칸 표기 |
+| `components/admin/ResultSheet.tsx` | 미실시 판정을 한 번 계산해 하위로 전달 |
+| `components/admin/sheet/*.tsx` | 위 관리자 화면 표 1·2·3·4·6 |
+| `components/admin/AdminDetailView.tsx` | KPI 분모를 `expectedTotals`로 |
 | `supabase/migrations/013_*.sql` | 컬럼 주석 갱신 |
 
 `readingCeilingHit()`·`writingCeilingHit()`는 **이미 존재하며 그대로 쓴다.** 둘을 묶는 통합
@@ -176,6 +221,20 @@
 - **`isWritingWrong` 변경** — 1점 오반응 여부는 미회신. 현행 `score === 0` 유지.
 - **모달 문구 확정** — 담당자가 "나중에 수정"이라 했다. 교체가 쉽도록 한 곳에 모으기만 한다.
 - **3~6학년 대응** — 검사지 미수령. G1 폴백 그대로.
+- **검사지 PDF의 중단 표시** — 아래 별건.
+
+### 별건: 공식 PDF에 중단 사실이 드러나지 않는다
+
+`stamp-sheet.ts`는 미실시 칸을 비우지만 **왜** 비었는지는 적지 않는다. 학교로 나가는 공식
+출력물에서 문장 읽기유창성 칸이 통째로 비면 "채점을 덜 했다"로 읽힐 수 있다 — 임상적 오독
+위험이다.
+
+이번 범위에서 제외한다: (a) 담당자 요청 사항이 아니고, (b) 넣을 문구가 담당자 확정 대상이며
+("중단에 대한 문구는 나중에 수정하더라도.."), (c) 원본 양식에 스탬핑하는 구조라 없는 자리에
+문구를 넣는 것은 레이아웃 작업이 따로 붙는다.
+
+**담당자 질문 목록에 올린다** — "중단으로 실시하지 않은 과제를 검사지 PDF에 어떻게 표시할까요".
+문구가 확정될 때 모달 문구와 함께 처리한다.
 
 ## 테스트
 
@@ -191,7 +250,11 @@
 - ① 시 무의미 낱말 페이지가 빠지고 쓰기 페이지가 남는다 (G1·G2 각각)
 - ② 시 1번 문항만 요구된다 (G1 `ww01` / G2 `sw01`)
 - ①+② 동시 성립 시 분모가 `{ rec: 1, write: 1 }`
-- ① 시 `complete.wordReading === true`, 무의미 소계는 미실시로 구분된다
+- ① 시 `complete.wordReading === true` **이면서** `discontinued.wordReading === true` —
+  Pass/Fail이 아니라 `중단`으로 갈린다
+- ① 시 `discontinued.sentenceReading === true` (문장 읽기유창성도 미실시)
+- ② 시 `discontinued.writing === true`, 1번 문항만 채점 대상
+- 중단이 없는 세션은 `discontinued`가 전부 false — 기존 Pass/Fail 경로가 그대로다
 - G1 "모두 아니오" 일괄 클릭이 `ww01`만 남긴다 (기존 `onSetAll` 로직이 n=1에서도 유효한지)
 
 ## 검증
