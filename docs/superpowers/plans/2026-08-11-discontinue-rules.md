@@ -18,7 +18,46 @@ npx tsc --noEmit && npm run lint && TZ=UTC npx vitest run
 
 ---
 
-### Task 1: `lib/survey-flow.ts` — 규칙 교체
+## 🔖 진행 상황 (2026-08-11 중단 — 재개 지점)
+
+**브랜치** `feat/discontinue-rules` (로컬만, 아직 푸시 안 함). 워킹트리 깨끗. **474 tests 통과.**
+
+```
+15497c3  feat(admin): 진행률 분모를 중단 규칙 조합으로 파생 계산   ← Task 2+3
+dbae32e  fix(flow): visiblePages 필터를 fail-closed로 · ①+② 경로 테스트
+5f9e7af  docs(plan): Task 6에 MarkPage 배너 추가
+9d75c3a  feat(flow): 중단 규칙을 담당자 확정안으로 교체              ← Task 1
+```
+
+| 태스크 | 구현 | 스펙 리뷰 | 품질 리뷰 |
+|---|---|---|---|
+| 1 survey-flow | ✅ | ✅ 통과 | ✅ 승인 (Important 2건 반영 완료) |
+| 2+3 items/db/adminStats | ✅ `15497c3` | ⏸ **미실시** | ⏸ **미실시** |
+| 4~9 | ⏸ 미착수 | | |
+
+### ▶ 재개할 때 첫 할 일
+
+**Task 2+3의 두 리뷰부터 돌린다.** 구현만 되고 검증을 안 거쳤다. 특히 확인할 것:
+
+1. **기존 테스트 픽스처의 의도가 보존됐는가.** `can_write`/`words` 값을 새로 채워 넣었는데, 잘못 고르면 규칙 ②가 의도치 않게 발동해 분모가 1로 줄고 **테스트의 뜻이 조용히 바뀐다.** 구현자는 기본을 `can_write: true`/`words: 최대`로 뒀다고 보고했다 — 실제로 그런지, 그리고 각 테스트 이름이 여전히 그 내용을 설명하는지 대조할 것.
+2. 구현자 보고 중 **검증이 필요한 주장**: "`① 세션` 테스트에서 `writing_answers`를 전부 `can_write: false`로 줘도 `writingCeilingHit`이 0번 문항만 보므로 분모가 1이 되고, 그래도 `incomplete === false`라 의도한 시나리오와 맞다." — 이 경우 분모 1 / 분자 10이 되는데 그게 정말 "쓰기 전체 실시" 시나리오를 표현하는지 따져볼 것. 테스트 이름은 `① 세션은 의미 낱말 녹음 1건 + 쓰기 전체로 완료다`인데 실제로는 **규칙 ②까지 걸린 상태**를 검증하고 있을 가능성이 있다.
+3. `expectedTotalsFor`의 `rec` 파생이 `recordingPages.filter(p => p.kind === 'meaning')`인데, 연습 페이지는 `recordingPages`에서 이미 제외되므로 1이 맞는지.
+
+리뷰가 통과하면 Task 4부터 계획대로 이어간다.
+
+### 알려진 상태 (정상 — 고치려 들지 말 것)
+
+- `lib/scoring.ts`·`components/admin/*`·`lib/pdf/*`·`app/survey/*`가 **아직 옛 규칙 전제**다. Task 4~7이 담당한다.
+- 전체 스위트가 초록인 것은 안전 신호가 아니라 **커버리지 구멍**이다 — 중단 세션 시나리오를 덮는 테스트가 아직 없다. Task 4·5·7에서 새 테스트를 반드시 **먼저** 써라.
+- `components/survey/MarkPage.tsx`·`WritingPage.tsx` 배너가 현재 **검사자에게 사실과 다른 내용을 보여준다.** Task 6이 고친다. **이 브랜치를 Task 6 이전 상태로 배포하지 말 것.**
+
+### 실행 방식
+
+Subagent-Driven (`superpowers:subagent-driven-development`). 태스크마다 구현자 1 + 스펙 리뷰어 1 + 품질 리뷰어 1. 모델 배분은 Task 1·5·6·9 = Opus, 2+3·4·7 = Sonnet, 8 = Haiku.
+
+---
+
+### Task 1: `lib/survey-flow.ts` — 규칙 교체 ✅ 완료 (`9d75c3a` + `dbae32e`)
 
 **Files:**
 - Modify: `lib/survey-flow.ts`
@@ -207,7 +246,7 @@ git commit -m "feat(flow): 중단 규칙을 담당자 확정안으로 교체
 
 ---
 
-### Task 2: `lib/items.ts` — `discontinuedTotals` 제거
+### Task 2: `lib/items.ts` — `discontinuedTotals` 제거 ✅ 구현 완료 (`15497c3`, 리뷰 미실시)
 
 **Files:**
 - Modify: `lib/items.ts:139-141` (인터페이스), `lib/items.ts:261-264` (build)
@@ -238,7 +277,7 @@ Expected: items.test PASS. **tsc는 `lib/adminStats.ts:42`에서 FAIL** — `dis
 
 ---
 
-### Task 3: `lib/db.ts` + `lib/adminStats.ts` — 분모를 파생 계산으로
+### Task 3: `lib/db.ts` + `lib/adminStats.ts` — 분모를 파생 계산으로 ✅ 구현 완료 (`15497c3`, 리뷰 미실시)
 
 **Files:**
 - Modify: `lib/db.ts:265-269` (SessionListRow), `lib/db.ts` listSessions select
