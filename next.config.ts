@@ -19,7 +19,15 @@ const nextConfig: NextConfig = {
     '/api/admin/sessions/[id]/sheet.pdf': ['./assets/**'],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }]
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // 벤더링한 폰트는 내용이 바뀌면 파일명도 바뀐다(구글 버전이 이름에 들어간다) —
+      // 안전하게 영구 캐시할 수 있다. public/ 기본 헤더는 max-age=0이라 매 방문 재검증한다.
+      {
+        source: '/fonts/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+      },
+    ]
   },
 }
 export default nextConfig

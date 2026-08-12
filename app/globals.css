@@ -14,6 +14,10 @@
   --color-bg: #F4F6FB;
   --color-line: #E3E8F3;
   --color-well: #F7F9FE;
+  /* 폰트 패밀리 — 실제 @font-face는 fonts.css(자동 생성물)에 있다.
+     next/font/google이 만들어 주던 변수를 직접 정의한 것이다(빌드-타임 다운로드 제거). */
+  --font-noto: 'Noto Sans KR';
+  --font-lexend: 'Lexend';
   --font-read: var(--font-lexend), sans-serif;
 }
 
