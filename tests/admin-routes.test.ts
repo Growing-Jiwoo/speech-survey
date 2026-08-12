@@ -12,6 +12,8 @@ import { GET as DETAIL, DELETE } from '@/app/api/admin/sessions/[id]/route'
 import { GET as SHEET } from '@/app/api/admin/sessions/[id]/sheet.pdf/route'
 import { POST as LOGOUT } from '@/app/api/admin/logout/route'
 import * as db from '@/lib/db'
+import { itemsFor } from '@/lib/items'
+import { formForGrade } from '@/lib/forms'
 
 const SID = '11111111-1111-4111-8111-111111111111'
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -100,10 +102,10 @@ describe('DELETE /api/admin/sessions/[id]', () => {
 })
 
 describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
-  const detail = (started_at: string) => ({
+  const detail = (started_at: string, submitted_at: string | null = null) => ({
     session: {
       id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_name: '홍길동',
-      birth_ymd: '170310', started_at,
+      birth_ymd: '170310', started_at, submitted_at,
       examiner_type: 'expert', checklist: [],
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
@@ -125,6 +127,31 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     const res = await SHEET(req(), ctx(SID))
     expect(res.headers.get('content-disposition')).toContain('2026-08-07')
     expect(res.headers.get('content-disposition')).not.toContain('2026-08-06')
+  })
+  // 항목 8·9 — 녹음이 없는 과제를 채점자가 손으로 X 찍어 저장하기 전까지 검사지 점수 칸이
+  // 통째로 비어 나갔다. 라우트가 화면과 같은 기본값(withUnrecordedDefaults)을 적용한다.
+  it('미녹음 페이지는 오반응(X·0점)으로 채워 찍는다 — 녹음이 다 있는 세션과 출력이 다르다', async () => {
+    const d = detail('2026-08-07T06:25:08.000Z', '2026-08-07T07:00:00.000Z')
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(d)
+    const filled = await (await SHEET(req(), ctx(SID))).arrayBuffer()
+
+    const allPages = itemsFor(formForGrade(1)).recordingPages.map(p => ({
+      item_code: p.code, attempt_no: 1, audio_path: `${SID}/${p.code}_1.webm`,
+      duration_sec: 3, created_at: 'z',
+    }))
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({ ...d, recordings: allPages })
+    const bare = await (await SHEET(req(), ctx(SID))).arrayBuffer()
+
+    expect(filled.byteLength).toBeGreaterThan(bare.byteLength)
+  })
+
+  it('진행 중(미제출) 세션에는 기본값을 넣지 않는다 — 아직 안 한 것은 오반응이 아니다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-07T06:25:08.000Z'))
+    const inProgress = await (await SHEET(req(), ctx(SID))).arrayBuffer()
+    vi.mocked(db.sessionDetail)
+      .mockResolvedValueOnce(detail('2026-08-07T06:25:08.000Z', '2026-08-07T07:00:00.000Z'))
+    const done = await (await SHEET(req(), ctx(SID))).arrayBuffer()
+    expect(inProgress.byteLength).toBeLessThan(done.byteLength)
   })
   it('UUID가 아닌 id 400', async () => {
     const res = await SHEET(req(), ctx('not-a-uuid'))

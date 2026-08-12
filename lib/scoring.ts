@@ -102,6 +102,35 @@ export interface ScoreResult {
   discontinued: Record<TaskKey, boolean>
 }
 
+export interface PdfGate {
+  /** 왜 막혔는지 — dirty(미저장) · unscored(채점 남음) */
+  reason: 'dirty' | 'unscored'
+  /** 채점이 남은 과제 */
+  tasks: TaskKey[]
+  /** 경고만 하고 내려받게 둘지 — 채점자가 결과지 화면에서 채울 수 없는 경우만 true */
+  overridable: boolean
+}
+
+/**
+ * 검사지 PDF를 지금 내려받아도 되는지. `null`이면 받아도 된다.
+ *
+ * 학교로 나가는 공식 문서라 채점이 끝나기 전에 실수로 내려받는 것을 막는다
+ * (사용자 확정 2026-08-12: 버튼 비활성화가 아니라 눌렀을 때 이유를 모달로 알린다).
+ *
+ * **채점자가 이 화면에서 채울 수 있는 것만 막는다** — 미저장·낱말 O/X·문장 어절 수.
+ * 쓰기 과제는 검사 중 수집분이라 결과지에서 고칠 수 없으므로 경고만 하고 통과시킨다
+ * (그렇지 않으면 아동이 쓰기를 건너뛴 세션의 결과지가 영구히 나갈 수 없다).
+ * 중단으로 실시하지 않은 과제는 "채점할 것이 없는" 상태라 관문에 걸리지 않는다.
+ */
+export function sheetPdfGate(r: ScoreResult, dirty: boolean): PdfGate | null {
+  const left = (k: TaskKey) => !r.complete[k] && !r.discontinued[k]
+  const fixable = TASK_KEYS.filter(k => k !== 'writing' && left(k))
+  if (dirty) return { reason: 'dirty', tasks: fixable, overridable: false }
+  if (fixable.length > 0) return { reason: 'unscored', tasks: fixable, overridable: false }
+  if (left('writing')) return { reason: 'unscored', tasks: ['writing'], overridable: true }
+  return null
+}
+
 /**
  * 저장된 행들(sessionDetail) → 채점 입력.
  *
@@ -136,6 +165,44 @@ export function scoreInputFrom(f: FormItems, rows: {
   }
 }
 
+/**
+ * 녹음이 없는 페이지의 문항을 **오반응(X)·0점**으로 채운 채점 입력을 만든다
+ * (사용자 확정 2026-08-12: "미녹음 한 거는 기본적으로 X하거나 0점이 default로 입력되게").
+ *
+ * 아동이 읽지 않고 넘긴 페이지(「모르겠어요」)는 정반응이 있을 수 없는데, 채점자가 X를
+ * 하나하나 찍어 주지 않으면 그 과제가 영원히 "채점 전"으로 남아 결과지·검사지 PDF의 점수
+ * 칸이 통째로 비어 나갔다(사용자 보고 항목 9).
+ *
+ * 두 가지를 지킨다:
+ *  · **저장된 채점이 언제나 우선한다** — 채점자가 녹음 없이 O를 준 판단을 덮지 않는다.
+ *  · **중단 규칙으로 실시하지 않은 과제에는 넣지 않는다** — 미실시는 0점이 아니다.
+ *    (의미 낱말이 미녹음이라 첫 3개가 X로 채워지면 그 뒤 과제는 미실시가 되므로,
+ *     의미 낱말을 먼저 채운 뒤 중단 여부를 다시 판정한다.)
+ *
+ * 화면(관리자 결과지)과 검사지 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
+ * 저장 버튼을 누르기 전까지 두 출력이 어긋난다.
+ */
+export function withUnrecordedDefaults(
+  f: FormItems, input: ScoreInput, hasRecording: (pageCode: string) => boolean,
+): ScoreInput {
+  const marks = { ...input.marks }
+  const sentences = { ...input.sentences }
+  const fillMarks = (page: (typeof f.recordingPages)[number]) => {
+    for (const i of page.items) if (marks[i.code] === undefined) marks[i.code] = false
+  }
+  const unrecorded = f.recordingPages.filter(p => !hasRecording(p.code))
+  // ① 의미 낱말 먼저 — 이 페이지의 기본값이 중단 판정을 바꿀 수 있다.
+  for (const p of unrecorded.filter(p => p.section === 'word_reading' && p.kind === 'meaning'))
+    fillMarks(p)
+  // ② 중단이면 나머지(무의미 낱말·문장 읽기유창성)는 미실시 — 비워 둔다.
+  if (readingCeilingHit(f, marks)) return { ...input, marks, sentences }
+  for (const p of unrecorded) {
+    if (p.section === 'word_reading') fillMarks(p)
+    else for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
+  }
+  return { ...input, marks, sentences }
+}
+
 const countTrue = (codes: string[], m: Partial<Record<string, boolean>>) =>
   codes.reduce((n, c) => n + (m[c] === true ? 1 : 0), 0)
 
@@ -154,15 +221,26 @@ const allAnswered = (codes: Iterable<string>, m: Partial<Record<string, unknown>
 export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const f = itemsFor(form)
   const { passMark } = scoringFor(form)
-  const total = (codes: string[]) => codes.reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
   // 중단 규칙 ①·② — 어느 문항까지가 "실시된 전부"인지를 정한다
   const discReading = readingCeilingHit(f, s.marks)
   const discWriting = writingCeilingHit(f, s.writing)
+  // 쓰기 총점은 **실시된 문항만** 더한다. ②가 걸린 뒤에도 값이 남아 있는 세션이 있는데
+  // (검사자가 2번 이후를 먼저 채점한 경우 — 사용자 보고 항목 10) 그것까지 더하면
+  // "중단 · 실시분 9점"처럼 실시하지 않은 문항의 점수가 결과지에 나타난다.
+  const implemented = requiredWritingCodes(f, f.writingItems, s.writing)
+  const total = (codes: string[]) =>
+    codes.filter(c => implemented.has(c)).reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
 
   const wordMeaning = countTrue(f.meaningReadCodes, s.marks)
-  const wordNonsense = countTrue(f.nonsenseReadCodes, s.marks)
+  // ①이 성립하면 무의미 낱말·문장 읽기유창성은 **실시 대상이 아니다** — 값이 남아 있어도 총점에서 뺀다.
+  // 값이 남는 경로가 실제로 있다(사용자 보고 2026-08-12): 관리자가 녹음을 듣고 의미 낱말을
+  // 고쳐 뒤늦게 중단이 성립하면, 검사 당시엔 실시된 무의미·문장의 점수가 이미 저장돼 있다.
+  // 기록(DB·화면의 회색 값)은 지우지 않고 채점에서만 뺀다 — O/X를 되돌리면 점수가 그대로 살아난다.
+  const wordNonsense = discReading ? 0 : countTrue(f.nonsenseReadCodes, s.marks)
   const wordReading = wordMeaning + wordNonsense
-  const sentenceReading = f.sentenceItems.reduce((n, i) => n + clampWords(f, i.code, s.sentences[i.code]), 0)
+  const sentenceReading = discReading
+    ? 0
+    : f.sentenceItems.reduce((n, i) => n + clampWords(f, i.code, s.sentences[i.code]), 0)
   const writeMeaning = total(f.meaningWriteCodes)
   const writeNonsense = total(f.nonsenseWriteCodes)
   const writing = total(f.writingItems.map(i => i.code))

@@ -137,9 +137,6 @@ export interface FormItems {
   meaningWriteCodes: string[]
   nonsenseWriteCodes: string[]
 
-  /** 각 섹션의 "첫 페이지" 코드 — 이 페이지에 진입할 때 섹션 안내를 한 번 보여준다.
-   *  연습 페이지가 있는 섹션은 연습이 첫 페이지가 된다(안내 → 연습 → 본 검사 순서). */
-  sectionFirstCodes: Set<string>
   /** 서버에 업로드되는 녹음 페이지(연습 제외). 진행률 분모·관리자 결과지가 공유한다. */
   recordingPages: SurveyPage[]
   /** 진행률 분모 — 화면·녹음 단위(페이지)와 쓰기 문항 수. */
@@ -260,7 +257,8 @@ function build(form: SurveyForm): FormItems {
     writingItems,
     meaningWriteCodes: writingItems.filter(i => i.kind === 'meaning').map(i => i.code),
     nonsenseWriteCodes: writingItems.filter(i => i.kind === 'nonsense').map(i => i.code),
-    sectionFirstCodes: new Set(sections.map(sec => pages.find(p => p.section === sec)!.code)),
+    // (섹션 안내를 띄울 "첫 페이지"는 진행 화면이 **실제 진행 목록**에서 찾는다 —
+    //  양식의 고정 목록으로 정하면 연습을 건너뛴 검사에서 안내가 사라진다.)
     recordingPages,
     totals: { rec: recordingPages.length, write: writingItems.length },
   }

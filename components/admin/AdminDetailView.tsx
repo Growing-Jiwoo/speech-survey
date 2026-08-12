@@ -8,7 +8,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { scoreInputFrom } from '@/lib/scoring'
+import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
+import { requiredWritingCodes } from '@/lib/survey-flow'
 import { adjacentSessionIds, expectedTotalsFor, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -91,8 +92,18 @@ export function AdminDetailView() {
   // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다.
   const f = itemsFor(formForGrade(s.grade))
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
-  const input = scoreInputFrom(f, data)
-  const writtenCount = Object.keys(input.writing).length
+  // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 검사지 PDF 라우트도 같은 함수를
+  // 거치므로, 채점자가 [채점 저장]을 누르기 전에도 화면과 인쇄물의 값이 같다.
+  // **제출된 세션에만** 적용한다: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라
+  // "아직 안 했다"이므로, 그것까지 0점으로 채우면 검사 중인 아동이 0점으로 보인다.
+  const rawInput = scoreInputFrom(f, data)
+  const input = s.submitted_at
+    ? withUnrecordedDefaults(f, rawInput, code => byItem.has(code))
+    : rawInput
+  // 쓰기 진행률은 **실시된 문항만** 센다 — 중단 규칙 ② 이후 문항에 값이 남아 있어도
+  // 세지 않는다(그러지 않으면 "낱말 쓰기 10 / 1"이 된다).
+  const implementedWriting = requiredWritingCodes(f, f.writingItems, input.writing)
+  const writtenCount = [...implementedWriting].filter(c => input.writing[c] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
   // 중단 규칙이 걸린 세션은 실시 범위가 줄어든다 — 전체 프로토콜을 분모로 삼으면
   // 규칙대로 정상 종료된 검사가 계속 "미완료"로 보여, 더 받을 것이 없는 아동을 쫓게 된다.

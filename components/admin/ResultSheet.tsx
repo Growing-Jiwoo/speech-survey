@@ -7,10 +7,12 @@
 import { useEffect, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { PROVISIONAL_CRITERIA, scoreSession, scoringFor } from '@/lib/scoring'
+import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
+import { CEILING_N, readingCeilingHit, requiredWritingCodes } from '@/lib/survey-flow'
 import { contactLabel, examinerLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BadgeLegend } from './BadgeLegend'
 import { ScoreBand } from './sheet/ScoreBand'
 import { TaskSection } from './sheet/TaskSection'
@@ -43,6 +45,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const [savedSentences, setSavedSentences] = useState(initialSentences)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [gateOpen, setGateOpen] = useState(false)
+  // 중단 규칙을 새로 성립시키는 O/X — 확인 전까지 반영을 보류한다
+  const [pendingMark, setPendingMark] = useState<{ code: string; v: boolean } | null>(null)
 
   const form = formForGrade(session.grade)
   const f = itemsFor(form)
@@ -50,12 +55,22 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const r = scoreSession(form, { marks, sentences, writing })
   // 중단 판정은 여기서 한 번만 — 하위 컴포넌트 여섯 곳이 각자 판정하면 어긋난다(스펙).
   const disc = r.discontinued
-  // "데이터 우선" — PageAudio의 attempts.length===0 검사와 같은 원칙(스펙 참고).
-  // 플래그가 걸려도 실제 응답이 남아 있으면(옛 규칙 세션, 관리자의 사후 정정) 미실시로
-  // 가리지 않는다 — 가리면 소계에는 그 값이 여전히 더해지는데 화면은 숨겨서 총점과 어긋난다.
-  const nonsenseReadNA = disc.wordReading && f.nonsenseReadCodes.every(c => marks[c] === undefined)
-  const sentenceReadNA = disc.sentenceReading && f.sentenceItems.every(i => sentences[i.code] === undefined)
-  const nonsenseWriteNA = disc.writing && f.nonsenseWriteCodes.every(c => writing[c] === undefined)
+  // **규칙 우선**(사용자 확정 2026-08-12). 예전에는 "데이터 우선"이었다 — 응답이 남아 있으면
+  // 미실시로 가리지 않았는데, 그때 소계에는 그 값이 더해져 화면과 총점이 어긋났다.
+  // 이제 scoreSession이 중단 이후 과제를 총점에서 빼므로, 화면도 규칙만 보고 미실시로 적는다.
+  // 수집된 값 자체는 잠긴 입력칸에 회색으로 남아 있어(오채점 확인용) 기록이 사라지지 않는다.
+  const nonsenseReadNA = disc.wordReading
+  const sentenceReadNA = disc.sentenceReading
+  // 중단 대상 과제에 실제 수집된 값이 있는지 — 검사 당시에는 실시됐다는 뜻이다.
+  const retroData = f.nonsenseReadCodes.some(c => marks[c] !== undefined)
+    || f.sentenceItems.some(i => sentences[i.code] !== undefined)
+  // 실시됐는데 사후 채점으로 중단이 성립한 경우 — 결과지에 이유를 밝힌다.
+  const retroDisc = disc.wordReading && retroData
+  // 쓰기는 반대로 **규칙 우선**이다. 중단 이후 문항은 값이 남아 있어도 총점에서 빠지므로
+  // (scoreSession이 실시 문항만 더한다 — 사용자 확정 2026-08-12 항목 10), 화면에도 값을
+  // 보여주면 "화면엔 O가 있는데 총점에 없는" 어긋남이 생긴다. 실시 문항 판정은 한 곳에서만 한다.
+  const implementedWriting = requiredWritingCodes(f, f.writingItems, writing)
+  const nonsenseWriteNA = disc.writing && f.nonsenseWriteCodes.every(c => !implementedWriting.has(c))
   const writingLabel = SECTION_LABEL[f.writingSection]
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
@@ -84,13 +99,37 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
     if (res.ok) { setSavedMarks(marks); setSavedSentences(sentences) }
   }
 
-  const setMark = (code: string, v: boolean) => setMarks(m => ({ ...m, [code]: v }))
-  const setSentence = (code: string, v: number | undefined) => setSentences(s => {
-    const next = { ...s }
-    if (v === undefined) delete next[code]
-    else next[code] = v
-    return next
-  })
+  // 채점을 고치면 이전 저장 결과 안내("저장했어요.")를 지운다 — 안 지우면 옆의
+  // "저장하지 않은 채점이 있어요"와 동시에 떠서 무엇이 저장된 상태인지 알 수 없다
+  // (사용자 보고 2026-08-12 항목 6).
+  // 검사지 PDF 관문 — 채점이 끝나기 전에 실수로 공식 문서를 내려받지 않게 한다.
+  const pdfHref = `/api/admin/sessions/${sessionId}/sheet.pdf`
+  const gate = sheetPdfGate(r, dirty)
+  const TASK_LABEL: Record<TaskKey, string> = {
+    wordReading: SECTION_LABEL.word_reading,
+    sentenceReading: SECTION_LABEL.sentence_reading,
+    writing: writingLabel,
+  }
+
+  const applyMark = (code: string, v: boolean) => { setMsg(''); setMarks(m => ({ ...m, [code]: v })) }
+
+  /** 이 O/X 하나로 중단 규칙 ①이 **새로** 성립하면, 이미 실시된 뒷 과제가 채점에서 빠진다.
+   *  되돌릴 수 있는 변경이지만 결과가 크므로 반영 전에 한 번 묻는다(사용자 확정 2026-08-12). */
+  const setMark = (code: string, v: boolean) => {
+    const next = { ...marks, [code]: v }
+    const newlyDisc = !readingCeilingHit(f, marks) && readingCeilingHit(f, next)
+    if (newlyDisc && retroData) { setPendingMark({ code, v }); return }
+    applyMark(code, v)
+  }
+  const setSentence = (code: string, v: number | undefined) => {
+    setMsg('')
+    setSentences(s => {
+      const next = { ...s }
+      if (v === undefined) delete next[code]
+      else next[code] = v
+      return next
+    })
+  }
 
   const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
 
@@ -137,6 +176,16 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         </p>
       </header>
 
+      {retroDisc && (
+        // 검사 당시엔 실시된 과제가 사후 채점으로 미실시가 된 상황 — 화면이 이유를 말하지 않으면
+        // 점수가 왜 사라졌는지 알 수 없다. 되돌리는 방법(O/X 재수정)도 함께 적는다.
+        <p className="border-b border-line bg-amber/10 px-5 py-3 text-[12.5px] leading-relaxed text-amber">
+          <b>채점 결과 중단 규칙 ①이 성립했습니다</b> — 의미 낱말 첫 {CEILING_N}개가 연속 오반응입니다.
+          검사 당시에는 실시된 <b>무의미 낱말·문장 읽기유창성</b>이 규칙상 미실시가 되어 채점에서
+          제외됩니다(수집된 값은 아래 잠긴 칸에 그대로 남아 있고, 의미 낱말 O/X를 고치면 다시 합산됩니다).
+        </p>
+      )}
+
       <ScoreBand form={form} result={r} />
 
       {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
@@ -165,7 +214,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
           attemptsFor={code => attemptsOf(`p_${code}`)} locked={sentenceReadNA}
           limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
-        <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
+        <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading, na: sentenceReadNA }}
           verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading}
           discontinued={disc.sentenceReading} />
       </TaskSection>
@@ -175,7 +224,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         hint={`검사 중 기록 · 정확하게 쓴 ${f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점`}>
       {f.writingSection === 'word_writing' ? (
         <>
-          <WritingChips items={f.writingItems} writing={writing} />
+          <WritingChips items={f.writingItems} writing={writing} implemented={implementedWriting} />
           <Subtotal
             cells={[
               { label: '의미 점수', value: r.writeMeaning, max: writeMax.meaning },
@@ -187,7 +236,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         </>
       ) : (
         <>
-          <SentenceWriteRows items={f.writingItems} writing={writing} />
+          <SentenceWriteRows items={f.writingItems} writing={writing} implemented={implementedWriting} />
           <Subtotal total={{ label: '총점', value: r.writing, max: taskMax.writing }}
             verdict={r.verdict.writing} complete={r.complete.writing}
             discontinued={disc.writing} />
@@ -212,8 +261,10 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           {saving ? '저장 중…' : '채점 저장'}
         </button>
         {/* 공식 출력은 원본 검사지에 점수를 얹은 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
-            어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다. */}
-        <a href={`/api/admin/sessions/${sessionId}/sheet.pdf`} download
+            어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다.
+            채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). */}
+        <a href={pdfHref} download
+          onClick={e => { if (gate) { e.preventDefault(); setGateOpen(true) } }}
           className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
           검사지 PDF 다운로드
         </a>
@@ -230,6 +281,46 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
 
       {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}
+      <ConfirmDialog open={pendingMark !== null}
+        title="이 채점으로 검사가 중단됩니다"
+        confirmLabel="그대로 반영" cancelLabel="취소"
+        onConfirm={() => { const p = pendingMark!; setPendingMark(null); applyMark(p.code, p.v) }}
+        onClose={() => setPendingMark(null)}>
+        <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+          의미 낱말 첫 {CEILING_N}개가 연속 오반응이 되어 <b>무의미 낱말·문장 읽기유창성</b>이
+          채점에서 <b className="text-rec-deep">제외</b>됩니다. 검사 중 수집된 값은 지워지지 않고,
+          O/X를 다시 고치면 되살아납니다.
+        </p>
+      </ConfirmDialog>
+
+      {gate && (
+        <ConfirmDialog open={gateOpen}
+          title={gate.reason === 'dirty' ? '먼저 채점을 저장해 주세요' : '채점이 끝나지 않았어요'}
+          cancelLabel="닫기"
+          confirmLabel={gate.reason === 'dirty' ? '채점 저장'
+            : gate.overridable ? '그래도 다운로드' : '채점 계속하기'}
+          onConfirm={() => {
+            setGateOpen(false)
+            if (gate.reason === 'dirty') { void save(); return }
+            // 결과지에서 채울 수 없는 과제(쓰기)만 남았으면 경고를 확인한 뒤 내려받는다.
+            if (gate.overridable) window.location.href = pdfHref
+          }}
+          onClose={() => setGateOpen(false)}>
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            {gate.reason === 'dirty' ? (
+              <>검사지 PDF는 <b>저장된 채점</b>으로 만들어집니다. 지금 화면의 수정은 아직 저장되지 않아
+                빠진 채로 나갑니다.</>
+            ) : gate.overridable ? (
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b>가 검사 중에 기록되지 않았습니다.
+                이 화면에서는 채울 수 없으니, 그대로 내려받으면 점수 칸이 <b>빈 채로</b> 나갑니다.</>
+            ) : (
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있습니다.
+                녹음을 듣고 채점을 마친 뒤 <b>[채점 저장]</b>을 누르면 내려받을 수 있어요.</>
+            )}
+          </p>
+        </ConfirmDialog>
+      )}
+
       <BadgeLegend
         columns={1}
         items={[
@@ -242,6 +333,12 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             desc: <>아직 채점하지 않았거나 중단 규칙으로 <b>실시하지 않은</b> 과제입니다.
               <b className="text-rec-deep"> 0점이 아닙니다</b> — 검사지 PDF에도 점수 칸이 비어 나갑니다.
               중단된 과제는 기준 점수 판정(Pass/Fail)을 하지 않습니다.</>,
+          },
+          {
+            badge: <Badge tone="rec">미녹음</Badge>,
+            desc: <>녹음이 올라오지 않은 과제입니다. 읽은 반응이 없으므로 <b>오반응(X · 0점)으로
+              기본 채점</b>되어 화면·검사지 PDF에 그대로 나갑니다(사용자 확정 2026-08-12).
+              녹음을 들어보고 고치면 저장한 값이 기본값을 대신합니다.</>,
           },
           {
             badge: (

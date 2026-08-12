@@ -5,7 +5,7 @@
 
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다. */
-const SCHEMA_V = 5
+const SCHEMA_V = 6
 
 export interface SurveyState {
   v: typeof SCHEMA_V
@@ -16,8 +16,12 @@ export interface SurveyState {
    *  formForGrade(grade)가 문항·페이지·중단 규칙을 전부 결정한다. */
   grade: number
   micDone: boolean
+  /** 연습 낱말을 실시하는지 — 마이크 확인 뒤 검사자가 고른다(같은 아동의 반복 검사에서
+   *  매번 연습을 강요하지 않기 위함). false면 연습 페이지가 진행 목록에서 빠진다. */
+  practice: boolean
   pageIdx: number                    // 현재 페이지 인덱스(0-based, visiblePages 기준)
-  phase: 'mic' | 'page'              // 마이크 확인 단계 / 페이지 단계
+  /** 마이크 확인 → 연습 실시 여부 선택 → 페이지 진행 */
+  phase: 'mic' | 'practiceAsk' | 'page'
   recorded: Record<string, number>   // pageCode → 저장된 시도 수
   marks: Record<string, boolean>     // 낱말 해독 의미 낱말 itemCode → 정반응 여부(검사자 현장 채점)
   /** 쓰기 과제 itemCode → 정확히 쓴 어절 수. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1,
@@ -36,7 +40,8 @@ export function newState(
 ): SurveyState {
   return {
     v: SCHEMA_V, sessionId, sessionToken, childName, grade,
-    micDone: false, pageIdx: 0, phase: 'mic',
+    // practice의 기본값은 true다 — 선택 화면에서 검사자가 바꾸기 전까지는 연습을 실시한다.
+    micDone: false, practice: true, pageIdx: 0, phase: 'mic',
     recorded: {}, marks: {}, writing: {}, checklist: [], introsSeen: [],
   }
 }

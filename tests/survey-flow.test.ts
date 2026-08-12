@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   hitsCeiling, readingCeilingHit, writingCeilingHit, visiblePages, canAdvance,
-  requiredWritingCodes, isWritingWrong, CEILING_N,
+  keepImplementedWriting, requiredWritingCodes, isWritingWrong, CEILING_N,
 } from '@/lib/survey-flow'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -102,6 +102,42 @@ describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
 
   it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 담당자 확정)', () => {
     expect(codes({ rw01: false, rw02: false, rw03: false })).toContain('p_cl')
+  })
+})
+
+describe('visiblePages — 연습 실시 여부 (검사자가 마이크 확인 뒤 고른다)', () => {
+  it('연습을 건너뛰면 연습 페이지가 빠진다 (나머지 순서는 그대로)', () => {
+    expect(visiblePages(g1, { marks: {}, practice: false }).map(p => p.code)).toEqual([
+      'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
+      'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
+    ])
+  })
+  it('연습을 실시하면(또는 값이 없으면) 연습 페이지가 첫 페이지다', () => {
+    expect(visiblePages(g1, { marks: {}, practice: true })[0].code).toBe('p_practice_rw')
+    expect(visiblePages(g1, { marks: {} })[0].code).toBe('p_practice_rw')
+  })
+  it('연습 건너뛰기와 중단 규칙 ①은 함께 적용된다', () => {
+    const marks = { rw01: false, rw02: false, rw03: false }
+    expect(visiblePages(g1, { marks, practice: false }).map(p => p.code))
+      .toEqual(['p_rw_meaning', 'p_rw_meaning_mark', 'p_ww', 'p_cl'])
+  })
+})
+
+describe('keepImplementedWriting — 중단 이후 문항의 답은 버린다 (항목 10)', () => {
+  it('G1: 1번이 0점이면 2~10번 값을 버린다 (검사자가 뒤 문항을 먼저 채점한 경우)', () => {
+    const entered = { ww01: 0, ww02: 1, ww03: 1, ww04: 1, ww05: 1, ww06: 1, ww07: 1, ww08: 1, ww09: 1, ww10: 1 }
+    expect(keepImplementedWriting(g1, entered)).toEqual({ ww01: 0 })
+  })
+  it('G2: 첫 문장이 0점이면 sw01만 남는다', () => {
+    expect(keepImplementedWriting(g2, { sw01: 0, sw02: 2, sw03: 1 })).toEqual({ sw01: 0 })
+  })
+  it('중단이 아니면 입력을 그대로 돌려준다 (정상 경로에 영향 없음)', () => {
+    const entered = { ww01: 1, ww02: 0, ww03: 1 }
+    expect(keepImplementedWriting(g1, entered)).toBe(entered)
+    expect(keepImplementedWriting(g2, { sw01: 1, sw02: 0 })).toEqual({ sw01: 1, sw02: 0 })
+  })
+  it('빈 입력도 그대로 (미채점을 중단으로 보지 않는다)', () => {
+    expect(keepImplementedWriting(g1, {})).toEqual({})
   })
 })
 

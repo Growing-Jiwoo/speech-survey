@@ -344,6 +344,24 @@ describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 �
     expect(sessionProgress(s).incomplete).toBe(true)
   })
 
+  // 항목 7 — 실제 세션 899b51db: ww01=X, ww02~10=O가 저장돼 "낱말 쓰기 10 / 1"로 보였다.
+  it('② 세션의 분자도 실시 문항만 센다 — 10 / 1이 아니라 1 / 1', () => {
+    const s = mkSession({
+      recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rs01' }],
+      writing_answers: G1_WRITE.map((item_code, i) => ({ item_code, can_write: i > 0 })),
+    })
+    const p = sessionProgress(s)
+    expect([p.written, p.expected.write]).toEqual([1, 1])
+    // 녹음은 6페이지 중 2페이지만 올라왔으므로 여전히 미완료다(중단 규칙 ①이 아니다)
+    expect([p.recorded, p.expected.rec]).toEqual([2, 6])
+    expect(p.incomplete).toBe(true)
+  })
+
+  it('중단이 아니면 분자는 저장된 쓰기 답 전체다 (기존 동작 보존)', () => {
+    const s = mkSession({ writing_answers: G1_WRITE.slice(0, 4).map(item_code => ({ item_code, can_write: true })) })
+    expect(sessionProgress(s).written).toBe(4)
+  })
+
   it('expectedTotals: 중단 여부·학년·쓰기 답으로 분모가 갈린다', () => {
     expect(expectedTotals(mkSession({ grade: 1 }))).toEqual({ rec: 6, write: 10 })
     expect(expectedTotals(mkSession({ grade: 2 }))).toEqual({ rec: 6, write: 5 })

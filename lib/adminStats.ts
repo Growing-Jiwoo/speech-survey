@@ -3,7 +3,7 @@ import { formForGrade } from '@/lib/forms'
 import type { FormItems, Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
 import { scoreInputFrom } from '@/lib/scoring'
-import { writingCeilingHit } from '@/lib/survey-flow'
+import { requiredWritingCodes, writingCeilingHit } from '@/lib/survey-flow'
 
 export type { Totals }
 
@@ -55,9 +55,15 @@ export function expectedTotals(
   s: Pick<SessionListRow, 'discontinued_at' | 'grade' | 'writing_answers' | 'sentence_scores'>,
 ): Totals {
   const f = itemsFor(formForGrade(s.grade))
-  // 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다.
-  const { writing } = scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, writing: s.writing_answers })
-  return expectedTotalsFor(f, !!s.discontinued_at, writing)
+  return expectedTotalsFor(f, !!s.discontinued_at, writingOf(f, s))
+}
+
+/** 목록 행의 쓰기 답(itemCode → 어절 수). 쓰기 답이 두 테이블에 나뉘어 있는 사실은
+ *  scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다. */
+function writingOf(
+  f: FormItems, s: Pick<SessionListRow, 'writing_answers' | 'sentence_scores'>,
+): Partial<Record<string, number>> {
+  return scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, writing: s.writing_answers }).writing
 }
 
 /** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다.
@@ -67,15 +73,17 @@ export function sessionProgress(s: SessionListRow): {
   recorded: number; written: number; expected: Totals; incomplete: boolean
 } {
   const f = itemsFor(formForGrade(s.grade))
-  const writingCodes = new Set(f.writingItems.map(i => i.code))
+  const writing = writingOf(f, s)
   // 녹음도 **이 양식의 페이지 코드만** 센다. 걸러내지 않으면 페이지 모델 도입(2026-08-07) 이전에
   // 문항 단위로 올라간 옛 녹음(rw01…rs04 = 18건)이 그대로 세어져 분자가 분모를 넘는다
   // ("녹음 18/6"). 실제로 운영 DB에 그런 세션이 남아 있다.
   const recCodes = new Set(f.recordingPages.map(p => p.code))
   const recorded = new Set(s.recordings.map(r => r.item_code).filter(c => recCodes.has(c))).size
-  const written = [...s.writing_answers, ...s.sentence_scores]
-    .filter(r => writingCodes.has(r.item_code)).length
-  const expected = expectedTotals(s)
+  // 분자도 분모와 같은 기준으로 센다 — 중단 규칙 ②로 실시하지 않은 문항에 값이 남아 있어도
+  // 세지 않는다(그러지 않으면 "낱말 쓰기 10 / 1"이 된다 — 사용자 보고 항목 7).
+  const required = requiredWritingCodes(f, f.writingItems, writing)
+  const written = [...required].filter(c => writing[c] !== undefined).length
+  const expected = expectedTotalsFor(f, !!s.discontinued_at, writing)
   return { recorded, written, expected, incomplete: recorded < expected.rec || written < expected.write }
 }
 
