@@ -11,10 +11,11 @@ import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { canAdvance, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
+import { CEILING_N, canAdvance, readingCeilingHit, requiredWritingCodes, visiblePages, writingCeilingHit } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { Blip } from '@/components/Blip'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ChecklistItem } from '@/components/survey/ChecklistItem'
 import { MarkPage } from '@/components/survey/MarkPage'
@@ -24,6 +25,31 @@ import { RetryBanner } from '@/components/survey/RetryBanner'
 import { SectionIntro } from '@/components/survey/SectionIntro'
 import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
+
+// 중단 안내 모달 문구 — 담당자가 "문구는 나중에 수정"이라 했으므로 여기 한 곳에 모아 둔다.
+// ⚠️ 아동이 보는 화면에 뜬다 — 문구 확정 시 아동 노출을 전제로 재검토할 것(스펙 참고).
+// ①의 담당자 제안 원문("낱말 쓰기 과제를 실시하지 않습니다")은 쓸 수 없다 —
+// 같은 회신에서 쓰기를 실시하는 쪽으로 바뀌어, 원문 그대로면 화면이 거짓을 말한다.
+const CEILING_COPY = {
+  reading: {
+    title: '낱말 해독을 중단합니다',
+    body: `의미 낱말 첫 ${CEILING_N}개 연속 오반응하여 낱말 해독과 문장 읽기유창성 과제를 중단합니다. 쓰기 과제로 넘어갑니다.`,
+    confirm: '쓰기 과제로 이동',
+    cancel: '다시 채점',
+  },
+  word_writing: {
+    title: '검사를 중단합니다',
+    body: '1번 낱말이 오반응하여 검사를 중단합니다. 검사자 체크리스트로 넘어갑니다.',
+    confirm: '체크리스트로 이동',
+    cancel: '다시 입력',
+  },
+  sentence_writing: {
+    title: '검사를 중단합니다',
+    body: '첫 문장이 오반응하여 검사를 중단합니다. 검사자 체크리스트로 넘어갑니다.',
+    confirm: '체크리스트로 이동',
+    cancel: '다시 입력',
+  },
+} as const
 
 function SurveyInner() {
   const router = useRouter()
@@ -38,6 +64,10 @@ function SurveyInner() {
   const pauseRef = useFocusTrap(paused, () => setPaused(false))
   // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다
   const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
+  // 중단 안내 모달. ②(쓰기)는 입력 즉시 뜨므로 취소(다시 입력) 후 같은 화면에서
+  // 다시 뜨지 않도록 한 번만 띄운다 — 페이지를 이동하면 초기화된다(goToIdx).
+  const [ceilingModal, setCeilingModal] = useState<keyof typeof CEILING_COPY | null>(null)
+  const [writingModalSeen, setWritingModalSeen] = useState(false)
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
@@ -121,12 +151,38 @@ function SurveyInner() {
   const page = pages[idx]
   const isLast = idx === pages.length - 1
 
-  function goToIdx(n: number) { patch({ pageIdx: n }); window.scrollTo(0, 0) }
+  function goToIdx(n: number) { patch({ pageIdx: n }); setWritingModalSeen(false); window.scrollTo(0, 0) }
 
   function goNext() {
     // 검토에서 넘어온 경우(from=review) 순차 진행 대신 검토 화면으로 복귀한다.
     if (fromReview || isLast) { router.push('/review'); return }
     goToIdx(idx + 1)
+  }
+
+  // 규칙 ①: 의미 낱말 채점 페이지에서 중단이 성립한 채 [다음] — 이동 전에 안내한다.
+  // 입력 즉시(3개째 X)에 띄우지 않는 이유: 의미 7문항은 전부 채점한다(아동은 이미 다
+  // 읽었고 채점은 사후 표시다 — 스펙 "확정 규칙 ①").
+  function tryNext() {
+    if (!fromReview && page.code === 'p_rw_meaning_mark' && readingCeilingHit(f, st!.marks)) {
+      setCeilingModal('reading'); return
+    }
+    goNext()
+  }
+
+  // 규칙 ②: 이 입력으로 중단이 성립하면 즉시 안내한다(1번 하나로 판정이 끝나 더 받을
+  // 입력이 없다). 취소하면 화면에 머물러 점수를 고칠 수 있다 — ConfirmDialog의 취소가
+  // 오입력 복구 경로다. 두 발화 지점(문항별 입력·일괄 버튼)이 "이 입력 이후 상태" 하나로
+  // 같은 판정을 쓴다 — 어느 문항이 판정을 정하는지는 survey-flow만 안다.
+  function maybeWritingCeiling(next: Partial<Record<string, number>>) {
+    if (fromReview || writingModalSeen || !writingCeilingHit(f, next)) return
+    setWritingModalSeen(true)
+    setCeilingModal(f.writingSection)
+  }
+
+  function changeWriting(code: string, v: number) {
+    const next = { ...st!.writing, [code]: v }
+    patch({ writing: next })
+    maybeWritingCeiling(next)
   }
 
   async function retryUpload(code: string) {
@@ -212,24 +268,24 @@ function SurveyInner() {
 
               {page.section === 'word_writing' && (
                 <WritingPage form={f} items={page.items} value={st.writing}
-                  onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))}
-                  onSetAll={v => patch(prev => {
+                  onChange={changeWriting}
+                  onSetAll={v => {
                     // 중단 규칙 ②를 무시하고 10문항 전부에 v를 쓰면, 이 클릭 자체가 중단을 유발하는 경우
                     // (예: "모두 아니오"를 첫 클릭으로) 중단 이후 문항에도 실제로 실시하지 않은 값이
                     // 남는다. tentative 상태에서 requiredWritingCodes로 다시 판정해, 그 판정에 필요한
                     // 코드에만 값을 반영한다 — 문항별로 하나씩 눌러 같은 잠금에 도달했을 때와 동일한 결과.
-                    const tentative = { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
+                    const tentative = { ...st.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) }
                     const required = requiredWritingCodes(f, page.items, tentative)
-                    const applied = Object.fromEntries(
-                      page.items.filter(i => required.has(i.code)).map(i => [i.code, v]),
-                    )
-                    return { writing: { ...prev.writing, ...applied } }
-                  })} />
+                    const next = { ...st.writing, ...Object.fromEntries(
+                      page.items.filter(i => required.has(i.code)).map(i => [i.code, v])) }
+                    patch({ writing: next })
+                    maybeWritingCeiling(next)
+                  }} />
               )}
 
               {page.section === 'sentence_writing' && (
                 <SentenceWritingPage form={f} items={page.items} value={st.writing}
-                  onChange={(code, v) => patch(prev => ({ writing: { ...prev.writing, [code]: v } }))} />
+                  onChange={changeWriting} />
               )}
 
               {page.section === 'checklist' && (
@@ -252,7 +308,7 @@ function SurveyInner() {
             시작하기
           </button>
         ) : (
-          <button onClick={goNext} disabled={!canNext}
+          <button onClick={tryNext} disabled={!canNext}
             className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
             {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '모르겠어요' : '다음'}
           </button>
@@ -270,6 +326,18 @@ function SurveyInner() {
           </p>
           <button type="button" onClick={() => setPaused(false)} className="cta max-w-60">이어서 하기</button>
         </div>
+      )}
+
+      {ceilingModal && (
+        <ConfirmDialog open title={CEILING_COPY[ceilingModal].title}
+          confirmLabel={CEILING_COPY[ceilingModal].confirm}
+          cancelLabel={CEILING_COPY[ceilingModal].cancel}
+          onConfirm={() => { setCeilingModal(null); goNext() }}
+          onClose={() => setCeilingModal(null)}>
+          <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
+            {CEILING_COPY[ceilingModal].body}
+          </p>
+        </ConfirmDialog>
       )}
     </main>
   )

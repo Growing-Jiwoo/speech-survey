@@ -3,7 +3,7 @@
 // 배점은 학년별 검사지(lib/forms)에서 나온다 — 숫자를 여기 적어 두지 않는다.
 import { itemsFor, type FormItems, type SurveyItem } from './items'
 import type { SurveyForm } from './forms'
-import { requiredWritingCodes } from './survey-flow'
+import { readingCeilingHit, requiredWritingCodes, writingCeilingHit } from './survey-flow'
 
 /**
  * 문항 배점 = **어절 수**. 검사지의 숫자를 따로 적어두지 않고 문항 텍스트에서 유도한다
@@ -92,6 +92,14 @@ export interface ScoreResult {
    * 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은 칸을 비운다.
    */
   complete: Record<TaskKey, boolean>
+  /**
+   * 과제별 중단 여부. true면 **Pass/Fail을 내지 않는다** — passMark는 전체 실시를 전제한
+   * 기준이라(낱말 해독 9/14), 의미 7문항만 실시한 세션에 들이대면 근거가 성립하지 않는다.
+   * 중단은 척도 위의 값이 아니라 그 자체가 결론이다. 화면은 `중단` 배지를 내고
+   * PDF는 소계·총점 칸을 비운다(스펙 "검사지 PDF" 절).
+   * complete보다 먼저 본다: discontinued가 true면 complete 값과 무관하게 '중단'으로 표시한다.
+   */
+  discontinued: Record<TaskKey, boolean>
 }
 
 /**
@@ -147,6 +155,9 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const f = itemsFor(form)
   const { passMark } = scoringFor(form)
   const total = (codes: string[]) => codes.reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
+  // 중단 규칙 ①·② — 어느 문항까지가 "실시된 전부"인지를 정한다
+  const discReading = readingCeilingHit(f, s.marks)
+  const discWriting = writingCeilingHit(f, s.writing)
 
   const wordMeaning = countTrue(f.meaningReadCodes, s.marks)
   const wordNonsense = countTrue(f.nonsenseReadCodes, s.marks)
@@ -164,10 +175,16 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
       writing: at(writing, 'writing'),
     },
     complete: {
-      wordReading: allAnswered(f.readItems.map(i => i.code), s.marks),
+      // ①이 걸리면 무의미는 실시하지 않으므로 의미 7문항이 "실시된 전부"다.
+      wordReading: allAnswered(discReading ? f.meaningReadCodes : f.readItems.map(i => i.code), s.marks),
       sentenceReading: allAnswered(f.sentenceItems.map(i => i.code), s.sentences),
-      // 쓰기는 중단 규칙 ②에 걸리면 앞 몇 개만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
+      // 쓰기는 중단 규칙 ②에 걸리면 1번만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
       writing: allAnswered(requiredWritingCodes(f, f.writingItems, s.writing), s.writing),
+    },
+    discontinued: {
+      wordReading: discReading,
+      sentenceReading: discReading,
+      writing: discWriting,
     },
   }
 }

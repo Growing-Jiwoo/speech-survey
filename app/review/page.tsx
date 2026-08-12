@@ -132,9 +132,13 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
+      {/* visiblePages가 페이지를 빼는 건 중단 규칙 ①(무의미 낱말·문장 미실시)뿐이다 —
+          쓰기는 담당자 확정(2026-08-11)으로 항상 실시하므로 여기서 언급하지 않는다.
+          쓰기 규칙 ②(1번 오반응)는 페이지를 빼지 않고 그 안의 문항만 줄이므로,
+          아래 쓰기 섹션 카드의 분모(예: "1 / 1")가 그 사실을 이미 보여준다. */}
       {pages.length < f.pages.length && (
         <p className="mt-1 text-xs text-ink-mute">
-          중단 규칙에 따라 문장 읽기유창성·{SECTION_LABEL[f.writingSection]}는 생략되었습니다.
+          중단 규칙에 따라 문장 읽기유창성이 생략되었습니다.
         </p>
       )}
 

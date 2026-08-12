@@ -28,7 +28,7 @@ describe('hitsCeiling (앞 N개 연속 오반응)', () => {
     expect(hitsCeiling([true, true, undefined])).toBe(false)
     expect(hitsCeiling([])).toBe(false)
   })
-  it('n=1이면 첫 항목만 본다 (문장 쓰기 규칙)', () => {
+  it('n=1이면 첫 항목만 본다 (쓰기 중단 규칙 — 양식 무관)', () => {
     expect(hitsCeiling([true, false, false], 1)).toBe(true)
     expect(hitsCeiling([false, true, true], 1)).toBe(false)
     expect(hitsCeiling([undefined], 1)).toBe(false)
@@ -62,21 +62,23 @@ describe('isWritingWrong — 무엇이 오반응인가', () => {
   })
 })
 
-describe('writingCeilingHit — 규칙이 양식마다 다르다', () => {
-  it('G1 낱말 쓰기: 의미 낱말 첫 3개가 모두 오반응이어야 중단', () => {
-    expect(writingCeilingHit(g1, { ww01: 0, ww02: 0, ww03: 0 })).toBe(true)
-    expect(writingCeilingHit(g1, { ww01: 0, ww02: 0, ww03: 1 })).toBe(false)
-    expect(writingCeilingHit(g1, { ww01: 0, ww02: 0 })).toBe(false)
+describe('writingCeilingHit — 1번 문항 하나로 판정 (담당자 확정)', () => {
+  it('G1: 1번 낱말(ww01)만 0점이면 중단 — 2·3번은 보지 않는다', () => {
+    expect(writingCeilingHit(g1, { ww01: 0 })).toBe(true)
+    expect(writingCeilingHit(g1, { ww01: 1 })).toBe(false)
+    expect(writingCeilingHit(g1, { ww01: 1, ww02: 0, ww03: 0 })).toBe(false)
+    expect(writingCeilingHit(g1, {})).toBe(false)
   })
-  it('G2 문장 쓰기: 첫 문장 하나만 0점이면 중단', () => {
+  it('G2: 첫 문장 하나만 0점이면 중단', () => {
     expect(writingCeilingHit(g2, { sw01: 0 })).toBe(true)
-    // 두 어절 중 하나라도 맞혔으면 오반응이 아니다 → 계속 실시
+    // 두 어절 중 하나라도 맞혔으면 오반응이 아니다(1점은 오반응 아님 — 담당자 확정) → 계속
     expect(writingCeilingHit(g2, { sw01: 1 })).toBe(false)
     expect(writingCeilingHit(g2, { sw01: 2 })).toBe(false)
     expect(writingCeilingHit(g2, {})).toBe(false)
   })
-  it('G2: 둘째 문장이 0점이어도 중단이 아니다 ("첫 문장" 규칙)', () => {
+  it('둘째 문항이 0점이어도 중단이 아니다 ("첫 문항" 규칙)', () => {
     expect(writingCeilingHit(g2, { sw01: 2, sw02: 0 })).toBe(false)
+    expect(writingCeilingHit(g1, { ww01: 1, ww02: 0 })).toBe(false)
   })
 })
 
@@ -88,19 +90,39 @@ describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
     ])
   })
 
-  it('낱말 해독 중단 시 문장·쓰기를 뺀다 (무의미 낱말은 계속 — 검사지 명시)', () => {
+  it('낱말 해독 중단 시 무의미 낱말·문장을 빼고 쓰기로 간다 (담당자 확정 — 검사지 문구와 다름)', () => {
     const hit = { rw01: false, rw02: false, rw03: false }
     expect(codes(hit)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense', 'p_cl',
+      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_ww', 'p_cl',
     ])
-    // G2도 같다 — 쓰기 과제의 섹션 이름이 달라도 빠져야 한다
     expect(codes(hit, g2)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense', 'p_cl',
+      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_sw', 'p_cl',
     ])
   })
 
-  it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 가정 A1)', () => {
+  it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 담당자 확정)', () => {
     expect(codes({ rw01: false, rw02: false, rw03: false })).toContain('p_cl')
+  })
+})
+
+describe('규칙 ①+② 동시 성립 (①이 쓰기를 남기면서 처음 생긴 경로)', () => {
+  it('① 후 진입한 쓰기에서 1번이 0점이면 그 문항만 요구된다', () => {
+    const marks = { rw01: false, rw02: false, rw03: false }
+    const pages = visiblePages(g1, { marks })
+    const writingPage = pages.find(p => p.section === 'word_writing')!
+    expect(writingPage.code).toBe('p_ww')
+    expect(requiredWritingCodes(g1, writingPage.items, { ww01: 0 })).toEqual(new Set(['ww01']))
+    expect(canAdvance(g1, writingPage, { marks, writing: { ww01: 0 }, checklist: [] })).toBe(true)
+  })
+  it('G2도 같다', () => {
+    const marks = { rw01: false, rw02: false, rw03: false }
+    const writingPage = visiblePages(g2, { marks }).find(p => p.section === 'sentence_writing')!
+    expect(writingPage.code).toBe('p_sw')
+    expect(requiredWritingCodes(g2, writingPage.items, { sw01: 0 })).toEqual(new Set(['sw01']))
+  })
+  it('규칙 ②가 의존하는 "1번 문항"은 양식의 첫 코드다 (위치 기반 의존의 명시적 고정)', () => {
+    expect(g1.writingItems[0].code).toBe('ww01')
+    expect(g2.writingItems[0].code).toBe('sw01')
   })
 })
 
@@ -111,12 +133,11 @@ describe('requiredWritingCodes (쓰기에서 실제로 요구되는 문항 코�
     expect(requiredWritingCodes(g1, page.items, {})).toEqual(new Set(page.items.map(i => i.code)))
   })
 
-  it('중단 걸리면 ww01~03만 요구 — items 배열을 뒤섞거나 걸러도 결과는 동일 (코드 기반, 위치 기반 아님)', () => {
-    const writing = { ww01: 0, ww02: 0, ww03: 0 }
-    expect(requiredWritingCodes(g1, page.items, writing)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
-    // 의도적으로 순서를 뒤집고 일부만 남긴 배열을 넘겨도(위치 기반이었다면 결과가 달라졌을 것) 동일해야 한다.
+  it('중단 걸리면 ww01만 요구 — items 배열을 뒤섞거나 걸러도 결과는 동일 (코드 기반, 위치 기반 아님)', () => {
+    const writing = { ww01: 0 }
+    expect(requiredWritingCodes(g1, page.items, writing)).toEqual(new Set(['ww01']))
     const reorderedSubset = [...page.items].reverse().slice(0, 4)
-    expect(requiredWritingCodes(g1, reorderedSubset, writing)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+    expect(requiredWritingCodes(g1, reorderedSubset, writing)).toEqual(new Set(['ww01']))
   })
 
   it('G2: 첫 문장 0점이면 sw01만 요구', () => {
@@ -133,9 +154,9 @@ describe('requiredWritingCodes로 구현하는 낱말 쓰기 일괄 선택("모�
   // 여기서는 그 tentative 병합 결과를 직접 구성해 requiredWritingCodes에 넣어 검증한다.
   const page = g1.pageByCode.get('p_ww')!
 
-  it('빈 상태에서 "모두 아니오": 중단이 걸려 앞 3개(의미 낱말)만 요구 — 나머지 7개는 기록되지 않아야 함', () => {
+  it('빈 상태에서 "모두 아니오": 중단이 걸려 1번만 요구 — 나머지 9개는 기록되지 않아야 함', () => {
     const tentative = Object.fromEntries(page.items.map(i => [i.code, 0]))
-    expect(requiredWritingCodes(g1, page.items, tentative)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+    expect(requiredWritingCodes(g1, page.items, tentative)).toEqual(new Set(['ww01']))
   })
 
   it('빈 상태에서 "모두 예": 중단이 걸리지 않아 10개 전체를 요구', () => {
@@ -143,10 +164,9 @@ describe('requiredWritingCodes로 구현하는 낱말 쓰기 일괄 선택("모�
     expect(requiredWritingCodes(g1, page.items, tentative)).toEqual(new Set(page.items.map(i => i.code)))
   })
 
-  it('ww01·ww02가 이미 오반응인 상태에서 일괄 "모두 아니오": 이 클릭이 중단을 유발해도 앞 3개만 요구', () => {
-    const before = { ww01: 0, ww02: 0 }
-    const tentative = { ...before, ...Object.fromEntries(page.items.map(i => [i.code, 0])) }
-    expect(requiredWritingCodes(g1, page.items, tentative)).toEqual(new Set(['ww01', 'ww02', 'ww03']))
+  it('ww01이 이미 오반응인 상태에서 일괄 "모두 아니오": 1번만 요구', () => {
+    const tentative = { ww01: 0, ...Object.fromEntries(page.items.map(i => [i.code, 0])) }
+    expect(requiredWritingCodes(g1, page.items, tentative)).toEqual(new Set(['ww01']))
   })
 })
 
@@ -179,10 +199,9 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
     expect(canAdvance(g1, page, { ...empty, writing: allWritten })).toBe(true)
   })
 
-  it('낱말 쓰기 페이지: 중단 규칙에 걸리면 앞 3개만 선택해도 진행 가능', () => {
+  it('낱말 쓰기 페이지: 중단 규칙에 걸리면 1번만 선택해도 진행 가능', () => {
     const page = g1.pageByCode.get('p_ww')!
-    const firstThree = Object.fromEntries(page.items.slice(0, CEILING_N).map(i => [i.code, 0]))
-    expect(canAdvance(g1, page, { ...empty, writing: firstThree })).toBe(true)
+    expect(canAdvance(g1, page, { ...empty, writing: { ww01: 0 } })).toBe(true)
   })
 
   it('낱말 쓰기 페이지: 중단 규칙에 안 걸리고 일부만 선택하면 진행 불가', () => {
@@ -191,11 +210,10 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
     expect(canAdvance(g1, page, { ...empty, writing: firstOne })).toBe(false)
   })
 
-  it('낱말 쓰기 페이지: items 나열 순서가 바뀌어도 중단 규칙은 문항 코드(ww01~03) 기준으로 판정된다', () => {
+  it('낱말 쓰기 페이지: items 나열 순서가 바뀌어도 중단 규칙은 문항 코드(ww01) 기준으로 판정된다', () => {
     const page = g1.pageByCode.get('p_ww')!
-    // 의미/무의미 순서를 뒤집은 가짜 페이지 — 배열 위치 기준 판정이었다면 여기서 어긋난다.
     const reorderedPage = { ...page, items: [...page.items].reverse() }
-    expect(canAdvance(g1, reorderedPage, { ...empty, writing: { ww01: 0, ww02: 0, ww03: 0 } })).toBe(true)
+    expect(canAdvance(g1, reorderedPage, { ...empty, writing: { ww01: 0 } })).toBe(true)
   })
 
   it('문장 쓰기 페이지(G2): 5문항 전부 입력해야 진행 가능', () => {

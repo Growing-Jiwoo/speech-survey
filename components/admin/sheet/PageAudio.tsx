@@ -18,13 +18,16 @@ const AudioPlayer = dynamic(() => import('@/components/AudioPlayer').then(m => m
 
 export type Attempt = Pick<DetailRecording, 'attempt_no' | 'url' | 'duration_sec'>
 
-export function PageAudio({ label, attempts, limitSec, onAudioError }: {
+export function PageAudio({ label, attempts, limitSec, onAudioError, notAdministered = false }: {
   /** 무엇의 녹음인지 (예: '의미 낱말'). 문장처럼 바로 옆에 문항이 적혀 있으면 생략한다 */
   label?: string
   attempts: Attempt[]
   /** 검사지 제한 시간(초). 이 값을 넘는 녹음은 초과분이 채점 대상이 아님을 알린다 */
   limitSec: number
   onAudioError: () => void
+  /** 중단 규칙으로 실시하지 않은 과제 — 녹음이 "빠진" 게 아니므로 경고(미녹음)를 내지 않는다.
+   *  녹음이 실제로 있으면(옛 규칙 세션 등) 데이터가 우선한다 — 그대로 재생기를 낸다. */
+  notAdministered?: boolean
 }) {
   const [idx, setIdx] = useState(0)
 
@@ -32,7 +35,7 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
     return (
       <div className="flex items-center gap-2.5 print:hidden">
         {label && <span className="text-[14px] font-bold text-ink">{label}</span>}
-        <Badge tone="rec">미녹음</Badge>
+        {notAdministered ? <Badge tone="mute">미실시</Badge> : <Badge tone="rec">미녹음</Badge>}
       </div>
     )
   }

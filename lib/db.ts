@@ -55,7 +55,8 @@ export interface SubmitInput {
   sentenceWriting: SentenceScore[]
   checklist: string[]
   marks: ReadingMark[]
-  /** 중단 규칙 ①로 문장·쓰기 과제를 실시하지 않았는지 — 검사 당시의 사실이므로 제출 시점에 굳힌다.
+  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않았는지(쓰기는 실시한다 —
+   *  담당자 확정 2026-08-11) — 검사 당시의 사실이므로 제출 시점에 굳힌다.
    *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
   discontinued: boolean
 }
@@ -247,7 +248,8 @@ export interface SessionRow {
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
   /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
   examiner_type: 'teacher' | 'expert' | null
-  /** 중단 규칙 ①로 문장·낱말 쓰기를 실시하지 않은 시각(012). 제출 시점에 확정된다 */
+  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않은 시각(012, 주석은 013에서 갱신).
+   *  쓰기 과제는 실시한다(담당자 확정 2026-08-11). 제출 시점에 확정된다 */
   discontinued_at: string | null
 }
 
@@ -262,16 +264,17 @@ const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grad
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
-  writing_answers: { item_code: string }[]
+  /** 진행률 분모 파생(규칙 ②)에 값이 필요해 can_write까지 싣는다 */
+  writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
-  sentence_scores: { item_code: string }[]
+  sentence_scores: { item_code: string; words: number }[]
 }
 
 const MAX_LIST_ROWS = 5000
 
 export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code), sentence_scores(item_code)`)
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words)`)
     .order('started_at', { ascending: false })
     .limit(MAX_LIST_ROWS)
   fail(error)

@@ -245,7 +245,9 @@ function ProgressCell({ recorded, written, totals }: { recorded: number; written
 
 function Track({ label, value, max }: { label: string; value: number; max: number }) {
   const full = value >= max
-  const pct = max === 0 ? 0 : Math.round((value / max) * 100)
+  // 규칙 ②가 옛 세션에 소급 적용되면 응답 수(value)가 새 분모(max)를 넘을 수 있다
+  // (실측: 세션 e0ac9d94 — ww01=false, 나머지 9개 응답, 분모는 1로 줄어듦) — 막대는 100%에서 clamp.
+  const pct = max === 0 ? 0 : Math.min(100, Math.round((value / max) * 100))
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-7 text-[12px] text-ink-mute">{label}</span>

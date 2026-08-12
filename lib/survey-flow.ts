@@ -1,10 +1,11 @@
-// lib/survey-flow.ts — 검사 진행 흐름 규칙(검사지의 중단 규칙 포함). 순수 함수만 둔다.
-// 검사지 근거:
-//  ① 낱말 해독 의미 낱말 첫 3개 연속 오반응 → 문장 읽기유창성·쓰기 과제를 실시하지 않는다.
-//  ② 쓰기 과제 중단 — 규칙이 양식마다 다르다:
-//     · 낱말 쓰기(G1): 의미 낱말 첫 3개 연속 오반응 시 중단
-//     · 문장 쓰기(G2): **첫 문장** 오반응 시 중단
-// ※ 가정 A1: ②로 중단되어도 검사자 체크리스트는 진행한다(아동 과제가 아니라 검사자 관찰 기록).
+// lib/survey-flow.ts — 검사 진행 흐름 규칙(중단 규칙 포함). 순수 함수만 둔다.
+// 근거: 담당자 확정(2026-08-11, docs/superpowers/specs/2026-08-11-discontinue-rules-design.md).
+// ⚠️ 검사지 인쇄 문구와 다르다 — 검사지가 실제 시행 절차와 다를 때는 담당자 회신이 우선한다(스펙 참고).
+//  ① 낱말 해독 의미 낱말 첫 3개 연속 오반응 → 무의미 낱말·문장 읽기유창성을 실시하지 않고
+//     쓰기 과제로 넘어간다. (검사지 문구는 "문장 읽기유창성과 낱말 쓰기 미실시" — 폐기됨)
+//  ② 쓰기 과제 1번 문항 오반응 → 즉시 중단. 양식 무관하게 첫 문항 하나로 판정한다.
+//     (검사지 G1 문구는 "의미 낱말 첫 3개" — 폐기됨)
+// ※ 검사자 체크리스트는 어느 중단에서도 진행한다(아동 과제가 아니라 검사자 관찰 기록).
 // ※ ①과 ②는 서로 다른 방식으로 구현된다: ①은 visiblePages()가 페이지 자체를 제거하고,
 //   ②는 쓰기 화면이 직접 남은 문항을 잠그는 방식이다(requiredWritingCodes 참고).
 import type { FormItems, SurveyItem } from './items'
@@ -28,35 +29,23 @@ export function readingCeilingHit(f: FormItems, marks: Partial<Record<string, bo
 
 /**
  * 쓰기 과제의 "오반응" — **한 어절도 맞히지 못한 것(0점)**.
- *
- * ⚠️ G2 검사지의 "첫 문장 오반응 시 검사를 중단합니다"는 문항 배점이 0·1·2인데도
- * 무엇을 오반응으로 볼지 적어 두지 않았다(가안). 두 어절 중 하나라도 맞혔다면 반응이
- * 있었던 것으로 보아 중단하지 않는 쪽 — 즉 **덜 중단하는 쪽** 으로 해석한다. 중단은
- * 이후 과제를 아예 실시하지 않게 만드는 결정이라, 애매하면 계속하는 편이 안전하다.
- * 담당자가 "1점도 오반응"이라고 회신하면 이 함수만 바꾸면 된다.
+ * 담당자 확정(2026-08-11): 문항 배점이 0·1·2인 문장 쓰기에서 1점은 오반응이 아니다.
  */
 export const isWritingWrong = (score: number | undefined): boolean | undefined =>
   score === undefined ? undefined : score === 0
 
-/** 이 양식에서 중단 규칙 ②의 판정 대상이 되는 문항 코드와 개수 */
-function writingCeilingRule(f: FormItems): { codes: string[]; n: number } {
-  // 낱말 쓰기는 의미 낱말 첫 3개, 문장 쓰기는 첫 문장 하나가 판정 대상이다.
-  return f.writingSection === 'word_writing'
-    ? { codes: f.meaningWriteCodes, n: CEILING_N }
-    : { codes: f.writingItems.map(i => i.code), n: 1 }
-}
-
-/** 쓰기 과제 중단 여부 (규칙 ②).
+/** 쓰기 과제 중단 여부 (규칙 ②) — 양식 무관하게 1번 문항 하나로 판정한다(담당자 확정).
  *  ⚠️ visiblePages에는 반영하지 않는다 — 이 규칙은 페이지를 빼는 대신 쓰기 화면이
  *  직접 남은 문항을 잠그는 방식으로 구현된다(requiredWritingCodes). 잘못 연결하지 말 것. */
 export function writingCeilingHit(f: FormItems, writing: Partial<Record<string, number>>): boolean {
-  const { codes, n } = writingCeilingRule(f)
-  return hitsCeiling(codes.map(c => isWritingWrong(writing[c])), n)
+  return hitsCeiling(f.writingItems.slice(0, 1).map(i => isWritingWrong(writing[i.code])), 1)
 }
 
 /**
  * 쓰기 과제에서 실제로 응답이 요구되는 문항 코드 집합.
- * 중단 규칙 ②에 걸리면 판정에 쓰인 앞 n개만 요구하고, 그렇지 않으면 페이지의 모든 문항을 요구한다.
+ * 중단 규칙 ②에 걸리면 판정에 쓰인 1번 문항만 요구하고, 그렇지 않으면 페이지의 모든 문항을 요구한다.
+ * 중단 시에는 인자 `items`와 무관하게 **양식의 1번 문항**(`f.writingItems[0]`)을 요구한다 —
+ * 넘어온 배열이 뒤섞이거나 일부만 담겨 있어도 판정이 흔들리지 않는다.
  * 쓰기 화면의 잠금·다음 버튼 활성화(canAdvance)·검토 화면의 완료 집계가 모두 이 함수 하나로
  * "요구되는 문항"을 판정해, 배열 위치가 아닌 문항 코드로 안전하게 동작한다.
  */
@@ -64,8 +53,7 @@ export function requiredWritingCodes(
   f: FormItems, items: SurveyItem[], writing: Partial<Record<string, number>>,
 ): Set<string> {
   if (!writingCeilingHit(f, writing)) return new Set(items.map(i => i.code))
-  const { codes, n } = writingCeilingRule(f)
-  return new Set(codes.slice(0, n))
+  return new Set(f.writingItems.slice(0, 1).map(i => i.code))
 }
 
 export interface FlowState {
@@ -74,17 +62,21 @@ export interface FlowState {
   checklist: string[]
 }
 
-/** 진행 상태에서 실제로 실시할 페이지 목록. 중단 규칙 ①에 걸리면 문장·쓰기 페이지가 빠진다. */
+/** 진행 상태에서 실제로 실시할 페이지 목록. 중단 규칙 ①에 걸리면 무의미 낱말·문장 페이지가 빠진다. */
 export function visiblePages(f: FormItems, s: Pick<FlowState, 'marks'>) {
   if (!readingCeilingHit(f, s.marks)) return f.pages
-  // 낱말 해독과 검사자 체크리스트만 남긴다 — 쓰기 과제의 섹션 이름이 양식마다 다르므로
-  // "무엇을 빼는가"가 아니라 "무엇을 남기는가"로 적는다(새 양식에서 빠뜨릴 여지를 없앤다).
-  return f.pages.filter(p => p.section === 'word_reading' || p.section === 'checklist')
+  // 무의미 낱말은 섹션이 의미 낱말과 같아(word_reading) 섹션 필터로는 걸러지지 않는다 —
+  // kind로 가른다(연습·의미·현장채점 페이지는 모두 kind가 'meaning'이다).
+  // "무엇을 빼는가"가 아니라 **무엇을 남기는가**로 적는다 — 새 양식이 실시하면 안 되는
+  // 페이지를 추가해도 조용히 통과하지 않는다(kind !== 'nonsense'였다면 kind: null이 통과했다).
+  return f.pages.filter(p =>
+    (p.section === 'word_reading' && p.kind === 'meaning')
+    || p.section === f.writingSection || p.section === 'checklist')
 }
 
 /**
  * 현재 페이지에서 [다음]을 누를 수 있는지 — 페이지 종류별 완료 조건.
- * 낱말 해독 현장 채점: 전부 표시. 쓰기: 전부 입력(단, 중단 규칙에 걸리면 앞 n개만).
+ * 낱말 해독 현장 채점: 전부 표시. 쓰기: 전부 입력(단, 중단 규칙에 걸리면 1번 문항만).
  * 체크리스트: 1개 이상 선택.
  * (녹음 문항 자체의 완료 여부는 이 함수가 판단하지 않는다 — 호출부에서 busy로 이미 잠겨 있다.)
  */

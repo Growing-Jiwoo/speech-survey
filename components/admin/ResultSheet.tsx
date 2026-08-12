@@ -48,6 +48,14 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const f = itemsFor(form)
   const { taskMax, readMax, writeMax, passMark } = scoringFor(form)
   const r = scoreSession(form, { marks, sentences, writing })
+  // 중단 판정은 여기서 한 번만 — 하위 컴포넌트 여섯 곳이 각자 판정하면 어긋난다(스펙).
+  const disc = r.discontinued
+  // "데이터 우선" — PageAudio의 attempts.length===0 검사와 같은 원칙(스펙 참고).
+  // 플래그가 걸려도 실제 응답이 남아 있으면(옛 규칙 세션, 관리자의 사후 정정) 미실시로
+  // 가리지 않는다 — 가리면 소계에는 그 값이 여전히 더해지는데 화면은 숨겨서 총점과 어긋난다.
+  const nonsenseReadNA = disc.wordReading && f.nonsenseReadCodes.every(c => marks[c] === undefined)
+  const sentenceReadNA = disc.sentenceReading && f.sentenceItems.every(i => sentences[i.code] === undefined)
+  const nonsenseWriteNA = disc.writing && f.nonsenseWriteCodes.every(c => writing[c] === undefined)
   const writingLabel = SECTION_LABEL[f.writingSection]
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
@@ -138,24 +146,28 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
         <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark}
+          locked={nonsenseReadNA}
           audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+            limitSec={form.limits.wordSec} onAudioError={onAudioError}
+            notAdministered={nonsenseReadNA} />} />
         <Subtotal
           cells={[
             { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
-            { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
+            { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense, na: nonsenseReadNA },
           ]}
           total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
-          verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+          verdict={r.verdict.wordReading} complete={r.complete.wordReading}
+          discontinued={disc.wordReading} />
       </TaskSection>
 
       <TaskSection title={SECTION_LABEL.sentence_reading}
         hint={`${form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수`}>
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
-          attemptsFor={code => attemptsOf(`p_${code}`)}
+          attemptsFor={code => attemptsOf(`p_${code}`)} locked={sentenceReadNA}
           limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
         <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
-          verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+          verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading}
+          discontinued={disc.sentenceReading} />
       </TaskSection>
 
       {/* 쓰기 과제 — 검사 중 수집분(읽기 전용). 학년에 따라 낱말 쓰기 또는 문장 쓰기다. */}
@@ -167,16 +179,18 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           <Subtotal
             cells={[
               { label: '의미 점수', value: r.writeMeaning, max: writeMax.meaning },
-              { label: '무의미 점수', value: r.writeNonsense, max: writeMax.nonsense },
+              { label: '무의미 점수', value: r.writeNonsense, max: writeMax.nonsense, na: nonsenseWriteNA },
             ]}
             total={{ label: '총 점수', value: r.writing, max: taskMax.writing }}
-            verdict={r.verdict.writing} complete={r.complete.writing} />
+            verdict={r.verdict.writing} complete={r.complete.writing}
+            discontinued={disc.writing} />
         </>
       ) : (
         <>
           <SentenceWriteRows items={f.writingItems} writing={writing} />
           <Subtotal total={{ label: '총점', value: r.writing, max: taskMax.writing }}
-            verdict={r.verdict.writing} complete={r.complete.writing} />
+            verdict={r.verdict.writing} complete={r.complete.writing}
+            discontinued={disc.writing} />
         </>
       )}
       </TaskSection>
@@ -209,7 +223,8 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
       {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
       <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
         검사지 PDF는 저장한 채점 내용으로 만들어집니다
-        {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
+        {(!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
+          || disc.wordReading || disc.sentenceReading || disc.writing)
           && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
       </p>
 
@@ -219,9 +234,14 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
         columns={1}
         items={[
           {
-            badge: <Badge tone="mute">채점 전</Badge>,
+            badge: (
+              <span className="flex gap-1">
+                <Badge tone="mute">채점 전</Badge><Badge tone="mute">중단</Badge>
+              </span>
+            ),
             desc: <>아직 채점하지 않았거나 중단 규칙으로 <b>실시하지 않은</b> 과제입니다.
-              <b className="text-rec-deep"> 0점이 아닙니다</b> — 검사지 PDF에도 점수 칸이 비어 나갑니다.</>,
+              <b className="text-rec-deep"> 0점이 아닙니다</b> — 검사지 PDF에도 점수 칸이 비어 나갑니다.
+              중단된 과제는 기준 점수 판정(Pass/Fail)을 하지 않습니다.</>,
           },
           {
             badge: (
