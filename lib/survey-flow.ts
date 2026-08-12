@@ -29,7 +29,10 @@ export function readingCeilingHit(f: FormItems, marks: Partial<Record<string, bo
 
 /**
  * 쓰기 과제의 "오반응" — **한 어절도 맞히지 못한 것(0점)**.
- * 담당자 확정(2026-08-11): 문항 배점이 0·1·2인 문장 쓰기에서 1점은 오반응이 아니다.
+ * 확정(2026-08-11): 문항 배점이 0·1·2인 문장 쓰기에서 1점은 오반응이 아니다.
+ * ⚠️ 이 답은 사용자(개발자)를 통해 받았고, 담당자 대화 로그에 원문이 남아 있지 않다.
+ * 되돌아볼 일이 생기면 담당자에게 한 번 더 확인할 것 — 이 한 줄이 "중단이냐 계속이냐"를
+ * 가르므로 잘못되면 이후 과제를 통째로 실시/미실시로 뒤집는다.
  */
 export const isWritingWrong = (score: number | undefined): boolean | undefined =>
   score === undefined ? undefined : score === 0

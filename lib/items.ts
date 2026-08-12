@@ -93,7 +93,15 @@ export const isRecordingPage = (p: SurveyPage): boolean => p.limitSec > 0
 /** 녹음 자동 종료 시각(초) = 검사지 제한 + 여유 */
 export const maxRecSec = (p: SurveyPage): number => p.limitSec + GRACE_SEC
 
-/** 연습용 낱말 — 담당자 확정: "쉬운 실제 낱말"(무의미 낱말이 아님).
+/** 연습용 낱말 — ⚠️ **담당자 확인 대기 중인 임시값(placeholder)이다. 확정 아님.**
+ *
+ *  담당자 원문은 "가짜 단어들 보여주고 테스트 하는 거야"인데, 이 표현이 두 갈래로 읽힌다:
+ *    (a) 검사 문항이 아닌 **쉬운 실제 낱말**  ← 지금 이 배열이 가정한 쪽
+ *    (b) **무의미 낱말**(아로·부림 같은)
+ *  (b)로 확정되면 연습에서 무의미 낱말을 미리 경험하는 것이 본 검사 반응에 영향을 줄 수 있어
+ *  단순한 문구 교체가 아니다 — 담당자에게 반드시 물을 것.
+ *  경위: docs/superpowers/plans/2026-08-07-survey-session-controls.md
+ *
  *  본 문항과 겹치지 않는 2음절 상용어로 고른다(겹치지 않음은 tests/items.test.ts가 검증).
  *  바꾸려면 이 배열만 교체하면 된다 — 연습은 녹음·채점하지 않으므로 다른 코드에 영향이 없다. */
 const PRACTICE_WORDS = ['나무', '구름', '바다']
