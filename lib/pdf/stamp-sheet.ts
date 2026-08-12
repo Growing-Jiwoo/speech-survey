@@ -40,7 +40,11 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
     readFile(path.join(ASSETS, 'fonts', 'NanumGothic.ttf')),
     readFile(path.join(ASSETS, 'fonts', 'NanumGothicBold.ttf')),
   ])
-  const doc = await PDFDocument.load(srcPdf)
+  // updateMetadata:false — pdf-lib 기본값(true)은 load 시점에 ModDate를 현재 시각으로 다시 쓴다.
+  // 그러면 같은 채점 결과라도 만들 때마다 바이트가 달라져 (a) 출력이 재현 불가능해지고
+  // (b) 두 출력을 비교하는 테스트가 초 경계를 넘는 순간 간헐 실패한다.
+  // 임상 문서는 같은 입력이면 같은 파일이 나와야 하므로 원본 메타데이터를 그대로 둔다.
+  const doc = await PDFDocument.load(srcPdf, { updateMetadata: false })
   doc.registerFontkit(fontkit)
   // 검사지 본문과 같은 서체(NanumGothic). 점수·O/X는 옆의 분모('/ 7')와 같은 굵기라야
   // 원래 인쇄된 숫자처럼 보인다 — 정체는 인적사항처럼 본문에 섞이는 값에만 쓴다.

@@ -203,3 +203,20 @@ describe('stampSheet — 중단 규칙: 중단 이후는 점수를 적지 않는
     expect(Buffer.compare(Buffer.from(out), Buffer.from(only1))).toBe(0)
   })
 })
+
+describe('stampSheet — 같은 입력이면 언제 만들어도 같은 바이트다 (재현 가능성)', () => {
+  const form = formForGrade(1)
+  const session = sessionFor(form)
+
+  // pdf-lib의 PDFDocument.load는 기본값(updateMetadata: true)이면 load 시점에 ModDate를
+  // 현재 시각으로 다시 쓴다. 그러면 같은 채점 결과라도 만들 때마다 바이트가 달라져
+  // (a) 임상 문서가 재현 불가능해지고 (b) 위 블록의 바이트 비교 테스트가 두 호출 사이에
+  // 초 경계를 넘는 순간 간헐 실패한다(실제로 전체 스위트에서 재발했다).
+  // 1초 이상 벌려 초 경계를 강제로 넘겨, 그 조건에서도 출력이 같은지 고정한다.
+  it('1초 넘게 벌려 두 번 만들어도 바이트가 같다 (ModDate가 끼어들지 않는다)', async () => {
+    const a = await stampSheet({ form, session, ...blank })
+    await new Promise(r => setTimeout(r, 1100))
+    const b = await stampSheet({ form, session, ...blank })
+    expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).toBe(0)
+  }, 20_000)
+})
