@@ -18,7 +18,14 @@
      next/font/google이 만들어 주던 변수를 직접 정의한 것이다(빌드-타임 다운로드 제거). */
   --font-noto: 'Noto Sans KR';
   --font-lexend: 'Lexend';
-  --font-read: var(--font-lexend), sans-serif;
+  /* 검사 자극(아이가 읽는 낱말·문장)과 숫자·O/X에 쓰는 폰트.
+     Lexend는 난독 연구 기반의 가독성 폰트라 이 자리에 골랐지만 **한글 글리프가 없다.**
+     그래서 Noto를 두 번째로 둔다 — 브라우저가 글자마다 골라, 숫자·기호는 Lexend가
+     한글은 Noto가 그린다.
+     Noto 없이 sans-serif로 떨어뜨리면 검사 낱말이 기기마다 다른 폰트로 보인다
+     (맥=Apple SD Gothic Neo, 윈도우=맑은 고딕…). 표준화된 선별검사에서 자극의 외형이
+     기기별로 달라지는 것이라 반드시 Noto로 고정한다. */
+  --font-read: var(--font-lexend), var(--font-noto), sans-serif;
 }
 
 html, body {
@@ -87,7 +94,7 @@ button, a, label {
   background: var(--color-well); border: 1px solid var(--color-line);
   border-radius: 11px; padding: 7px 13px; font-size: 12px; color: var(--color-ink-soft);
 }
-.kpi b { color: var(--color-ink); font-family: var(--font-read), sans-serif; }
+.kpi b { color: var(--color-ink); font-family: var(--font-read); }
 
 /* 버튼 스킨 3종 — 크기(h-*, flex-*)는 호출부 클래스로 지정하고 여기는 색·모양만 담당.
  * .cta(큰 주 행동 버튼)와 달리 화면 하단 내비·모달 등 나란히 놓이는 버튼용. */
