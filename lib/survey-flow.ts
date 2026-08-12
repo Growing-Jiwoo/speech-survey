@@ -59,20 +59,45 @@ export function requiredWritingCodes(
   return new Set(f.writingItems.slice(0, 1).map(i => i.code))
 }
 
+/**
+ * 실제로 실시된 쓰기 답만 남긴다 — 중단 규칙 ②가 성립하면 2번 이후 문항의 값을 버린다.
+ *
+ * 왜 필요한가(사용자 보고 2026-08-12): 검사자가 2~5번을 먼저 채점하고 1번을 마지막에
+ * 오반응으로 찍으면 중단이 성립하지만, 그때 이미 입력된 2~5번 값이 남아 제출된다.
+ * 실시하지 않은 문항에 점수가 남으면 관리자 결과지가 "중단인데 9점"을 보여주고
+ * 진행률 분모(1)보다 분자(10)가 커진다("낱말 쓰기 10 / 1").
+ * 중단이 아니면 입력을 그대로 돌려주므로(항등) 정상 경로에는 영향이 없다.
+ */
+export function keepImplementedWriting<T extends number | undefined>(
+  f: FormItems, writing: Record<string, T>,
+): Record<string, T> {
+  if (!writingCeilingHit(f, writing)) return writing
+  const required = requiredWritingCodes(f, f.writingItems, writing)
+  return Object.fromEntries(Object.entries(writing).filter(([code]) => required.has(code)))
+}
+
 export interface FlowState {
   marks: Partial<Record<string, boolean>>
   writing: Partial<Record<string, number>>
   checklist: string[]
+  /** 연습 페이지를 실시하는지(검사자가 마이크 확인 뒤에 고른다). 같은 아동이 반복 검사할 때
+   *  매번 연습을 강요하지 않기 위한 선택이다 — false면 연습 페이지가 진행 목록에서 빠진다. */
+  practice: boolean
 }
 
-/** 진행 상태에서 실제로 실시할 페이지 목록. 중단 규칙 ①에 걸리면 무의미 낱말·문장 페이지가 빠진다. */
-export function visiblePages(f: FormItems, s: Pick<FlowState, 'marks'>) {
-  if (!readingCeilingHit(f, s.marks)) return f.pages
+/** 진행 상태에서 실제로 실시할 페이지 목록.
+ *  · 연습을 건너뛰기로 했으면(practice === false) 연습 페이지가 빠진다.
+ *  · 중단 규칙 ①에 걸리면 무의미 낱말·문장 페이지가 빠진다. */
+export function visiblePages(f: FormItems, s: Pick<FlowState, 'marks'> & Partial<Pick<FlowState, 'practice'>>) {
+  // practice가 undefined인 호출(옛 저장 상태·테스트)은 연습을 실시하는 쪽으로 본다 —
+  // 빠뜨려서 연습이 사라지는 쪽보다 남는 쪽이 안전하다.
+  const pages = s.practice === false ? f.pages.filter(p => !p.practice) : f.pages
+  if (!readingCeilingHit(f, s.marks)) return pages
   // 무의미 낱말은 섹션이 의미 낱말과 같아(word_reading) 섹션 필터로는 걸러지지 않는다 —
   // kind로 가른다(연습·의미·현장채점 페이지는 모두 kind가 'meaning'이다).
   // "무엇을 빼는가"가 아니라 **무엇을 남기는가**로 적는다 — 새 양식이 실시하면 안 되는
   // 페이지를 추가해도 조용히 통과하지 않는다(kind !== 'nonsense'였다면 kind: null이 통과했다).
-  return f.pages.filter(p =>
+  return pages.filter(p =>
     (p.section === 'word_reading' && p.kind === 'meaning')
     || p.section === f.writingSection || p.section === 'checklist')
 }
@@ -83,7 +108,11 @@ export function visiblePages(f: FormItems, s: Pick<FlowState, 'marks'>) {
  * 체크리스트: 1개 이상 선택.
  * (녹음 문항 자체의 완료 여부는 이 함수가 판단하지 않는다 — 호출부에서 busy로 이미 잠겨 있다.)
  */
-export function canAdvance(f: FormItems, page: FormItems['pages'][number], s: FlowState): boolean {
+export function canAdvance(
+  f: FormItems, page: FormItems['pages'][number],
+  // 연습 실시 여부는 "이 페이지를 넘어갈 수 있는가"와 무관하다(연습 페이지에는 완료 조건이 없다).
+  s: Omit<FlowState, 'practice'>,
+): boolean {
   const markDone = page.items.every(i => s.marks[i.code] !== undefined)
   const writingDone = [...requiredWritingCodes(f, page.items, s.writing)]
     .every(code => s.writing[code] !== undefined)

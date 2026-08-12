@@ -169,6 +169,32 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
   })
 })
 
+describe('중단 규칙 ② — 실시하지 않은 쓰기 문항은 저장하지 않는다 (항목 10)', () => {
+  it('G1: 1번이 오반응이면 2번 이후 답은 버려진다 (뒤 문항을 먼저 채점한 경우)', async () => {
+    const res = await POST(makeReq({ ...VALID(), writing: { ww01: 0, ww02: 1, ww03: 1 } }))
+    expect(res.status).toBe(200)
+    expect(submitArg().writing).toEqual([{ itemCode: 'ww01', canWrite: false }])
+  })
+  it('1번이 정반응이면 뒤 문항이 그대로 저장된다', async () => {
+    const res = await POST(makeReq({ ...VALID(), writing: { ww01: 1, ww02: 0, ww03: 1 } }))
+    expect(res.status).toBe(200)
+    expect(submitArg().writing).toHaveLength(3)
+  })
+  it('G2: 첫 문장이 0점이면 sw01만 저장된다', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
+    const res = await POST(makeReq({
+      sessionId: SID, sessionToken: TOKEN, checklist: ['none'],
+      writing: { sw01: 0, sw02: 2, sw03: 1 },
+    }))
+    expect(res.status).toBe(200)
+    expect(submitArg().sentenceWriting).toEqual([{ itemCode: 'sw01', words: 0 }])
+  })
+  it('절삭 전에 형식 검증이 먼저다 — 버려질 문항의 잘못된 값도 400', async () => {
+    expect((await POST(makeReq({ ...VALID(), writing: { ww01: 0, ww02: 5 } }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
+})
+
 describe('중단 규칙 ① 판정을 제출 시점에 굳힌다', () => {
   it('의미 낱말 첫 3개 연속 오반응이면 중단으로 기록된다', async () => {
     const res = await POST(makeReq({ ...VALID(), marks: { rw01: false, rw02: false, rw03: false } }))

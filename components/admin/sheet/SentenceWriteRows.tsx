@@ -4,10 +4,13 @@
 import { itemMaxWords } from '@/lib/scoring'
 import type { SurveyItem } from '@/lib/items'
 
-export function SentenceWriteRows({ items, writing }: {
+export function SentenceWriteRows({ items, writing, implemented }: {
   items: SurveyItem[]
   /** itemCode → 정확히 쓴 어절 수(미응답은 키 없음) */
   writing: Partial<Record<string, number>>
+  /** 실제로 실시된 문항 코드 — 중단 규칙 ② 이후 문항은 값이 남아 있어도 '미실시'로 적는다
+   *  (총점에서도 빠진다 — lib/scoring.ts의 scoreSession). */
+  implemented: Set<string>
 }) {
   return (
     <div>
@@ -16,10 +19,12 @@ export function SentenceWriteRows({ items, writing }: {
         <span className="w-20 text-right">점수</span>
       </div>
       {items.map((item, i) => {
-        const v = writing[item.code]
+        const na = !implemented.has(item.code)
+        const v = na ? undefined : writing[item.code]
         const max = itemMaxWords(item)
         return (
-          <div key={item.code} className="flex items-center gap-3 border-b border-line/60 px-4 py-2">
+          <div key={item.code}
+            className={`flex items-center gap-3 border-b border-line/60 px-4 py-2 ${na ? 'opacity-60' : ''}`}>
             <span className="w-4 flex-none text-xs font-bold text-ink-mute">{i + 1}</span>
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
               {item.text.trim().split(/\s+/).map((w, k) => (
@@ -29,14 +34,21 @@ export function SentenceWriteRows({ items, writing }: {
               ))}
             </span>
             <span className="w-20 flex-none text-right text-[13px]"
-              aria-label={`${item.text} ${v === undefined ? '미응답' : `${v}점`}`}>
-              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다.
+              aria-label={`${item.text} ${na ? '미실시' : v === undefined ? '미응답' : `${v}점`}`}>
+              {/* 미응답은 '—' — 0점(두 어절 모두 오답)과 구분해야 한다. 중단 이후 문항은
+                  '미실시'로 적어 미응답과도 구분한다(실시하지 않았으므로 채점 대상이 아니다).
                   0점을 경고색으로 칠하지 않는 이유: 이 숫자는 받은 점수를 적은 것뿐이고
                   판정이 아니다(인쇄물의 「0 1 2」 동그라미와 같은 규칙). */}
-              <b className={`font-read text-[16px] tabular-nums ${v === undefined ? 'text-ink-mute' : 'text-ink'}`}>
-                {v === undefined ? '—' : v}
-              </b>
-              <span className="text-ink-mute"> / {max}</span>
+              {na ? (
+                <b className="text-[12px] font-bold text-ink-mute">미실시</b>
+              ) : (
+                <>
+                  <b className={`font-read text-[16px] tabular-nums ${v === undefined ? 'text-ink-mute' : 'text-ink'}`}>
+                    {v === undefined ? '—' : v}
+                  </b>
+                  <span className="text-ink-mute"> / {max}</span>
+                </>
+              )}
             </span>
           </div>
         )

@@ -17,11 +17,27 @@ beforeEach(() => {
 describe('survey-state', () => {
   it('newState는 pageIdx=0, phase=mic로 시작하고 marks가 비어 있다', () => {
     const s = newState('sid-1', '홍길동', 'tok', 1)
-    expect(s.v).toBe(5)
+    expect(s.v).toBe(6)
     expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
     expect(s.marks).toEqual({})
+  })
+
+  it('연습은 기본으로 실시한다 — 선택 화면에서 검사자가 끄기 전까지', () => {
+    expect(newState('sid-1', '홍길동', 'tok', 1).practice).toBe(true)
+  })
+
+  it('연습 실시 여부도 save→load로 복원된다 (새로고침 후 다시 묻지 않는다)', () => {
+    const s = newState('sid-1', '홍길동', 'tok', 1)
+    saveState({ ...s, practice: false, phase: 'page' })
+    expect(loadState()?.practice).toBe(false)
+  })
+
+  it('구버전(v5) 상태는 로드하지 않는다 — practice 필드가 없어 연습 실시 여부가 미정이다', () => {
+    localStorage.setItem('kodys-survey:last', 'v5')
+    localStorage.setItem('kodys-survey:v5', JSON.stringify({ v: 5, sessionId: 'v5', pageIdx: 2 }))
+    expect(loadState()).toBeNull()
   })
 
   it('save→load 왕복으로 pageIdx·phase·childName·marks 복원', () => {

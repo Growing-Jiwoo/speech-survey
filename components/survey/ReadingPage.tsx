@@ -1,70 +1,52 @@
 // components/survey/ReadingPage.tsx — 낱말/문장 읽기 페이지(페이지 전체 = 1녹음).
-// 검사지대로 한 페이지의 문항 전체를 제한 시간 안에 읽는다. 카운트다운 후 녹음이 시작되고,
+// 검사지대로 한 페이지의 문항 전체를 제한 시간 안에 읽는다. 버튼을 누르면 곧바로 녹음이
+// 시작되고(3·2·1 카운트다운은 2026-08-12에 제거 — 연습 단계가 그 역할을 대신한다),
 // 제한 시간(limitSec)에 도달하면 "여기까지예요" 안내가 뜨며 여유 시간(GRACE_SEC) 뒤 자동 종료된다.
-// 연습 페이지(page.practice)는 동작이 동일하되 업로드하지 않는다.
+//
+// 저장은 이 컴포넌트가 하지 않는다 — 녹음이 끝나면 onRecorded로 넘기고, 업로드는 상위
+// 진행 화면이 백그라운드로 처리한다(낙관적 완료 표시). 그래서 여기에는 "저장 중" 대기 UI가 없다.
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
 import { maxRecSec, type SurveyPage } from '@/lib/items'
 import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
-import { Spinner } from '@/components/Spinner'
-import { Countdown } from '@/components/survey/Countdown'
-import { uploadRecording } from '@/lib/upload'
 
-export function ReadingPage({ page, sessionId, sessionToken, attemptCount, onSaved, onRecordingChange, onUploadFailed }: {
-  page: SurveyPage; sessionId: string; sessionToken: string; attemptCount: number; onSaved: () => void
-  /** 녹음/카운트다운 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
+export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange }: {
+  page: SurveyPage
+  /** 이 페이지에서 이미 완료된 녹음 수(상위 진행 상태) */
+  attemptCount: number
+  /** 녹음 완료 — 상위가 완료 표시와 업로드를 맡는다(연습 페이지는 업로드하지 않는다) */
+  onRecorded: (rec: Recording) => void
+  /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
   onRecordingChange?: (busy: boolean) => void
-  /** 업로드 실패를 부모에 알려 페이지 이동 후에도 재시도할 수 있게 한다 */
-  onUploadFailed?: (rec: Recording) => void
 }) {
-  const [counting, setCounting] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
+  // 마지막 녹음의 소리 크기 판정 — 목소리가 담기지 않았으면 다시 하도록 권한다.
   const [lowVolume, setLowVolume] = useState(false)
   const [micErr, setMicErr] = useState<RecorderErrorKind | null>(null)
-  const [lastRec, setLastRec] = useState<Recording | null>(null)
   const words = page.section === 'word_reading'
   const hardStopSec = maxRecSec(page)
 
-  async function upload(rec: Recording) {
-    setBusy(true); setErr('')
-    const ok = await uploadRecording({
-      sessionId, sessionToken, itemCode: page.code, attemptNo: attemptCount + 1, rec,
-    })
-    if (!ok) { setErr('저장에 문제가 생겼어요. 다시 시도해 주세요.'); onUploadFailed?.(rec); setBusy(false); return }
+  const recorder = useRecorder(hardStopSec, (rec: Recording) => {
     setLowVolume(rec.peak < MIC_MIN_PEAK)
-    setBusy(false)
-    onSaved()
-  }
-
-  function handleComplete(rec: Recording) {
-    setLastRec(rec)
-    // 연습 페이지는 서버에 남기지 않는다 — 완료 표시만 하고 버린다.
-    if (page.practice) { setLowVolume(rec.peak < MIC_MIN_PEAK); onSaved(); return }
-    void upload(rec)
-  }
-
-  const recorder = useRecorder(hardStopSec, handleComplete)
+    onRecorded(rec)
+  })
   const recording = recorder.state === 'recording'
   // 제한 시간을 넘겨 여유 구간에 들어섰는지 — 채점은 limitSec까지만이므로 아동에게 종료를 알린다.
   const pastLimit = recording && recorder.elapsedMs / 1000 >= page.limitSec
 
   useEffect(() => {
-    onRecordingChange?.(recording || counting)
+    onRecordingChange?.(recording)
     return () => onRecordingChange?.(false)
-  }, [recording, counting, onRecordingChange])
+  }, [recording, onRecordingChange])
 
-  const startAfterCountdown = useCallback(async () => {
-    setCounting(false)
-    try { await recorder.start(); setMicErr(null) }
+  async function begin() {
+    setMicErr(null)
+    try { await recorder.start() }
     catch (e) { setMicErr(classifyRecorderError(e)) }
-  }, [recorder])
-
-  function begin() { setErr(''); setMicErr(null); setCounting(true) }
+  }
 
   const saved = attemptCount > 0
   const savedMessage = lowVolume
@@ -73,8 +55,12 @@ export function ReadingPage({ page, sessionId, sessionToken, attemptCount, onSav
 
   return (
     <>
-      <div className="card p-5 lg:p-6">
-        <p className="text-xs font-bold text-blue lg:text-sm">
+      {/* 연습 페이지는 카드 테두리부터 다르게 둔다 — 본 검사와 같은 모양이면 "지금이 연습"이
+          화면에 드러나지 않는다(사용자 피드백 2026-08-12).
+          `!`(important)가 필요한 이유: .card는 globals.css의 레이어 없는 규칙이라 같은
+          특이도의 Tailwind 유틸리티(레이어 안)보다 나중에 적용된다 — 없으면 흰 카드로 남는다. */}
+      <div className={`card p-5 lg:p-6 ${page.practice ? 'border-amber/50! bg-amber/[0.06]!' : ''}`}>
+        <p className={`text-xs font-bold lg:text-sm ${page.practice ? 'text-amber' : 'text-blue'}`}>
           {page.practice ? '연습이에요. 아래 낱말을 소리 내어 읽어 주세요'
             : words ? '아래 낱말을 모두 소리 내어 읽어 주세요'
               : '아래 문장을 소리 내어 읽어 주세요'}
@@ -104,20 +90,15 @@ export function ReadingPage({ page, sessionId, sessionToken, attemptCount, onSav
 
       {/* 항상 마운트된 단일 라이브 리전 — 조건부로 갈아끼우면 스크린리더 낭독이 보장되지 않는다 */}
       <p className="sr-only" aria-live="polite">
-        {busy ? '녹음을 저장하고 있어요' : err ? err : saved && !recording ? savedMessage : ''}
+        {saved && !recording ? savedMessage : ''}
       </p>
 
       <div className="mt-6 flex flex-col items-center gap-5">
-        {counting ? (
-          <div className="flex min-h-[116px] items-center"><Countdown onDone={startAfterCountdown} /></div>
-        ) : (
-          <RecordButton state={recorder.state} onStart={begin} onStop={recorder.stop}
-            disabled={busy} maxSec={page.limitSec} elapsedMs={recorder.elapsedMs} />
-        )}
+        <RecordButton state={recorder.state} onStart={begin} onStop={recorder.stop}
+          maxSec={page.limitSec} elapsedMs={recorder.elapsedMs} />
         <p className="text-sm font-bold text-ink-soft">
-          {counting ? '곧 시작해요'
-            : recording ? '다 읽었으면 버튼을 눌러 주세요'
-              : saved ? '다시 하려면 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
+          {recording ? '다 읽었으면 버튼을 눌러 주세요'
+            : saved ? '다시 하려면 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
         </p>
 
         {/* 상태 표시는 버튼 아래 이 고정 높이 슬롯 한 곳에만 나타난다 — 상태가 바뀌어도 버튼이 밀리지 않도록 */}
@@ -132,16 +113,6 @@ export function ReadingPage({ page, sessionId, sessionToken, attemptCount, onSav
                   : <span className="text-[13px] font-bold text-ink-soft">읽는 중이에요</span>}
               </div>
             </>
-          ) : busy ? (
-            <div className="flex items-center gap-2 rounded-[14px] border border-line bg-well px-4 py-3">
-              <Spinner className="h-4 w-4 text-blue" />
-              <p className="text-sm text-ink-soft">저장 중…</p>
-            </div>
-          ) : err ? (
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-center text-sm font-bold text-rec-deep">{err}</p>
-              {lastRec && <button onClick={() => upload(lastRec)} className="cta max-w-60">다시 시도</button>}
-            </div>
           ) : micErr ? (
             <p className="text-center text-sm leading-relaxed text-ink-soft">
               {micErr === 'unsupported'

@@ -13,7 +13,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
 import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
+import { readingCeilingHit, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
@@ -136,7 +136,9 @@ export default function ReviewPage() {
           쓰기는 담당자 확정(2026-08-11)으로 항상 실시하므로 여기서 언급하지 않는다.
           쓰기 규칙 ②(1번 오반응)는 페이지를 빼지 않고 그 안의 문항만 줄이므로,
           아래 쓰기 섹션 카드의 분모(예: "1 / 1")가 그 사실을 이미 보여준다. */}
-      {pages.length < f.pages.length && (
+      {/* 판정 근거는 페이지 수가 아니라 중단 규칙이다 — 연습을 건너뛴 검사도 페이지 수가
+          줄어들어, 수로 비교하면 중단되지 않은 검사에 중단 안내가 붙는다. */}
+      {readingCeilingHit(f, state.marks) && (
         <p className="mt-1 text-xs text-ink-mute">
           중단 규칙에 따라 문장 읽기유창성이 생략되었습니다.
         </p>

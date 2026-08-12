@@ -14,7 +14,7 @@ import { env } from '@/lib/env'
 import { formForGrade } from '@/lib/forms'
 import { AREA_CODES, itemsFor } from '@/lib/items'
 import { itemMaxWords } from '@/lib/scoring'
-import { readingCeilingHit } from '@/lib/survey-flow'
+import { keepImplementedWriting, readingCeilingHit } from '@/lib/survey-flow'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -55,13 +55,24 @@ export async function POST(req: Request) {
   const f = itemsFor(formForGrade(grade))
 
   // 쓰기 답: 값은 "정확히 쓴 어절 수". 낱말 쓰기는 문항 만점이 1이라 0/1만 유효하다.
-  const writing: WritingAnswer[] = []
-  const sentenceWriting: SentenceScore[] = []
+  const validWriting: Record<string, number> = {}
   for (const [itemCode, words] of Object.entries(rawWriting)) {
     const item = f.byCode.get(itemCode)
     if (!item || item.section !== f.writingSection) return bad('쓰기 답 형식 오류')
     if (typeof words !== 'number' || !Number.isInteger(words) || words < 0 || words > itemMaxWords(item))
       return bad('쓰기 답 형식 오류')
+    validWriting[itemCode] = words
+  }
+
+  // 중단 규칙 ②가 성립하면 **실시하지 않은 문항의 답은 저장하지 않는다.**
+  // 검사자가 2번 이후를 먼저 채점하고 1번을 마지막에 오반응으로 찍으면 화면은 중단으로
+  // 넘어가는데 앞서 입력한 값이 그대로 올라와, 관리자 결과지가 실시하지 않은 문항의 점수를
+  // 보여줬다(사용자 보고 2026-08-12 항목 10). 화면에서도 확인 시점에 버리지만, 확인 없이
+  // 이동한 경로가 남아 있어 서버가 마지막으로 한 번 더 절삭한다.
+  const writingMap = keepImplementedWriting(f, validWriting)
+  const writing: WritingAnswer[] = []
+  const sentenceWriting: SentenceScore[] = []
+  for (const [itemCode, words] of Object.entries(writingMap)) {
     if (f.writingSection === 'word_writing') writing.push({ itemCode, canWrite: words >= 1 })
     else sentenceWriting.push({ itemCode, words })
   }

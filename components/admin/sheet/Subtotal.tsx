@@ -42,7 +42,10 @@ export function Subtotal({ cells, total, verdict, complete = true, discontinued 
         {total.label}{' '}
         {/* 미채점일 때 '— / 36'처럼 작대기를 세우면 값이 있는 것처럼 읽히고 모양도 어수선하다.
             숫자 자리를 비우고 척도만 알려 준다 — 판정은 옆 배지가 한다. */}
-        {complete ? (
+        {total.na ? (
+          // 과제 통째로 미실시 — 총점 자리에 0이 들어가면 "0점을 받았다"로 읽힌다.
+          <b className="text-[16px] text-ink-mute">미실시</b>
+        ) : complete ? (
           <>
             <b className="text-[20px] tabular-nums text-blue">{total.value}</b>
             <span className="text-ink-mute"> / {total.max}</span>
