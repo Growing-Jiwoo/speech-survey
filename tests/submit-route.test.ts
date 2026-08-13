@@ -158,5 +158,14 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
     vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
     expect((await POST(g2Req({ sw01: 2 }))).status).toBe(400)
   })
+
+  it('[REGRESSION] 첫 문장(sw01)이 0점이어도 나머지 답이 그대로 저장된다 (중단 절삭 폐기)', async () => {
+    const res = await POST(g2Req({ sw01: 0, sw02: 2 }))
+    expect(res.status).toBe(200)
+    expect(submitArg()).toMatchObject({
+      writing: [],
+      sentenceWriting: [{ itemCode: 'sw01', words: 0 }, { itemCode: 'sw02', words: 2 }],
+    })
+  })
 })
 
