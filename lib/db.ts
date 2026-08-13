@@ -240,10 +240,6 @@ export interface SessionRow {
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
   /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
   examiner_type: 'teacher' | 'expert' | null
-  /** 중단 규칙 ①(무의미 낱말·문장 읽기유창성 미실시) 판정 시각으로 쓰였으나, 그 규칙 자체가
-   *  폐기되어(담당자 확정 2026-08-13) 더 이상 쓰이지 않는다. 컬럼 삭제 전까지 과거 수집분의
-   *  값만 남아 있다 — 조회 전용 */
-  discontinued_at: string | null
 }
 
 export interface RecordingRow {
@@ -253,7 +249,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type, discontinued_at'
+const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

@@ -19,6 +19,7 @@ Supabase CLI를 쓰지 않는다 — **SQL Editor에서 번호 순서대로 직�
 | `011_scoring.sql` | 어절 수 점수 테이블(`sentence_scores`)·검사자 구분(`examiner_type`) |
 | `012_discontinued.sql` | 중단 규칙 ① 적용 시각(`discontinued_at`) — 진행률 분모 판정 |
 | `013_discontinued_comment.sql` | 위 컬럼 주석만 갱신(스키마 변경 없음) — 규칙 ①의 미실시 범위가 문장·쓰기에서 무의미·문장으로 바뀜(담당자 확정 2026-08-11) |
+| `014_drop_discontinued.sql` | `discontinued_at` 컬럼 제거(중단 규칙 폐기 — 담당자 확정 2026-08-13) |
 
 ## 설계 메모
 
