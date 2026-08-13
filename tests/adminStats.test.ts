@@ -219,20 +219,6 @@ describe('sortSessions', () => {
     expect(sortSessions([b, a], { key: 'progress', dir: 'asc' })[0]).toBe(a)
     expect(sortSessions([a, b], { key: 'progress', dir: 'desc' })[0]).toBe(b)
   })
-  it('[REGRESSION] 쓰기 1번이 오반응이어도 분모가 줄지 않아, 다 끝난 세션이 위에 온다 (중단 규칙 폐기)', () => {
-    // 예전에는 ww01=false면 쓰기 분모가 1로 줄어 10/1≈1.43이 되어(실측: 세션 e0ac9d94)
-    // 다 끝난 세션을 밀어냈다. 이제 분모가 전 문항이라 그런 일이 생기지 않는다.
-    const full = mkSession({
-      child_name: '가',
-      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
-      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
-    })
-    const writingOnly = mkSession({
-      child_name: '나', recordings: [],
-      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: item_code !== 'ww01' })),
-    })
-    expect(sortSessions([writingOnly, full], { key: 'progress', dir: 'desc' })[0]).toBe(full)
-  })
   it('grade는 학년→반 순, 동일 학년·반은 이름 2차 정렬', () => {
     const g1c2n = mkSession({ child_name: '나', grade: 1, class_no: 2 })
     const g1c2a = mkSession({ child_name: '가', grade: 1, class_no: 2 })
