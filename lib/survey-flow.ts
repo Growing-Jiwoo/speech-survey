@@ -1,6 +1,6 @@
 // lib/survey-flow.ts — 검사 진행 흐름 규칙. 순수 함수만 둔다.
 // 중단 규칙(①·②)과 현장 채점은 2026-08-13 담당자 확정으로 폐기됐다 — 검사 화면은 수집만
-// 하고, 판정·채점은 전부 관리자 결과지가 한다(스펙: 2026-08-13-admin-only-scoring-and-class-codes).
+// 하고, 판정·채점은 전부 관리자 결과지가 한다(스펙: docs/superpowers/specs/2026-08-13-admin-only-scoring-and-class-codes-design.md).
 // ⚠️ 검사지에 인쇄된 중단 규칙 문구는 적용하지 않는다 — 시행 절차는 담당자 회신이 우선한다.
 import type { FormItems, SurveyItem } from './items'
 
