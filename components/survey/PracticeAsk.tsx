@@ -1,6 +1,6 @@
 // components/survey/PracticeAsk.tsx — 연습 실시 여부 선택(마이크 확인 다음, 본 검사 진입 전).
 // 같은 아동이 여러 번 검사할 수 있어 매번 연습을 강요하지 않는다(사용자 확정 2026-08-12).
-// 검사자가 고르는 화면이므로 아동 화면과 톤을 달리해 blue 표식을 쓴다(MarkPage와 같은 규칙).
+// 검사자가 고르는 화면이므로 아동 화면과 톤을 달리해 blue 표식을 쓴다.
 'use client'
 import { Blip } from '@/components/Blip'
 
