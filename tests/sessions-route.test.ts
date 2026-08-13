@@ -40,7 +40,7 @@ describe('POST /api/sessions', () => {
       schoolRegion: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
       birthYmd: '190101', grade: 1, classNo: 3, gender: '남',
       childName: '김도연', teacherName: '박선생',
-      teacherPhone: '010-1234-5678', teacherEmail: null,
+      teacherPhone: '01012345678', teacherEmail: null,
       examinerType: 'teacher',
     })
   })
