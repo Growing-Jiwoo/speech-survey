@@ -1,16 +1,18 @@
 // POST /api/sessions/verify-code — 학급 코드 조회(검사 시작 전 확인 모달 데이터).
-// 공개 라우트 — 코드가 곧 접근 수단이므로 세션 생성과 같은 레이트리밋으로 코드 열거를 막는다.
+// 공개 라우트 — 코드가 곧 접근 수단이므로 코드 열거를 막기 위해 레이트리밋을 둔다.
+// 단, sessions 라우트보다 훨씬 높은 전용 상한을 쓴다 — 학교 건물 전체가 IP 하나(NAT)를
+// 공유하고, 확인 모달 재시도(오타·[아니에요])마다 이 상한을 소비하며, 여러 PC 동시 검사가
+// 전제이기 때문이다. 이유 전문은 lib/request.ts의 VERIFY_CODE_RATE_LIMIT 주석 참고.
 // ⚠️ 검사한 번호 목록은 반환하지 않는다 — 시작 화면은 아동 앞의 PC이고 학급 안에서 번호는
 // 사실상 이름이다. 물어본 그 번호의 상태(alreadyTested)만 답한다(스펙 "중복 검사 경고").
 import { NextResponse } from 'next/server'
 import { childTestState, findClassCode } from '@/lib/db'
 import { verifyCodeSchema } from '@/lib/schema'
-import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
+import { clientIp, createRateLimiter, jsonError, VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS } from '@/lib/request'
 
 export const runtime = 'nodejs'
 
-// 정책값(숫자)은 sessions 라우트와 공유하지만(lib/request.ts 참고), 버킷은 이 라우트 전용으로 독립이다.
-const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
+const rateLimited = createRateLimiter(VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))

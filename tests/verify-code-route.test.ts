@@ -75,9 +75,9 @@ describe('POST /api/sessions/verify-code', () => {
     expect((await POST(req({ code: 'K7M2P9' }))).status).toBe(400)
     expect((await POST(req({ code: 'K7M2P9', childNo: 0 }))).status).toBe(400)
   })
-  it('같은 IP 21번째 요청은 429 (코드 열거 방지)', async () => {
+  it('같은 IP 301번째 요청은 429 (코드 열거 방지, 다중 PC 동시 검사를 감안한 높은 상한)', async () => {
     let last = 0
-    for (let i = 0; i < 21; i++) last = (await POST(req({ code: 'K7M2P9', childNo: 3 }, '9.9.9.9'))).status
+    for (let i = 0; i < 301; i++) last = (await POST(req({ code: 'K7M2P9', childNo: 3 }, '9.9.9.9'))).status
     expect(last).toBe(429)
   })
 })

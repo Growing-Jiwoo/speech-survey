@@ -10,7 +10,8 @@ import { sessionCreateSchema } from '@/lib/schema'
 
 export const runtime = 'nodejs'
 
-// 정책값(숫자)은 verify-code 라우트와 공유하지만(lib/request.ts 참고), 버킷은 이 라우트 전용으로 독립이다.
+// verify-code보다 빡빡한 상한 — 방어 대상이 스팸 세션 행 생성이라서다. 두 라우트가 왜
+// 다른 상한을 쓰는지는 lib/request.ts의 VERIFY_CODE_RATE_LIMIT 주석 참고.
 const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
