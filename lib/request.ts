@@ -22,3 +22,25 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 /** `{ error }` JSON 에러 응답 축약. 메시지는 내부 정보 없는 사용자용 문구만 담을 것. */
 export const jsonError = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status })
+
+/** best-effort 인메모리 IP 레이트리미터. 서버리스에서는 인스턴스별 독립이라 완벽한
+ *  전역 방어는 아니며, 스팸성 요청에 마찰을 주는 목적이다. sweepEvery번째 요청마다
+ *  만료 키를 걷어내 장수 인스턴스의 메모리 단조 증가를 막는다. */
+export function createRateLimiter(limit: number, windowMs: number, sweepEvery = 100) {
+  const hits = new Map<string, number[]>()
+  let counter = 0
+  return function rateLimited(ip: string): boolean {
+    const now = Date.now()
+    if (++counter % sweepEvery === 0) {
+      for (const [key, times] of hits) {
+        const alive = times.filter(t => now - t < windowMs)
+        if (alive.length === 0) hits.delete(key)
+        else hits.set(key, alive)
+      }
+    }
+    const recent = (hits.get(ip) ?? []).filter(t => now - t < windowMs)
+    recent.push(now)
+    hits.set(ip, recent)
+    return recent.length > limit
+  }
+}

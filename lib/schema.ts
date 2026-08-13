@@ -93,3 +93,6 @@ export const classCodeCreateSchema = z.object({
 }).refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
   { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
 export type ClassCodeCreateInput = z.infer<typeof classCodeCreateSchema>
+
+/** POST /api/sessions/verify-code 바디 */
+export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema })
