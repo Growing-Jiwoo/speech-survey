@@ -3,7 +3,6 @@ import type { SessionListRow } from '@/lib/db'
 import {
   sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds,
-  expectedTotals,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -75,6 +74,25 @@ describe('sessionProgress', () => {
     const p = sessionProgress(s)
     expect(p.recorded).toBe(2)
     expect(p.recorded).toBeLessThanOrEqual(p.expected.rec)
+  })
+
+  it('쓰기 1번이 0점이어도 분모·분자는 전 문항 기준이다 (중단 규칙 폐기)', () => {
+    const s = mkSession({ writing_answers: [{ item_code: 'ww01', can_write: false }] })
+    const p = sessionProgress(s)
+    expect(p.expected.write).toBe(10)
+    expect(p.written).toBe(1)
+    expect(p.incomplete).toBe(true)
+  })
+
+  it('[REGRESSION] ww01이 0점이고 나머지 9문항을 다 써도 분자는 10이다 (쓰기 10 / 10)', () => {
+    // 예전에는 "쓰기 1 / 1 · 완료"로 떠, 실제로 쓴 나머지 9개가 분자에서 빠졌다.
+    const s = mkSession({
+      recordings: RECORDING_CODES.map(item_code => ({ item_code })),
+      writing_answers: G1_WRITE.map((item_code, i) => ({ item_code, can_write: i > 0 })),
+    })
+    const p = sessionProgress(s)
+    expect([p.written, p.expected.write]).toEqual([10, 10])
+    expect(p.incomplete).toBe(false)
   })
 
   it('G2 세션에서 문장 쓰기가 4개면 미완료다', () => {
@@ -201,20 +219,19 @@ describe('sortSessions', () => {
     expect(sortSessions([b, a], { key: 'progress', dir: 'asc' })[0]).toBe(a)
     expect(sortSessions([a, b], { key: 'progress', dir: 'desc' })[0]).toBe(b)
   })
-  it('[REGRESSION] 규칙 ②가 옛 세션에 소급 적용돼 분자>분모가 돼도 progress는 1을 넘지 않는다 ' +
-    '(실측: 세션 e0ac9d94 — discontinued_at:null인데 ww01=false라 쓰기 분모가 1로 줄어 10/1이 됨)', () => {
+  it('[REGRESSION] 쓰기 1번이 오반응이어도 분모가 줄지 않아, 다 끝난 세션이 위에 온다 (중단 규칙 폐기)', () => {
+    // 예전에는 ww01=false면 쓰기 분모가 1로 줄어 10/1≈1.43이 되어(실측: 세션 e0ac9d94)
+    // 다 끝난 세션을 밀어냈다. 이제 분모가 전 문항이라 그런 일이 생기지 않는다.
     const full = mkSession({
-      child_name: '가', discontinued_at: null,
+      child_name: '가',
       recordings: RECORDING_CODES.map(item_code => ({ item_code })),
       writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
     })
-    const retroactivelyOverfull = mkSession({
-      child_name: '나', discontinued_at: null, recordings: [],
-      // ww01만 false(규칙 ② 판정 문항) — 나머지 9개는 응답 있음. 클램프 없으면 10/7≈1.43으로
-      // 위 full(16/16=1)보다 커져 다 끝난 세션을 밀어낸다.
+    const writingOnly = mkSession({
+      child_name: '나', recordings: [],
       writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: item_code !== 'ww01' })),
     })
-    expect(sortSessions([retroactivelyOverfull, full], { key: 'progress', dir: 'desc' })[0]).toBe(full)
+    expect(sortSessions([writingOnly, full], { key: 'progress', dir: 'desc' })[0]).toBe(full)
   })
   it('grade는 학년→반 순, 동일 학년·반은 이름 2차 정렬', () => {
     const g1c2n = mkSession({ child_name: '나', grade: 1, class_no: 2 })
@@ -300,86 +317,5 @@ describe('URL 직렬화', () => {
     const sort = { key: 'progress' as const, dir: 'asc' as const }
     const qs = filtersToQuery(filters, sort)
     expect(parseFilters(new URLSearchParams(qs))).toEqual({ filters, sort })
-  })
-})
-
-describe('중단 규칙이 적용된 세션의 진행률 (규칙대로 끝난 검사를 미완료로 세지 않기 위함)', () => {
-  // 규칙 ① 세션: 무의미 낱말도 실시하지 않으므로 녹음 분모가 1(의미 낱말)이다.
-  // 쓰기는 실시한다 — 쓰기가 비면 미완료가 맞다.
-  it('① 세션은 의미 낱말 녹음 1건 + 쓰기 전체로 완료다', () => {
-    const s = mkSession({
-      discontinued_at: '2026-08-10T01:00:00.000Z',
-      recordings: [{ item_code: 'p_rw_meaning' }],
-      writing_answers: G1_WRITE.map(item_code => ({ item_code, can_write: true })),
-    })
-    expect(sessionProgress(s).incomplete).toBe(false)
-    expect(sessionProgress(s).expected).toEqual({ rec: 1, write: 10 })
-  })
-
-  it('① 세션이라도 쓰기가 비면 미완료다 (쓰기는 실시하는 과제다)', () => {
-    const s = mkSession({
-      discontinued_at: '2026-08-10T01:00:00.000Z',
-      recordings: [{ item_code: 'p_rw_meaning' }],
-      writing_answers: [],
-    })
-    expect(sessionProgress(s).incomplete).toBe(true)
-  })
-
-  it('① 세션에서 쓰기 1번이 0점이면(규칙 ②) 쓰기 분모도 1이다', () => {
-    const s = mkSession({
-      discontinued_at: '2026-08-10T01:00:00.000Z',
-      recordings: [{ item_code: 'p_rw_meaning' }],
-      writing_answers: [{ item_code: 'ww01', can_write: false }],
-    })
-    expect(sessionProgress(s).incomplete).toBe(false)
-    expect(sessionProgress(s).expected).toEqual({ rec: 1, write: 1 })
-  })
-
-  it('중단되지 않은 같은 데이터는 미완료다', () => {
-    const s = mkSession({
-      discontinued_at: null,
-      recordings: [{ item_code: 'p_rw_meaning' }],
-      writing_answers: [{ item_code: 'ww01', can_write: true }],
-    })
-    expect(sessionProgress(s).incomplete).toBe(true)
-  })
-
-  // 항목 7 — 실제 세션 899b51db: ww01=X, ww02~10=O가 저장돼 "낱말 쓰기 10 / 1"로 보였다.
-  it('② 세션의 분자도 실시 문항만 센다 — 10 / 1이 아니라 1 / 1', () => {
-    const s = mkSession({
-      recordings: [{ item_code: 'p_rw_meaning' }, { item_code: 'p_rs01' }],
-      writing_answers: G1_WRITE.map((item_code, i) => ({ item_code, can_write: i > 0 })),
-    })
-    const p = sessionProgress(s)
-    expect([p.written, p.expected.write]).toEqual([1, 1])
-    // 녹음은 6페이지 중 2페이지만 올라왔으므로 여전히 미완료다(중단 규칙 ①이 아니다)
-    expect([p.recorded, p.expected.rec]).toEqual([2, 6])
-    expect(p.incomplete).toBe(true)
-  })
-
-  it('중단이 아니면 분자는 저장된 쓰기 답 전체다 (기존 동작 보존)', () => {
-    const s = mkSession({ writing_answers: G1_WRITE.slice(0, 4).map(item_code => ({ item_code, can_write: true })) })
-    expect(sessionProgress(s).written).toBe(4)
-  })
-
-  it('expectedTotals: 중단 여부·학년·쓰기 답으로 분모가 갈린다', () => {
-    expect(expectedTotals(mkSession({ grade: 1 }))).toEqual({ rec: 6, write: 10 })
-    expect(expectedTotals(mkSession({ grade: 2 }))).toEqual({ rec: 6, write: 5 })
-    const disc = '2026-08-10T01:00:00.000Z'
-    expect(expectedTotals(mkSession({ discontinued_at: disc, grade: 1 })))
-      .toEqual({ rec: 1, write: 10 })
-    expect(expectedTotals(mkSession({ discontinued_at: disc, grade: 2 })))
-      .toEqual({ rec: 1, write: 5 })
-    // 규칙 ② — 1번 문항 0점이 저장돼 있으면 쓰기 분모가 1로 준다
-    expect(expectedTotals(mkSession({
-      grade: 2, sentence_scores: [{ item_code: 'sw01', words: 0 }],
-    }))).toEqual({ rec: 6, write: 1 })
-    expect(expectedTotals(mkSession({
-      grade: 1, writing_answers: [{ item_code: 'ww01', can_write: false }],
-    }))).toEqual({ rec: 6, write: 1 })
-    // 1점은 오반응이 아니다 — 분모 전체 유지
-    expect(expectedTotals(mkSession({
-      grade: 2, sentence_scores: [{ item_code: 'sw01', words: 1 }],
-    }))).toEqual({ rec: 6, write: 5 })
   })
 })

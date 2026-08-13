@@ -3,13 +3,10 @@
 // 흘려 한두 줄에 담는다. 가로 스크롤 없음.
 import { KIND_LABEL, type SurveyItem } from '@/lib/items'
 
-export function WritingChips({ items, writing, implemented }: {
+export function WritingChips({ items, writing }: {
   items: SurveyItem[]
   /** itemCode → 정확히 쓴 어절 수(낱말 쓰기는 0/1). 미응답은 키 없음 */
   writing: Partial<Record<string, number>>
-  /** 실제로 실시된 문항 코드 — 중단 규칙 ② 이후 문항은 값이 남아 있어도 '미실시'로 적는다.
-   *  총점에서도 빠지므로(scoreSession), 여기서 O/X를 보여주면 총점과 어긋난다. */
-  implemented: Set<string>
 }) {
   const groups = (['meaning', 'nonsense'] as const)
     .map(kind => ({ kind, items: items.filter(i => i.kind === kind) }))
@@ -23,18 +20,17 @@ export function WritingChips({ items, writing, implemented }: {
             {KIND_LABEL[g.kind]} 낱말
           </span>
           {g.items.map(item => {
-            const na = !implemented.has(item.code)
-            const v = na ? undefined : writing[item.code]
+            const v = writing[item.code]
             const ok = v === undefined ? undefined : v >= 1
             return (
               <span key={item.code}
-                aria-label={`${item.text} ${na ? '미실시' : ok === undefined ? '미응답' : ok ? '정반응' : '오반응'}`}
-                className={`inline-flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 ${
-                  na ? 'bg-well opacity-60' : 'bg-white'}`}>
+                aria-label={`${item.text} ${ok === undefined ? '미응답' : ok ? '정반응' : '오반응'}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-2.5 py-1.5">
                 <span className="font-read text-[16px]">{item.text}</span>
+                {/* 미응답은 '—' — 0점(오반응)과 구분해야 한다. */}
                 <b className={`font-read text-[15px] ${
                   ok === undefined ? 'text-ink-mute' : ok ? 'text-mint' : 'text-rec-deep'}`}>
-                  {na ? <span className="text-[11px] font-bold">미실시</span> : ok === undefined ? '—' : ok ? 'O' : 'X'}
+                  {ok === undefined ? '—' : ok ? 'O' : 'X'}
                 </b>
               </span>
             )

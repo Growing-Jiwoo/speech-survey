@@ -89,8 +89,25 @@ describe('scoreSession — 합산', () => {
     expect(score({ writing: { ww01: 1, ww02: 0, ww03: 1 } }).writing).toBe(2)
   })
 
+  it('낱말 쓰기 만점은 10점', () => {
+    expect(score({ writing: Object.fromEntries(WRITE_ALL.map(c => [c, 1])) }).writing).toBe(10)
+  })
+
   it('낱말 해독 만점', () => {
     expect(score({ marks: Object.fromEntries(READ_ALL.map(c => [c, true])) }).wordReading).toBe(14)
+  })
+
+  it('[REGRESSION] 의미 낱말 첫 3개가 X여도 저장된 무의미·문장·쓰기 점수는 전부 산입된다', () => {
+    // 예전 중단 규칙 ①이 걸리던 입력이다. 이제 읽은 것·쓴 것은 전부 산입한다
+    // (담당자 확정 2026-08-13 — 중단 규칙 폐기).
+    const r = score({
+      marks: { rw01: false, rw02: false, rw03: false, rw08: true },
+      sentences: { rs01: 5 },
+      writing: { ww01: 0, ww02: 1 },
+    })
+    expect(r.wordNonsense).toBe(1)
+    expect(r.sentenceReading).toBe(5)
+    expect(r.writing).toBe(1)
   })
 })
 
@@ -156,7 +173,7 @@ describe('낱말 쓰기 의미/무의미 소계', () => {
   })
 })
 
-describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하지 않기 위한 근거)', () => {
+describe('채점 완료 여부 (채점 전을 0점 Fail로 표시하지 않기 위한 근거)', () => {
   const allRead = Object.fromEntries(READ_ALL.map(c => [c, true]))
   const allSent = { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }
   const allWrite = Object.fromEntries(WRITE_ALL.map(c => [c, 1]))
@@ -165,8 +182,8 @@ describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하�
     expect(score({}).complete).toEqual({ wordReading: false, sentenceReading: false, writing: false })
   })
 
-  it('현장 채점(의미 7개)만 있으면 낱말 해독은 아직 미완료다', () => {
-    // 무의미 낱말은 검사자가 현장에서 표시하지 않는다 — 관리자가 녹음을 듣고 채점해야 완료다.
+  it('의미 낱말 7개만 채점됐으면 낱말 해독은 아직 미완료다', () => {
+    // 채점은 관리자가 녹음을 듣고 전 문항에 대해 한다 — 무의미까지 찍어야 완료다.
     const r = score({ marks: Object.fromEntries(g1.meaningReadCodes.map(c => [c, true])) })
     expect(r.wordReading).toBe(7)
     expect(r.complete.wordReading).toBe(false)
@@ -177,8 +194,7 @@ describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하�
       .toEqual({ wordReading: true, sentenceReading: true, writing: true })
   })
 
-  it('옛 규칙으로 전 문항 실시된 세션도 낱말 해독은 완료다 (소급 세션)', () => {
-    // 무의미까지 채점된 세션 — 새 규칙 ①이 걸려도 complete는 유지된다.
+  it('의미 낱말이 여러 개 오반응이어도 전 문항이 채점됐으면 낱말 해독은 완료다', () => {
     const r = score({ marks: { ...allRead, rw01: false, rw02: false, rw03: false } })
     expect(r.complete.wordReading).toBe(true)
     expect(r.complete.sentenceReading).toBe(false)
@@ -187,11 +203,10 @@ describe('채점 완료 여부 (미실시·채점 전을 0점 Fail로 표시하�
     expect(r.sentenceReading).toBe(0)
   })
 
-  it('중단 규칙 ②(G2): 첫 문장이 0점이면 그것만 채워도 완료다', () => {
-    const r = scoreSession(G2, { ...empty, writing: { sw01: 0 } })
-    expect(r.complete.writing).toBe(true)
-    // 1점(부분 정답)이면 중단이 아니므로 나머지도 채워야 완료다
-    expect(scoreSession(G2, { ...empty, writing: { sw01: 1 } }).complete.writing).toBe(false)
+  it('쓰기 완료는 전 문항 입력 기준이다 (중단 규칙 폐기 — 담당자 확정 2026-08-13)', () => {
+    expect(score({ writing: { sw01: 0 } }, G2).complete.writing).toBe(false)
+    const all = Object.fromEntries(g2.writingItems.map(i => [i.code, 0]))
+    expect(score({ writing: all }, G2).complete.writing).toBe(true)
   })
 
   it('문장 하나라도 비면 미완료다', () => {
@@ -238,80 +253,6 @@ describe('scoreInputFrom — 저장된 행을 채점 입력으로', () => {
   })
 })
 
-describe('중단 규칙과 채점 (discontinued — 판정을 Pass/Fail이 아니라 중단으로)', () => {
-  const MEANING = g1.meaningReadCodes
-  const ceilingMarks = Object.fromEntries(MEANING.map((c, i) => [c, i >= 3]))  // 첫 3개 X, 나머지 O
-
-  it('① 세션: 의미 7문항만 채점되면 낱말 해독은 완료다 (무의미는 미실시)', () => {
-    const r = score({ marks: ceilingMarks })
-    expect(r.complete.wordReading).toBe(true)
-    expect(r.wordReading).toBe(4)          // 의미 4문항 정반응, 무의미 기여 0
-  })
-
-  it('① 세션: discontinued가 낱말 해독·문장 읽기유창성에 선다', () => {
-    const r = score({ marks: ceilingMarks })
-    expect(r.discontinued).toEqual({ wordReading: true, sentenceReading: true, writing: false })
-  })
-
-  it('중단 아닌 세션: 의미만 채점됐으면 여전히 미완료다 (기존 동작 보존)', () => {
-    const okMarks = Object.fromEntries(MEANING.map(c => [c, true]))
-    const r = score({ marks: okMarks })
-    expect(r.complete.wordReading).toBe(false)
-    expect(r.discontinued.wordReading).toBe(false)
-  })
-
-  it('② 세션: 쓰기 1번 0점이면 discontinued.writing — 1번만으로 완료다', () => {
-    const r = score({ writing: { ww01: 0 } })
-    expect(r.discontinued.writing).toBe(true)
-    expect(r.complete.writing).toBe(true)
-    const r2 = score({ writing: { sw01: 0 } }, G2)
-    expect(r2.discontinued.writing).toBe(true)
-    expect(r2.complete.writing).toBe(true)
-  })
-
-  // 사후 중단 — 관리자가 녹음을 듣고 의미 낱말을 고쳐 뒤늦게 ①이 성립하는 경로.
-  // 검사 당시엔 실시된 무의미 낱말·문장 점수가 이미 저장돼 있다(사용자 보고 2026-08-12).
-  it('① 성립 후에는 무의미 낱말·문장 점수를 총점에서 뺀다 (값이 남아 있어도)', () => {
-    const marks = { ...Object.fromEntries(READ_ALL.map(c => [c, true])), rw01: false, rw02: false, rw03: false }
-    const r = score({ marks, sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 } })
-    expect(r.wordMeaning).toBe(4)      // 의미 낱말 4개 정반응 — 실시된 과제라 남는다
-    expect(r.wordNonsense).toBe(0)     // 무의미 7개가 O로 저장돼 있어도 미실시
-    expect(r.wordReading).toBe(4)
-    expect(r.sentenceReading).toBe(0)  // 36점이 저장돼 있어도 미실시
-  })
-
-  it('의미 낱말 O/X를 되돌리면 뺐던 점수가 그대로 살아난다 (파생값)', () => {
-    const marks = Object.fromEntries(READ_ALL.map(c => [c, true]))
-    const sentences = { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }
-    const r = score({ marks, sentences })
-    expect([r.wordNonsense, r.sentenceReading]).toEqual([7, 36])
-  })
-
-  it('중단이 없으면 discontinued는 전부 false — Pass/Fail 경로가 그대로다', () => {
-    expect(score({}).discontinued)
-      .toEqual({ wordReading: false, sentenceReading: false, writing: false })
-  })
-
-  // 항목 10 — 검사자가 2번 이후를 먼저 채점하고 1번을 마지막에 오반응으로 찍은 세션이
-  // 실제로 저장돼 있다(운영 DB 899b51db: ww01=X, ww02~10=O).
-  it('② 세션: 중단 이후 문항에 값이 남아 있어도 총점에 더하지 않는다', () => {
-    const r = score({ writing: { ww01: 0, ww02: 1, ww03: 1, ww04: 1, ww05: 1, ww06: 1, ww07: 1, ww08: 1, ww09: 1, ww10: 1 } })
-    expect(r.writing).toBe(0)
-    expect([r.writeMeaning, r.writeNonsense]).toEqual([0, 0])
-    expect(r.discontinued.writing).toBe(true)
-  })
-
-  it('② 세션(G2)도 같다 — 첫 문장 0점이면 2~5번 어절 점수는 총점에서 빠진다', () => {
-    const r = score({ writing: { sw01: 0, sw02: 2, sw03: 2, sw04: 2, sw05: 2 } }, G2)
-    expect(r.writing).toBe(0)
-  })
-
-  it('1번이 정반응이면 뒤 문항이 모두 합산된다 (절삭이 정상 경로를 건드리지 않는다)', () => {
-    const all = Object.fromEntries(WRITE_ALL.map(c => [c, 1]))
-    expect(score({ writing: all }).writing).toBe(10)
-  })
-})
-
 describe('sheetPdfGate — 채점이 끝나기 전에는 공식 PDF를 내려받지 않는다', () => {
   const ALL_MARKS = Object.fromEntries(READ_ALL.map(c => [c, true]))
   const ALL_SENT = Object.fromEntries(g1.sentenceItems.map(i => [i.code, 1]))
@@ -335,12 +276,6 @@ describe('sheetPdfGate — 채점이 끝나기 전에는 공식 PDF를 내려받
   it('쓰기만 비어 있으면 경고만 하고 통과시킨다 — 결과지에서 채울 수 없는 값이다', () => {
     const gate = sheetPdfGate(score({ marks: ALL_MARKS, sentences: ALL_SENT }), false)
     expect(gate).toMatchObject({ reason: 'unscored', tasks: ['writing'], overridable: true })
-  })
-
-  it('중단으로 실시하지 않은 과제는 관문에 걸리지 않는다 (채점할 것이 없다)', () => {
-    // ① 의미 낱말 첫 3개 X → 무의미·문장 미실시, ② 쓰기 1번 0점 → 쓰기도 중단
-    const marks = Object.fromEntries(g1.meaningReadCodes.map((c, i) => [c, i >= 3]))
-    expect(sheetPdfGate(score({ marks, writing: { ww01: 0 } }), false)).toBeNull()
   })
 })
 
@@ -374,18 +309,11 @@ describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기�
     expect(withUnrecordedDefaults(g1, empty, all)).toEqual(empty)
   })
 
-  it('중단 규칙 ① 세션에서는 무의미·문장에 0점을 넣지 않는다 (미실시는 0점이 아니다)', () => {
-    const marks = Object.fromEntries(g1.meaningReadCodes.map((c, i) => [c, i >= 3]))
-    const out = withUnrecordedDefaults(g1, { ...empty, marks }, none)
-    expect(g1.nonsenseReadCodes.every(c => out.marks[c] === undefined)).toBe(true)
-    expect(g1.sentenceItems.every(i => out.sentences[i.code] === undefined)).toBe(true)
-  })
-
-  it('의미 낱말 자체가 미녹음이면 X 7개가 채워지고, 그로써 성립한 중단 이후는 비운다', () => {
+  it('[REGRESSION] 의미 낱말 첫 3개가 X로 채워져도 무의미·문장까지 전부 기본채점한다 (중단 규칙 폐기)', () => {
     const out = withUnrecordedDefaults(g1, empty, none)
-    expect(g1.meaningReadCodes.every(c => out.marks[c] === false)).toBe(true)
-    expect(g1.nonsenseReadCodes.every(c => out.marks[c] === undefined)).toBe(true)
-    expect(scoreSession(G1, out).discontinued.wordReading).toBe(true)
+    expect(Object.keys(out.marks)).toHaveLength(14)          // 의미 7 + 무의미 7 전부 X
+    expect(Object.values(out.marks).every(v => v === false)).toBe(true)
+    expect(Object.keys(out.sentences)).toHaveLength(4)       // 문장 4개 전부 0
   })
 
   it('쓰기 과제는 손대지 않는다 (녹음이 없는 과제라 미녹음 판정 대상이 아니다)', () => {

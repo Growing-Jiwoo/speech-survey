@@ -93,7 +93,7 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
         id: 'progress', header: '진행률',
         meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-3', tdClassName: 'px-4' },
         cell: ({ row }) => {
-          // 분모는 행마다 다르다 — 학년별 검사지 문항 수와 중단 규칙이 반영된 값이다.
+          // 분모는 행마다 다르다 — 그 아동의 학년 검사지 문항 수다.
           const p = sessionProgress(row.original)
           return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
         },
@@ -215,8 +215,7 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
             desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',
           },
         ]}
-        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준입니다(1학년 쓰기 10문항 · 2학년 5문항).
-          중단 규칙으로 끝난 검사는 낱말 해독까지가 전부라, 그만큼만 채워지면 완료로 봅니다.</>}
+        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준입니다(1학년 쓰기 10문항 · 2학년 5문항).</>}
       />
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">

@@ -3,7 +3,6 @@ import { formForGrade } from '@/lib/forms'
 import type { FormItems, Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
 import { scoreInputFrom } from '@/lib/scoring'
-import { requiredWritingCodes, writingCeilingHit } from '@/lib/survey-flow'
 
 export type { Totals }
 
@@ -36,28 +35,6 @@ export function kstDateKey(d: Date): string {
 
 // ---------- 집계 ----------
 
-/** 이 세션에서 "전부"에 해당하는 분모. 중단 규칙이 실시 범위를 줄인다:
- *  · 규칙 ①(discontinued_at) — 무의미 낱말·문장을 실시하지 않아 녹음 분모가 1(의미 낱말)
- *  · 규칙 ② — 쓰기 1번 문항 오반응이면 쓰기 분모가 1
- *  ②는 컬럼이 아니라 저장된 쓰기 답에서 파생한다. 관리자가 1번을 0→1로 고치면 분모가
- *  전체로 돌아와 "미완료"가 되는데, 그 아동은 중단되지 말았어야 했으므로 그것이 정확하다
- *  (컬럼으로 박으면 잘못 중단된 검사가 영원히 "정상 완료"로 남는다 — 스펙 참고). */
-export function expectedTotalsFor(
-  f: FormItems, discontinued: boolean, writing: Partial<Record<string, number>>,
-): Totals {
-  return {
-    rec: (discontinued ? f.recordingPages.filter(p => p.kind === 'meaning') : f.recordingPages).length,
-    write: writingCeilingHit(f, writing) ? 1 : f.writingItems.length,
-  }
-}
-
-export function expectedTotals(
-  s: Pick<SessionListRow, 'discontinued_at' | 'grade' | 'writing_answers' | 'sentence_scores'>,
-): Totals {
-  const f = itemsFor(formForGrade(s.grade))
-  return expectedTotalsFor(f, !!s.discontinued_at, writingOf(f, s))
-}
-
 /** 목록 행의 쓰기 답(itemCode → 어절 수). 쓰기 답이 두 테이블에 나뉘어 있는 사실은
  *  scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다. */
 function writingOf(
@@ -79,11 +56,8 @@ export function sessionProgress(s: SessionListRow): {
   // ("녹음 18/6"). 실제로 운영 DB에 그런 세션이 남아 있다.
   const recCodes = new Set(f.recordingPages.map(p => p.code))
   const recorded = new Set(s.recordings.map(r => r.item_code).filter(c => recCodes.has(c))).size
-  // 분자도 분모와 같은 기준으로 센다 — 중단 규칙 ②로 실시하지 않은 문항에 값이 남아 있어도
-  // 세지 않는다(그러지 않으면 "낱말 쓰기 10 / 1"이 된다 — 사용자 보고 항목 7).
-  const required = requiredWritingCodes(f, f.writingItems, writing)
-  const written = [...required].filter(c => writing[c] !== undefined).length
-  const expected = expectedTotalsFor(f, !!s.discontinued_at, writing)
+  const written = f.writingItems.filter(i => writing[i.code] !== undefined).length
+  const expected = f.totals
   return { recorded, written, expected, incomplete: recorded < expected.rec || written < expected.write }
 }
 
@@ -152,14 +126,13 @@ export function sortSessions(rows: SessionListRow[], sort: Sort): SessionListRow
   const NO_SUBMIT = { asc: Number.POSITIVE_INFINITY, desc: Number.NEGATIVE_INFINITY }
   // progress 정렬 값은 사전 계산 — 비교자 안에서 행마다 반복 호출하면(내부에서 Set 생성)
   // 5,000행 기준 수만 회의 불필요한 할당이 생긴다.
-  // 분모는 행마다 다르다(학년별 문항 수 · 중단 규칙) — 비율로 재야 학년이 섞인 목록에서 공정하다.
+  // 분모는 행마다 다르다(학년별 문항 수) — 비율로 재야 학년이 섞인 목록에서 공정하다.
   const progressOf = sort.key === 'progress'
     ? new Map(rows.map(s => {
         const p = sessionProgress(s)
         const denom = p.expected.rec + p.expected.write
-        // 규칙 ②가 옛 세션에 소급 적용되면 분자가 분모를 넘을 수 있다(실측: 세션
-        // e0ac9d94 — discontinued_at:null인데 ww01=false라 분모가 1로 줄어 10/1이 됨) —
-        // 다 끝난 세션보다 위로 오지 않도록 1에서 clamp.
+        // 분자가 분모를 넘는 일은 없어야 하지만, 넘더라도 다 끝난 세션보다 위로 오지
+        // 않도록 1에서 clamp한다(옛 데이터에 대한 방어).
         return [s.id, denom === 0 ? 0 : Math.min(1, (p.recorded + p.written) / denom)] as const
       }))
     : null

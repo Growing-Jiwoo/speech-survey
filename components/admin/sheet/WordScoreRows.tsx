@@ -12,14 +12,12 @@
 import type { ReactNode } from 'react'
 import type { SurveyItem } from '@/lib/items'
 
-export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
+export function WordScoreRows({ audio, items, marks, onMark }: {
   /** sticky 바에 앉는 플레이어(그룹 라벨 포함 — PageAudio) */
   audio: ReactNode
   items: SurveyItem[]
   marks: Partial<Record<string, boolean>>
   onMark: (code: string, v: boolean) => void
-  /** 중단 규칙으로 실시하지 않은 그룹 — 채점을 잠근다(찍으면 총점이 오염된다) */
-  locked?: boolean
 }) {
   return (
     <div className="relative border-t border-line">
@@ -39,13 +37,13 @@ export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
               <span className="font-read min-w-0 truncate text-[20px]">{item.text}</span>
               <div className="flex flex-none gap-1.5">
                 {([['O', true], ['X', false]] as const).map(([label, want]) => (
-                  <button key={label} type="button" aria-pressed={v === want} disabled={locked}
+                  <button key={label} type="button" aria-pressed={v === want}
                     aria-label={`${item.text} ${want ? '정반응' : '오반응'}`}
                     onClick={() => onMark(item.code, want)}
                     className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition ${
                       v === want
                         ? want ? 'border-mint bg-mint/10 text-mint' : 'border-rec bg-rec/10 text-rec-deep'
-                        : 'border-line bg-well text-ink-mute'} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                        : 'border-line bg-well text-ink-mute'}`}>
                     {label}
                   </button>
                 ))}

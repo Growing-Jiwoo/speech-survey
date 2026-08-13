@@ -202,7 +202,6 @@ describe('pages (화면·녹음 단위)', () => {
   it('진행률 분모는 페이지 기준 — 쓰기 문항 수가 양식마다 다르다', () => {
     expect(g1.totals).toEqual({ rec: 6, write: 10 })
     expect(g2.totals).toEqual({ rec: 6, write: 5 })
-    // 중단 규칙이 적용된 세션의 분모는 정적값이 아니라 adminStats.expectedTotalsFor가 계산한다
   })
 
   it('섹션 순서(단계)는 양식의 쓰기 과제를 따른다', () => {

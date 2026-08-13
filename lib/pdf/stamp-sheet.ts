@@ -8,7 +8,6 @@ import fontkit from '@pdf-lib/fontkit'
 import { itemsFor, type FormItems } from '@/lib/items'
 import { clampWords, scoreSession, type ScoreInput } from '@/lib/scoring'
 import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
-import { requiredWritingCodes } from '@/lib/survey-flow'
 import type { SurveyForm } from '@/lib/forms'
 import type { ChoiceGridLayout, ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
 
@@ -65,35 +64,27 @@ export async function stampSheet(input: StampInput): Promise<Uint8Array> {
 
   stampHeader(page, font, L, session)
   // 검사지 배열 순서: 의미 낱말 먼저, 그다음 무의미 낱말.
-  // ①이 걸리면 무의미는 실시하지 않은 것이라 O/X도 찍지 않는다 — 값이 남아 있어도(관리자가
-  // 뒤늦게 채점했더라도) 실시하지 않은 문항의 정오 판정을 공식 문서에 남기지 않는다.
   stampGrid(page, bold, L.wordReading,
-    r.discontinued.wordReading ? f.meaningReadCodes : [...f.meaningReadCodes, ...f.nonsenseReadCodes],
-    input.marks, L.fontSize)
+    [...f.meaningReadCodes, ...f.nonsenseReadCodes], input.marks, L.fontSize)
 
-  // 채점이 끝나지 않았거나 **중단으로 실시하지 않은** 과제는 소계·총점 칸을 비운다.
-  // 없는 데이터를 0으로 세어 찍으면 "실시하지 않았다"가 "0점을 받았다"로 둔갑한다.
-  // 중단 이후에는 아무 점수도 적지 않는다(사용자 확정 — 담당자 회신이 아니라 개발 판단이다).
+  // 채점이 끝나지 않은 과제는 소계·총점 칸을 비운다.
+  // 없는 데이터를 0으로 세어 찍으면 "채점하지 않았다"가 "0점을 받았다"로 둔갑한다.
   // 빈칸이 곧 표기다: 별도 안내 문구를 넣지 않기로 했다.
   // 종이 검사지에서도 채점하지 않은 칸은 비워 두므로, 빈칸이 곧 올바른 표기다.
-  //
-  // 의미 낱말은 중단이 발생하기 전에 실시·채점됐다 — 그 소계는 남긴다(스펙 표).
-  if (r.complete.wordReading) put(L.readScores.meaning, r.wordMeaning)
-  // 무의미·총점은 ①이 걸리면 실시하지 않은 것이라 비운다.
-  if (r.complete.wordReading && !r.discontinued.wordReading) {
+  if (r.complete.wordReading) {
+    put(L.readScores.meaning, r.wordMeaning)
     put(L.readScores.nonsense, r.wordNonsense)
     put(L.readScores.total, r.wordReading)
   }
   f.sentenceItems.forEach((item, i) => {
     const v = input.sentences[item.code]
     // 미입력 문항은 0을 찍지 않는다 — 0점과 미채점은 다르다.
-    // ①이 걸리면 문장 읽기유창성은 통째로 미실시라 문항별 점수도 비운다.
     // 값은 총점과 같은 clamp를 거쳐야 행의 합과 총점이 어긋나지 않는다(오입력·NaN 방지).
-    if (!r.discontinued.sentenceReading && v !== undefined && L.sentenceScores[i]) {
+    if (v !== undefined && L.sentenceScores[i]) {
       put(L.sentenceScores[i], clampWords(f, item.code, v))
     }
   })
-  if (r.complete.sentenceReading && !r.discontinued.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
+  if (r.complete.sentenceReading) put(L.sentenceTotal, r.sentenceReading)
 
   stampWriting(page, bold, L.writing, L.fontSize, f, input.writing, r, put)
 
@@ -115,20 +106,14 @@ function stampWriting(
   writing: Partial<Record<string, number>>, r: ReturnType<typeof scoreSession>,
   put: (slot: ScoreSlot, v: number) => void,
 ) {
-  // ②(1번 오반응)가 걸리면 2번 이후는 실시하지 않은 문항이다 — 값이 남아 있어도 찍지 않는다.
-  // 화면·검토 집계와 같은 함수로 "실시된 문항"을 판정해, 인쇄물이 화면과 어긋나지 않게 한다.
-  // ②가 아니면 전체 코드가 돌아오므로 ①만 걸린 세션의 쓰기는 그대로 다 찍힌다.
-  const required = requiredWritingCodes(f, f.writingItems, writing)
   if (layout.kind === 'word') {
     // 낱말 쓰기 값은 문항 만점이 1이라 1=정반응, 0=오반응이다.
     const marks = Object.fromEntries(
-      Object.entries(writing)
-        .filter(([code]) => required.has(code))
-        .map(([code, v]) => [code, v === undefined ? undefined : v >= 1]),
+      Object.entries(writing).map(([code, v]) => [code, v === undefined ? undefined : v >= 1]),
     )
     stampGrid(page, bold, layout.grid,
       [...f.meaningWriteCodes, ...f.nonsenseWriteCodes], marks, fontSize)
-    if (r.complete.writing && !r.discontinued.writing) {
+    if (r.complete.writing) {
       put(layout.scores.meaning, r.writeMeaning)
       put(layout.scores.nonsense, r.writeNonsense)
       put(layout.scores.total, r.writing)
@@ -137,13 +122,13 @@ function stampWriting(
   }
   f.writingItems.forEach((item, i) => {
     const v = writing[item.code]
-    if (v === undefined || !required.has(item.code)) return   // 미채점·미실시는 비워 둔다 (0점과 다르다)
+    if (v === undefined) return   // 미채점은 비워 둔다 (0점과 다르다)
     circleChoice(page, layout.choices, i, clampWords(f, item.code, v))
   })
-  if (r.complete.writing && !r.discontinued.writing) put(layout.total, r.writing)
+  if (r.complete.writing) put(layout.total, r.writing)
 }
 
-/** 낱말 격자: 낱말 오른쪽 여백에 O/X. 미실시(undefined)는 비워 둔다.
+/** 낱말 격자: 낱말 오른쪽 여백에 O/X. 미채점(undefined)은 비워 둔다.
  *  베이스라인을 낱말과 맞춘다 — 칸 위쪽에 찍으면 채점 대상보다 떠 보인다. */
 function stampGrid(
   page: PDFPage, font: PDFFont, g: WordGridLayout,
