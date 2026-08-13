@@ -39,14 +39,12 @@ describe('POST /api/sessions/submit', () => {
       writing: [{ itemCode: 'ww01', canWrite: true }, { itemCode: 'ww02', canWrite: false }],
       sentenceWriting: [],
       checklist: ['none'],
-      marks: [],
-      discontinued: false,
     })
   })
   it('답이 하나도 없어도 제출 가능', async () => {
     const res = await POST(makeReq({ sessionId: SID, sessionToken: TOKEN, writing: {}, checklist: [] }))
     expect(res.status).toBe(200)
-    expect(submitArg()).toMatchObject({ writing: [], sentenceWriting: [], checklist: [], marks: [] })
+    expect(submitArg()).toMatchObject({ writing: [], sentenceWriting: [], checklist: [] })
   })
   it('존재하지 않는 세션 404 (허위 성공 제거)', async () => {
     vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
@@ -93,29 +91,22 @@ describe('POST /api/sessions/submit', () => {
     expect(res.status).toBe(200)
     expect(submitArg().checklist).toEqual(['speech', 'attention'])
   })
-  it('marks에 의미 낱말 코드와 boolean이 오면 저장된다', async () => {
-    const res = await POST(makeReq({ ...VALID(), marks: { rw01: true, rw02: false } }))
+  it('[REGRESSION] marks를 보내도 무시된다 — 검사자 현장 채점은 폐기됐다 (담당자 확정 2026-08-13)', async () => {
+    const res = await POST(makeReq({ ...VALID(), marks: { rw01: false, rw02: false, rw03: false } }))
     expect(res.status).toBe(200)
-    expect(submitArg().marks)
-      .toEqual([{ itemCode: 'rw01', correct: true }, { itemCode: 'rw02', correct: false }])
+    const call = submitArg()
+    expect(call).not.toHaveProperty('marks')
+    expect(call).not.toHaveProperty('discontinued')
   })
-  it('marks가 없으면 빈 배열로 저장된다 (구버전 클라이언트 호환)', async () => {
-    const res = await POST(makeReq(VALID()))
+  it('쓰기 1번이 0점이어도 나머지 답이 그대로 저장된다 (중단 절삭 폐기)', async () => {
+    const writing = { ww01: 0, ww02: 1, ww03: 0 }
+    const res = await POST(makeReq({ ...VALID(), writing }))
     expect(res.status).toBe(200)
-    expect(submitArg().marks).toEqual([])
-  })
-  it('의미 낱말이 아닌 코드는 400 (무의미 낱말·쓰기 문항은 현장 채점 대상이 아님)', async () => {
-    expect((await POST(makeReq({ ...VALID(), marks: { rw08: true } }))).status).toBe(400)
-    expect((await POST(makeReq({ ...VALID(), marks: { ww01: true } }))).status).toBe(400)
-    expect(db.submitSession).not.toHaveBeenCalled()
-  })
-  it('marks 값이 boolean이 아니면 400', async () => {
-    expect((await POST(makeReq({ ...VALID(), marks: { rw01: 'yes' } }))).status).toBe(400)
-    expect(db.submitSession).not.toHaveBeenCalled()
-  })
-  it('marks가 배열이면 400 (객체만 허용)', async () => {
-    expect((await POST(makeReq({ ...VALID(), marks: [['rw01', true]] }))).status).toBe(400)
-    expect(db.submitSession).not.toHaveBeenCalled()
+    expect(submitArg().writing).toEqual([
+      { itemCode: 'ww01', canWrite: false },
+      { itemCode: 'ww02', canWrite: true },
+      { itemCode: 'ww03', canWrite: false },
+    ])
   })
   it('writing이 배열이면 400 (객체만 허용)', async () =>
     expect((await POST(makeReq({ ...VALID(), writing: [['ww01', 1]] }))).status).toBe(400))
@@ -169,46 +160,3 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
   })
 })
 
-describe('중단 규칙 ② — 실시하지 않은 쓰기 문항은 저장하지 않는다 (항목 10)', () => {
-  it('G1: 1번이 오반응이면 2번 이후 답은 버려진다 (뒤 문항을 먼저 채점한 경우)', async () => {
-    const res = await POST(makeReq({ ...VALID(), writing: { ww01: 0, ww02: 1, ww03: 1 } }))
-    expect(res.status).toBe(200)
-    expect(submitArg().writing).toEqual([{ itemCode: 'ww01', canWrite: false }])
-  })
-  it('1번이 정반응이면 뒤 문항이 그대로 저장된다', async () => {
-    const res = await POST(makeReq({ ...VALID(), writing: { ww01: 1, ww02: 0, ww03: 1 } }))
-    expect(res.status).toBe(200)
-    expect(submitArg().writing).toHaveLength(3)
-  })
-  it('G2: 첫 문장이 0점이면 sw01만 저장된다', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
-    const res = await POST(makeReq({
-      sessionId: SID, sessionToken: TOKEN, checklist: ['none'],
-      writing: { sw01: 0, sw02: 2, sw03: 1 },
-    }))
-    expect(res.status).toBe(200)
-    expect(submitArg().sentenceWriting).toEqual([{ itemCode: 'sw01', words: 0 }])
-  })
-  it('절삭 전에 형식 검증이 먼저다 — 버려질 문항의 잘못된 값도 400', async () => {
-    expect((await POST(makeReq({ ...VALID(), writing: { ww01: 0, ww02: 5 } }))).status).toBe(400)
-    expect(db.submitSession).not.toHaveBeenCalled()
-  })
-})
-
-describe('중단 규칙 ① 판정을 제출 시점에 굳힌다', () => {
-  it('의미 낱말 첫 3개 연속 오반응이면 중단으로 기록된다', async () => {
-    const res = await POST(makeReq({ ...VALID(), marks: { rw01: false, rw02: false, rw03: false } }))
-    expect(res.status).toBe(200)
-    expect(submitArg().discontinued).toBe(true)
-  })
-  it('첫 3개 중 하나라도 정반응이면 중단이 아니다', async () => {
-    const res = await POST(makeReq({ ...VALID(), marks: { rw01: false, rw02: true, rw03: false } }))
-    expect(res.status).toBe(200)
-    expect(submitArg().discontinued).toBe(false)
-  })
-  it('현장 채점이 없으면 중단이 아니다 (미채점을 오반응으로 보지 않는다)', async () => {
-    const res = await POST(makeReq(VALID()))
-    expect(res.status).toBe(200)
-    expect(submitArg().discontinued).toBe(false)
-  })
-})

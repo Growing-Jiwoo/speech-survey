@@ -39,7 +39,7 @@ export async function insertRecording(r: {
 /** 낱말 쓰기(G1) 답 — 문항 만점이 1이라 boolean으로 담는다 */
 export interface WritingAnswer { itemCode: string; canWrite: boolean }
 
-/** 낱말 해독 의미 낱말의 검사자 현장 채점 */
+/** 낱말 해독 O/X — 관리자 채점(saveScores)이 쓴다 */
 export interface ReadingMark { itemCode: string; correct: boolean }
 
 /** 어절 수 점수 — 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 같은 테이블을 쓴다 */
@@ -54,23 +54,18 @@ export interface SubmitInput {
   /** 문장 쓰기 양식(G2)에서만 채워진다 */
   sentenceWriting: SentenceScore[]
   checklist: string[]
-  marks: ReadingMark[]
-  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않았는지(쓰기는 실시한다 —
-   *  담당자 확정 2026-08-11) — 검사 당시의 사실이므로 제출 시점에 굳힌다.
-   *  나중에 reading_marks로 다시 판정하면 관리자가 채점을 고칠 때 값이 뒤집힌다. */
-  discontinued: boolean
 }
 
 /**
  * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
- * 쓰기 답·현장 채점을 upsert한다.
+ * 쓰기 답을 upsert한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
  */
 export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
-  const { sessionId, writing, sentenceWriting, checklist, marks, discontinued } = input
+  const { sessionId, writing, sentenceWriting, checklist } = input
   const now = new Date().toISOString()
   const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: now, discontinued_at: discontinued ? now : null })
+    .update({ checklist, submitted_at: now })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
@@ -87,17 +82,14 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
   }
-  if (marks.length > 0) {
-    const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
-    const { error: e3 } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
-    fail(e3)
-  }
   return 'ok'
 }
 
 /**
- * 관리자 채점 저장. 낱말 O/X는 reading_marks(현장 채점과 같은 테이블 — 관리자가 확정값으로 덮어쓴다),
- * 문장 어절 수는 sentence_scores에 upsert한다. 제출 여부와 무관하게 언제든 다시 채점할 수 있다.
+ * 관리자 채점 저장. 낱말 O/X는 reading_marks에, 문장 어절 수는 sentence_scores에 upsert한다.
+ * reading_marks는 원래 검사자 현장 채점의 착지점이자 관리자 최종 채점의 저장소로 공유됐으나,
+ * 현장 채점 자체가 폐기되어(담당자 확정 2026-08-13) 이제 이 함수만 쓴다.
+ * 제출 여부와 무관하게 언제든 다시 채점할 수 있다.
  */
 export async function saveScores(
   sessionId: string, marks: ReadingMark[], sentences: SentenceScore[],
@@ -248,8 +240,9 @@ export interface SessionRow {
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
   /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
   examiner_type: 'teacher' | 'expert' | null
-  /** 중단 규칙 ①로 무의미 낱말·문장 읽기유창성을 실시하지 않은 시각(012, 주석은 013에서 갱신).
-   *  쓰기 과제는 실시한다(담당자 확정 2026-08-11). 제출 시점에 확정된다 */
+  /** 중단 규칙 ①(무의미 낱말·문장 읽기유창성 미실시) 판정 시각으로 쓰였으나, 그 규칙 자체가
+   *  폐기되어(담당자 확정 2026-08-13) 더 이상 쓰이지 않는다. 컬럼 삭제 전까지 과거 수집분의
+   *  값만 남아 있다 — 조회 전용 */
   discontinued_at: string | null
 }
 
