@@ -26,6 +26,7 @@ export interface StampInput extends ScoreInput {
     birth_ymd: string; started_at: string
     checklist: string[]
   }
+  // examiner_type(교사/전문가) 필드는 없다 — 수집 자체가 폐기됐다(사용자 확정 2026-08-13).
 }
 
 export async function stampSheet(input: StampInput): Promise<Uint8Array> {
@@ -201,8 +202,10 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SheetLayout, s: StampInput
   put(s.child_name, h.childName)
   put(s.birth_ymd, h.birth)
   put(sheetDateLabel(s.started_at), h.testedAt)
-  // "교사 / 전문가" 구분 자체가 폐기됐다(스펙 2026-08-13, Task 9) — 세션에 값이 없어
-  // 동그라미를 칠 수 없다. h.examiner 레이아웃 정리는 Task 9(검사자 구분 제거) 몫.
+  // "교사 / 전문가" 구분 자체가 폐기됐다(사용자 확정 2026-08-13) — 세션에 값이 없어
+  // 동그라미를 칠 수 없다. h.examiner 좌표(레이아웃 파일)는 지우지 않고 남겨 둔다 —
+  // 원본 검사지에 실제로 인쇄된 "교사 / 전문가" 글자의 실측 위치라, 검사자 구분이
+  // 다시 필요해지면 또 그 값이 필요하다. SheetLayout 타입도 필수 필드라 그대로 둔다.
 }
 
 /**

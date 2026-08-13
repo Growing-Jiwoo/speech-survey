@@ -39,6 +39,6 @@
 | `http.ts` | `requestJson/postJson`(던지지 않는 결과형) + `fetchJson`(react-query용) + 네트워크 오류 카피 단일화 |
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
-| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`examinerLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷 |
+| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷 |
 | `platform.ts` | 브라우저·플랫폼 판별(녹음 지원 여부 안내용) |
 | `schools.ts` | 지역(시도교육청) 상수와 학교 타입 — 학교 목록 데이터는 `public/schools/*.json` |

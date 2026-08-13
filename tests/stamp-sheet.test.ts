@@ -35,7 +35,7 @@ async function gridMarkCount(bytes: Uint8Array, g: WordGridLayout): Promise<numb
 const baseSession = {
   school_name: '경기초등학교', class_no: 3, child_name: '홍길동',
   birth_ymd: '170310', started_at: '2026-08-07T06:25:08.000Z',
-  examiner_type: 'expert' as const, checklist: ['cognition'],
+  checklist: ['cognition'],
 }
 const sessionFor = (form: SurveyForm) => ({ ...baseSession, grade: form.grades[0] })
 const blank = { marks: {}, sentences: {}, writing: {} }
@@ -122,7 +122,7 @@ describe('stampSheet — 저장된 채점은 전부 찍힌다 (중단 규칙 폐
   const session = {
     school_name: '가나초', grade: 1, class_no: 1, child_name: '테스트',
     birth_ymd: '2019-01-01', started_at: '2026-08-11T00:00:00Z',
-    examiner_type: 'teacher' as const, checklist: ['none'],
+    checklist: ['none'],
   }
   // 예전에 중단 규칙 ①이 걸리던 입력: 의미 첫 3개 X, 나머지 4개 O.
   const ceilingMarks = Object.fromEntries(f1.meaningReadCodes.map((c, i) => [c, i >= 3]))

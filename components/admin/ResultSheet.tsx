@@ -116,12 +116,11 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             {[
               ['학교', session.school_name],
               ['학년', gradeClassLabel(session.grade, session.class_no)],
+              ['번호', String(session.child_no)],
               ['학생명', session.child_name],
               ['성별', session.gender],
               ['생년월일', session.birth_ymd],
               ['검사일', sheetDateLabel(session.started_at)],
-              // "검사자(교사/전문가)" 구분란 제거는 Task 9(검사자 구분 제거) 몫 — 여기서는
-              // SessionRow에서 examiner_type이 빠져 컴파일이 깨지는 것만 최소로 막는다.
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="text-ink-mute">{k}</dt>

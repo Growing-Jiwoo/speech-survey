@@ -74,6 +74,11 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
         meta: { sortKey: 'grade', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
         cell: ({ row }) => gradeClassLabel(row.original.grade, row.original.class_no),
       }),
+      col.accessor('child_no', {
+        id: 'childNo', header: '번호',
+        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 tabular-nums text-ink-soft' },
+        cell: ({ row }) => row.original.child_no,
+      }),
       col.accessor('birth_ymd', {
         id: 'birth', header: '생년월일',
         meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },

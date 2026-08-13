@@ -106,7 +106,7 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     session: {
       id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_name: '홍길동',
       birth_ymd: '170310', started_at, submitted_at,
-      examiner_type: 'expert', checklist: [],
+      checklist: [],
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
     marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],

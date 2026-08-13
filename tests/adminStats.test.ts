@@ -191,6 +191,12 @@ describe('filterSessions', () => {
     expect(filterSessions(rows, f({ q: '최선생' }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(rows, f({ q: '5' }), kstDateKey(now))).toHaveLength(1) // 반 번호
   })
+  it('검색어가 아동 번호와 일치하면 잡힌다', () => {
+    // '7'이 '17'·'70' 등에 부분일치하지 않도록 서로 겹치지 않는 값으로 구성.
+    const rows = [mkSession({ child_no: 7 }), mkSession({ child_no: 12 })]
+    const out = filterSessions(rows, f({ q: '7' }), kstDateKey(now))
+    expect(out.map(s => s.child_no)).toEqual([7])
+  })
   it('상태·학교·학년·오늘 필터가 AND로 결합된다', () => {
     expect(filterSessions(base, f({ status: 'submitted' }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(base, f({ status: 'inProgress' }), kstDateKey(now))).toHaveLength(1)
