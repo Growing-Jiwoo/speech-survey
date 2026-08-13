@@ -17,7 +17,7 @@ Supabase CLI를 쓰지 않는다 — **SQL Editor에서 번호 순서대로 직�
 | `009_reading_marks.sql` | 낱말 해독 의미 낱말 O/X 테이블 — 원래 검사자 현장 채점(중단 규칙 판정 근거)이었으나, 현장 채점 폐기(담당자 확정 2026-08-13) 이후 관리자 최종 채점 저장소로 쓰인다 |
 | `010_class_and_contact.sql` | 단일학급(반 0) 허용·담임 연락처 전화/이메일 분리 |
 | `011_scoring.sql` | 어절 수 점수 테이블(`sentence_scores`)·검사자 구분(`examiner_type`) |
-| `012_discontinued.sql` | 중단 규칙 ① 적용 시각(`discontinued_at`) — 진행률 분모 판정 |
+| `012_discontinued.sql` | 중단 규칙 ① 적용 시각(`discontinued_at`)을 추가 — 진행률 분모 판정에 썼다(014에서 컬럼 제거됨) |
 | `013_discontinued_comment.sql` | 위 컬럼 주석만 갱신(스키마 변경 없음) — 규칙 ①의 미실시 범위가 문장·쓰기에서 무의미·문장으로 바뀜(담당자 확정 2026-08-11) |
 | `014_drop_discontinued.sql` | `discontinued_at` 컬럼 제거(중단 규칙 폐기 — 담당자 확정 2026-08-13) |
 

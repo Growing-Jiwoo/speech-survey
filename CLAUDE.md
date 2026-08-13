@@ -9,7 +9,7 @@
 
 | 알고 싶은 것 | 어디 |
 |---|---|
-| 검사 구성·중단 규칙·미실시 표기·셋업·배포·PII | [README.md](README.md) |
+| 검사 구성·중단 규칙 폐기·미녹음 표기·셋업·배포·PII | [README.md](README.md) |
 | 로직 계층 파일별 역할 | [lib/README.md](lib/README.md) |
 | 테스트 관례(node 환경·모킹 경계) | [tests/README.md](tests/README.md) |
 | 왜 그렇게 만들었나(작성 시점 스냅샷) | [docs/README.md](docs/README.md) |
