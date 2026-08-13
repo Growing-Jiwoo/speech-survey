@@ -8,6 +8,18 @@ import type { MarkRow, SentenceScoreRow, SessionListRow, SessionRow, WritingRow 
 export const adminKeys = {
   sessions: ['admin', 'sessions'] as const,
   session: (id: string) => ['admin', 'session', id] as const,
+  codes: ['admin', 'codes'] as const,
+}
+
+/** 학급 코드 목록 항목 — 발급 화면(CodeIssuer)이 쓴다. */
+export interface ClassCodeItem {
+  id: string; code: string
+  school_region: string; school_id: string; school_name: string
+  grade: number; class_no: number
+  teacher_name: string; teacher_phone: string | null; teacher_email: string | null
+  created_at: string
+  /** 이 코드로 만들어진 세션 수 — 0일 때만 삭제 버튼을 낸다 */
+  session_count: number
 }
 
 /** 결과지 녹음 항목(서명 URL 포함) — API가 audio_path를 서명 URL로 변환해 내려준다. */
@@ -44,5 +56,13 @@ export function useSessionDetailQuery(id: string) {
     queryKey: adminKeys.session(id),
     queryFn: () => fetchJson<SessionDetailData>(`/api/admin/sessions/${id}`),
     enabled: !!id,
+  })
+}
+
+/** 학급 코드 목록 — 발급 화면이 쓴다. */
+export function useClassCodesQuery() {
+  return useQuery({
+    queryKey: adminKeys.codes,
+    queryFn: () => fetchJson<{ codes: ClassCodeItem[] }>('/api/admin/codes').then(d => d.codes),
   })
 }
