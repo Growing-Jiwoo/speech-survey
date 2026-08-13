@@ -9,7 +9,7 @@
 |---|---|
 | `items.ts` | `itemsFor(양식)` — 문항(채점 단위)과 **페이지 모델**(화면·녹음·제한시간 단위), 진행률 분모를 양식에서 만든다. 문항은 학년마다 다르므로 모듈 상수가 아니다 |
 | `forms/` | 학년별 검사지 정의(문항·배점·제한시간·임시 Pass 기준)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 `g*.ts` + `g*-layout.ts` + 원본 PDF 추가로 끝난다 |
-| `survey-flow.ts` | 중단 규칙과 페이지 게이팅. ① 의미 낱말 첫 3개 연속 오반응 → 무의미 낱말·문장 미실시, ② 쓰기 1번 문항 오반응 → 즉시 중단(양식 무관). 담당자 확정안이며 **검사지 인쇄 문구와 다르다**. `visiblePages`(연습 실시 여부도 여기서 반영)·`requiredWritingCodes`·`keepImplementedWriting`(중단 이후 문항의 답을 버린다)·`canAdvance` |
+| `survey-flow.ts` | 페이지 게이팅. 중단 규칙(①·②)과 현장 채점은 담당자 확정(2026-08-13)으로 전면 폐기됐다 — 검사 화면은 수집만 하고 판정·채점은 관리자 결과지가 한다. `visiblePages`(연습 실시 여부만 반영)·`canAdvance`(문항 완료 여부로 [다음] 활성화 판단) |
 | `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 배점은 전부 **어절 수**에서 유도한다(`itemMaxWords`) — 검사지 숫자를 옮겨 적지 않는다. 저장된 행을 채점 입력으로 바꾸는 `scoreInputFrom`, **미녹음 페이지를 오반응(X·0점)으로 채우는** `withUnrecordedDefaults`(관리자 화면과 검사지 PDF가 공유)도 여기 |
 | `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용) |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |

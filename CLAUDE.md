@@ -29,10 +29,11 @@
 
 ## 2. 검사지 PDF가 절대 기준 — 단 시행 절차는 예외
 
-`assets/forms/`의 검사지가 문항·배점의 절대 기준이다. **중단 규칙(시행 절차)만은 담당자 회신이
-인쇄 문구를 이긴다** — `lib/survey-flow.ts`가 검사지와 달라 보이는 것은 버그가 아니다.
-되돌리기 전에 README.md "문항 구성" 절과
-`docs/superpowers/specs/2026-08-11-discontinue-rules-design.md`를 읽을 것.
+`assets/forms/`의 검사지가 문항·배점의 절대 기준이다. **시행 절차만은 담당자 회신이 인쇄 문구를
+이긴다** — `lib/survey-flow.ts`가 검사지와 달라 보이는 것은 버그가 아니다. 현재: 중단 규칙 전체
+미적용(담당자 확정 2026-08-13) — 근거 스펙
+`docs/superpowers/specs/2026-08-13-admin-only-scoring-and-class-codes-design.md`.
+되돌리기 전에 README.md "문항 구성" 절을 읽을 것.
 
 ## 3. 코드를 고치면 그 폴더 README·주석도 같은 커밋에서 고친다
 
