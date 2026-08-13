@@ -43,7 +43,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  countSessionRecordings, deleteSession, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
+  childTestState, countSessionRecordings, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
@@ -223,6 +223,37 @@ describe('countSessionRecordings', () => {
     expect(await countSessionRecordings(SID)).toBe(7)
     enqueue('recordings', { count: null, error: null })
     expect(await countSessionRecordings(SID)).toBe(0)
+  })
+})
+
+/** insertClassCode 유효 픽스처(NewClassCodeInput 형태) */
+const NEW_CODE_INPUT = {
+  code: 'ABCDEF',
+  schoolRegion: '서울특별시교육청', schoolId: 'S001', schoolName: '테스트초등학교',
+  grade: 1, classNo: 2,
+  teacherName: '김교사', teacherPhone: '01012345678', teacherEmail: null,
+}
+
+describe('class_codes', () => {
+  it('insertClassCode: unique 충돌(23505)이면 duplicate를 돌려준다 (던지지 않는다)', async () => {
+    enqueue('class_codes', { data: null, error: { message: 'dup', code: '23505' } })
+    expect(await insertClassCode(NEW_CODE_INPUT)).toBe('duplicate')
+  })
+  it('deleteClassCode: FK 위반(23503)이면 in_use', async () => {
+    enqueue('class_codes', { data: null, error: { message: 'fk', code: '23503' } })
+    expect(await deleteClassCode('11111111-1111-1111-1111-111111111111')).toBe('in_use')
+  })
+  it('childTestState: 제출본이 있으면 submitted가 미제출보다 우선', async () => {
+    enqueue('sessions', { data: [{ submitted_at: null }, { submitted_at: '2026-08-13T00:00:00Z' }], error: null })
+    expect(await childTestState('cc-1', 3)).toBe('submitted')
+  })
+  it('childTestState: 미제출만 있으면 inProgress', async () => {
+    enqueue('sessions', { data: [{ submitted_at: null }], error: null })
+    expect(await childTestState('cc-1', 3)).toBe('inProgress')
+  })
+  it('childTestState: 행이 없으면 null', async () => {
+    enqueue('sessions', { data: [], error: null })
+    expect(await childTestState('cc-1', 3)).toBeNull()
   })
 })
 

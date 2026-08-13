@@ -195,6 +195,79 @@ export async function signedAudioUrl(path: string): Promise<string> {
   return data!.signedUrl
 }
 
+// ---------- 학급 코드 (스펙 2026-08-13 — 관리자 발급, 세션 생성이 비정규화 복사) ----------
+
+export interface ClassCodeRow {
+  id: string
+  code: string
+  school_region: string; school_id: string; school_name: string
+  grade: number; class_no: number
+  teacher_name: string; teacher_phone: string | null; teacher_email: string | null
+  created_at: string
+}
+
+const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at'
+
+export interface NewClassCodeInput {
+  code: string
+  schoolRegion: string; schoolId: string; schoolName: string
+  grade: number; classNo: number
+  teacherName: string
+  /** 전화·이메일 중 하나는 non-null(스키마가 보장). 전화는 하이픈 없는 숫자만 */
+  teacherPhone: string | null; teacherEmail: string | null
+}
+
+/** unique 충돌이면 'duplicate' — 라우트가 새 코드로 재시도한다(23505 = unique_violation). */
+export async function insertClassCode(c: NewClassCodeInput): Promise<ClassCodeRow | 'duplicate'> {
+  const { data, error } = await sb().from('class_codes').insert({
+    code: c.code,
+    school_region: c.schoolRegion, school_id: c.schoolId, school_name: c.schoolName,
+    grade: c.grade, class_no: c.classNo,
+    teacher_name: c.teacherName, teacher_phone: c.teacherPhone, teacher_email: c.teacherEmail,
+  }).select(CLASS_CODE_COLS).single()
+  if ((error as { code?: string } | null)?.code === '23505') return 'duplicate'
+  fail(error)
+  return data as unknown as ClassCodeRow
+}
+
+export type ClassCodeListRow = ClassCodeRow & { sessions: { count: number }[] }
+
+export async function listClassCodes(): Promise<ClassCodeListRow[]> {
+  const { data, error } = await sb().from('class_codes')
+    .select(`${CLASS_CODE_COLS}, sessions(count)`)
+    .order('created_at', { ascending: false })
+  fail(error)
+  return (data ?? []) as unknown as ClassCodeListRow[]
+}
+
+/** 세션이 참조 중이면 'in_use'(23503 = foreign_key_violation — FK restrict가 최종 방어). */
+export async function deleteClassCode(id: string): Promise<'ok' | 'in_use'> {
+  const { error } = await sb().from('class_codes').delete().eq('id', id)
+  if ((error as { code?: string } | null)?.code === '23503') return 'in_use'
+  fail(error)
+  return 'ok'
+}
+
+export async function findClassCode(code: string): Promise<ClassCodeRow | null> {
+  const { data, error } = await sb().from('class_codes')
+    .select(CLASS_CODE_COLS).eq('code', code).maybeSingle()
+  fail(error)
+  return (data as unknown as ClassCodeRow) ?? null
+}
+
+/** 같은 학급·같은 아동 번호의 기존 검사 상태 — 중복 검사 경고용.
+ *  제출본이 하나라도 있으면 'submitted', 미제출만 있으면 'inProgress', 없으면 null.
+ *  ⚠️ 번호 목록을 만들지 않는다 — 물어본 번호 하나에 대해서만 답한다(스펙 "중복 검사 경고"). */
+export async function childTestState(
+  classCodeId: string, childNo: number,
+): Promise<'submitted' | 'inProgress' | null> {
+  const { data, error } = await sb().from('sessions').select('submitted_at')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo)
+  fail(error)
+  if (!data || data.length === 0) return null
+  return data.some(r => r.submitted_at) ? 'submitted' : 'inProgress'
+}
+
 // ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------
 
 /** 해당 IP가 현재 잠금 상태인지 (실패 임계 도달 + 잠금시각 이내) */

@@ -11,7 +11,8 @@
 | `forms/` | 학년별 검사지 정의(문항·배점·제한시간·임시 Pass 기준)와 PDF 스탬핑 좌표. `formForGrade(학년)`으로 조회 — 새 학년은 `g*.ts` + `g*-layout.ts` + 원본 PDF 추가로 끝난다 |
 | `survey-flow.ts` | 페이지 게이팅. 중단 규칙(①·②)과 낱말 해독 현장 채점은 담당자 확정(2026-08-13)으로 전면 폐기됐다 — 낱말 해독·문장 읽기유창성은 검사 화면이 수집만 하고 판정·채점은 관리자 결과지가 한다. 다만 쓰기(낱말 쓰기·문장 쓰기)는 예외로, 녹음이 없어 검사 중 검사자가 계속 입력한다(사용자 확정 2026-08-13, `WritingPage.tsx`·`SentenceWritingPage.tsx`). `visiblePages`(연습 실시 여부만 반영)·`canAdvance`(문항 완료 여부로 [다음] 활성화 판단) |
 | `scoring.ts` | 배점·합산·Pass/Fail과 **과제별 채점 완료 여부**(`complete`). 배점은 전부 **어절 수**에서 유도한다(`itemMaxWords`) — 검사지 숫자를 옮겨 적지 않는다. 저장된 행을 채점 입력으로 바꾸는 `scoreInputFrom`, **미녹음 페이지를 오반응(X·0점)으로 채우는** `withUnrecordedDefaults`(관리자 화면과 검사지 PDF가 공유)도 여기 |
-| `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용) |
+| `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용). 학급 코드 알파벳(`CODE_ALPHABET`)·길이(`CODE_LEN`)도 여기가 단일 소스 — 발급(`class-code.ts`)과 입력 검증이 공유 |
+| `class-code.ts` | `generateClassCode()` — 학급 코드 생성(서버 전용, `node:crypto`의 `randomInt`). 알파벳·길이는 `schema.ts`를 import — 여기서 다시 적지 않는다 |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
 | `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름을 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
 | `adminStats.ts` | 관리자 목록의 KPI·학교별 집계·필터/정렬·URL(searchParams) 직렬화. KST 일자 키(`kstDateKey`) 기준 "오늘" 판정 |
@@ -21,7 +22,7 @@
 | 파일 | 역할 |
 |---|---|
 | `supabase.ts` | service role 클라이언트 싱글턴. RLS는 전면 차단이므로 모든 DB/스토리지 접근은 이 경유 |
-| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회) |
+| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회·학급 코드 발급/목록/삭제/조회/중복검사 상태) |
 | `env.ts` | 필수 환경변수 로더 — 미설정 시 즉시 throw(fail-fast) |
 | `request.ts` | 라우트 공용: `clientIp`(위조 불가 헤더 우선 규칙), `UUID_RE`, `jsonError` |
 | `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(Edge middleware·Node 라우트 공용) |
