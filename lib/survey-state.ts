@@ -14,7 +14,7 @@ export interface SurveyState {
   sessionToken: string               // /api/sessions가 발급 — 녹음/제출 요청에 동봉
   childName: string                  // 진행 화면·이어하기 안내 표시용(서버 세션 행이 원본)
   /** 학년 — 어떤 검사지(양식)로 진행할지 고르는 값. 서버 세션 행이 원본이며 여기 사본을 둔다.
-   *  formForGrade(grade)가 문항·페이지·중단 규칙을 전부 결정한다. */
+   *  formForGrade(grade)가 문항·페이지를 결정한다. */
   grade: number
   micDone: boolean
   /** 연습 낱말을 실시하는지 — 마이크 확인 뒤 검사자가 고른다(같은 아동의 반복 검사에서
