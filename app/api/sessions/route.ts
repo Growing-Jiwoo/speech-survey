@@ -1,7 +1,8 @@
-// POST /api/sessions — 검사 세션 생성(아동 정보 저장) + 세션 스코프 토큰 발급.
-// 이후 녹음 업로드·제출은 이 토큰을 동봉해야 한다(임의 세션 쓰기 차단).
+// POST /api/sessions — 검사 세션 생성(학급 코드 + 아동 정보) + 세션 스코프 토큰 발급.
+// 학급 정보(학교·학년·반·담임·연락처)는 클라이언트가 보낸 값을 받지 않는다 —
+// 코드를 다시 조회해 서버가 복사한다(스펙 2026-08-13). 이후 녹음 업로드·제출은 토큰 동봉 필수.
 import { NextResponse } from 'next/server'
-import { createSession } from '@/lib/db'
+import { createSession, findClassCode } from '@/lib/db'
 import { createSessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
@@ -23,15 +24,15 @@ export async function POST(req: Request) {
 
   const d = parsed.data
   try {
+    const classCode = await findClassCode(d.code)
+    if (!classCode) return jsonError('코드를 확인해 주세요.', 404)
     const sessionId = await createSession({
-      schoolRegion: d.region, schoolId: d.schoolId, schoolName: d.schoolName,
-      birthYmd: d.birthYmd, grade: d.grade, classNo: d.classNo, gender: d.gender,
-      childName: d.name, teacherName: d.teacherName,
-      teacherPhone: d.teacherPhone || null, teacherEmail: d.teacherEmail || null,
-      examinerType: d.examinerType,
+      classCode, childNo: d.childNo,
+      birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
     })
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
-    return NextResponse.json({ sessionId, sessionToken })
+    // grade는 어떤 검사지(양식)로 진행할지 정한다 — 코드가 정한 값을 서버가 내려준다.
+    return NextResponse.json({ sessionId, sessionToken, grade: classCode.grade })
   } catch (e) {
     console.error('[sessions] createSession 실패', e)
     return jsonError('문제가 생겼어요. 잠시 후 다시 시도해 주세요.', 502)

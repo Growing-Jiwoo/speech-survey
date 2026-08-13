@@ -56,28 +56,16 @@ const optionalEmail = z.string().max(60).default('')
 /** 문자열 정규화: trim + 연속 공백 1칸 (기존 라우트 cleanStr와 동일 규칙). */
 const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
 
-/** POST /api/sessions 바디. 문자열 필드는 정규화 후 규칙 검증(파싱 결과가 서버 저장값). */
+/** POST /api/sessions 바디 — 학급 정보는 받지 않는다(서버가 코드에서 복사 — 스펙). */
 export const sessionCreateSchema = z.object({
-  region: z.string().refine(r => REGION_NAMES.includes(r)),
-  schoolId: cleaned.pipe(z.string().min(1)),
-  schoolName: cleaned.pipe(z.string().min(1).max(100)),
-  birthYmd: birthYmdSchema,
-  grade: gradeSchema,
-  classNo: classNoSchema,
-  gender: genderSchema,
+  code: classCodeSchema,
+  childNo: childNoSchema,
   name: cleaned.pipe(nameSchema),
-  teacherName: cleaned.pipe(nameSchema),
-  teacherPhone: optionalPhone,
-  teacherEmail: optionalEmail,
-  // 검사지 헤더의 "교사 / 전문가" 구분
-  examinerType: z.enum(['teacher', 'expert']),
+  gender: genderSchema,
+  birthYmd: birthYmdSchema,
   // 만 14세 미만 아동 — 법정대리인 서면 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
-  // true 리터럴만 허용: 미체크(false/누락) 상태로는 세션 생성 자체가 불가능하다.
   guardianConsent: z.literal(true),
 })
-  .refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
-    { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
-
 export type SessionCreateInput = z.infer<typeof sessionCreateSchema>
 
 /** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */

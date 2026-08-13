@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
-import { contactLabel, examinerLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
+import { contactLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -120,7 +120,8 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
               ['성별', session.gender],
               ['생년월일', session.birth_ymd],
               ['검사일', sheetDateLabel(session.started_at)],
-              ['검사자', examinerLabel(session.examiner_type)],
+              // "검사자(교사/전문가)" 구분란 제거는 Task 9(검사자 구분 제거) 몫 — 여기서는
+              // SessionRow에서 examiner_type이 빠져 컴파일이 깨지는 것만 최소로 막는다.
             ].map(([k, v]) => (
               <div key={k}>
                 <dt className="text-ink-mute">{k}</dt>
