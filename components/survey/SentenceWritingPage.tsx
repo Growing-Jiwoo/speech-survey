@@ -48,7 +48,7 @@ export function SentenceWritingPage({ items, value, onChange }: {
                     aria-pressed={value[item.code] === v}
                     aria-label={`${item.text} ${v}점`}
                     onClick={() => onChange(item.code, v)}
-                    className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition disabled:cursor-not-allowed ${
+                    className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition ${
                       value[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
                     {v}
                   </button>

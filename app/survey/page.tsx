@@ -128,14 +128,13 @@ function SurveyInner() {
   if (st.phase === 'mic')
     return <MicCheck onOk={() => patch({ micDone: true, phase: 'practiceAsk' })} />
 
-  // 학년이 검사지(양식)를 정하고, 양식이 문항·페이지·중단 규칙을 정한다.
+  // 학년이 검사지(양식)를 정하고, 양식이 문항·페이지를 정한다.
   const f = itemsFor(formForGrade(st.grade))
 
   if (st.phase === 'practiceAsk')
     return <PracticeAsk onChoose={practice => patch({ practice, phase: 'page', pageIdx: 0 })} />
 
-  // 중단 규칙·연습 실시 여부를 반영한 진행 목록. marks가 바뀌면 목록이 줄어들 수 있으므로
-  // 인덱스를 clamp한다.
+  // 연습 실시 여부를 반영한 진행 목록 — 연습을 건너뛰면 목록이 줄어드므로 인덱스를 clamp한다.
   const pages = visiblePages(f, st)
   const idx = Math.min(st.pageIdx, pages.length - 1)
   const page = pages[idx]

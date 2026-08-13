@@ -23,7 +23,7 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
         <div className="flex gap-1.5">
           {([['모두 예', 1], ['모두 아니오', 0]] as const).map(([label, v]) => (
             <button key={label} type="button" onClick={() => onSetAll(v)}
-              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
               {label}
             </button>
           ))}
@@ -47,7 +47,7 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
                     <button key={label} type="button"
                       aria-pressed={value[item.code] === v} aria-label={`${item.text} ${label}`}
                       onClick={() => onChange(item.code, v)}
-                      className={`h-11 min-w-[58px] rounded-lg border-[1.5px] px-2 text-sm font-bold transition disabled:cursor-not-allowed ${
+                      className={`h-11 min-w-[58px] rounded-lg border-[1.5px] px-2 text-sm font-bold transition ${
                         value[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
                       {label}
                     </button>
