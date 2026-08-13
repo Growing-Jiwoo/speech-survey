@@ -131,4 +131,25 @@ describe('학급 코드 기억 (연속 검사 — 스펙 2026-08-13)', () => {
     saveClassCode('BBBBBB')
     expect(loadClassCode()).toBe('BBBBBB')
   })
+
+  // 전 키 순회(진행 상태 키 제외)로 확인 — 코드 키만 보는 것보다 강한 보장이라 이쪽을 골랐다.
+  // saveClassCode(code, childNo)처럼 호출부가 조용히 확장돼도, 결과로 생긴 값이 아동 이름을
+  // 담고 있으면 이 핀이 걸린다(호출 시그니처 자체를 컴파일 타임에 막지는 못하므로).
+  it('[REGRESSION] saveClassCode 이후 진행 상태 키를 제외한 모든 localStorage 키에 아동 정보가 없다', () => {
+    saveState(newState('sid', '이하늘', 'tok', 1))
+    saveClassCode('K7M2P9')
+    // 진행 상태 키(세션 본체·last 포인터)는 아동 이름을 의도적으로 담는 별개 경로 —
+    // clearState가 지우며, 이미 다른 테스트에서 그 경로를 핀했다. 이 테스트의 대상이 아니다.
+    const progressKeys = new Set(['kodys-survey:sid', 'kodys-survey:last'])
+    let sawCodeKey = false
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)!
+      if (progressKeys.has(key)) continue
+      const value = localStorage.getItem(key) ?? ''
+      expect(key).not.toContain('이하늘')
+      expect(value).not.toContain('이하늘')
+      if (key === 'kodys-survey:classCode') { sawCodeKey = true; expect(value).toBe('K7M2P9') }
+    }
+    expect(sawCodeKey).toBe(true)
+  })
 })

@@ -1,4 +1,4 @@
-// app/page.tsx — 검사 시작 화면. 학급 코드 + 아동 정보만 입력한다(담당자 협의 2026-08-13).
+// app/page.tsx — 검사 시작 화면. 학급 코드 + 아동 정보만 입력한다(사용자 확정 2026-08-13).
 // 학급 정보(학교·학년·반·담임·연락처)는 관리자가 /admin/codes에서 코드 발급 시 입력했다.
 // [확인] → 코드 조회(verify-code) → 학급 정보 확인 모달 → [맞아요] → 세션 생성 → /survey.
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
@@ -66,6 +66,8 @@ export default function StartPage() {
   const [consent, setConsent] = useState(false)
   // 코드 조회 결과 — 값이 있으면 확인 모달이 열려 있다
   const [confirm, setConfirm] = useState<ClassInfo | null>(null)
+  // 세션 생성 실패 시 모달 안에 보여줄 오류 — 모달을 닫지 않고 재시도할 수 있게 한다
+  const [confirmErr, setConfirmErr] = useState('')
   // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(childName) 함께 보여 이어하기를 돕는다
   const [resume, setResume] = useState<{ childName: string } | null>(null)
 
@@ -109,18 +111,21 @@ export default function StartPage() {
       else setFormErr(r.error)
       return
     }
+    setConfirmErr('')
     setConfirm(r.data)
   }
 
-  /** 확인 모달 [맞아요] — 세션 생성. 성공했을 때만 코드를 기억한다(스펙 "연속 검사"). */
+  /** 확인 모달 [맞아요] — 세션 생성. 성공했을 때만 코드를 기억한다(스펙 "연속 검사").
+   *  성공 분기에서는 busy를 풀지 않는다 — router.push가 끝나기 전에 확인 버튼이 다시
+   *  활성화되면 느린 기기에서 두 번 탭해 세션이 중복 생성될 수 있다(첫 세션이 고아로 남음).
+   *  화면을 완전히 떠날 때까지 잠가 두고, 실패했을 때만 재시도할 수 있게 푼다. */
   async function begin() {
     setBusy(true)
     const r = await postJson<{ sessionId: string; sessionToken: string; grade: number }>('/api/sessions', {
       code: cleanCode, childNo: childNoNum, name: cleanName, gender, birthYmd,
       guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
     })
-    setBusy(false)
-    if (!r.ok) { setConfirm(null); setFormErr(r.error); return }
+    if (!r.ok) { setBusy(false); setConfirmErr(r.error); return }
     saveClassCode(cleanCode)
     clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
     saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken, r.data.grade))
@@ -166,7 +171,10 @@ export default function StartPage() {
         onSubmit={e => { e.preventDefault(); if (!busy && filled) void verify() }}>
         <div>
           <label className="text-[13px] font-bold text-ink-soft" htmlFor="code">학급 코드</label>
-          <input id="code" data-field="code" name="code" value={code} maxLength={10}
+          {/* 코드는 6자리지만, classCodeSchema가 trim 전 20자까지 허용해 양끝 공백 붙여넣기를
+              봐준다(사용자 확정 2026-08-13) — maxLength를 6으로 조이면 그 붙여넣기가 잘려 코드
+              자체가 손상될 수 있어, 공백 여유를 둔 8로 맞춘다. */}
+          <input id="code" data-field="code" name="code" value={code} maxLength={8}
             placeholder="ABC234" autoCapitalize="characters" spellCheck={false}
             aria-describedby={errors.code ? 'err-code' : undefined} aria-invalid={!!errors.code}
             onChange={e => setCode(e.target.value.toUpperCase())}
@@ -253,13 +261,13 @@ export default function StartPage() {
       {/* 확인 모달 — 코드가 가리키는 학급과 아동이 맞는지 시작 전에 한 번 묻는다(스펙 "흐름" 3).
           이미 검사한 번호면 경고형으로 바뀐다 — 막지는 않는다(재검사 허용, 스펙 "중복 검사 경고"). */}
       {confirm && (
-        <ConfirmDialog open busy={busy}
+        <ConfirmDialog open busy={busy} error={confirmErr}
           title={confirm.alreadyTested
             ? `${childNoNum}번은 이미 검사했어요`
             : '이 정보가 맞나요?'}
           confirmLabel={confirm.alreadyTested ? '네, 다시 검사할게요' : '맞아요, 시작하기'}
           cancelLabel="아니에요"
-          onConfirm={begin} onClose={() => setConfirm(null)}>
+          onConfirm={begin} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
             <p className="font-bold text-ink">
               {confirm.schoolName} {gradeClassLabel(confirm.grade, confirm.classNo)}
@@ -277,6 +285,11 @@ export default function StartPage() {
             {confirm.alreadyTested === 'inProgress' && (
               <p className="mt-2 text-[12.5px] text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요. 다른 기기에서 검사 중일 수 있어요.
+              </p>
+            )}
+            {confirm.alreadyTested === 'submitted' && (
+              <p className="mt-2 text-[12.5px] text-amber">
+                이 번호로 제출까지 끝난 검사가 있어요. 다시 검사하면 새 결과가 추가로 남아요.
               </p>
             )}
           </div>
