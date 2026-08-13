@@ -111,14 +111,14 @@ describe('toggleChecklistArea (배타 선택)', () => {
 })
 
 describe('pages (화면·녹음 단위)', () => {
-  it('페이지 순서와 코드 — 연습→의미→현장채점→무의미→문장4→쓰기→체크리스트', () => {
+  it('페이지 순서와 코드 — 연습→의미→무의미→문장4→쓰기→체크리스트', () => {
     expect(g1.pages.map(p => p.code)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
+      'p_practice_rw', 'p_rw_meaning', 'p_rw_nonsense',
       'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
     ])
     // G2는 쓰기 페이지만 다르다 — 문장 쓰기이므로 p_sw
     expect(g2.pages.map(p => p.code)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
+      'p_practice_rw', 'p_rw_meaning', 'p_rw_nonsense',
       'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_sw', 'p_cl',
     ])
   })
@@ -174,13 +174,10 @@ describe('pages (화면·녹음 단위)', () => {
     }
   })
 
-  it('현장 채점 페이지는 검사자용(role=examiner)이며 의미 낱말 7개를 다룬다', () => {
-    for (const f of [g1, g2]) {
-      const mark = f.pageByCode.get('p_rw_meaning_mark')!
-      expect(mark.role).toBe('examiner')
-      expect(mark.items.map(i => i.code)).toEqual(f.meaningReadCodes)
-      expect(f.meaningReadCodes).toHaveLength(7)
-    }
+  it('현장 채점 페이지는 없다 (담당자 확정 2026-08-13 — 채점은 관리자 전담)', () => {
+    expect(g1.pages.some(p => p.code === 'p_rw_meaning_mark')).toBe(false)
+    expect(g2.pages.some(p => p.code === 'p_rw_meaning_mark')).toBe(false)
+    expect(g1.pages.every(p => p.role === 'child' || !isRecordingPage(p))).toBe(true)
   })
 
   it('아동 조작 페이지 / 검사자 조작 페이지 구분', () => {
@@ -205,7 +202,6 @@ describe('pages (화면·녹음 단위)', () => {
   it('진행률 분모는 페이지 기준 — 쓰기 문항 수가 양식마다 다르다', () => {
     expect(g1.totals).toEqual({ rec: 6, write: 10 })
     expect(g2.totals).toEqual({ rec: 6, write: 5 })
-    // 중단 규칙이 적용된 세션의 분모는 정적값이 아니라 adminStats.expectedTotalsFor가 계산한다
   })
 
   it('섹션 순서(단계)는 양식의 쓰기 과제를 따른다', () => {
@@ -215,7 +211,7 @@ describe('pages (화면·녹음 단위)', () => {
     expect(g2.writingSection).toBe('sentence_writing')
   })
 
-  it('의미 낱말 코드 목록 (중단 규칙 판정에 쓰임)', () => {
+  it('의미 낱말 코드 목록 (문항 순서 유지 — 관리자 채점·소계가 씀)', () => {
     expect(g1.meaningReadCodes).toEqual(['rw01', 'rw02', 'rw03', 'rw04', 'rw05', 'rw06', 'rw07'])
     expect(g1.meaningWriteCodes).toEqual(['ww01', 'ww02', 'ww03', 'ww04', 'ww05'])
     expect(g2.meaningReadCodes).toEqual(['rw01', 'rw02', 'rw03', 'rw04', 'rw05', 'rw06', 'rw07'])
@@ -239,7 +235,6 @@ describe('pageLabel — 검토 화면 목록·업로드 재시도 안내', () =>
     expect(pageLabel(g1, 'p_practice_rw')).toBe('연습 낱말 3개')
     expect(pageLabel(g1, 'p_rw_meaning')).toBe('의미 낱말 7개')
     expect(pageLabel(g1, 'p_rw_nonsense')).toBe('무의미 낱말 7개')
-    expect(pageLabel(g1, 'p_rw_meaning_mark')).toBe('검사자 확인 (의미 낱말 채점)')
     expect(pageLabel(g1, 'p_rs03')).toBe('3번 문장')
     expect(pageLabel(g1, 'p_cl')).toBe('검사자 체크리스트')
   })

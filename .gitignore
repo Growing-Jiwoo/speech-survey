@@ -9,3 +9,6 @@ node_modules/
 # Claude Code 로컬 작업 파일 (워크트리 등) — launch.json만 커밋 대상
 .claude/*
 !.claude/launch.json
+
+# Superpowers SDD 스크래치(진행 원장·태스크 브리프·리뷰 패키지)
+.superpowers/

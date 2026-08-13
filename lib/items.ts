@@ -125,7 +125,7 @@ export interface FormItems {
   sections: Section[]
 
   readItems: SurveyItem[]
-  /** 중단 규칙 판정에 쓰는 의미 낱말 코드(문항 순서 유지) */
+  /** 의미 낱말 코드(문항 순서 유지) — 관리자 채점·소계가 쓴다 */
   meaningReadCodes: string[]
   nonsenseReadCodes: string[]
   sentenceItems: SurveyItem[]
@@ -155,7 +155,6 @@ export function pageLabel(f: FormItems, code: string): string {
   const p = f.pageByCode.get(code)
   if (!p) return code
   if (p.section === 'checklist') return SECTION_LABEL.checklist
-  if (p.code === 'p_rw_meaning_mark') return '검사자 확인 (의미 낱말 채점)'
   if (p.section === f.writingSection) return `${SECTION_LABEL[p.section]} ${p.items.length}문항`
   if (p.practice) return `연습 낱말 ${p.items.length}개`
   if (p.kind) return `${KIND_LABEL[p.kind]} 낱말 ${p.items.length}개`
@@ -224,9 +223,6 @@ function build(form: SurveyForm): FormItems {
       items: PRACTICE_ITEMS, limitSec: wordSec, practice: true },
     { code: 'p_rw_meaning', section: 'word_reading', role: 'child', kind: 'meaning',
       items: readOf('meaning'), limitSec: wordSec, practice: false },
-    // 검사지 중단 규칙 판정을 위해 의미 낱말 직후 검사자가 현장에서 O/X를 표시한다.
-    { code: 'p_rw_meaning_mark', section: 'word_reading', role: 'examiner', kind: 'meaning',
-      items: readOf('meaning'), limitSec: 0, practice: false },
     { code: 'p_rw_nonsense', section: 'word_reading', role: 'child', kind: 'nonsense',
       items: readOf('nonsense'), limitSec: wordSec, practice: false },
     ...sentenceItems.map(i => ({

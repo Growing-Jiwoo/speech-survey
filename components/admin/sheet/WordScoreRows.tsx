@@ -3,7 +3,7 @@
 //
 // 가로 격자(WordGrid)를 세로 행으로 바꾼 이유: 격자는 종이 검사지 재현이 목적이었는데
 // 공식 출력물이 PDF 스탬핑으로 옮겨가며 그 목적이 사라졌고, 좁은 화면 가로 스크롤과
-// 92px 칸의 밀집만 남았다. 행 리스트는 검사 진행 화면 MarkPage에서 이미 검증된 패턴이다.
+// 92px 칸의 밀집만 남았다.
 //
 // 플레이어 바를 sticky로 두는 이유: 행이 세로로 길어져(7행) 스크롤 중 플레이어가 화면
 // 밖으로 나간다 — "들으면서 찍기"가 이 화면의 핵심 동선이므로 지금 듣는 그룹의 플레이어가
@@ -12,14 +12,12 @@
 import type { ReactNode } from 'react'
 import type { SurveyItem } from '@/lib/items'
 
-export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
+export function WordScoreRows({ audio, items, marks, onMark }: {
   /** sticky 바에 앉는 플레이어(그룹 라벨 포함 — PageAudio) */
   audio: ReactNode
   items: SurveyItem[]
   marks: Partial<Record<string, boolean>>
   onMark: (code: string, v: boolean) => void
-  /** 중단 규칙으로 실시하지 않은 그룹 — 채점을 잠근다(찍으면 총점이 오염된다) */
-  locked?: boolean
 }) {
   return (
     <div className="relative border-t border-line">
@@ -39,13 +37,13 @@ export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
               <span className="font-read min-w-0 truncate text-[20px]">{item.text}</span>
               <div className="flex flex-none gap-1.5">
                 {([['O', true], ['X', false]] as const).map(([label, want]) => (
-                  <button key={label} type="button" aria-pressed={v === want} disabled={locked}
+                  <button key={label} type="button" aria-pressed={v === want}
                     aria-label={`${item.text} ${want ? '정반응' : '오반응'}`}
                     onClick={() => onMark(item.code, want)}
                     className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition ${
                       v === want
                         ? want ? 'border-mint bg-mint/10 text-mint' : 'border-rec bg-rec/10 text-rec-deep'
-                        : 'border-line bg-well text-ink-mute'} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                        : 'border-line bg-well text-ink-mute'}`}>
                     {label}
                   </button>
                 ))}

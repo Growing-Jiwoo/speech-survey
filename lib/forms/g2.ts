@@ -12,7 +12,7 @@
 //    scripts/extract-form-layout.mjs를 다시 돌려 g2-layout.ts를 통째로 갱신한다.
 //
 // G1과의 구조적 차이: 쓰기 과제가 낱말 쓰기가 아니라 **문장 쓰기**다.
-// 문항마다 O/X가 아니라 어절 수(0~2)로 채점하며, 중단 규칙도 "첫 문장 오반응"으로 다르다.
+// 문항마다 O/X가 아니라 어절 수(0~2)로 채점한다.
 import type { SurveyForm } from './index'
 import { G2_LAYOUT } from './g2-layout'
 

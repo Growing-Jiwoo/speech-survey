@@ -7,14 +7,13 @@
 import { NextResponse } from 'next/server'
 import {
   sessionState, submitSession,
-  type ReadingMark, type SentenceScore, type WritingAnswer,
+  type SentenceScore, type WritingAnswer,
 } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { formForGrade } from '@/lib/forms'
 import { AREA_CODES, itemsFor } from '@/lib/items'
 import { itemMaxWords } from '@/lib/scoring'
-import { keepImplementedWriting, readingCeilingHit } from '@/lib/survey-flow'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -32,8 +31,6 @@ export async function POST(req: Request) {
   if (!Array.isArray(b.checklist) || b.checklist.some((c: unknown) => typeof c !== 'string' || !AREA_CODES.includes(c)))
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
-  const rawMarks = b.marks === undefined ? {} : asRecord(b.marks)
-  if (!rawMarks) return bad('현장 채점 형식 오류')
 
   const invalidToken = () => jsonError('유효하지 않은 세션입니다.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
@@ -64,34 +61,15 @@ export async function POST(req: Request) {
     validWriting[itemCode] = words
   }
 
-  // 중단 규칙 ②가 성립하면 **실시하지 않은 문항의 답은 저장하지 않는다.**
-  // 검사자가 2번 이후를 먼저 채점하고 1번을 마지막에 오반응으로 찍으면 화면은 중단으로
-  // 넘어가는데 앞서 입력한 값이 그대로 올라와, 관리자 결과지가 실시하지 않은 문항의 점수를
-  // 보여줬다(사용자 보고 2026-08-12 항목 10). 화면에서도 확인 시점에 버리지만, 확인 없이
-  // 이동한 경로가 남아 있어 서버가 마지막으로 한 번 더 절삭한다.
-  const writingMap = keepImplementedWriting(f, validWriting)
   const writing: WritingAnswer[] = []
   const sentenceWriting: SentenceScore[] = []
-  for (const [itemCode, words] of Object.entries(writingMap)) {
+  for (const [itemCode, words] of Object.entries(validWriting)) {
     if (f.writingSection === 'word_writing') writing.push({ itemCode, canWrite: words >= 1 })
     else sentenceWriting.push({ itemCode, words })
   }
 
-  // 낱말 해독 의미 낱말의 검사자 현장 채점(중단 규칙 판정 근거). 없어도 제출은 통과시킨다.
-  const markCodes = new Set(f.meaningReadCodes)
-  const marks: ReadingMark[] = []
-  for (const [itemCode, correct] of Object.entries(rawMarks)) {
-    if (!markCodes.has(itemCode) || typeof correct !== 'boolean') return bad('현장 채점 형식 오류')
-    marks.push({ itemCode, correct })
-  }
-
   try {
-    // 중단 규칙 ①은 현장 채점(의미 낱말 O/X)만으로 판정된다. 검사 당시의 사실이므로
-    // 여기서 한 번 굳혀 저장한다 — 나중에 관리자가 채점을 고쳐도 뒤집히지 않아야 한다.
-    const discontinued = readingCeilingHit(f, Object.fromEntries(marks.map(m => [m.itemCode, m.correct])))
-    const result = await submitSession({
-      sessionId: b.sessionId, writing, sentenceWriting, checklist, marks, discontinued,
-    })
+    const result = await submitSession({ sessionId: b.sessionId, writing, sentenceWriting, checklist })
     if (result === 'not_found')
       return jsonError('세션을 찾을 수 없습니다.', 404)
     if (result === 'already_submitted')

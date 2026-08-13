@@ -49,7 +49,7 @@ import {
 const SID = '11111111-1111-4111-8111-111111111111'
 /** submitSession 호출 헬퍼 — 테스트가 신경 쓰는 필드만 넘긴다 */
 const submit = (over: Partial<Parameters<typeof submitSession>[0]> = {}) => submitSession({
-  sessionId: SID, writing: [], sentenceWriting: [], checklist: [], marks: [], discontinued: false,
+  sessionId: SID, writing: [], sentenceWriting: [], checklist: [],
   ...over,
 })
 
@@ -100,35 +100,6 @@ describe('submitSession — 미제출 세션만 갱신하고 결과를 구분한
     enqueue('sessions', { data: [{ id: SID }], error: null })
     enqueue('writing_answers', { error: { message: 'duplicate key' } })
     await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
-  })
-})
-
-describe('submitSession — 현장 채점(marks) 저장', () => {
-  it('marks가 있으면 reading_marks에도 upsert한다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    enqueue('writing_answers', { error: null })
-    enqueue('reading_marks', { error: null })
-    const r = await submit({
-      writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'],
-      marks: [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw02', correct: false }],
-    })
-    expect(r).toBe('ok')
-    expect(fromCalls).toContain('reading_marks')
-  })
-
-  it('marks가 비어 있으면 reading_marks를 건드리지 않는다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    enqueue('writing_answers', { error: null })
-    const r = await submit({ writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'] })
-    expect(r).toBe('ok')
-    expect(fromCalls).not.toContain('reading_marks')
-  })
-
-  it('reading_marks 저장 실패는 삼키지 않고 throw한다 (채점 근거의 조용한 손실 방지)', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    enqueue('reading_marks', { error: { message: 'boom' } })
-    await expect(submit({ checklist: ['none'], marks: [{ itemCode: 'rw01', correct: false }] }))
-      .rejects.toThrow('boom')
   })
 })
 

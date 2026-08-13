@@ -9,7 +9,7 @@
 
 | 알고 싶은 것 | 어디 |
 |---|---|
-| 검사 구성·중단 규칙·미실시 표기·셋업·배포·PII | [README.md](README.md) |
+| 검사 구성·중단 규칙 폐기·미녹음 표기·셋업·배포·PII | [README.md](README.md) |
 | 로직 계층 파일별 역할 | [lib/README.md](lib/README.md) |
 | 테스트 관례(node 환경·모킹 경계) | [tests/README.md](tests/README.md) |
 | 왜 그렇게 만들었나(작성 시점 스냅샷) | [docs/README.md](docs/README.md) |
@@ -29,10 +29,11 @@
 
 ## 2. 검사지 PDF가 절대 기준 — 단 시행 절차는 예외
 
-`assets/forms/`의 검사지가 문항·배점의 절대 기준이다. **중단 규칙(시행 절차)만은 담당자 회신이
-인쇄 문구를 이긴다** — `lib/survey-flow.ts`가 검사지와 달라 보이는 것은 버그가 아니다.
-되돌리기 전에 README.md "문항 구성" 절과
-`docs/superpowers/specs/2026-08-11-discontinue-rules-design.md`를 읽을 것.
+`assets/forms/`의 검사지가 문항·배점의 절대 기준이다. **시행 절차만은 담당자 회신이 인쇄 문구를
+이긴다** — `lib/survey-flow.ts`가 검사지와 달라 보이는 것은 버그가 아니다. 현재: 중단 규칙 전체
+미적용(담당자 확정 2026-08-13) — 근거 스펙
+`docs/superpowers/specs/2026-08-13-admin-only-scoring-and-class-codes-design.md`.
+되돌리기 전에 README.md "문항 구성" 절을 읽을 것.
 
 ## 3. 코드를 고치면 그 폴더 README·주석도 같은 커밋에서 고친다
 

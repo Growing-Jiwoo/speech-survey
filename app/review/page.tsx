@@ -13,7 +13,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
 import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
-import { readingCeilingHit, requiredWritingCodes, visiblePages } from '@/lib/survey-flow'
+import { visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
@@ -48,17 +48,14 @@ export default function ReviewPage() {
   const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
   const missingWriting = pages
     .filter(p => p.section === f.writingSection)
-    .flatMap(p => {
-      const required = requiredWritingCodes(f, p.items, state.writing)
-      return p.items.filter(i => required.has(i.code))
-    })
+    .flatMap(p => p.items)
     .filter(i => state.writing[i.code] === undefined).length
   const missing = missingPages + missingWriting
 
   /** 섹션 하나를 카드로 렌더 — 얇은 구분선 행 + 작은 상태 배지의 차분한 목록. */
   function renderSection(section: Section) {
     const rows = pages.filter(p => p.section === section)
-    if (rows.length === 0) return null   // 중단 규칙으로 미실시된 섹션
+    if (rows.length === 0) return null   // 빈 섹션 카드는 그리지 않는다
     return (
       <section className="card p-4 lg:p-5">
         <h2 className="text-[13px] font-bold text-ink-soft">{SECTION_LABEL[section]}</h2>
@@ -71,15 +68,9 @@ export default function ReviewPage() {
             } else if (isRecordingPage(p)) {
               const done = (state.recorded[p.code] ?? 0) > 0
               pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
-            } else if (p.code === 'p_rw_meaning_mark') {
-              // 몇 개를 표시했는지 그대로 보여준다 — "표시 안 함"은 7개 중 3개를 찍은 상태도
-              // 하나도 안 찍은 것처럼 읽혔다. 아래 쓰기 줄과 같은 모양이라 읽는 법도 하나다.
-              const marked = p.items.filter(i => state.marks[i.code] !== undefined).length
-              pill = <StatusPill done={marked === p.items.length} label={`${marked} / ${p.items.length}`} />
             } else if (p.section === f.writingSection) {
-              const required = requiredWritingCodes(f, p.items, state.writing)
-              const done = p.items.filter(i => required.has(i.code) && state.writing[i.code] !== undefined).length
-              pill = <StatusPill done={done === required.size} label={`${done} / ${required.size}`} />
+              const done = p.items.filter(i => state.writing[i.code] !== undefined).length
+              pill = <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
             } else {
               pill = (
                 <span className="text-right text-xs text-ink-soft">
@@ -113,7 +104,7 @@ export default function ReviewPage() {
     setBusy(true); setErr('')
     const r = await postJson('/api/sessions/submit', {
       sessionId: st.sessionId, sessionToken: st.sessionToken,
-      writing: st.writing, checklist: st.checklist, marks: st.marks,
+      writing: st.writing, checklist: st.checklist,
     }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
@@ -132,17 +123,6 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
-      {/* visiblePages가 페이지를 빼는 건 중단 규칙 ①(무의미 낱말·문장 미실시)뿐이다 —
-          쓰기는 담당자 확정(2026-08-11)으로 항상 실시하므로 여기서 언급하지 않는다.
-          쓰기 규칙 ②(1번 오반응)는 페이지를 빼지 않고 그 안의 문항만 줄이므로,
-          아래 쓰기 섹션 카드의 분모(예: "1 / 1")가 그 사실을 이미 보여준다. */}
-      {/* 판정 근거는 페이지 수가 아니라 중단 규칙이다 — 연습을 건너뛴 검사도 페이지 수가
-          줄어들어, 수로 비교하면 중단되지 않은 검사에 중단 안내가 붙는다. */}
-      {readingCeilingHit(f, state.marks) && (
-        <p className="mt-1 text-xs text-ink-mute">
-          중단 규칙에 따라 문장 읽기유창성이 생략되었습니다.
-        </p>
-      )}
 
       {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
           검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.

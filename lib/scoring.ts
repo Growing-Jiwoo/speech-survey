@@ -3,7 +3,6 @@
 // 배점은 학년별 검사지(lib/forms)에서 나온다 — 숫자를 여기 적어 두지 않는다.
 import { itemsFor, type FormItems, type SurveyItem } from './items'
 import type { SurveyForm } from './forms'
-import { readingCeilingHit, requiredWritingCodes, writingCeilingHit } from './survey-flow'
 
 /**
  * 문항 배점 = **어절 수**. 검사지의 숫자를 따로 적어두지 않고 문항 텍스트에서 유도한다
@@ -87,19 +86,11 @@ export interface ScoreResult {
   /**
    * 과제별 채점 완료 여부. 이것이 false면 **숫자도 판정도 확정된 값이 아니다.**
    *
-   * 없는 데이터를 0으로 세는 것과 "0점을 받았다"는 전혀 다르다. 중단 규칙으로 실시하지
-   * 않은 과제(문장·쓰기)나 아직 채점 전인 과제까지 0점 Fail로 표시하면, 치르지도
-   * 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은 칸을 비운다.
+   * 없는 데이터를 0으로 세는 것과 "0점을 받았다"는 전혀 다르다. 아직 채점 전인 과제까지
+   * 0점 Fail로 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다.
+   * 화면은 판정을 감추고 인쇄물은 칸을 비운다.
    */
   complete: Record<TaskKey, boolean>
-  /**
-   * 과제별 중단 여부. true면 **Pass/Fail을 내지 않는다** — passMark는 전체 실시를 전제한
-   * 기준이라(낱말 해독 9/14), 의미 7문항만 실시한 세션에 들이대면 근거가 성립하지 않는다.
-   * 중단은 척도 위의 값이 아니라 그 자체가 결론이다. 화면은 `중단` 배지를 내고
-   * PDF는 소계·총점 칸을 비운다(스펙 "검사지 PDF" 절).
-   * complete보다 먼저 본다: discontinued가 true면 complete 값과 무관하게 '중단'으로 표시한다.
-   */
-  discontinued: Record<TaskKey, boolean>
 }
 
 export interface PdfGate {
@@ -120,10 +111,9 @@ export interface PdfGate {
  * **채점자가 이 화면에서 채울 수 있는 것만 막는다** — 미저장·낱말 O/X·문장 어절 수.
  * 쓰기 과제는 검사 중 수집분이라 결과지에서 고칠 수 없으므로 경고만 하고 통과시킨다
  * (그렇지 않으면 아동이 쓰기를 건너뛴 세션의 결과지가 영구히 나갈 수 없다).
- * 중단으로 실시하지 않은 과제는 "채점할 것이 없는" 상태라 관문에 걸리지 않는다.
  */
 export function sheetPdfGate(r: ScoreResult, dirty: boolean): PdfGate | null {
-  const left = (k: TaskKey) => !r.complete[k] && !r.discontinued[k]
+  const left = (k: TaskKey) => !r.complete[k]
   const fixable = TASK_KEYS.filter(k => k !== 'writing' && left(k))
   if (dirty) return { reason: 'dirty', tasks: fixable, overridable: false }
   if (fixable.length > 0) return { reason: 'unscored', tasks: fixable, overridable: false }
@@ -174,11 +164,7 @@ export function scoreInputFrom(f: FormItems, rows: {
  * 하나하나 찍어 주지 않으면 그 과제가 영원히 "채점 전"으로 남아 결과지·검사지 PDF의 점수
  * 칸이 통째로 비어 나갔다(사용자 보고 항목 9).
  *
- * 두 가지를 지킨다:
- *  · **저장된 채점이 언제나 우선한다** — 채점자가 녹음 없이 O를 준 판단을 덮지 않는다.
- *  · **중단 규칙으로 실시하지 않은 과제에는 넣지 않는다** — 미실시는 0점이 아니다.
- *    (의미 낱말이 미녹음이라 첫 3개가 X로 채워지면 그 뒤 과제는 미실시가 되므로,
- *     의미 낱말을 먼저 채운 뒤 중단 여부를 다시 판정한다.)
+ * **저장된 채점이 언제나 우선한다** — 채점자가 녹음 없이 O를 준 판단을 덮지 않는다.
  *
  * 화면(관리자 결과지)과 검사지 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
  * 저장 버튼을 누르기 전까지 두 출력이 어긋난다.
@@ -188,18 +174,12 @@ export function withUnrecordedDefaults(
 ): ScoreInput {
   const marks = { ...input.marks }
   const sentences = { ...input.sentences }
-  const fillMarks = (page: (typeof f.recordingPages)[number]) => {
-    for (const i of page.items) if (marks[i.code] === undefined) marks[i.code] = false
-  }
-  const unrecorded = f.recordingPages.filter(p => !hasRecording(p.code))
-  // ① 의미 낱말 먼저 — 이 페이지의 기본값이 중단 판정을 바꿀 수 있다.
-  for (const p of unrecorded.filter(p => p.section === 'word_reading' && p.kind === 'meaning'))
-    fillMarks(p)
-  // ② 중단이면 나머지(무의미 낱말·문장 읽기유창성)는 미실시 — 비워 둔다.
-  if (readingCeilingHit(f, marks)) return { ...input, marks, sentences }
-  for (const p of unrecorded) {
-    if (p.section === 'word_reading') fillMarks(p)
-    else for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
+  for (const p of f.recordingPages.filter(p => !hasRecording(p.code))) {
+    if (p.section === 'word_reading') {
+      for (const i of p.items) if (marks[i.code] === undefined) marks[i.code] = false
+    } else {
+      for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
+    }
   }
   return { ...input, marks, sentences }
 }
@@ -222,26 +202,14 @@ const allAnswered = (codes: Iterable<string>, m: Partial<Record<string, unknown>
 export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const f = itemsFor(form)
   const { passMark } = scoringFor(form)
-  // 중단 규칙 ①·② — 어느 문항까지가 "실시된 전부"인지를 정한다
-  const discReading = readingCeilingHit(f, s.marks)
-  const discWriting = writingCeilingHit(f, s.writing)
-  // 쓰기 총점은 **실시된 문항만** 더한다. ②가 걸린 뒤에도 값이 남아 있는 세션이 있는데
-  // (검사자가 2번 이후를 먼저 채점한 경우 — 사용자 보고 항목 10) 그것까지 더하면
-  // "중단 · 실시분 9점"처럼 실시하지 않은 문항의 점수가 결과지에 나타난다.
-  const implemented = requiredWritingCodes(f, f.writingItems, s.writing)
-  const total = (codes: string[]) =>
-    codes.filter(c => implemented.has(c)).reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
-
+  // 읽은 것·쓴 것은 전부 산입한다 — 중단 규칙으로 뒤 과제를 채점에서 빼던 파생은 폐기됐다
+  // (담당자 확정 2026-08-13).
+  const total = (codes: string[]) => codes.reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
   const wordMeaning = countTrue(f.meaningReadCodes, s.marks)
-  // ①이 성립하면 무의미 낱말·문장 읽기유창성은 **실시 대상이 아니다** — 값이 남아 있어도 총점에서 뺀다.
-  // 값이 남는 경로가 실제로 있다(사용자 보고 2026-08-12): 관리자가 녹음을 듣고 의미 낱말을
-  // 고쳐 뒤늦게 중단이 성립하면, 검사 당시엔 실시된 무의미·문장의 점수가 이미 저장돼 있다.
-  // 기록(DB·화면의 회색 값)은 지우지 않고 채점에서만 뺀다 — O/X를 되돌리면 점수가 그대로 살아난다.
-  const wordNonsense = discReading ? 0 : countTrue(f.nonsenseReadCodes, s.marks)
+  const wordNonsense = countTrue(f.nonsenseReadCodes, s.marks)
   const wordReading = wordMeaning + wordNonsense
-  const sentenceReading = discReading
-    ? 0
-    : f.sentenceItems.reduce((n, i) => n + clampWords(f, i.code, s.sentences[i.code]), 0)
+  const sentenceReading = f.sentenceItems.reduce(
+    (n, i) => n + clampWords(f, i.code, s.sentences[i.code]), 0)
   const writeMeaning = total(f.meaningWriteCodes)
   const writeNonsense = total(f.nonsenseWriteCodes)
   const writing = total(f.writingItems.map(i => i.code))
@@ -254,16 +222,9 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
       writing: at(writing, 'writing'),
     },
     complete: {
-      // ①이 걸리면 무의미는 실시하지 않으므로 의미 7문항이 "실시된 전부"다.
-      wordReading: allAnswered(discReading ? f.meaningReadCodes : f.readItems.map(i => i.code), s.marks),
+      wordReading: allAnswered(f.readItems.map(i => i.code), s.marks),
       sentenceReading: allAnswered(f.sentenceItems.map(i => i.code), s.sentences),
-      // 쓰기는 중단 규칙 ②에 걸리면 1번만 요구된다 — 요구 문항이 다 채워졌으면 완료다.
-      writing: allAnswered(requiredWritingCodes(f, f.writingItems, s.writing), s.writing),
-    },
-    discontinued: {
-      wordReading: discReading,
-      sentenceReading: discReading,
-      writing: discWriting,
+      writing: allAnswered(f.writingItems.map(i => i.code), s.writing),
     },
   }
 }

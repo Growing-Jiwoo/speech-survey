@@ -22,7 +22,7 @@ export interface SessionDetailData {
   session: SessionRow
   recordings: DetailRecording[]
   writing: WritingRow[]
-  /** 낱말 해독 의미 낱말의 검사자 현장 채점 — 3단계 채점 화면의 초기값이 된다 */
+  /** 관리자 결과지가 저장한 낱말 해독 O/X(의미·무의미 14개). 검사자 현장 채점은 폐기됐다 — 담당자 확정(2026-08-13) */
   marks: MarkRow[]
   /** 문장 읽기유창성 채점(어절 수) */
   sentences: SentenceScoreRow[]

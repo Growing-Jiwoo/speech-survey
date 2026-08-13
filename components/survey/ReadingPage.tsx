@@ -98,7 +98,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange 
           maxSec={page.limitSec} elapsedMs={recorder.elapsedMs} />
         <p className="text-sm font-bold text-ink-soft">
           {recording ? '다 읽었으면 버튼을 눌러 주세요'
-            : saved ? '다시 하려면 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
+            : saved ? '다 읽었으면 [다음]을, 다시 읽으려면 녹음 버튼을 눌러 주세요' : '버튼을 누르고 읽어 주세요'}
         </p>
 
         {/* 상태 표시는 버튼 아래 이 고정 높이 슬롯 한 곳에만 나타난다 — 상태가 바뀌어도 버튼이 밀리지 않도록 */}

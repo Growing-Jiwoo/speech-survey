@@ -9,8 +9,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
-import { requiredWritingCodes } from '@/lib/survey-flow'
-import { adjacentSessionIds, expectedTotalsFor, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
+import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
@@ -100,14 +99,9 @@ export function AdminDetailView() {
   const input = s.submitted_at
     ? withUnrecordedDefaults(f, rawInput, code => byItem.has(code))
     : rawInput
-  // 쓰기 진행률은 **실시된 문항만** 센다 — 중단 규칙 ② 이후 문항에 값이 남아 있어도
-  // 세지 않는다(그러지 않으면 "낱말 쓰기 10 / 1"이 된다).
-  const implementedWriting = requiredWritingCodes(f, f.writingItems, input.writing)
-  const writtenCount = [...implementedWriting].filter(c => input.writing[c] !== undefined).length
+  const writtenCount = f.writingItems.filter(i => input.writing[i.code] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
-  // 중단 규칙이 걸린 세션은 실시 범위가 줄어든다 — 전체 프로토콜을 분모로 삼으면
-  // 규칙대로 정상 종료된 검사가 계속 "미완료"로 보여, 더 받을 것이 없는 아동을 쫓게 된다.
-  const expected = expectedTotalsFor(f, !!s.discontinued_at, input.writing)
+  const expected = f.totals
   const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writtenCount)
 
   return (
