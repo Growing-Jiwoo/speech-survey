@@ -9,8 +9,6 @@ import { formForGrade } from '@/lib/forms'
 const g1 = itemsFor(formForGrade(1))
 const g2 = itemsFor(formForGrade(2))
 
-const codes = (marks: Record<string, boolean>, f = g1) => visiblePages(f, { marks }).map(p => p.code)
-
 describe('hitsCeiling (앞 N개 연속 오반응)', () => {
   it('앞 3개가 모두 오반응이면 중단', () => {
     expect(hitsCeiling([true, true, true, false, false])).toBe(true)
@@ -82,44 +80,16 @@ describe('writingCeilingHit — 1번 문항 하나로 판정 (담당자 확정)'
   })
 })
 
-describe('visiblePages (중단 규칙 반영한 진행 페이지)', () => {
-  it('중단 없으면 전체 페이지', () => {
-    expect(codes({})).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
-      'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
-    ])
-  })
-
-  it('낱말 해독 중단 시 무의미 낱말·문장을 빼고 쓰기로 간다 (담당자 확정 — 검사지 문구와 다름)', () => {
-    const hit = { rw01: false, rw02: false, rw03: false }
-    expect(codes(hit)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_ww', 'p_cl',
-    ])
-    expect(codes(hit, g2)).toEqual([
-      'p_practice_rw', 'p_rw_meaning', 'p_rw_meaning_mark', 'p_sw', 'p_cl',
-    ])
-  })
-
-  it('중단되어도 검사자 체크리스트는 남는다 (아동 과제가 아니라 검사자 관찰 기록 — 담당자 확정)', () => {
-    expect(codes({ rw01: false, rw02: false, rw03: false })).toContain('p_cl')
-  })
-})
-
 describe('visiblePages — 연습 실시 여부 (검사자가 마이크 확인 뒤 고른다)', () => {
   it('연습을 건너뛰면 연습 페이지가 빠진다 (나머지 순서는 그대로)', () => {
-    expect(visiblePages(g1, { marks: {}, practice: false }).map(p => p.code)).toEqual([
+    expect(visiblePages(g1, { practice: false }).map(p => p.code)).toEqual([
       'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
       'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
     ])
   })
   it('연습을 실시하면(또는 값이 없으면) 연습 페이지가 첫 페이지다', () => {
-    expect(visiblePages(g1, { marks: {}, practice: true })[0].code).toBe('p_practice_rw')
-    expect(visiblePages(g1, { marks: {} })[0].code).toBe('p_practice_rw')
-  })
-  it('연습 건너뛰기와 중단 규칙 ①은 함께 적용된다', () => {
-    const marks = { rw01: false, rw02: false, rw03: false }
-    expect(visiblePages(g1, { marks, practice: false }).map(p => p.code))
-      .toEqual(['p_rw_meaning', 'p_rw_meaning_mark', 'p_ww', 'p_cl'])
+    expect(visiblePages(g1, { practice: true })[0].code).toBe('p_practice_rw')
+    expect(visiblePages(g1, {})[0].code).toBe('p_practice_rw')
   })
 })
 
@@ -138,27 +108,6 @@ describe('keepImplementedWriting — 중단 이후 문항의 답은 버린다 (�
   })
   it('빈 입력도 그대로 (미채점을 중단으로 보지 않는다)', () => {
     expect(keepImplementedWriting(g1, {})).toEqual({})
-  })
-})
-
-describe('규칙 ①+② 동시 성립 (①이 쓰기를 남기면서 처음 생긴 경로)', () => {
-  it('① 후 진입한 쓰기에서 1번이 0점이면 그 문항만 요구된다', () => {
-    const marks = { rw01: false, rw02: false, rw03: false }
-    const pages = visiblePages(g1, { marks })
-    const writingPage = pages.find(p => p.section === 'word_writing')!
-    expect(writingPage.code).toBe('p_ww')
-    expect(requiredWritingCodes(g1, writingPage.items, { ww01: 0 })).toEqual(new Set(['ww01']))
-    expect(canAdvance(g1, writingPage, { marks, writing: { ww01: 0 }, checklist: [] })).toBe(true)
-  })
-  it('G2도 같다', () => {
-    const marks = { rw01: false, rw02: false, rw03: false }
-    const writingPage = visiblePages(g2, { marks }).find(p => p.section === 'sentence_writing')!
-    expect(writingPage.code).toBe('p_sw')
-    expect(requiredWritingCodes(g2, writingPage.items, { sw01: 0 })).toEqual(new Set(['sw01']))
-  })
-  it('규칙 ②가 의존하는 "1번 문항"은 양식의 첫 코드다 (위치 기반 의존의 명시적 고정)', () => {
-    expect(g1.writingItems[0].code).toBe('ww01')
-    expect(g2.writingItems[0].code).toBe('sw01')
   })
 })
 
@@ -207,26 +156,14 @@ describe('requiredWritingCodes로 구현하는 낱말 쓰기 일괄 선택("모�
 })
 
 describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
-  const empty = { marks: {}, writing: {}, checklist: [] }
+  const empty = { writing: {}, checklist: [] }
 
-  it('현장 채점이 아닌 낱말 해독 페이지는 marks/writing/checklist와 무관하게 항상 진행 가능', () => {
+  it('현장 채점이 아닌 낱말 해독 페이지는 writing/checklist와 무관하게 항상 진행 가능', () => {
     expect(canAdvance(g1, g1.pageByCode.get('p_rw_meaning')!, empty)).toBe(true)
   })
 
-  it('문장 읽기 페이지는 marks/writing/checklist와 무관하게 항상 진행 가능', () => {
+  it('문장 읽기 페이지는 writing/checklist와 무관하게 항상 진행 가능', () => {
     expect(canAdvance(g1, g1.pageByCode.get('p_rs01')!, empty)).toBe(true)
-  })
-
-  it('현장 채점 페이지: 낱말 전부 표시해야 진행 가능', () => {
-    const page = g1.pageByCode.get('p_rw_meaning_mark')!
-    const allMarked = Object.fromEntries(page.items.map(i => [i.code, true]))
-    expect(canAdvance(g1, page, { ...empty, marks: allMarked })).toBe(true)
-  })
-
-  it('현장 채점 페이지: 하나라도 미채점이면 진행 불가', () => {
-    const page = g1.pageByCode.get('p_rw_meaning_mark')!
-    const allButLast = Object.fromEntries(page.items.slice(0, -1).map(i => [i.code, true]))
-    expect(canAdvance(g1, page, { ...empty, marks: allButLast })).toBe(false)
   })
 
   it('낱말 쓰기 페이지: 전부 선택하면 진행 가능', () => {
@@ -235,21 +172,10 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
     expect(canAdvance(g1, page, { ...empty, writing: allWritten })).toBe(true)
   })
 
-  it('낱말 쓰기 페이지: 중단 규칙에 걸리면 1번만 선택해도 진행 가능', () => {
-    const page = g1.pageByCode.get('p_ww')!
-    expect(canAdvance(g1, page, { ...empty, writing: { ww01: 0 } })).toBe(true)
-  })
-
   it('낱말 쓰기 페이지: 중단 규칙에 안 걸리고 일부만 선택하면 진행 불가', () => {
     const page = g1.pageByCode.get('p_ww')!
     const firstOne = Object.fromEntries(page.items.slice(0, 1).map(i => [i.code, 1]))
     expect(canAdvance(g1, page, { ...empty, writing: firstOne })).toBe(false)
-  })
-
-  it('낱말 쓰기 페이지: items 나열 순서가 바뀌어도 중단 규칙은 문항 코드(ww01) 기준으로 판정된다', () => {
-    const page = g1.pageByCode.get('p_ww')!
-    const reorderedPage = { ...page, items: [...page.items].reverse() }
-    expect(canAdvance(g1, reorderedPage, { ...empty, writing: { ww01: 0 } })).toBe(true)
   })
 
   it('문장 쓰기 페이지(G2): 5문항 전부 입력해야 진행 가능', () => {
@@ -259,16 +185,26 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
     expect(canAdvance(g2, page, { ...empty, writing: all })).toBe(true)
   })
 
-  it('문장 쓰기 페이지(G2): 첫 문장 0점이면 그것만으로 진행 가능 (중단 규칙 ②)', () => {
-    const page = g2.pageByCode.get('p_sw')!
-    expect(canAdvance(g2, page, { ...empty, writing: { sw01: 0 } })).toBe(true)
-  })
-
   it('체크리스트 페이지: 1개 이상 선택하면 진행 가능', () => {
     expect(canAdvance(g1, g1.pageByCode.get('p_cl')!, { ...empty, checklist: ['none'] })).toBe(true)
   })
 
   it('체크리스트 페이지: 아무것도 선택하지 않으면 진행 불가', () => {
     expect(canAdvance(g1, g1.pageByCode.get('p_cl')!, empty)).toBe(false)
+  })
+})
+
+describe('canAdvance — 쓰기는 전 문항 입력이 완료 조건이다 (중단 규칙 폐기, 담당자 확정 2026-08-13)', () => {
+  const wwPage = (f: typeof g1) => f.pages.find(p => p.section === f.writingSection)!
+  it('G1: 1번이 0점이어도 나머지를 다 입력해야 진행 가능', () => {
+    const partial = { ww01: 0 }
+    expect(canAdvance(g1, wwPage(g1), { writing: partial, checklist: [] })).toBe(false)
+    const all = Object.fromEntries(g1.writingItems.map(i => [i.code, 0]))
+    expect(canAdvance(g1, wwPage(g1), { writing: all, checklist: [] })).toBe(true)
+  })
+  it('G2: 첫 문장이 0점이어도 5문항 전부 입력해야 진행 가능', () => {
+    expect(canAdvance(g2, wwPage(g2), { writing: { sw01: 0 }, checklist: [] })).toBe(false)
+    const all = Object.fromEntries(g2.writingItems.map(i => [i.code, 0]))
+    expect(canAdvance(g2, wwPage(g2), { writing: all, checklist: [] })).toBe(true)
   })
 })
