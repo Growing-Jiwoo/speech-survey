@@ -105,6 +105,11 @@
      `class_code_id`(코드 참조)·`child_no`(학급 내 출석 번호)를 `not null`로 추가하며,
      더는 쓰지 않는 `examiner_type`을 제거한다. 마찬가지로 배포 전 DB 전체 리셋을 전제로 한다
      (사용자 확정 2026-08-13) — 기존 행이 있으면 `not null` 추가가 실패하거나 데이터가 사라진다.
+     적용 순서 주의는 `014`보다 훨씬 심각하다: 현재 코드(`lib/db.ts`의 `SESSION_COLS`·
+     `createSession`)는 `examiner_type`을 **읽고 쓰지만** `class_code_id`·`child_no`는 아직 모른다.
+     리셋 전제가 깨진 환경에서 코드 배포보다 `015`를 먼저 적용하면 `examiner_type` 조회가 없는
+     컬럼을 찾아 깨지는 것은 물론, **세션 생성 자체가 `class_code_id`/`child_no` `not null` 위반으로
+     전면 실패한다** — 반드시 코드 배포 후(또는 동시에) 적용할 것.
 3. `cp .env.local.example .env.local` 후 값 채우기
    - `ADMIN_PASSWORD_HASH`: `npm run hash-password -- '원하는비밀번호'` 실행 → **".env.local용" 라벨이 붙은 줄**을 그대로 복사해 붙여넣는다.
      - ⚠️ argon2id 해시(`$argon2id$v=19$...`)는 `$`를 필드 구분자로 쓰는데, Next.js는 `.env*` 파일의 `$VAR`를
