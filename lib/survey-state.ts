@@ -5,7 +5,7 @@
 
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다. */
-const SCHEMA_V = 6
+const SCHEMA_V = 7
 
 export interface SurveyState {
   v: typeof SCHEMA_V
@@ -23,7 +23,6 @@ export interface SurveyState {
   /** 마이크 확인 → 연습 실시 여부 선택 → 페이지 진행 */
   phase: 'mic' | 'practiceAsk' | 'page'
   recorded: Record<string, number>   // pageCode → 저장된 시도 수
-  marks: Record<string, boolean>     // 낱말 해독 의미 낱말 itemCode → 정반응 여부(검사자 현장 채점)
   /** 쓰기 과제 itemCode → 정확히 쓴 어절 수. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1,
    *  문장 쓰기(G2)는 0~2다 — 두 과제의 채점 규칙이 "어절당 1점"으로 같아 한 모양으로 담는다. */
   writing: Record<string, number>
@@ -42,7 +41,7 @@ export function newState(
     v: SCHEMA_V, sessionId, sessionToken, childName, grade,
     // practice의 기본값은 true다 — 선택 화면에서 검사자가 바꾸기 전까지는 연습을 실시한다.
     micDone: false, practice: true, pageIdx: 0, phase: 'mic',
-    recorded: {}, marks: {}, writing: {}, checklist: [], introsSeen: [],
+    recorded: {}, writing: {}, checklist: [], introsSeen: [],
   }
 }
 

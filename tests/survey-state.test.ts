@@ -15,13 +15,12 @@ beforeEach(() => {
 })
 
 describe('survey-state', () => {
-  it('newState는 pageIdx=0, phase=mic로 시작하고 marks가 비어 있다', () => {
+  it('newState는 pageIdx=0, phase=mic로 시작한다', () => {
     const s = newState('sid-1', '홍길동', 'tok', 1)
-    expect(s.v).toBe(6)
+    expect(s.v).toBe(7)
     expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
-    expect(s.marks).toEqual({})
   })
 
   it('연습은 기본으로 실시한다 — 선택 화면에서 검사자가 끄기 전까지', () => {
@@ -40,16 +39,15 @@ describe('survey-state', () => {
     expect(loadState()).toBeNull()
   })
 
-  it('save→load 왕복으로 pageIdx·phase·childName·marks 복원', () => {
+  it('save→load 왕복으로 pageIdx·phase·childName 복원', () => {
     const s = newState('sid-1', '홍길동', 'tok', 1)
-    saveState({ ...s, pageIdx: 3, phase: 'page', micDone: true, marks: { rw01: true, rw02: false } })
+    saveState({ ...s, pageIdx: 3, phase: 'page', micDone: true })
     const loaded = loadState()
     expect(loaded?.sessionId).toBe('sid-1')
     expect(loaded?.pageIdx).toBe(3)
     expect(loaded?.phase).toBe('page')
     expect(loaded?.sessionToken).toBe('tok')
     expect(loaded?.childName).toBe('홍길동')
-    expect(loaded?.marks).toEqual({ rw01: true, rw02: false })
   })
 
   it('세션별 키 분리 + last 포인터가 최신 세션을 가리킴', () => {
@@ -62,6 +60,13 @@ describe('survey-state', () => {
   it('구버전(v3) 상태는 로드하지 않는다 — 필드 구조가 달라 재개 위치가 어긋난다', () => {
     localStorage.setItem('kodys-survey:last', 'old')
     localStorage.setItem('kodys-survey:old', JSON.stringify({ v: 3, sessionId: 'old', idx: 12 }))
+    expect(loadState()).toBeNull()
+  })
+
+  it('[REGRESSION] 구버전(v=6, marks 있던 스키마) 상태는 로드하지 않는다', () => {
+    const stale = { ...newState('sid', '아이', 'tok', 1), v: 6, marks: {} }
+    localStorage.setItem('kodys-survey:sid', JSON.stringify(stale))
+    localStorage.setItem('kodys-survey:last', 'sid')
     expect(loadState()).toBeNull()
   })
 
