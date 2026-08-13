@@ -83,7 +83,7 @@ describe('writingCeilingHit — 1번 문항 하나로 판정 (담당자 확정)'
 describe('visiblePages — 연습 실시 여부 (검사자가 마이크 확인 뒤 고른다)', () => {
   it('연습을 건너뛰면 연습 페이지가 빠진다 (나머지 순서는 그대로)', () => {
     expect(visiblePages(g1, { practice: false }).map(p => p.code)).toEqual([
-      'p_rw_meaning', 'p_rw_meaning_mark', 'p_rw_nonsense',
+      'p_rw_meaning', 'p_rw_nonsense',
       'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04', 'p_ww', 'p_cl',
     ])
   })
