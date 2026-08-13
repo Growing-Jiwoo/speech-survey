@@ -23,6 +23,13 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 export const jsonError = (message: string, status: number) =>
   NextResponse.json({ error: message }, { status })
 
+/** 공개 엔드포인트(계정 없이 호출되는 라우트) 공통 레이트리밋 정책 —
+ *  `/api/sessions`·`/api/sessions/verify-code`가 이 숫자를 공유한다는 것이 설계 의도다.
+ *  단, 공유하는 것은 **정책값**이지 카운터가 아니다 — 각 라우트는 createRateLimiter를
+ *  각자 호출해 독립된 버킷(IP당 20건)을 갖는다. 정책을 바꿀 때 한쪽만 바뀌는 드리프트를 막기 위해 여기 둔다. */
+export const PUBLIC_RATE_LIMIT = 20 // IP당 시간창 내 허용 요청 수
+export const PUBLIC_RATE_WINDOW_MS = 10 * 60_000
+
 /** best-effort 인메모리 IP 레이트리미터. 서버리스에서는 인스턴스별 독립이라 완벽한
  *  전역 방어는 아니며, 스팸성 요청에 마찰을 주는 목적이다. sweepEvery번째 요청마다
  *  만료 키를 걷어내 장수 인스턴스의 메모리 단조 증가를 막는다. */

@@ -54,6 +54,18 @@ describe('POST /api/sessions/verify-code', () => {
     const json = await (await POST(req({ code: 'K7M2P9', childNo: 3 }))).json()
     expect(json.alreadyTested).toBe('submitted')
   })
+  it('검사 진행 중이면 alreadyTested=inProgress', async () => {
+    vi.mocked(db.childTestState).mockResolvedValue('inProgress')
+    const json = await (await POST(req({ code: 'K7M2P9', childNo: 3 }))).json()
+    expect(json.alreadyTested).toBe('inProgress')
+  })
+  it('findClassCode 실패 시 502이며 내부 오류 원문이 응답에 새지 않는다', async () => {
+    vi.mocked(db.findClassCode).mockRejectedValue(new Error('db 커넥션 실패'))
+    const res = await POST(req({ code: 'K7M2P9', childNo: 3 }))
+    const json = await res.json()
+    expect(res.status).toBe(502)
+    expect(json.error).not.toMatch(/db 커넥션 실패/)
+  })
   it('[REGRESSION] 응답에 다른 아동 번호 목록이 실리지 않는다 — 물어본 번호의 상태만 답한다', async () => {
     const json = await (await POST(req({ code: 'K7M2P9', childNo: 3 }))).json()
     expect(Object.keys(json).sort()).toEqual(

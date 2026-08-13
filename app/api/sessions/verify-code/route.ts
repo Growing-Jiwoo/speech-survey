@@ -5,11 +5,12 @@
 import { NextResponse } from 'next/server'
 import { childTestState, findClassCode } from '@/lib/db'
 import { verifyCodeSchema } from '@/lib/schema'
-import { clientIp, createRateLimiter, jsonError } from '@/lib/request'
+import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
 
 export const runtime = 'nodejs'
 
-const rateLimited = createRateLimiter(20, 10 * 60_000)
+// 정책값(숫자)은 sessions 라우트와 공유하지만(lib/request.ts 참고), 버킷은 이 라우트 전용으로 독립이다.
+const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))

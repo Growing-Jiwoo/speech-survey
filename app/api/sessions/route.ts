@@ -4,14 +4,13 @@ import { NextResponse } from 'next/server'
 import { createSession } from '@/lib/db'
 import { createSessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { clientIp, createRateLimiter, jsonError } from '@/lib/request'
+import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
 import { sessionCreateSchema } from '@/lib/schema'
 
 export const runtime = 'nodejs'
 
-const RATE_LIMIT = 20 // IP당 시간창 내 허용 세션 생성 수
-const RATE_WINDOW_MS = 10 * 60_000
-const rateLimited = createRateLimiter(RATE_LIMIT, RATE_WINDOW_MS)
+// 정책값(숫자)은 verify-code 라우트와 공유하지만(lib/request.ts 참고), 버킷은 이 라우트 전용으로 독립이다.
+const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))
