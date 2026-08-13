@@ -82,7 +82,7 @@
 
 1. `npm install`
 2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 순서대로 실행:
-   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql` → `008_guardian_consent.sql` → `009_reading_marks.sql` → `010_class_and_contact.sql` → `011_scoring.sql` → `012_discontinued.sql` → `013_discontinued_comment.sql` → `014_drop_discontinued.sql`
+   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql` → `008_guardian_consent.sql` → `009_reading_marks.sql` → `010_class_and_contact.sql` → `011_scoring.sql` → `012_discontinued.sql` → `013_discontinued_comment.sql` → `014_drop_discontinued.sql` → `015_class_codes.sql`
    - ⚠️ `003`은 기존 `questions`/`responses`/`attempts`/`sessions` 테이블과 데이터를 폐기한다.
      (`002`는 003 이전 스키마 전용 레거시 — 실행하지 말 것, 파일 상단 주석 참고)
    - `004`는 관리자 로그인 무차별 대입 방어용 `login_attempts` 테이블을 만든다.
@@ -101,6 +101,10 @@
      2026-08-13) — 이미 운영 중인 DB라면 컬럼 삭제가 되돌릴 수 없는 데이터 손실이라는 점을 감안할 것.
      적용 순서도 주의: 구코드는 `discontinued_at`을 SELECT하므로, 리셋 전제가 깨진 환경에서는
      코드 배포 후(또는 동시에) 적용해야 한다 — 먼저 적용하면 구코드가 없는 컬럼을 조회해 깨진다.
+   - `015`도 **파괴적**이다 — 학급 코드 발급 테이블(`class_codes`)을 만들고, `sessions`에
+     `class_code_id`(코드 참조)·`child_no`(학급 내 출석 번호)를 `not null`로 추가하며,
+     더는 쓰지 않는 `examiner_type`을 제거한다. 마찬가지로 배포 전 DB 전체 리셋을 전제로 한다
+     (사용자 확정 2026-08-13) — 기존 행이 있으면 `not null` 추가가 실패하거나 데이터가 사라진다.
 3. `cp .env.local.example .env.local` 후 값 채우기
    - `ADMIN_PASSWORD_HASH`: `npm run hash-password -- '원하는비밀번호'` 실행 → **".env.local용" 라벨이 붙은 줄**을 그대로 복사해 붙여넣는다.
      - ⚠️ argon2id 해시(`$argon2id$v=19$...`)는 `$`를 필드 구분자로 쓰는데, Next.js는 `.env*` 파일의 `$VAR`를
