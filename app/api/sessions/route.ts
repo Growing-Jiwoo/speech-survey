@@ -34,7 +34,9 @@ export async function POST(req: Request) {
     // grade는 어떤 검사지(양식)로 진행할지 정한다 — 코드가 정한 값을 서버가 내려준다.
     return NextResponse.json({ sessionId, sessionToken, grade: classCode.grade })
   } catch (e) {
-    console.error('[sessions] createSession 실패', e)
+    // 이 try 블록은 코드 조회(findClassCode)와 세션 생성(createSession) 둘 다 감싼다 —
+    // 라벨을 하나로 좁히면 장애 시 원인을 오인한다(예: DB 연결 장애를 "세션 생성 실패"로 오독).
+    console.error('[sessions] 코드 조회 또는 세션 생성 실패', e)
     return jsonError('문제가 생겼어요. 잠시 후 다시 시도해 주세요.', 502)
   }
 }

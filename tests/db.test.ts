@@ -16,12 +16,18 @@ const storage = {
   createSignedUrl: vi.fn(),
 }
 
-function chain(result: unknown) {
+// insert() 인자 캡처: 테이블별로 넘어온 insert payload를 그대로 쌓아 둔다.
+// (createSession처럼 "어느 필드가 어느 컬럼으로 가는지"를 검증해야 하는 테스트가 읽는다.)
+const insertCallsByTable = new Map<string, unknown[]>()
+
+function chain(result: unknown, onInsert?: (arg: unknown) => void) {
   const target = () => {}
   const proxy: unknown = new Proxy(target, {
     get(_t, prop) {
       if (prop === 'then')
         return (resolve: (v: unknown) => void) => resolve(result)
+      if (prop === 'insert' && onInsert)
+        return (arg: unknown) => { onInsert(arg); return proxy }
       return () => proxy
     },
     apply() { return proxy },
@@ -35,7 +41,11 @@ vi.mock('@/lib/supabase', () => ({
       fromCalls.push(table)
       const queue = tableQueues.get(table)
       const result = queue && queue.length > 0 ? queue.shift() : { data: null, error: null }
-      return chain(result)
+      return chain(result, (arg) => {
+        const calls = insertCallsByTable.get(table) ?? []
+        calls.push(arg)
+        insertCallsByTable.set(table, calls)
+      })
     },
     storage: { from: () => storage },
     rpc: vi.fn().mockResolvedValue({ error: null }),
@@ -43,7 +53,8 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  childTestState, countSessionRecordings, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
+  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
+  type ClassCodeRow,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
@@ -62,6 +73,7 @@ const enqueue = (table: string, result: unknown) => {
 beforeEach(() => {
   tableQueues.clear()
   fromCalls.length = 0
+  insertCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -254,6 +266,58 @@ describe('class_codes', () => {
   it('childTestState: 행이 없으면 null', async () => {
     enqueue('sessions', { data: [], error: null })
     expect(await childTestState('cc-1', 3)).toBeNull()
+  })
+})
+
+// 필드마다 값을 다르게 둔다 — 같은 값을 쓰면 컬럼이 뒤바뀌어도 단언이 통과해버려 못 잡는다.
+// 특히 grade(3)↔class_no(5), school_region↔school_id처럼 "타입이 같아 뒤바뀌어도 안 들키는 쌍"을
+// 서로 다른 값으로 채워 명시적으로 구분한다.
+const CLASS_CODE: ClassCodeRow = {
+  id: 'cc-1111-aaaa', code: 'K7M2P9',
+  school_region: '서울특별시교육청', school_id: 'S001', school_name: '테스트초등학교',
+  grade: 3, class_no: 5,
+  teacher_name: '김담임', teacher_phone: '01011112222', teacher_email: 'teacher@test.kr',
+  created_at: '2026-01-01T00:00:00Z',
+}
+
+describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르게 배선된다', () => {
+  it('코드 행의 각 필드가 올바른 컬럼으로 가고, 아동 정보·guardian_consented_at도 함께 기록된다', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    const before = Date.now()
+
+    const id = await createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개',
+    })
+
+    expect(id).toBe(SID)
+    const inserted = insertCallsByTable.get('sessions')
+    expect(inserted).toHaveLength(1)
+    const row = inserted![0] as Record<string, unknown>
+
+    // grade ↔ class_no: 둘 다 int라 뒤바뀌어도 타입 에러가 안 난다 — 값으로 구분해야 잡힌다.
+    expect(row.grade).toBe(3)
+    expect(row.class_no).toBe(5)
+    // school_id ↔ school_region: 둘 다 string이라 마찬가지.
+    expect(row.school_region).toBe('서울특별시교육청')
+    expect(row.school_id).toBe('S001')
+    expect(row.school_name).toBe('테스트초등학교')
+
+    expect(row.teacher_name).toBe('김담임')
+    expect(row.teacher_phone).toBe('01011112222')
+    expect(row.teacher_email).toBe('teacher@test.kr')
+
+    expect(row.class_code_id).toBe('cc-1111-aaaa')
+    expect(row.child_no).toBe(7)
+    expect(row.birth_ymd).toBe('180101')
+    expect(row.gender).toBe('여')
+    expect(row.child_name).toBe('아무개')
+
+    // 법정대리인 동의 확인 시각(제22조의2) — 세션 생성 시점에 기록되는지 직접 확인.
+    expect(typeof row.guardian_consented_at).toBe('string')
+    const consentedAt = new Date(row.guardian_consented_at as string).getTime()
+    expect(consentedAt).toBeGreaterThanOrEqual(before)
+    expect(consentedAt).toBeLessThanOrEqual(Date.now())
   })
 })
 

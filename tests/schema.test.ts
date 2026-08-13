@@ -70,4 +70,21 @@ describe('classCodeCreateSchema — 학급 코드 발급 폼', () => {
   it('전화 형식이 틀리면 거부', () => {
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '12345' }).success).toBe(false)
   })
+
+  // classNo/grade/optionalEmail은 sessionCreateSchema 삭제(Task 6)로 유일한 zod 레벨
+  // 테스트가 없어졌다 — classCodeCreateSchema를 통해 여전히 살아 있는 코드이므로 여기서 보강한다.
+  it('classNo: 0(단일학급·반 없음)은 통과, 범위 밖은 거부', () => {
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, classNo: 0 }).success).toBe(true)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, classNo: -1 }).success).toBe(false)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, classNo: 100 }).success).toBe(false)
+  })
+  it('grade 경계값 — 1·6은 통과, 0·7은 거부', () => {
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, grade: 1 }).success).toBe(true)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, grade: 6 }).success).toBe(true)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, grade: 0 }).success).toBe(false)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, grade: 7 }).success).toBe(false)
+  })
+  it('teacherEmail 형식이 틀리면 거부', () => {
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '', teacherEmail: 'not-an-email' }).success).toBe(false)
+  })
 })
