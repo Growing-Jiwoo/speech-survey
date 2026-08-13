@@ -74,3 +74,17 @@ export function clearState(): void {
     localStorage.removeItem(LAST_KEY)
   } catch { /* noop */ }
 }
+
+/** 학급 코드 기억 — 진행 상태와 **별도 키**라 clearState가 지우지 않는다.
+ *  한 학급을 연달아 검사할 때 코드 재입력을 덜기 위한 것으로, 세션 생성 성공 직후에만
+ *  저장한다(오타·확인 모달 취소가 남지 않게 — 스펙 "연속 검사").
+ *  ⚠️ 아동 개인정보(이름·번호·성별·생년월일)는 여기든 어디든 별도 키로 남기지 않는다. */
+const CODE_KEY = 'kodys-survey:classCode'
+
+export function saveClassCode(code: string): void {
+  try { localStorage.setItem(CODE_KEY, code) } catch { /* noop */ }
+}
+
+export function loadClassCode(): string | null {
+  try { return localStorage.getItem(CODE_KEY) } catch { return null }
+}

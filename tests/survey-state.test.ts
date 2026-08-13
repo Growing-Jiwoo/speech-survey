@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { newState, saveState, loadState, clearState } from '@/lib/survey-state'
+import { newState, saveState, loadState, clearState, saveClassCode, loadClassCode } from '@/lib/survey-state'
 
 // node 환경에는 localStorage가 없으므로 Map 기반 스텁을 주입한다.
 beforeEach(() => {
@@ -113,5 +113,22 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
       getItem: () => { throw new Error('SecurityError') },
     } as unknown as Storage
     expect(() => clearState()).not.toThrow()
+  })
+})
+
+describe('학급 코드 기억 (연속 검사 — 스펙 2026-08-13)', () => {
+  it('[REGRESSION] clearState는 학급 코드를 지우지 않는다 — 진행 상태(아동 정보 포함)만 지운다', () => {
+    saveState(newState('sid', '이하늘', 'tok', 1))
+    saveClassCode('K7M2P9')
+    clearState()
+    expect(loadClassCode()).toBe('K7M2P9')
+    expect(loadState()).toBeNull()
+    expect(localStorage.getItem('kodys-survey:sid')).toBeNull()
+    expect(localStorage.getItem('kodys-survey:last')).toBeNull()
+  })
+  it('새 코드가 이전 코드를 덮어쓴다 (코드는 하나만 유지)', () => {
+    saveClassCode('AAAAAA')
+    saveClassCode('BBBBBB')
+    expect(loadClassCode()).toBe('BBBBBB')
   })
 })
