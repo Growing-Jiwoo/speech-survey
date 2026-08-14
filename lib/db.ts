@@ -3,21 +3,21 @@ import { sb } from './supabase'
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
 
 export interface NewSessionInput {
-  schoolRegion: string; schoolId: string; schoolName: string
-  birthYmd: string; grade: number; classNo: number; gender: '남' | '여'
-  childName: string; teacherName: string
-  /** 전화·이메일 중 하나는 반드시 non-null (스키마가 보장). 미입력 칸은 null로 저장한다. */
-  teacherPhone: string | null; teacherEmail: string | null
-  examinerType: 'teacher' | 'expert'
+  /** 학급 정보의 원본 — 세션 행에 비정규화 복사한다(스펙 "DB" 절). 코드를 나중에 고쳐도
+   *  이미 만든 세션은 검사 당시 값을 유지한다(임상 기록 관점). */
+  classCode: ClassCodeRow
+  childNo: number
+  birthYmd: string; gender: '남' | '여'; childName: string
 }
 
 export async function createSession(s: NewSessionInput): Promise<string> {
+  const c = s.classCode
   const { data, error } = await sb().from('sessions').insert({
-    school_region: s.schoolRegion, school_id: s.schoolId, school_name: s.schoolName,
-    birth_ymd: s.birthYmd, grade: s.grade, class_no: s.classNo, gender: s.gender,
-    child_name: s.childName, teacher_name: s.teacherName,
-    teacher_phone: s.teacherPhone, teacher_email: s.teacherEmail,
-    examiner_type: s.examinerType,
+    class_code_id: c.id, child_no: s.childNo,
+    school_region: c.school_region, school_id: c.school_id, school_name: c.school_name,
+    grade: c.grade, class_no: c.class_no,
+    teacher_name: c.teacher_name, teacher_phone: c.teacher_phone, teacher_email: c.teacher_email,
+    birth_ymd: s.birthYmd, gender: s.gender, child_name: s.childName,
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
@@ -195,6 +195,79 @@ export async function signedAudioUrl(path: string): Promise<string> {
   return data!.signedUrl
 }
 
+// ---------- 학급 코드 (스펙 2026-08-13 — 관리자 발급, 세션 생성이 비정규화 복사) ----------
+
+export interface ClassCodeRow {
+  id: string
+  code: string
+  school_region: string; school_id: string; school_name: string
+  grade: number; class_no: number
+  teacher_name: string; teacher_phone: string | null; teacher_email: string | null
+  created_at: string
+}
+
+const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at'
+
+export interface NewClassCodeInput {
+  code: string
+  schoolRegion: string; schoolId: string; schoolName: string
+  grade: number; classNo: number
+  teacherName: string
+  /** 전화·이메일 중 하나는 non-null(스키마가 보장). 전화는 하이픈 없는 숫자만 */
+  teacherPhone: string | null; teacherEmail: string | null
+}
+
+/** unique 충돌이면 'duplicate' — 라우트가 새 코드로 재시도한다(23505 = unique_violation). */
+export async function insertClassCode(c: NewClassCodeInput): Promise<ClassCodeRow | 'duplicate'> {
+  const { data, error } = await sb().from('class_codes').insert({
+    code: c.code,
+    school_region: c.schoolRegion, school_id: c.schoolId, school_name: c.schoolName,
+    grade: c.grade, class_no: c.classNo,
+    teacher_name: c.teacherName, teacher_phone: c.teacherPhone, teacher_email: c.teacherEmail,
+  }).select(CLASS_CODE_COLS).single()
+  if ((error as { code?: string } | null)?.code === '23505') return 'duplicate'
+  fail(error)
+  return data as unknown as ClassCodeRow
+}
+
+export type ClassCodeListRow = ClassCodeRow & { sessions: { count: number }[] }
+
+export async function listClassCodes(): Promise<ClassCodeListRow[]> {
+  const { data, error } = await sb().from('class_codes')
+    .select(`${CLASS_CODE_COLS}, sessions(count)`)
+    .order('created_at', { ascending: false })
+  fail(error)
+  return (data ?? []) as unknown as ClassCodeListRow[]
+}
+
+/** 세션이 참조 중이면 'in_use'(23503 = foreign_key_violation — FK restrict가 최종 방어). */
+export async function deleteClassCode(id: string): Promise<'ok' | 'in_use'> {
+  const { error } = await sb().from('class_codes').delete().eq('id', id)
+  if ((error as { code?: string } | null)?.code === '23503') return 'in_use'
+  fail(error)
+  return 'ok'
+}
+
+export async function findClassCode(code: string): Promise<ClassCodeRow | null> {
+  const { data, error } = await sb().from('class_codes')
+    .select(CLASS_CODE_COLS).eq('code', code).maybeSingle()
+  fail(error)
+  return (data as unknown as ClassCodeRow) ?? null
+}
+
+/** 같은 학급·같은 아동 번호의 기존 검사 상태 — 중복 검사 경고용.
+ *  제출본이 하나라도 있으면 'submitted', 미제출만 있으면 'inProgress', 없으면 null.
+ *  ⚠️ 번호 목록을 만들지 않는다 — 물어본 번호 하나에 대해서만 답한다(스펙 "중복 검사 경고"). */
+export async function childTestState(
+  classCodeId: string, childNo: number,
+): Promise<'submitted' | 'inProgress' | null> {
+  const { data, error } = await sb().from('sessions').select('submitted_at')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo)
+  fail(error)
+  if (!data || data.length === 0) return null
+  return data.some(r => r.submitted_at) ? 'submitted' : 'inProgress'
+}
+
 // ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------
 
 /** 해당 IP가 현재 잠금 상태인지 (실패 임계 도달 + 잠금시각 이내) */
@@ -230,6 +303,10 @@ export async function clearLoginFailures(ip: string): Promise<void> {
 
 export interface SessionRow {
   id: string
+  /** 발급된 학급 코드 참조. 학급 정보는 생성 시점에 아래 컬럼들로 복사돼 있다 */
+  class_code_id: string
+  /** 학급 내 출석 번호(1~99). 같은 번호의 재검사가 있을 수 있다 */
+  child_no: number
   school_region: string; school_id: string; school_name: string
   birth_ymd: string; grade: number; class_no: number; gender: string
   child_name: string; teacher_name: string
@@ -238,8 +315,6 @@ export interface SessionRow {
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
-  /** 검사지 헤더의 "교사 / 전문가" 구분. 도입 전(011 이전) 수집분은 null */
-  examiner_type: 'teacher' | 'expert' | null
 }
 
 export interface RecordingRow {
@@ -249,7 +324,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at, examiner_type'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

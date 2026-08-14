@@ -14,6 +14,7 @@ const G1_WRITE = itemsFor(formForGrade(1)).writingItems.map(i => i.code)
 export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
   return {
     id: 'id-' + Math.random().toString(36).slice(2),
+    class_code_id: '11111111-1111-1111-1111-111111111111', child_no: 3,
     school_region: '서울', school_id: 'sch-1', school_name: '가나초등학교',
     birth_ymd: '2019-03-01', grade: 1, class_no: 2, gender: '남',
     child_name: '김테스트', teacher_name: '이담임',
@@ -21,7 +22,6 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
-    examiner_type: null,
     recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }
@@ -190,6 +190,12 @@ describe('filterSessions', () => {
     expect(filterSessions(rows, f({ q: '이담임' }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(rows, f({ q: '최선생' }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(rows, f({ q: '5' }), kstDateKey(now))).toHaveLength(1) // 반 번호
+  })
+  it('검색어가 아동 번호와 일치하면 잡힌다', () => {
+    // '7'이 '17'·'70' 등에 부분일치하지 않도록 서로 겹치지 않는 값으로 구성.
+    const rows = [mkSession({ child_no: 7 }), mkSession({ child_no: 12 })]
+    const out = filterSessions(rows, f({ q: '7' }), kstDateKey(now))
+    expect(out.map(s => s.child_no)).toEqual([7])
   })
   it('상태·학교·학년·오늘 필터가 AND로 결합된다', () => {
     expect(filterSessions(base, f({ status: 'submitted' }), kstDateKey(now))).toHaveLength(1)

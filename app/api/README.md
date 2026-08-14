@@ -9,6 +9,7 @@
 | 라우트 | 역할 · 방어 |
 |---|---|
 | `POST /api/sessions` | 세션 생성. zod 검증(`lib/schema`) + IP 레이트리밋(인메모리, best-effort) → **세션 스코프 HMAC 토큰**(24h) 발급. 이후 쓰기 요청은 이 토큰 필수 |
+| `POST /api/sessions/verify-code` | 학급 코드 조회(검사 시작 전 확인 모달용). **인증 없음** — 코드를 아는 사람 누구나 호출 가능하고 응답에 담임 연락처가 실린다. IP 레이트리밋(세션 생성과 동일 정책)으로 코드 열거를 억제. 아동 번호는 **물어본 번호 하나의 상태만** 답한다(`alreadyTested`) — 학급 번호 목록은 만들지도 반환하지도 않는다(사용자 확정 2026-08-13, 중복 검사 경고 스펙) |
 | `POST /api/recordings` | 녹음 업로드. 검증 사슬: 형식 → 세션 토큰 → 5MB 상한 → MIME allowlist+매직바이트 → 미제출 세션인지(제출 후 변조 차단) → 세션당 총량 상한. DB 기록 실패 시 방금 올린 객체를 보상 정리(고아 파일 방지) |
 | `POST /api/sessions/submit` | 최종 제출. 낱말쓰기/체크리스트 형식 검증 → 토큰 검증 → 미제출 세션만 갱신(재제출 409) |
 
@@ -21,6 +22,8 @@
 | `GET /api/admin/sessions` | 목록(최대 5,000행 — 초과 시 서버 페이지네이션 도입 필요, 코드에 경고 로그) |
 | `GET /api/admin/sessions/[id]` | 결과지. 녹음은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출 |
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
+| `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`로 펴서 응답, `sessions` 원본 키는 비노출) |
+| `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
 
 ## 관례
 

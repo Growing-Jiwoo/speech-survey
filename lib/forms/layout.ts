@@ -81,7 +81,9 @@ export interface SheetLayout {
     childName: HeaderCol
     birth: HeaderCol
     testedAt: HeaderCol
-    /** 검사자 구분: 해당 낱말에 타원을 그린다 */
+    /** 검사자 구분(교사/전문가) 좌표 — 수집 자체가 폐기돼(사용자 확정 2026-08-13) 지금은
+     *  찍지 않는다. 원본 검사지에 인쇄된 글자의 실측 위치라 데이터로만 남겨 둔다 —
+     *  검사자 구분이 다시 필요해지면 다시 뽑을 필요 없이 이 값을 쓴다. */
     examiner: { teacher: { cx: number; rx: number }; expert: { cx: number; rx: number }; cy: number }
   }
 

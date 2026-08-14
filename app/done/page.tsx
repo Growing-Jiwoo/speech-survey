@@ -17,7 +17,8 @@ export default function DonePage() {
       <p className="text-sm leading-relaxed text-ink-soft lg:text-base">
         참여해 주셔서 감사합니다.
       </p>
-      <Link href="/" className="cta mt-6 max-w-60">처음 화면으로</Link>
+      {/* 코드는 남아 있어(saveClassCode) 다음 학생은 아동 정보만 입력한다 */}
+      <Link href="/" className="cta mt-6 max-w-60">다음 학생 검사하기</Link>
     </main>
   )
 }

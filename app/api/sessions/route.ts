@@ -1,38 +1,18 @@
-// POST /api/sessions — 검사 세션 생성(아동 정보 저장) + 세션 스코프 토큰 발급.
-// 이후 녹음 업로드·제출은 이 토큰을 동봉해야 한다(임의 세션 쓰기 차단).
+// POST /api/sessions — 검사 세션 생성(학급 코드 + 아동 정보) + 세션 스코프 토큰 발급.
+// 학급 정보(학교·학년·반·담임·연락처)는 클라이언트가 보낸 값을 받지 않는다 —
+// 코드를 다시 조회해 서버가 복사한다(스펙 2026-08-13). 이후 녹음 업로드·제출은 토큰 동봉 필수.
 import { NextResponse } from 'next/server'
-import { createSession } from '@/lib/db'
+import { createSession, findClassCode } from '@/lib/db'
 import { createSessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { clientIp, jsonError } from '@/lib/request'
+import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
 import { sessionCreateSchema } from '@/lib/schema'
 
 export const runtime = 'nodejs'
 
-const RATE_LIMIT = 20 // IP당 시간창 내 허용 세션 생성 수
-const RATE_WINDOW_MS = 10 * 60_000
-const SWEEP_EVERY = 100 // N번째 요청마다 전체 만료 키 청소(사라진 IP 엔트리의 무한 누적 방지)
-// best-effort 인메모리 카운터. 서버리스 환경에서는 인스턴스별로 독립되어 완벽한 전역 방어는 아니며,
-// 스팸성 세션 생성을 완화하는 목적(마찰 추가)이다.
-const hits = new Map<string, number[]>()
-let sweepCounter = 0
-
-function rateLimited(ip: string): boolean {
-  const now = Date.now()
-  // 장수 인스턴스(로컬/컨테이너)에서 한 번 오고 사라진 IP의 엔트리가 영구 잔존해
-  // 메모리가 단조 증가하는 것을 막는다 — 주기적으로 전체 맵에서 만료 키를 걷어낸다.
-  if (++sweepCounter % SWEEP_EVERY === 0) {
-    for (const [key, times] of hits) {
-      const alive = times.filter(t => now - t < RATE_WINDOW_MS)
-      if (alive.length === 0) hits.delete(key)
-      else hits.set(key, alive)
-    }
-  }
-  const recent = (hits.get(ip) ?? []).filter(t => now - t < RATE_WINDOW_MS)
-  recent.push(now)
-  hits.set(ip, recent)
-  return recent.length > RATE_LIMIT
-}
+// verify-code보다 빡빡한 상한 — 방어 대상이 스팸 세션 행 생성이라서다. 두 라우트가 왜
+// 다른 상한을 쓰는지는 lib/request.ts의 VERIFY_CODE_RATE_LIMIT 주석 참고.
+const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))
@@ -45,17 +25,19 @@ export async function POST(req: Request) {
 
   const d = parsed.data
   try {
+    const classCode = await findClassCode(d.code)
+    if (!classCode) return jsonError('코드를 확인해 주세요.', 404)
     const sessionId = await createSession({
-      schoolRegion: d.region, schoolId: d.schoolId, schoolName: d.schoolName,
-      birthYmd: d.birthYmd, grade: d.grade, classNo: d.classNo, gender: d.gender,
-      childName: d.name, teacherName: d.teacherName,
-      teacherPhone: d.teacherPhone || null, teacherEmail: d.teacherEmail || null,
-      examinerType: d.examinerType,
+      classCode, childNo: d.childNo,
+      birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
     })
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
-    return NextResponse.json({ sessionId, sessionToken })
+    // grade는 어떤 검사지(양식)로 진행할지 정한다 — 코드가 정한 값을 서버가 내려준다.
+    return NextResponse.json({ sessionId, sessionToken, grade: classCode.grade })
   } catch (e) {
-    console.error('[sessions] createSession 실패', e)
+    // 이 try 블록은 코드 조회(findClassCode)와 세션 생성(createSession) 둘 다 감싼다 —
+    // 라벨을 하나로 좁히면 장애 시 원인을 오인한다(예: DB 연결 장애를 "세션 생성 실패"로 오독).
+    console.error('[sessions] 코드 조회 또는 세션 생성 실패', e)
     return jsonError('문제가 생겼어요. 잠시 후 다시 시도해 주세요.', 502)
   }
 }

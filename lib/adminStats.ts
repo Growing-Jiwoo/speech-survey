@@ -116,7 +116,8 @@ export function filterSessions(sessions: SessionListRow[], f: Filters, todayKey:
       && !s.child_name.includes(keyword)
       && !s.school_name.includes(keyword)
       && !s.teacher_name.includes(keyword)
-      && !String(s.class_no).includes(keyword)) return false
+      && !String(s.class_no).includes(keyword)
+      && !String(s.child_no).includes(keyword)) return false
     return true
   })
 }

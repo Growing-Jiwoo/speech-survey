@@ -256,6 +256,9 @@ function build(form: SurveyForm): FormItems {
     // (섹션 안내를 띄울 "첫 페이지"는 진행 화면이 **실제 진행 목록**에서 찾는다 —
     //  양식의 고정 목록으로 정하면 연습을 건너뛴 검사에서 안내가 사라진다.)
     recordingPages,
-    totals: { rec: recordingPages.length, write: writingItems.length },
+    // sessionProgress·AdminDetailView가 이 함수의 메모된 결과를 그대로 참조로 반환한다
+    // (itemsFor 자체가 학년별로 캐시됨) — 아무도 변형하지 않지만 얼려서 구조적으로 막는다
+    // (사용자 확정, PR A 최종 리뷰 M-2).
+    totals: Object.freeze({ rec: recordingPages.length, write: writingItems.length }),
   }
 }
