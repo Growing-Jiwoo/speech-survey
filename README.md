@@ -85,36 +85,14 @@
 ## 셋업
 
 1. `npm install`
-2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 순서대로 실행:
-   `001_init.sql` → `003_kodys_redesign.sql` → `004_login_attempts.sql` → `005_cascade_and_indexes.sql` → `006_login_lockout_decay.sql` → `007_harden_rpc.sql` → `008_guardian_consent.sql` → `009_reading_marks.sql` → `010_class_and_contact.sql` → `011_scoring.sql` → `012_discontinued.sql` → `013_discontinued_comment.sql` → `014_drop_discontinued.sql` → `015_class_codes.sql`
-   - ⚠️ `003`은 기존 `questions`/`responses`/`attempts`/`sessions` 테이블과 데이터를 폐기한다.
-     (`002`는 003 이전 스키마 전용 레거시 — 실행하지 말 것, 파일 상단 주석 참고)
-   - `004`는 관리자 로그인 무차별 대입 방어용 `login_attempts` 테이블을 만든다.
-   - `005`는 FK에 `ON DELETE CASCADE`를 추가하고(세션 삭제 시 녹음·낱말쓰기 자동 정리), 조회 인덱스와
-     로그인 실패 원자적 증가 함수(`record_login_failure`)를 만든다.
-   - `006`은 잠금 만료 후 실패 카운트를 리셋해, 오답 1회로 잠금이 무한 연장되는 것을 막는다(관리자 로그인 DoS 완화).
-   - `007`은 `record_login_failure`의 EXECUTE 권한 회수·search_path 고정(방어 심층).
-   - `008`은 법정대리인 동의 확인 시각 컬럼(`guardian_consented_at`) 추가.
-   - `009`는 낱말 해독 O/X 테이블(원래 검사자 현장 채점용이었으나, 현장 채점 폐기 이후 관리자
-     최종 채점 저장소로 쓰인다), `010`은 단일학급(반 0)·담임 연락처 분리,
-     `011`은 문장 어절 점수 테이블(`sentence_scores`)과 검사자 구분, `012`는 중단 규칙 적용 시각
-     컬럼(`013`은 그 주석 갱신).
-   - `005`~`013`은 비파괴적이며 재실행해도 안전하다.
-   - `014`는 **파괴적**이다 — `012`가 추가한 `discontinued_at` 컬럼을 삭제한다(중단 규칙 폐기,
-     담당자 확정 2026-08-13). 배포 전 DB 전체를 리셋하는 것을 전제로 그대로 적용한다(사용자 확정
-     2026-08-13) — 이미 운영 중인 DB라면 컬럼 삭제가 되돌릴 수 없는 데이터 손실이라는 점을 감안할 것.
-     적용 순서도 주의: 구코드는 `discontinued_at`을 SELECT하므로, 리셋 전제가 깨진 환경에서는
-     코드 배포 후(또는 동시에) 적용해야 한다 — 먼저 적용하면 구코드가 없는 컬럼을 조회해 깨진다.
-   - `015`도 **파괴적**이다 — 학급 코드 발급 테이블(`class_codes`)을 만들고, `sessions`에
-     `class_code_id`(코드 참조)·`child_no`(학급 내 출석 번호)를 `not null`로 추가하며,
-     더는 쓰지 않는 `examiner_type`을 제거한다. 마찬가지로 배포 전 DB 전체 리셋을 전제로 한다
-     (사용자 확정 2026-08-13) — 기존 행이 있으면 `not null` 추가가 실패하거나 데이터가 사라진다.
-     적용 순서 주의는 `014`보다 훨씬 심각하다: 현재 코드(`lib/db.ts`의 `SESSION_COLS`·
-     `createSession`)는 이미 `class_code_id`·`child_no`를 읽고 쓰며 `examiner_type`은 더 이상
-     모른다 — 즉 코드가 `015` 적용 후의 스키마를 전제로 한다. 리셋 전제가 깨진 환경에서 `015`
-     적용보다 코드 배포가 먼저 나가면, 아직 없는 `class_code_id`/`child_no` 컬럼에 쓰려다
-     **세션 생성 자체가 전면 실패한다** — 반드시 `015` 적용 후(또는 동시에) 코드를 배포할 것
-     (`014`와 반대로, 여기서는 코드가 마이그레이션보다 앞서 나가면 안 된다).
+2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 `001_init.sql`(통합본,
+   구 001~015를 하나로 합친 것 — 구 이력은 git log 참고) 하나를 위→아래로 한 번에 실행한다.
+   - 학급 코드 발급 테이블(`class_codes`), 그를 참조하는 검사 세션(`sessions`), 녹음·낱말쓰기·
+     낱말해독 O/X·문장 어절 점수 테이블, 관리자 로그인 무차별 대입 방어(`login_attempts` +
+     `record_login_failure` RPC), RLS(정책 없음 = anon 전면 차단), 조회 인덱스, 녹음 스토리지
+     버킷까지 한 파일에서 만든다.
+   - 이미 데이터가 든 운영 DB가 있다면 **먼저 비우고**(또는 새 프로젝트를 만들고) 실행할 것 —
+     `create table`이라 기존 테이블과 이름이 겹치면 실패한다.
 3. `cp .env.local.example .env.local` 후 값 채우기
    - `ADMIN_PASSWORD_HASH`: `npm run hash-password -- '원하는비밀번호'` 실행 → **".env.local용" 라벨이 붙은 줄**을 그대로 복사해 붙여넣는다.
      - ⚠️ argon2id 해시(`$argon2id$v=19$...`)는 `$`를 필드 구분자로 쓰는데, Next.js는 `.env*` 파일의 `$VAR`를
@@ -205,7 +183,7 @@ Supabase가 없고 `.env.local`이 **원격**(실 아동 기록이 있을 수 �
 - **동의 절차(구현됨)**: ① 검사 전 가정통신문 서면 동의서
   ([docs/consent/guardian-consent-form.md](docs/consent/guardian-consent-form.md)) 배부·회수(시행령 제17조의2 ①4호)
   → ② 시작 화면에서 4대 고지사항(제15조②) 표시 + 검사자가 "서면 동의 확인" 필수 체크
-  → ③ 확인 시각이 `sessions.guardian_consented_at`에 기록(감사 증적, 마이그레이션 008)
+  → ③ 확인 시각이 `sessions.guardian_consented_at`에 기록(감사 증적, `supabase/migrations/001_init.sql`)
   → ④ 아동에게는 마이크 확인 화면에서 쉬운 말로 고지(제22조의2 ③).
   서면 동의서 원본은 운영 주체가 별도 보관한다. 고지 문구의 단일 소스는 `lib/consent.ts`.
 - **저장 위치**: 아동·검사 데이터는 `sessions`(+ 녹음·낱말쓰기, FK CASCADE)에, 담임 성명·전화·이메일은

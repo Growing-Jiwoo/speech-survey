@@ -1,26 +1,12 @@
 # supabase/ — DB 마이그레이션
 
-Supabase CLI를 쓰지 않는다 — **SQL Editor에서 번호 순서대로 직접 실행**한다(적용 순서와
-각 파일의 주의사항은 루트 README의 셋업 절 참고). 실행 이력이 DB에 남지 않으므로 각 파일은
-재실행 안전(idempotent)하게 작성하거나 파일 상단에 파괴 여부를 명시한다.
+Supabase CLI를 쓰지 않는다 — **SQL Editor에서 직접 실행**한다(적용 방법은 루트 README의 셋업 절
+참고). 실행 이력이 DB에 남지 않으므로 파일은 재실행 안전(idempotent)하게 작성하거나 파일 상단에
+파괴 여부를 명시한다.
 
 | 파일 | 내용 |
 |---|---|
-| `001_init.sql` | 초기 스키마 |
-| `002_widen_child_age.sql` | ⚠️ **레거시 — 실행 금지.** 003 이전 스키마 전용(파일 상단 주석 참고) |
-| `003_kodys_redesign.sql` | 읽기 선별검사 스키마로 재설계 — ⚠️ 기존 테이블·데이터 폐기 |
-| `004_login_attempts.sql` | 관리자 로그인 브루트포스 방어 테이블 |
-| `005_cascade_and_indexes.sql` | FK ON DELETE CASCADE(세션 삭제 시 자동 정리)·조회 인덱스·`record_login_failure` RPC(원자적 실패 기록) |
-| `006_login_lockout_decay.sql` | 잠금 만료 후 실패 카운트 리셋(잠금 무한 연장 DoS 완화) |
-| `007_harden_rpc.sql` | RPC EXECUTE 권한 회수·search_path 고정(방어 심층) |
-| `008_guardian_consent.sql` | 법정대리인 동의 확인 시각(`guardian_consented_at`) — 제22조의2 확인 의무의 감사 증적 |
-| `009_reading_marks.sql` | 낱말 해독 의미 낱말 O/X 테이블 — 원래 검사자 현장 채점(중단 규칙 판정 근거)이었으나, 현장 채점 폐기(담당자 확정 2026-08-13) 이후 관리자 최종 채점 저장소로 쓰인다 |
-| `010_class_and_contact.sql` | 단일학급(반 0) 허용·담임 연락처 전화/이메일 분리 |
-| `011_scoring.sql` | 어절 수 점수 테이블(`sentence_scores`)·검사자 구분(`examiner_type`, 015에서 컬럼 제거됨) |
-| `012_discontinued.sql` | 중단 규칙 ① 적용 시각(`discontinued_at`)을 추가 — 진행률 분모 판정에 썼다(014에서 컬럼 제거됨) |
-| `013_discontinued_comment.sql` | 위 컬럼 주석만 갱신(스키마 변경 없음) — 규칙 ①의 미실시 범위가 문장·쓰기에서 무의미·문장으로 바뀜(담당자 확정 2026-08-11) |
-| `014_drop_discontinued.sql` | `discontinued_at` 컬럼 제거(중단 규칙 폐기 — 담당자 확정 2026-08-13) |
-| `015_class_codes.sql` | `class_codes` 테이블 + `sessions.class_code_id`/`child_no` 추가, `examiner_type` 제거(파괴적 — DB 리셋 전제) |
+| `001_init.sql` | 초기 스키마 통합본(사용자 확정 2026-08-14) — 구 001~015를 하나로 합쳤다. 상쇄되는 마이그레이션(001의 폐기 테이블, 002, 012+013+014, 011의 `examiner_type`, 005의 구 `record_login_failure`)은 제외했다. **구 이력은 git log로 확인.** |
 
 ## 설계 메모
 
