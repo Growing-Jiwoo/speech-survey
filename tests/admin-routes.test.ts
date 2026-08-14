@@ -80,6 +80,17 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(res.status).toBe(500)
     expect((await res.json()).error).not.toMatch(/JSON object/)
   })
+  // 삭제된 세션을 장애와 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다.
+  // E2E(2026-08-14)에서 실제로 그랬다 — sessionDetail이 `.single()`이라 행 0개에 throw했고,
+  // sheet.pdf의 `if (!session)` 가드는 도달조차 못 했다.
+  it('[REGRESSION] 없는 세션은 404 — 장애(500)와 구분한다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: null, recordings: [], writing: [], marks: [], sentences: [],
+    })
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toMatch(/찾을 수 없/)
+  })
 })
 
 describe('DELETE /api/admin/sessions/[id]', () => {
@@ -110,6 +121,17 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
     marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+  })
+
+  // 이 라우트의 `if (!session)` 가드는 sessionDetail이 `.single()`이던 동안 도달조차 못 했다
+  // (행 0개에 throw → catch → 500). maybeSingle로 바꾼 뒤 가드가 실제로 동작하는지 고정한다.
+  it('[REGRESSION] 없는 세션은 404 — 삭제된 세션과 장애를 구분한다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: null, recordings: [], writing: [], marks: [], sentences: [],
+    })
+    const res = await SHEET(req(), ctx(SID))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toMatch(/찾을 수 없/)
   })
 
   it('PDF를 첨부 파일로 내려준다', async () => {
