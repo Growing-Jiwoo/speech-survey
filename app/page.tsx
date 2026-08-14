@@ -187,8 +187,12 @@ export default function StartPage() {
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="childNo">아동 번호</label>
+            {/* placeholder를 두지 않는다(사용자 확정 2026-08-15). 학급 코드의 `ABC234`는 짐작할 수
+                없는 형식(6자리·대문자·혼동 문자 제외)을 가르치지만, 번호칸의 예시 숫자는 라벨과
+                숫자 키패드가 이미 말하는 것을 되풀이할 뿐이다. 두 자리 폭 칸 속 회색 숫자는
+                입력된 값으로 오독되기 쉽고, 이 칸이 임상 기록을 어느 아이에게 붙일지 정한다. */}
             <input id="childNo" data-field="childNo" name="childNo" value={childNo} maxLength={2}
-              inputMode="numeric" placeholder="3"
+              inputMode="numeric"
               aria-describedby={errors.childNo ? 'err-childNo' : undefined} aria-invalid={!!errors.childNo}
               onChange={e => setChildNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
           </div>
