@@ -115,7 +115,7 @@ describe('DELETE /api/admin/sessions/[id]', () => {
 describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
   const detail = (started_at: string, submitted_at: string | null = null) => ({
     session: {
-      id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_name: '홍길동',
+      id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_no: 3, child_name: '홍길동',
       birth_ymd: '170310', started_at, submitted_at,
       checklist: [],
     } as never,
@@ -143,6 +143,20 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     const buf = await res.arrayBuffer()
     // PDF 매직 넘버
     expect(new TextDecoder().decode(buf.slice(0, 4))).toBe('%PDF')
+  })
+  // 한 학급 30명을 한꺼번에 받을 때 ① 동명이인이 서로 덮어쓰이지 않고 ② 파일 정렬이 출석
+  // 번호 순서와 같아야 한다. 0을 채우지 않으면 문자열 정렬에서 '2_'가 '11_'보다 뒤로 간다.
+  it('파일명은 두 자리 아동 번호로 시작한다 — 동명이인 덮어쓰기·정렬 어긋남 방지', async () => {
+    const d = detail('2026-08-07T06:25:08.000Z')
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(d)
+    const cd = (await SHEET(req(), ctx(SID))).headers.get('content-disposition') ?? ''
+    expect(decodeURIComponent(cd)).toContain('03_홍길동_2026-08-07.pdf')
+
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      ...d, session: { ...(d.session as object), child_no: 11 } as never,
+    })
+    const cd11 = (await SHEET(req(), ctx(SID))).headers.get('content-disposition') ?? ''
+    expect(decodeURIComponent(cd11)).toContain('11_홍길동_2026-08-07.pdf')
   })
   it('파일명 날짜는 KST 기준 — UTC로 계산하면 아침 검사가 하루 전으로 찍힌다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-06T23:00:00.000Z'))

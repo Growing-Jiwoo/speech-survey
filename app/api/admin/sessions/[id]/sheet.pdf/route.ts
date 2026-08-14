@@ -8,6 +8,7 @@ import { itemsFor } from '@/lib/items'
 import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
 import { stampSheet } from '@/lib/pdf/stamp-sheet'
 import { kstDateKey } from '@/lib/adminStats'
+import { pad2 } from '@/lib/format'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +36,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
     // 검사지에 찍히는 검사일과 같은 KST 기준 — UTC로 자르면 아침 검사가 하루 전으로 어긋난다.
     const date = kstDateKey(new Date(session.started_at))
-    const name = `${session.child_name}_${date}.pdf`
+    // 아동 번호를 두 자리로 앞세운다(사용자 확정 2026-08-15): 한 학급 30명을 한꺼번에 받으면
+    // ① 동명이인 파일이 서로 덮어쓰이고 ② 이름 정렬이 출석 번호 순서와 어긋나 인쇄물을 손으로
+    // 다시 줄 세워야 했다. `03_`처럼 0을 채워야 문자열 정렬이 번호 순서와 같아진다(2_ > 11_).
+    const name = `${pad2(session.child_no)}_${session.child_name}_${date}.pdf`
     return new NextResponse(bytes as BodyInit, {
       headers: {
         'content-type': 'application/pdf',

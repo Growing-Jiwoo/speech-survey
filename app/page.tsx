@@ -68,14 +68,16 @@ export default function StartPage() {
   const [confirm, setConfirm] = useState<ClassInfo | null>(null)
   // 세션 생성 실패 시 모달 안에 보여줄 오류 — 모달을 닫지 않고 재시도할 수 있게 한다
   const [confirmErr, setConfirmErr] = useState('')
-  // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(childName) 함께 보여 이어하기를 돕는다
-  const [resume, setResume] = useState<{ childName: string } | null>(null)
+  // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(번호+이름) 함께 보여 이어하기를 돕는다.
+  // 번호를 같이 밝히는 이유: 이 흐름은 아동을 코드+번호로 지목하므로 이름만으로는
+  // 검사자가 "지금 부른 아이"와 같은 아이인지 대조할 근거가 한 칸 부족하다.
+  const [resume, setResume] = useState<{ childName: string; childNo: number } | null>(null)
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
     const s = loadState()
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (s) setResume({ childName: s.childName })
+    if (s) setResume({ childName: s.childName, childNo: s.childNo })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
     const last = loadClassCode()
     if (last) setCode(last)
@@ -128,7 +130,7 @@ export default function StartPage() {
     if (!r.ok) { setBusy(false); setConfirmErr(r.error); return }
     saveClassCode(cleanCode)
     clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
-    saveState(newState(r.data.sessionId, cleanName, r.data.sessionToken, r.data.grade))
+    saveState(newState(r.data.sessionId, cleanName, childNoNum, r.data.sessionToken, r.data.grade))
     router.push('/survey')
   }
 
@@ -149,7 +151,7 @@ export default function StartPage() {
         <div className="card mt-6 flex w-full flex-col gap-3 border-blue/40 bg-blue/5 p-4">
           <p className="text-sm font-bold text-ink-soft">
             {resume.childName
-              ? <><b className="text-blue">{resume.childName}</b> 학생의 검사가 진행 중이에요.</>
+              ? <><b className="text-blue">{resume.childNo}번 {resume.childName}</b> 학생의 검사가 진행 중이에요.</>
               : '이 기기에 진행 중인 검사가 있어요.'}
           </p>
           <div className="flex gap-2">
