@@ -26,7 +26,7 @@ export function AdminDetailView() {
   const back = useSearchParams().get('back')
   const listHref = back ? `/admin?${back}` : '/admin'
   const queryClient = useQueryClient()
-  const { data, isLoading, isError, refetch } = useSessionDetailQuery(id)
+  const { data, isLoading, isError, error, refetch } = useSessionDetailQuery(id)
 
   // 세션 삭제(PII 파기): 확인 모달 → DELETE → 목록 캐시 무효화 후 목록으로 복귀
   // 저장하지 않은 채점이 있는데 아동을 옮기면 그 채점은 사라진다(다른 아동 화면은 다시 마운트된다).
@@ -74,15 +74,23 @@ export function AdminDetailView() {
   const attemptsOf = (pageCode: string) => byItem.get(pageCode) ?? []
 
   if (isLoading) return <LoadingOverlay show />
+  // 삭제된 세션(404)과 장애(그 외)를 구분한다 — 없는 세션에 "다시 시도"를 권하면 운영자가
+  // 장애로 오인해 계속 누른다. 서버도 같은 판정으로 404를 낸다(app/api/admin/sessions/[id]).
+  const notFound = isError && /\(404\)/.test((error as Error | null)?.message ?? '')
   if (isError || !data) return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
-        <p className="text-sm text-ink-soft">결과지를 불러오지 못했어요.</p>
-        <button type="button" onClick={() => void refetch()}
-          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
-          다시 시도
-        </button>
+        <p className="text-sm text-ink-soft">
+          {notFound ? '이 세션을 찾을 수 없어요. 이미 삭제되었을 수 있어요.' : '결과지를 불러오지 못했어요.'}
+        </p>
+        {/* 없는 세션은 재시도해도 달라지지 않는다 — 목록으로 돌아가는 길만 남긴다. */}
+        {!notFound && (
+          <button type="button" onClick={() => void refetch()}
+            className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
+            다시 시도
+          </button>
+        )}
       </div>
     </main>
   )

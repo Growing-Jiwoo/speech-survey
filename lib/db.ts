@@ -351,13 +351,16 @@ export interface MarkRow { item_code: string; correct: boolean }
 
 export interface SentenceScoreRow { item_code: string; words: number }
 
+/** 세션이 없으면 `session`이 null이다 — 호출부가 404와 500(장애)을 구분할 수 있게 한다.
+ *  `.single()`을 쓰면 행이 0개일 때 throw해서 삭제된 세션이 장애와 같은 500으로 뭉뚱그려진다
+ *  (실제로 그랬다 — E2E 2026-08-14에서 확인). 조회 계열은 `.maybeSingle()`로 통일한다. */
 export async function sessionDetail(sessionId: string): Promise<{
-  session: SessionRow; recordings: RecordingRow[]; writing: WritingRow[]
+  session: SessionRow | null; recordings: RecordingRow[]; writing: WritingRow[]
   marks: MarkRow[]; sentences: SentenceScoreRow[]
 }> {
   const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 },
     { data: mk, error: e4 }, { data: ss, error: e5 }] = await Promise.all([
-      sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).single(),
+      sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).maybeSingle(),
       sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
         .eq('session_id', sessionId).order('item_code').order('attempt_no'),
       sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
@@ -366,7 +369,7 @@ export async function sessionDetail(sessionId: string): Promise<{
     ])
   fail(e1); fail(e2); fail(e3); fail(e4); fail(e5)
   return {
-    session: s as unknown as SessionRow,
+    session: (s as unknown as SessionRow) ?? null,
     recordings: (recs ?? []) as RecordingRow[],
     writing: (ans ?? []) as WritingRow[],
     marks: (mk ?? []) as MarkRow[],
