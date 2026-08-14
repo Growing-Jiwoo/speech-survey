@@ -18,7 +18,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     school_region: '서울', school_id: 'sch-1', school_name: '가나초등학교',
     birth_ymd: '2019-03-01', grade: 1, class_no: 2, gender: '남',
     child_name: '김테스트', teacher_name: '이담임',
-    teacher_phone: null, teacher_email: null, teacher_contact: '010-0000-0000',
+    teacher_phone: null, teacher_email: null,
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',

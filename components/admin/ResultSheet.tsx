@@ -130,7 +130,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           </dl>
         </div>
         <p className="mt-2 text-[12px] text-ink-mute">
-          담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email, session.teacher_contact)})
+          담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email)})
           {' · '}{session.submitted_at ? '제출 완료' : '진행 중'}
           {' · '}
           {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) — 도입 전 수집분은 '기록 없음' */}

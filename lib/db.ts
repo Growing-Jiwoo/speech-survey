@@ -310,8 +310,7 @@ export interface SessionRow {
   school_region: string; school_id: string; school_name: string
   birth_ymd: string; grade: number; class_no: number; gender: string
   child_name: string; teacher_name: string
-  /** 010 이전 수집분은 teacher_contact에만 값이 있다(관리자 화면이 contactLabel로 폴백 표시) */
-  teacher_phone: string | null; teacher_email: string | null; teacher_contact: string | null
+  teacher_phone: string | null; teacher_email: string | null
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
@@ -324,7 +323,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, teacher_contact, checklist, started_at, submitted_at, guardian_consented_at'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

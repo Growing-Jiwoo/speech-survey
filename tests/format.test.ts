@@ -42,12 +42,9 @@ describe('contactLabel (담임 연락처 표기)', () => {
     expect(contactLabel('010-1234-5678', null)).toBe('010-1234-5678')
     expect(contactLabel(null, 'a@b.com')).toBe('a@b.com')
   })
-  it('분리 도입 전 수집분은 legacy 값으로 폴백한다', () => {
-    expect(contactLabel(null, null, '010-0000-0000')).toBe('010-0000-0000')
-  })
   it('아무것도 없으면 안내 문구', () => {
     expect(contactLabel(null, null)).toBe('연락처 없음')
-    expect(contactLabel('', '', '')).toBe('연락처 없음')
+    expect(contactLabel('', '')).toBe('연락처 없음')
   })
 })
 

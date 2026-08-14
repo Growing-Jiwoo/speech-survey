@@ -15,15 +15,14 @@ export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`
 }
 
-/** 담임 연락처 표기. 전화·이메일을 분리 저장하기 전(010 이전) 수집분은 legacy 한 칸에만 값이 있다. */
+/** 담임 연락처 표기. 전화·이메일 중 있는 값만 이어붙이고, 둘 다 없으면 안내 문구를 낸다. */
 export function contactLabel(
   phone: string | null | undefined,
   email: string | null | undefined,
-  legacy?: string | null,
 ): string {
   const parts = [phone, email].filter((v): v is string => !!v)
   if (parts.length > 0) return parts.join(' · ')
-  return legacy || '연락처 없음'
+  return '연락처 없음'
 }
 
 /**
