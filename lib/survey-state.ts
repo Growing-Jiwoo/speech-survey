@@ -5,14 +5,19 @@
 
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다.
- *  v7: 현장 채점 `marks` 필드 제거 및 채점 페이지 제거로 `pageIdx` 재조정 — 담당자 확정(2026-08-13) */
-const SCHEMA_V = 7
+ *  v7: 현장 채점 `marks` 필드 제거 및 채점 페이지 제거로 `pageIdx` 재조정 — 담당자 확정(2026-08-13)
+ *  v8: 이어하기 안내에 아동 번호를 쓰기 위해 `childNo` 추가 — 사용자 확정(2026-08-15) */
+const SCHEMA_V = 8
 
 export interface SurveyState {
   v: typeof SCHEMA_V
   sessionId: string
   sessionToken: string               // /api/sessions가 발급 — 녹음/제출 요청에 동봉
   childName: string                  // 진행 화면·이어하기 안내 표시용(서버 세션 행이 원본)
+  /** 학급 내 출석 번호 — 이어하기 안내에서 "누구의 검사인지"를 이름과 함께 밝히는 용도.
+   *  새 흐름은 아동을 번호로 지목하므로(코드+번호), 이름만 보이면 안내가 화면과 어긋난다.
+   *  서버 세션 행이 원본이며 여기 사본을 둔다. */
+  childNo: number
   /** 학년 — 어떤 검사지(양식)로 진행할지 고르는 값. 서버 세션 행이 원본이며 여기 사본을 둔다.
    *  formForGrade(grade)가 문항·페이지를 결정한다. */
   grade: number
@@ -36,10 +41,10 @@ const LAST_KEY = 'kodys-survey:last'
 const keyOf = (sessionId: string) => `${PREFIX}${sessionId}`
 
 export function newState(
-  sessionId: string, childName: string, sessionToken: string, grade: number,
+  sessionId: string, childName: string, childNo: number, sessionToken: string, grade: number,
 ): SurveyState {
   return {
-    v: SCHEMA_V, sessionId, sessionToken, childName, grade,
+    v: SCHEMA_V, sessionId, sessionToken, childName, childNo, grade,
     // practice의 기본값은 true다 — 선택 화면에서 검사자가 바꾸기 전까지는 연습을 실시한다.
     micDone: false, practice: true, pageIdx: 0, phase: 'mic',
     recorded: {}, writing: {}, checklist: [], introsSeen: [],

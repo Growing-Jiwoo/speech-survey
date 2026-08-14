@@ -16,19 +16,19 @@ beforeEach(() => {
 
 describe('survey-state', () => {
   it('newState는 pageIdx=0, phase=mic로 시작한다', () => {
-    const s = newState('sid-1', '홍길동', 'tok', 1)
-    expect(s.v).toBe(7)
+    const s = newState('sid-1', '홍길동', 3, 'tok', 1)
+    expect(s.v).toBe(8)
     expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
   })
 
   it('연습은 기본으로 실시한다 — 선택 화면에서 검사자가 끄기 전까지', () => {
-    expect(newState('sid-1', '홍길동', 'tok', 1).practice).toBe(true)
+    expect(newState('sid-1', '홍길동', 3, 'tok', 1).practice).toBe(true)
   })
 
   it('연습 실시 여부도 save→load로 복원된다 (새로고침 후 다시 묻지 않는다)', () => {
-    const s = newState('sid-1', '홍길동', 'tok', 1)
+    const s = newState('sid-1', '홍길동', 3, 'tok', 1)
     saveState({ ...s, practice: false, phase: 'page' })
     expect(loadState()?.practice).toBe(false)
   })
@@ -39,8 +39,8 @@ describe('survey-state', () => {
     expect(loadState()).toBeNull()
   })
 
-  it('save→load 왕복으로 pageIdx·phase·childName 복원', () => {
-    const s = newState('sid-1', '홍길동', 'tok', 1)
+  it('save→load 왕복으로 pageIdx·phase·childName·childNo 복원', () => {
+    const s = newState('sid-1', '홍길동', 3, 'tok', 1)
     saveState({ ...s, pageIdx: 3, phase: 'page', micDone: true })
     const loaded = loadState()
     expect(loaded?.sessionId).toBe('sid-1')
@@ -48,11 +48,30 @@ describe('survey-state', () => {
     expect(loaded?.phase).toBe('page')
     expect(loaded?.sessionToken).toBe('tok')
     expect(loaded?.childName).toBe('홍길동')
+    expect(loaded?.childNo).toBe(3)
+  })
+
+  // childNo와 grade는 둘 다 작은 정수라, 인수 순서가 뒤바뀌어도 타입 검사에 걸리지 않는다
+  // — 그러면 이어하기 안내가 엉뚱한 번호를 대며 검사자가 다른 아이를 이어받게 된다.
+  // 세 값을 모두 다르게 주어 자리마다 제 값이 들어갔는지 고정한다.
+  it('[REGRESSION] childNo·grade 인수 자리가 뒤바뀌지 않는다', () => {
+    const s = newState('sid-x', '박서준', 11, 'tok', 2)
+    expect(s.childNo).toBe(11)
+    expect(s.grade).toBe(2)
+    expect(s.childName).toBe('박서준')
+  })
+
+  // v7까지는 childNo가 없어 이어하기 안내가 "undefined번"으로 나간다.
+  it('[REGRESSION] 구버전(v=7, childNo 없던 스키마) 상태는 로드하지 않는다', () => {
+    const { childNo: _drop, ...noChildNo } = newState('sid', '아이', 7, 'tok', 1)
+    localStorage.setItem('kodys-survey:sid', JSON.stringify({ ...noChildNo, v: 7 }))
+    localStorage.setItem('kodys-survey:last', 'sid')
+    expect(loadState()).toBeNull()
   })
 
   it('세션별 키 분리 + last 포인터가 최신 세션을 가리킴', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok', 1), pageIdx: 1 })
-    saveState({ ...newState('sid-2', '김철수', 'tok', 2), pageIdx: 2 })
+    saveState({ ...newState('sid-1', '홍길동', 3, 'tok', 1), pageIdx: 1 })
+    saveState({ ...newState('sid-2', '김철수', 12, 'tok', 2), pageIdx: 2 })
     expect(loadState()?.sessionId).toBe('sid-2')
     expect(loadState()?.pageIdx).toBe(2)
   })
@@ -64,14 +83,14 @@ describe('survey-state', () => {
   })
 
   it('[REGRESSION] 구버전(v=6, marks 있던 스키마) 상태는 로드하지 않는다', () => {
-    const stale = { ...newState('sid', '아이', 'tok', 1), v: 6, marks: {} }
+    const stale = { ...newState('sid', '아이', 7, 'tok', 1), v: 6, marks: {} }
     localStorage.setItem('kodys-survey:sid', JSON.stringify(stale))
     localStorage.setItem('kodys-survey:last', 'sid')
     expect(loadState()).toBeNull()
   })
 
   it('clearState는 진행 상태를 파기한다', () => {
-    saveState({ ...newState('sid-1', '홍길동', 'tok', 1), pageIdx: 2 })
+    saveState({ ...newState('sid-1', '홍길동', 3, 'tok', 1), pageIdx: 2 })
     clearState()
     expect(loadState()).toBeNull()
   })
@@ -105,7 +124,7 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
   it('saveState는 저장 실패(쿼터 초과 등) 시 예외를 전파하지 않는다', () => {
     const broken = { ...localStorage, setItem: () => { throw new Error('QuotaExceededError') } }
     ;(globalThis as unknown as { localStorage: Storage }).localStorage = broken as Storage
-    expect(() => saveState(newState('sid-1', '홍길동', 'tok', 1))).not.toThrow()
+    expect(() => saveState(newState('sid-1', '홍길동', 3, 'tok', 1))).not.toThrow()
   })
 
   it('clearState는 localStorage 접근 실패 시에도 예외를 전파하지 않는다', () => {
@@ -118,7 +137,7 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
 
 describe('학급 코드 기억 (연속 검사 — 스펙 2026-08-13)', () => {
   it('[REGRESSION] clearState는 학급 코드를 지우지 않는다 — 진행 상태(아동 정보 포함)만 지운다', () => {
-    saveState(newState('sid', '이하늘', 'tok', 1))
+    saveState(newState('sid', '이하늘', 9, 'tok', 1))
     saveClassCode('K7M2P9')
     clearState()
     expect(loadClassCode()).toBe('K7M2P9')
@@ -136,7 +155,7 @@ describe('학급 코드 기억 (연속 검사 — 스펙 2026-08-13)', () => {
   // saveClassCode(code, childNo)처럼 호출부가 조용히 확장돼도, 결과로 생긴 값이 아동 이름을
   // 담고 있으면 이 핀이 걸린다(호출 시그니처 자체를 컴파일 타임에 막지는 못하므로).
   it('[REGRESSION] saveClassCode 이후 진행 상태 키를 제외한 모든 localStorage 키에 아동 정보가 없다', () => {
-    saveState(newState('sid', '이하늘', 'tok', 1))
+    saveState(newState('sid', '이하늘', 9, 'tok', 1))
     saveClassCode('K7M2P9')
     // 진행 상태 키(세션 본체·last 포인터)는 아동 이름을 의도적으로 담는 별개 경로 —
     // clearState가 지우며, 이미 다른 테스트에서 그 경로를 핀했다. 이 테스트의 대상이 아니다.

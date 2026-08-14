@@ -14,7 +14,7 @@
 | `schema.ts` | 세션 생성 입력의 zod 스키마 — **검증 규칙의 단일 소스**(서버 라우트가 사용). 학급 코드 알파벳(`CODE_ALPHABET`)·길이(`CODE_LEN`)도 여기가 단일 소스 — 발급(`class-code.ts`)과 입력 검증이 공유 |
 | `class-code.ts` | `generateClassCode()` — 학급 코드 생성(서버 전용, `node:crypto`의 `randomInt`). 알파벳·길이는 `schema.ts`를 import — 여기서 다시 적지 않는다 |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
-| `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름을 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
+| `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름과 번호를 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
 | `adminStats.ts` | 관리자 목록의 KPI·학교별 집계·필터/정렬·URL(searchParams) 직렬화. KST 일자 키(`kstDateKey`) 기준 "오늘" 판정 |
 
 ## 서버 전용 (클라이언트 컴포넌트에서 import 금지)
