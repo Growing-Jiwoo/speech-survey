@@ -120,7 +120,10 @@ export function AudioPlayer({ src, durationSec, onError }: {
           </svg>
         )}
       </button>
-      <div ref={waveRef} className="h-8 min-w-0 flex-1" aria-hidden="true" />
+      {/* 파형은 클릭·드래그로 시크된다(dragToSeek) — 누를 수 있다는 걸 커서로 알린다.
+          로드 전(ready=false)에는 눌러도 아무 일이 없으므로 기본 커서를 유지한다. */}
+      <div ref={waveRef} aria-hidden="true"
+        className={`h-8 min-w-0 flex-1 ${ready ? 'cursor-pointer' : ''}`} />
       <span className="flex-none font-read text-[12.5px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
       <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
         ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[104px] flex-none" />
