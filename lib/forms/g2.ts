@@ -36,7 +36,9 @@ export const G2: SurveyForm = {
     sentences: ['집으로 와요', '글씨를 씁니다', '냄새를 맡다', '책상이 넓어요', '뛰지 않아요'],
   },
   limits: { wordSec: 30, sentenceSec: 40 },
-  // 임시값. G1의 비율을 그대로 옮겼다(문장 읽기 만점이 36→35라 23→22).
+  // ⚠️ 담당자 확인 대기 — 확정 아님. G1과 같은 기준표를 받아야 한다.
+  // **G1의 비율을 그대로 옮긴 것 자체가 개발 판단이다**(사용자 확정 2026-08-11) —
+  // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다. 문장 읽기 만점이 36→35라 23→22.
   passMark: { wordReading: 9, sentenceReading: 22, writing: 6 },
   layout: G2_LAYOUT,
 }

@@ -185,7 +185,10 @@ export async function uploadRecording(path: string, bytes: Buffer, mime: string)
   const doUpload = () => sb().storage.from('recordings')
     .upload(path, bytes, { contentType: mime, upsert: true })
   let { error } = await doUpload()
-  if (error) ({ error } = await doUpload()) // 1회 자동 재시도
+  // 스토리지 일시 오류는 즉시 한 번 더 쏘면 대부분 넘어간다. 1회로 끊는 이유: 검사 화면은
+  // 녹음을 낙관적으로 "완료"로 표시하고 뒤에서 올리므로, 여기서 오래 끌수록 실패가 재시도
+  // 배너에 늦게 뜬다 — 아이는 이미 다음 문항으로 넘어간 뒤다.
+  if (error) ({ error } = await doUpload())
   if (error) throw new Error(`녹음 업로드 실패: ${error.message}`)
 }
 

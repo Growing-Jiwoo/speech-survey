@@ -58,7 +58,9 @@ describe('canAdvance ([다음] 버튼 활성화 조건)', () => {
   })
 })
 
-describe('canAdvance — 쓰기는 전 문항 입력이 완료 조건이다 (중단 규칙 폐기, 담당자 확정 2026-08-13)', () => {
+// 쓰기 중단(규칙 ②) 폐기는 사용자 확정(2026-08-13)이고 담당자 재확인이 없다 —
+// 담당자가 규칙 ②를 되살리라고 하면 이 describe의 전제부터 바뀐다.
+describe('canAdvance — 쓰기는 전 문항 입력이 완료 조건이다 (중단 규칙 ② 폐기, 사용자 확정 2026-08-13)', () => {
   const wwPage = (f: typeof g1) => f.pages.find(p => p.section === f.writingSection)!
   it('G1: 1번이 0점이어도 나머지를 다 입력해야 진행 가능', () => {
     const partial = { ww01: 0 }

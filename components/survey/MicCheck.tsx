@@ -1,4 +1,8 @@
-// components/survey/MicCheck.tsx
+// components/survey/MicCheck.tsx — 검사 시작 전 마이크 확인.
+// 아이가 한마디 해 보게 하고 그 소리 크기(peak)가 MIC_MIN_PEAK를 넘는지로 통과를 판정한다.
+// 여기서 걸러내지 못하면 검사를 다 마친 뒤에야 무음 녹음을 발견하게 되고, 그때는 아이를
+// 다시 불러야 한다 — 이 화면의 존재 이유가 그것이다.
+// 실패는 종류별(권한 거부/미지원/그 외)로 갈라 플랫폼에 맞는 권한 해제 경로를 안내한다.
 'use client'
 import { useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'

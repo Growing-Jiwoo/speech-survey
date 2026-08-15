@@ -1,4 +1,3 @@
-// tests/audio.test.ts
 import { describe, it, expect } from 'vitest'
 import { MIC_MIN_PEAK, remainingSec, classifyRecorderError, RecorderError } from '@/lib/audio'
 

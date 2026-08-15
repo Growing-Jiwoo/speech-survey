@@ -36,7 +36,8 @@ export function CodeIssuer() {
   const [email, setEmail] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  // 방금 발급된 코드 — 크게 보여주고 복사 버튼을 붙인다
+  // 발급 직후 1건만 붙잡아 둔다 — 교사에게 그 자리에서 불러 줘야 하는데, 아래 목록에서
+  // 방금 만든 코드를 눈으로 찾게 하면 다른 학급 코드를 잘못 읽어 줄 수 있다.
   const [issued, setIssued] = useState<ClassCodeItem | null>(null)
   const [copied, setCopied] = useState(false)
   const [toDelete, setToDelete] = useState<ClassCodeItem | null>(null)

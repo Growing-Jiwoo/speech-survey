@@ -57,7 +57,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const dirty = JSON.stringify(marks) !== JSON.stringify(savedMarks)
     || JSON.stringify(sentences) !== JSON.stringify(savedSentences)
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])   // 언마운트 시 해제
+  // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
+  // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   // 탭 닫기·새로고침은 앱이 막을 수 없으므로 브라우저 기본 경고에 맡긴다(검사 화면과 같은 방식).
   useEffect(() => {
