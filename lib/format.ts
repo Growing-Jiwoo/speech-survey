@@ -15,6 +15,21 @@ export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`
 }
 
+/**
+ * 검사지 PDF의 「학년」 칸 표기 — **두 줄**로 나눈다: `1학년` / `(2반)`.
+ *
+ * 화면용 `gradeClassLabel`과 일부러 다르다. 검사지의 「학년」 칸은 원래 학년만 적는 자리인데
+ * 이 앱은 반까지 알고 있어 함께 찍는다. 한 줄에 `1-2`로 뭉치면 **무엇이 학년이고 무엇이
+ * 반인지 인쇄물만 보고는 알 수 없다** — 임상 문서라 읽는 사람이 앱을 모른다.
+ * 학년을 먼저 온전히 적고 반을 괄호로 덧붙이면 칸의 원래 의미(학년)가 유지된다
+ * (사용자 확정 2026-08-15).
+ *
+ * 반이 0이면 학년당 한 학급인 학교다 — 반 번호가 없으므로 `(단일학급)`으로 적는다.
+ */
+export function gradeClassLines(grade: number, classNo: number): [string, string] {
+  return [`${grade}학년`, classNo === 0 ? '(단일학급)' : `(${classNo}반)`]
+}
+
 /** 담임 연락처 표기. 전화·이메일 중 있는 값만 이어붙이고, 둘 다 없으면 안내 문구를 낸다. */
 export function contactLabel(
   phone: string | null | undefined,

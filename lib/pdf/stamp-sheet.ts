@@ -7,7 +7,7 @@ import { LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-
 import fontkit from '@pdf-lib/fontkit'
 import { itemsFor, type FormItems } from '@/lib/items'
 import { clampWords, scoreSession, type ScoreInput } from '@/lib/scoring'
-import { gradeClassLabel, sheetDateLabel } from '@/lib/format'
+import { gradeClassLines, sheetDateLabel } from '@/lib/format'
 import type { SurveyForm } from '@/lib/forms'
 import type { ChoiceGridLayout, ScoreSlot, SheetLayout, WordGridLayout } from '@/lib/forms/layout'
 
@@ -194,27 +194,10 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SheetLayout, s: StampInput
    * 넘칠 때 가운데 정렬로 흘려보내지 않는 것은 종전과 같다 — 양옆 칸(제목·학년/반)을 덮으면
    * 아동의 학년이 읽히지 않는다. 칸 안에서 해결한다.
    */
-  const put = (text: string, col: { lo: number; hi: number }) => {
-    if (!text) return
-    const avail = col.hi - col.lo - 4
-    const fits = (s: string, size: number) => font.widthOfTextAtSize(s, size) <= avail
-
-    // 1) 한 줄 — 9pt에서 7pt까지는 한 줄이 두 줄보다 읽기 쉽다.
-    let size = 9
-    while (size > 7 && !fits(text, size)) size -= 0.5
-    let lines = [text]
-
-    // 2) 두 줄 — 글자 수를 반으로 갈라 양쪽이 다 들어갈 때까지 줄인다.
-    //    5pt가 하한이다(그 아래는 인쇄물에서 읽히지 않아 적는 의미가 없다).
-    if (!fits(text, size)) {
-      const half = Math.ceil(text.length / 2)
-      lines = [text.slice(0, half), text.slice(half)]
-      size = 9
-      while (size > 5 && !lines.every(l => fits(l, size))) size -= 0.5
-    }
-
-    // 두 줄은 기존 베이스라인을 가운데 두고 위아래로 벌린다 — 한 줄일 때의 세로 위치가
-    // 바뀌지 않아, 학교명이 긴 아동의 검사지만 다른 높이로 찍히는 일이 없다.
+  /** 이미 나뉜 줄들을 칸 가운데에 그린다. 두 줄은 기존 베이스라인을 가운데 두고 위아래로
+   *  벌린다 — 한 줄일 때의 세로 위치가 바뀌지 않아, 학교명이 긴 아동의 검사지만 다른 높이로
+   *  찍히는 일이 없다. 줄 수와 무관하게 칸의 좌우 경계 안에 가둔다. */
+  const draw = (lines: string[], col: { lo: number; hi: number }, size: number) => {
     const leading = size + 1
     const y0 = lines.length === 1 ? h.baselineY : h.baselineY + leading / 2
     lines.forEach((line, i) => {
@@ -223,8 +206,34 @@ function stampHeader(page: PDFPage, font: PDFFont, L: SheetLayout, s: StampInput
       page.drawText(line, { x, y: y0 - i * leading, size, font, color: INK })
     })
   }
+
+  /** 이미 나뉜 줄들을 칸에 맞을 때까지 줄여 그린다(줄 나누기는 호출부가 정한 그대로 둔다). */
+  const putLines = (lines: string[], col: { lo: number; hi: number }) => {
+    const avail = col.hi - col.lo - 4
+    let size = 9
+    while (size > 5 && !lines.every(l => font.widthOfTextAtSize(l, size) <= avail)) size -= 0.5
+    draw(lines, col, size)
+  }
+
+  const put = (text: string, col: { lo: number; hi: number }) => {
+    if (!text) return
+    const avail = col.hi - col.lo - 4
+    const fits = (str: string, size: number) => font.widthOfTextAtSize(str, size) <= avail
+
+    // 1) 한 줄 — 9pt에서 7pt까지는 한 줄이 두 줄보다 읽기 쉽다.
+    let size = 9
+    while (size > 7 && !fits(text, size)) size -= 0.5
+    if (fits(text, size)) { draw([text], col, size); return }
+
+    // 2) 두 줄 — 글자 수를 반으로 갈라 양쪽이 다 들어갈 때까지 줄인다.
+    //    5pt가 하한이다(그 아래는 인쇄물에서 읽히지 않아 적는 의미가 없다).
+    const half = Math.ceil(text.length / 2)
+    putLines([text.slice(0, half), text.slice(half)], col)
+  }
   put(s.school_name, h.school)
-  put(gradeClassLabel(s.grade, s.class_no), h.grade)
+  // 학년 칸은 **항상 두 줄**이다: `1학년` / `(2반)`. 글자 수로 자동 분할하면 "1학"·"년(2"처럼
+  // 뜻이 끊기므로 의미 단위로 미리 나눠 넘긴다. 이유는 lib/format.ts의 gradeClassLines 주석.
+  putLines([...gradeClassLines(s.grade, s.class_no)], h.grade)
   put(s.child_name, h.childName)
   put(s.birth_ymd, h.birth)
   put(sheetDateLabel(s.started_at), h.testedAt)
