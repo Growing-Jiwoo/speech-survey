@@ -5,10 +5,11 @@ vi.mock('@/lib/db', () => ({
   sessionDetail: vi.fn(),
   signedAudioUrl: vi.fn(),
   deleteSession: vi.fn().mockResolvedValue(undefined),
+  updateSessionIdentity: vi.fn(),
 }))
 
 import { GET as LIST } from '@/app/api/admin/sessions/route'
-import { GET as DETAIL, DELETE } from '@/app/api/admin/sessions/[id]/route'
+import { GET as DETAIL, DELETE, PATCH } from '@/app/api/admin/sessions/[id]/route'
 import { GET as SHEET } from '@/app/api/admin/sessions/[id]/sheet.pdf/route'
 import { POST as LOGOUT } from '@/app/api/admin/logout/route'
 import * as db from '@/lib/db'
@@ -209,5 +210,62 @@ describe('POST /api/admin/logout', () => {
     const cookie = res.headers.get('set-cookie') ?? ''
     expect(cookie).toMatch(/admin_token=/)
     expect(cookie).toMatch(/Max-Age=0/i)
+  })
+})
+
+// 검사자가 아동 번호를 잘못 입력한 세션을 관리자가 바로잡는 경로.
+// 없으면 삭제 후 재검사밖에 없고, 그건 아이를 다시 부른다는 뜻이다.
+describe('PATCH /api/admin/sessions/[id]', () => {
+  const VALID = { childNo: 3, name: '김지우', gender: '남', birthYmd: '190303' }
+  const patch = (body: unknown, id = SID) =>
+    PATCH(new Request('http://x', { method: 'PATCH', body: JSON.stringify(body) }), ctx(id))
+
+  beforeEach(() => {
+    vi.mocked(db.updateSessionIdentity).mockResolvedValue({ id: SID, child_no: 3 } as never)
+  })
+
+  it('아동 식별값 4개를 넘기면 200 + 갱신된 세션', async () => {
+    const res = await patch(VALID)
+    expect(res.status).toBe(200)
+    expect(db.updateSessionIdentity).toHaveBeenCalledWith(SID, VALID)
+  })
+
+  // 학년이 바뀌면 저장된 점수가 다른 양식의 문항을 가리키게 되고 결과지·PDF가 통째로
+  // 다시 그려진다. 화이트리스트가 곧 임상 기록의 안전장치다.
+  it('[REGRESSION] grade·학급 정보가 실려 와도 DB 계층에 전달되지 않는다', async () => {
+    const res = await patch({ ...VALID, grade: 2, classNo: 9, schoolName: '남의초등학교' })
+    expect(res.status).toBe(200)
+    expect(db.updateSessionIdentity).toHaveBeenCalledWith(SID, VALID)
+    const passed = vi.mocked(db.updateSessionIdentity).mock.calls[0][1] as Record<string, unknown>
+    for (const k of ['grade', 'classNo', 'schoolName']) expect(passed).not.toHaveProperty(k)
+  })
+
+  it('형식 위반은 400 (DB 호출 없음)', async () => {
+    for (const bad of [
+      { ...VALID, childNo: 0 }, { ...VALID, childNo: 100 },
+      { ...VALID, name: '123' }, { ...VALID, gender: 'X' }, { ...VALID, birthYmd: '9999' },
+    ]) {
+      expect((await patch(bad)).status, JSON.stringify(bad)).toBe(400)
+    }
+    expect(db.updateSessionIdentity).not.toHaveBeenCalled()
+  })
+
+  it('UUID가 아닌 id 400', async () => {
+    expect((await patch(VALID, 'not-a-uuid')).status).toBe(400)
+    expect(db.updateSessionIdentity).not.toHaveBeenCalled()
+  })
+
+  it('[REGRESSION] 없는 세션은 404 — 장애(500)와 구분한다', async () => {
+    vi.mocked(db.updateSessionIdentity).mockResolvedValueOnce(null)
+    const res = await patch(VALID)
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toMatch(/찾을 수 없/)
+  })
+
+  it('DB 오류 시 500 + 일반화된 메시지', async () => {
+    vi.mocked(db.updateSessionIdentity).mockRejectedValueOnce(new Error('pg internal detail'))
+    const res = await patch(VALID)
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/pg internal/)
   })
 })

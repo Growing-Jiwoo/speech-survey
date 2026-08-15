@@ -179,23 +179,49 @@ function score(page: PDFPage, font: PDFFont, slot: ScoreSlot, value: number, siz
 
 function stampHeader(page: PDFPage, font: PDFFont, L: SheetLayout, s: StampInput['session']) {
   const h = L.header
+  /**
+   * 머리글 칸 채우기 — 칸보다 긴 값도 **전부 적는다. 생략하지 않는다.**
+   *
+   * 종전에는 6pt까지 줄이고 그래도 넘치면 "부산해운대초등…"처럼 잘라냈다. 그런데 학교명은
+   * 이 문서가 어느 아이의 기록인지 특정하는 정보라, 잘린 검사지는 문서로서 결함이다
+   * (사용자 보고 2026-08-15). 학교 칸은 47pt인데 `부산해운대초등학교`는 9pt에서 76pt라
+   * 흔한 이름조차 한 줄로는 들어가지 않는다.
+   *
+   * 그래서 한 줄에 안 들어가면 **두 줄로 나눈다.** 두 줄까지만 하는 이유는 머리글 罫線
+   * 사이(G1 기준 702.1~729.9)에 그 이상이 들어가지 않기 때문이다. 두 줄이면 6pt에서
+   * 16자까지 담겨 실제 학교명은 사실상 전부 들어간다.
+   *
+   * 넘칠 때 가운데 정렬로 흘려보내지 않는 것은 종전과 같다 — 양옆 칸(제목·학년/반)을 덮으면
+   * 아동의 학년이 읽히지 않는다. 칸 안에서 해결한다.
+   */
   const put = (text: string, col: { lo: number; hi: number }) => {
     if (!text) return
     const avail = col.hi - col.lo - 4
-    // 칸이 좁아 긴 학교명은 들어가지 않는다 — 먼저 줄이고(최소 6pt), 그래도 넘치면 잘라낸다.
-    // 실제 학교 목록 6,320곳 중 250곳이 6pt에서도 넘치는데, 가운데 정렬로 흘려보내면
-    // 양옆 칸(제목·학년/반)을 덮어 아동의 학년이 읽히지 않는다. 이름이 잘리는 편이 낫다.
+    const fits = (s: string, size: number) => font.widthOfTextAtSize(s, size) <= avail
+
+    // 1) 한 줄 — 9pt에서 7pt까지는 한 줄이 두 줄보다 읽기 쉽다.
     let size = 9
-    while (size > 6 && font.widthOfTextAtSize(text, size) > avail) size -= 0.5
-    let t = text
-    if (font.widthOfTextAtSize(t, size) > avail) {
-      while (t.length > 1 && font.widthOfTextAtSize(t + '…', size) > avail) t = t.slice(0, -1)
-      t += '…'
+    while (size > 7 && !fits(text, size)) size -= 0.5
+    let lines = [text]
+
+    // 2) 두 줄 — 글자 수를 반으로 갈라 양쪽이 다 들어갈 때까지 줄인다.
+    //    5pt가 하한이다(그 아래는 인쇄물에서 읽히지 않아 적는 의미가 없다).
+    if (!fits(text, size)) {
+      const half = Math.ceil(text.length / 2)
+      lines = [text.slice(0, half), text.slice(half)]
+      size = 9
+      while (size > 5 && !lines.every(l => fits(l, size))) size -= 0.5
     }
-    const w = font.widthOfTextAtSize(t, size)
-    // 잘린 경우에도 칸을 넘지 않도록 좌우 경계 안으로 가둔다.
-    const x = Math.max(col.lo + 2, (col.lo + col.hi) / 2 - w / 2)
-    page.drawText(t, { x, y: h.baselineY, size, font, color: INK })
+
+    // 두 줄은 기존 베이스라인을 가운데 두고 위아래로 벌린다 — 한 줄일 때의 세로 위치가
+    // 바뀌지 않아, 학교명이 긴 아동의 검사지만 다른 높이로 찍히는 일이 없다.
+    const leading = size + 1
+    const y0 = lines.length === 1 ? h.baselineY : h.baselineY + leading / 2
+    lines.forEach((line, i) => {
+      const w = font.widthOfTextAtSize(line, size)
+      const x = Math.max(col.lo + 2, (col.lo + col.hi) / 2 - w / 2)
+      page.drawText(line, { x, y: y0 - i * leading, size, font, color: INK })
+    })
   }
   put(s.school_name, h.school)
   put(gradeClassLabel(s.grade, s.class_no), h.grade)

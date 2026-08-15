@@ -18,6 +18,7 @@ import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { ResultSheet } from '@/components/admin/ResultSheet'
+import { SessionEditDialog } from '@/components/admin/SessionEditDialog'
 import type { Attempt } from '@/components/admin/sheet/PageAudio'
 
 export function AdminDetailView() {
@@ -35,6 +36,7 @@ export function AdminDetailView() {
   const [pendingNav, setPendingNav] = useState<string | null>(null)
   const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
 
+  const [editOpen, setEditOpen] = useState(false)
   const [delModal, setDelModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
@@ -116,11 +118,24 @@ export function AdminDetailView() {
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
-        {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
+        {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다.
+            [정보 수정]도 여기 둔다 — 결과지 본문은 검사지를 재현하는 영역이라 편집 컨트롤을
+            섞지 않고, [세션 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <span className="kpi">녹음 <b>{recordedCount} / {expected.rec}</b></span>
           <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {expected.write}</b></span>
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
+          {/* 수정된 세션은 원래 값을 함께 보여준다 — 잘못 고쳤을 때 되돌릴 근거가 된다.
+              ⚠️ 검사지 PDF에는 이 표시가 없다(양식은 절대 기준) — 인쇄물만 보면 알 수 없다. */}
+          {s.original_identity && (
+            <Badge tone="mute" size="lg">
+              정보 수정됨 · 원래 {s.original_identity.child_no}번 {s.original_identity.child_name}
+            </Badge>
+          )}
+          <button type="button" onClick={() => setEditOpen(true)}
+            className="ml-auto rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
+            정보 수정
+          </button>
         </div>
 
         {/* overflow-hidden이면 조상이 스크롤 컨테이너가 되어 내부 sticky(그룹 플레이어 바)가
@@ -151,6 +166,19 @@ export function AdminDetailView() {
             세션 삭제
           </button>
         </div>
+
+        {/* 저장 안 한 채점은 살아남는다 — ResultSheet의 채점 상태는 마운트 시 한 번만
+            초기화되고 key(id)가 그대로라, 데이터가 갱신돼도 다시 만들어지지 않는다.
+            ⚠️ 그래서 여기서 removeQueries를 쓰면 안 된다 — 캐시가 비면 로딩 상태로 떨어져
+            결과지가 언마운트되고, 채점자가 찍어 둔 O/X가 통째로 사라진다.
+            invalidate는 이전 데이터를 보여준 채 뒤에서 다시 받아온다. */}
+        <SessionEditDialog open={editOpen} session={s}
+          onClose={() => setEditOpen(false)}
+          onSaved={() => {
+            setEditOpen(false)
+            void queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })
+            void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+          }} />
 
         <ConfirmDialog open={pendingNav !== null}
           title="저장하지 않은 채점이 있어요"

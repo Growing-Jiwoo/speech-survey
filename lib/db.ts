@@ -181,6 +181,41 @@ export async function deleteSession(id: string): Promise<void> {
   fail(error)
 }
 
+/**
+ * 아동 식별값(번호·이름·성별·생년월일)을 고친다. 세션이 없으면 `null`을 돌려준다 —
+ * 호출부가 404와 500(장애)을 구분할 수 있게(`sessionDetail`과 같은 규약).
+ *
+ * **점수는 건드리지 않는다.** 녹음도 옮기지 않는다 — 저장 경로가
+ * `{sessionId}/{itemCode}_{attemptNo}`라 아동 번호·이름이 들어가지 않기 때문이다.
+ * 번호를 고쳐도 파일이 고아가 되지 않는 것이 이 기능을 안전하게 만드는 전제다.
+ *
+ * `original_identity`는 **처음 고칠 때만** 채운다(`?? 현재값`). 두 번째 수정에서 덮어쓰면
+ * "처음 들어온 값"을 잃어, 잘못 고친 것을 되돌릴 근거가 사라진다.
+ */
+export async function updateSessionIdentity(
+  id: string,
+  v: { childNo: number; name: string; gender: string; birthYmd: string },
+): Promise<SessionRow | null> {
+  // 원본 보존 여부를 판단하려면 현재 값을 먼저 읽어야 한다. 읽기와 쓰기 사이에 다른
+  // 관리자가 같은 세션을 고치면 나중 쓰기가 이긴다 — 관리자는 소수라 낙관적으로 둔다.
+  const { data: cur, error: readErr } = await sb()
+    .from('sessions').select(SESSION_COLS).eq('id', id).maybeSingle()
+  fail(readErr)
+  if (!cur) return null
+  const prev = cur as unknown as SessionRow
+
+  const { data, error } = await sb().from('sessions').update({
+    child_no: v.childNo, child_name: v.name, gender: v.gender, birth_ymd: v.birthYmd,
+    edited_at: prev.edited_at ?? new Date().toISOString(),
+    original_identity: prev.original_identity ?? {
+      child_no: prev.child_no, child_name: prev.child_name,
+      gender: prev.gender, birth_ymd: prev.birth_ymd,
+    },
+  }).eq('id', id).select(SESSION_COLS).maybeSingle()
+  fail(error)
+  return (data as unknown as SessionRow) ?? null
+}
+
 export async function uploadRecording(path: string, bytes: Buffer, mime: string): Promise<void> {
   const doUpload = () => sb().storage.from('recordings')
     .upload(path, bytes, { contentType: mime, upsert: true })
@@ -317,6 +352,16 @@ export interface SessionRow {
   checklist: string[]
   started_at: string; submitted_at: string | null
   guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
+  /** 아동 식별값을 관리자가 고친 시각. null이면 한 번도 고치지 않았다 */
+  edited_at: string | null
+  /** 최초 수정 직전의 아동 식별값. 두 번째 수정부터는 덮어쓰지 않는다 —
+   *  알고 싶은 것은 "처음 들어온 값"이지 중간 단계가 아니다 */
+  original_identity: OriginalIdentity | null
+}
+
+/** 수정 전 아동 식별값 스냅샷(jsonb). 표시 전용이라 읽기만 한다. */
+export interface OriginalIdentity {
+  child_no: number; child_name: string; gender: string; birth_ymd: string
 }
 
 export interface RecordingRow {
@@ -326,7 +371,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
