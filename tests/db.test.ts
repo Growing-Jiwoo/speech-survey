@@ -19,15 +19,18 @@ const storage = {
 // insert() 인자 캡처: 테이블별로 넘어온 insert payload를 그대로 쌓아 둔다.
 // (createSession처럼 "어느 필드가 어느 컬럼으로 가는지"를 검증해야 하는 테스트가 읽는다.)
 const insertCallsByTable = new Map<string, unknown[]>()
+/** update() 인자 캡처. insert와 같은 이유다 — updateSessionIdentity처럼 "어느 값이 어느
+ *  컬럼으로 가는지"와 "원본을 덮어쓰지 않는지"는 결과가 아니라 **인자**로만 검증된다. */
+const updateCallsByTable = new Map<string, unknown[]>()
 
-function chain(result: unknown, onInsert?: (arg: unknown) => void) {
+function chain(result: unknown, capture?: (kind: 'insert' | 'update', arg: unknown) => void) {
   const target = () => {}
   const proxy: unknown = new Proxy(target, {
     get(_t, prop) {
       if (prop === 'then')
         return (resolve: (v: unknown) => void) => resolve(result)
-      if (prop === 'insert' && onInsert)
-        return (arg: unknown) => { onInsert(arg); return proxy }
+      if ((prop === 'insert' || prop === 'update') && capture)
+        return (arg: unknown) => { capture(prop, arg); return proxy }
       return () => proxy
     },
     apply() { return proxy },
@@ -41,10 +44,11 @@ vi.mock('@/lib/supabase', () => ({
       fromCalls.push(table)
       const queue = tableQueues.get(table)
       const result = queue && queue.length > 0 ? queue.shift() : { data: null, error: null }
-      return chain(result, (arg) => {
-        const calls = insertCallsByTable.get(table) ?? []
+      return chain(result, (kind, arg) => {
+        const bucket = kind === 'insert' ? insertCallsByTable : updateCallsByTable
+        const calls = bucket.get(table) ?? []
         calls.push(arg)
-        insertCallsByTable.set(table, calls)
+        bucket.set(table, calls)
       })
     },
     storage: { from: () => storage },
@@ -53,7 +57,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, uploadRecording,
+  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -74,6 +78,7 @@ beforeEach(() => {
   tableQueues.clear()
   fromCalls.length = 0
   insertCallsByTable.clear()
+  updateCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -359,5 +364,63 @@ describe('saveScores — 관리자 채점 저장', () => {
     enqueue('reading_marks', { error: { message: 'boom' } })
     await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], [], RS))
       .rejects.toThrow('boom')
+  })
+})
+
+// 검사자가 아동 번호를 잘못 입력한 세션을 바로잡는 경로.
+// 여기서 검증하는 것은 결과가 아니라 **update에 실린 값**이다 — 원본 보존 로직은
+// 반환값에 드러나지 않아 인자를 보지 않으면 조용히 망가진다.
+describe('updateSessionIdentity', () => {
+  const cur = {
+    id: SID, child_no: 13, child_name: '김지우', gender: '남', birth_ymd: '190303',
+    edited_at: null, original_identity: null,
+  }
+  const NEXT = { childNo: 3, name: '김지우', gender: '남', birthYmd: '190303' }
+  const lastUpdate = () => {
+    const calls = updateCallsByTable.get('sessions') ?? []
+    return calls[calls.length - 1] as Record<string, unknown>
+  }
+
+  it('없는 세션은 null — 호출부가 404와 500을 구분할 수 있어야 한다', async () => {
+    enqueue('sessions', { data: null, error: null })
+    expect(await updateSessionIdentity(SID, NEXT)).toBeNull()
+    // 존재를 확인하기 전에는 쓰지 않는다
+    expect(updateCallsByTable.get('sessions') ?? []).toHaveLength(0)
+  })
+
+  it('첫 수정이면 수정 직전 값을 original_identity에 남긴다', async () => {
+    enqueue('sessions', { data: cur, error: null })          // 현재 값 조회
+    enqueue('sessions', { data: { ...cur, child_no: 3 }, error: null }) // update 결과
+    await updateSessionIdentity(SID, NEXT)
+    const u = lastUpdate()
+    expect(u.child_no).toBe(3)
+    expect(u.original_identity).toEqual({
+      child_no: 13, child_name: '김지우', gender: '남', birth_ymd: '190303',
+    })
+    expect(u.edited_at).toEqual(expect.any(String))
+  })
+
+  // 두 번째 수정에서 덮어쓰면 "처음 들어온 값"을 잃어, 잘못 고친 것을 되돌릴 근거가 사라진다.
+  it('[REGRESSION] 두 번째 수정은 original_identity·edited_at을 덮어쓰지 않는다', async () => {
+    const already = {
+      ...cur, child_no: 3, edited_at: '2026-08-15T00:00:00.000Z',
+      original_identity: { child_no: 13, child_name: '김지우', gender: '남', birth_ymd: '190303' },
+    }
+    enqueue('sessions', { data: already, error: null })
+    enqueue('sessions', { data: { ...already, child_no: 5 }, error: null })
+    await updateSessionIdentity(SID, { ...NEXT, childNo: 5 })
+    const u = lastUpdate()
+    expect(u.child_no).toBe(5)
+    expect(u.original_identity).toEqual(already.original_identity)
+    expect(u.edited_at).toBe('2026-08-15T00:00:00.000Z')
+  })
+
+  // 학년·학급을 건드리면 저장된 점수가 다른 양식의 문항을 가리키게 된다.
+  it('[REGRESSION] 학년·학급·학교 컬럼은 update에 실리지 않는다', async () => {
+    enqueue('sessions', { data: cur, error: null })
+    enqueue('sessions', { data: cur, error: null })
+    await updateSessionIdentity(SID, NEXT)
+    for (const col of ['grade', 'class_no', 'school_name', 'class_code_id', 'teacher_name'])
+      expect(lastUpdate()).not.toHaveProperty(col)
   })
 })

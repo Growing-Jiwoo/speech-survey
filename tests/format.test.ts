@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel } from '@/lib/format'
+import { contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel, gradeClassLines } from '@/lib/format'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
   it('정상 값', () => {
@@ -56,5 +56,23 @@ describe('sheetDateLabel (검사일 표기)', () => {
     expect(sheetDateLabel('2026-08-07T14:59:00.000Z')).toBe('2026. 8. 7.')
     // KST 자정 직후 → 다음 날
     expect(sheetDateLabel('2026-08-07T15:00:00.000Z')).toBe('2026. 8. 8.')
+  })
+})
+
+// 검사지의 「학년」 칸은 원래 학년만 적는 자리인데 이 앱은 반까지 함께 찍는다.
+// 한 줄로 뭉치면 인쇄물만 보고는 무엇이 학년이고 무엇이 반인지 알 수 없다.
+describe('gradeClassLines — 검사지 학년 칸(두 줄)', () => {
+  it('학년을 온전히 적고 반을 괄호로 덧붙인다', () => {
+    expect(gradeClassLines(1, 2)).toEqual(['1학년', '(2반)'])
+    expect(gradeClassLines(6, 12)).toEqual(['6학년', '(12반)'])
+  })
+  it('반 0은 학년당 한 학급인 학교 — 번호 대신 단일학급으로 적는다', () => {
+    expect(gradeClassLines(1, 0)).toEqual(['1학년', '(단일학급)'])
+  })
+  // 화면은 좁은 표 칸에 들어가야 해 한 줄 표기를 그대로 쓴다. 둘을 같은 함수로 합치면
+  // 한쪽 요구가 다른 쪽을 망가뜨린다.
+  it('화면용 한 줄 표기(gradeClassLabel)와 별개다', () => {
+    expect(gradeClassLabel(1, 2)).toBe('1-2')
+    expect(gradeClassLines(1, 2).join('')).not.toBe(gradeClassLabel(1, 2))
   })
 })

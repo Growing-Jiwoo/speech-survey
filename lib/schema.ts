@@ -68,6 +68,25 @@ export const sessionCreateSchema = z.object({
 })
 export type SessionCreateInput = z.infer<typeof sessionCreateSchema>
 
+/** PATCH /api/admin/sessions/[id] 바디 — 검사자가 잘못 입력한 **아동 식별값**만 고친다.
+ *
+ *  학급 정보(학년·반·학교·담임)가 여기 없는 것은 빠뜨린 게 아니라 **의도**다:
+ *  - `grade`는 `formForGrade(grade)`로 문항·배점·쓰기 과제 종류를 정한다. 저장된 점수는
+ *    그 양식의 문항 코드(`ww01`…)로 쌓여 있어, 학년을 바꾸면 존재하지 않는 문항을 가리키게
+ *    되고 결과지·검사지 PDF가 다른 양식으로 다시 그려진다.
+ *  - 학교·반·담임은 검사 당시 값을 보존하려고 일부러 비정규화 복사한 것이라, 여기서 고치면
+ *    그 취지가 무너진다.
+ *  학급 코드를 통째로 잘못 골랐다면 아이가 다른 검사지로 검사받은 것이므로 기록이 무효다 —
+ *  수정이 아니라 삭제 후 재검사가 맞다. 서버는 이 스키마로 **화이트리스트**를 강제한다.
+ *  (사용자 확정 2026-08-15) */
+export const sessionEditSchema = z.object({
+  childNo: childNoSchema,
+  name: cleaned.pipe(nameSchema),
+  gender: genderSchema,
+  birthYmd: birthYmdSchema,
+})
+export type SessionEditInput = z.infer<typeof sessionEditSchema>
+
 /** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
 export const classCodeCreateSchema = z.object({
   region: z.string().refine(r => REGION_NAMES.includes(r)),

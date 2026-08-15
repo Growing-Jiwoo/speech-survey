@@ -1,6 +1,7 @@
 // /api/admin/sessions/[id] — 관리자 결과지 조회(GET)·세션 영구 삭제(DELETE). 인증은 middleware가 담당.
 import { NextResponse } from 'next/server'
-import { deleteSession, sessionDetail, signedAudioUrl } from '@/lib/db'
+import { deleteSession, sessionDetail, signedAudioUrl, updateSessionIdentity } from '@/lib/db'
+import { sessionEditSchema } from '@/lib/schema'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,32 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   } catch (e) {
     console.error('[admin/sessions/:id] 조회 실패', e)
     return jsonError('결과지를 불러오지 못했습니다.', 500)
+  }
+}
+
+/** 아동 식별값 수정(번호·이름·성별·생년월일). 검사자가 잘못 입력한 세션을 바로잡는다.
+ *
+ *  받는 필드는 `sessionEditSchema`가 정한 4개뿐이다 — 바디에 `grade`나 학급 정보가 실려
+ *  와도 zod가 걷어낸다. 학년이 바뀌면 저장된 점수가 다른 양식의 문항을 가리키게 되므로,
+ *  이 화이트리스트가 곧 임상 기록의 안전장치다(스키마 주석 참고). */
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  if (!UUID_RE.test(id)) return badId()
+  let body: unknown
+  try { body = await req.json() } catch { return jsonError('요청 형식이 올바르지 않습니다.', 400) }
+  const parsed = sessionEditSchema.safeParse(body)
+  if (!parsed.success) return jsonError('입력값을 확인해 주세요.', 400)
+  try {
+    const session = await updateSessionIdentity(id, parsed.data)
+    // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리지 않는다(GET과 같은 판정).
+    if (!session) return jsonError('세션을 찾을 수 없습니다.', 404)
+    // 임상 기록의 식별값이 바뀐 사건이라 최소 기록을 남긴다. 관리자 계정이 단일
+    // 비밀번호라 행위자는 특정할 수 없다 — "무엇이 언제"까지만이다.
+    console.info(`[admin/sessions/:id] 아동 정보 수정 id=${id} → ${parsed.data.childNo}번`)
+    return NextResponse.json({ session })
+  } catch (e) {
+    console.error('[admin/sessions/:id] 수정 실패', e)
+    return jsonError('수정에 실패했습니다.', 500)
   }
 }
 

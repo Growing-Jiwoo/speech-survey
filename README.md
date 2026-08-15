@@ -86,8 +86,9 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
 ## 셋업
 
 1. `npm install`
-2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 `001_init.sql`(통합본,
-   구 001~015를 하나로 합친 것 — 구 이력은 git log 참고) 하나를 위→아래로 한 번에 실행한다.
+2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 `supabase/migrations/`의
+   파일을 **번호 순서대로** 실행한다(`001_init.sql` → `002_session_edit_trace.sql`).
+   001은 통합본으로, 구 001~015를 하나로 합친 것이다 — 구 이력은 git log 참고.
    - 학급 코드 발급 테이블(`class_codes`), 그를 참조하는 검사 세션(`sessions`), 녹음·낱말쓰기·
      낱말해독 O/X·문장 어절 점수 테이블, 관리자 로그인 무차별 대입 방어(`login_attempts` +
      `record_login_failure` RPC), RLS(정책 없음 = anon 전면 차단), 조회 인덱스, 녹음 스토리지

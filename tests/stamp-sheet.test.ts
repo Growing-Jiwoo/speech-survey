@@ -190,3 +190,52 @@ describe('stampSheet — 같은 입력이면 언제 만들어도 같은 바이�
     expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).toBe(0)
   }, 20_000)
 })
+
+// 학교명은 이 문서가 어느 아이의 기록인지 특정하는 정보다. 종전에는 칸이 좁으면
+// "부산해운대초등…"으로 잘라냈는데, 잘린 검사지는 임상 문서로서 결함이다
+// (사용자 보고 2026-08-15 — 실제 인쇄물에서 발견).
+describe('머리글 학교명 — 생략하지 않는다', () => {
+  const g1 = formForGrade(1)
+  const empty = { marks: {}, sentences: {}, writing: {} }
+  const stamp = (school: string) => stampSheet({
+    form: g1, session: { ...sessionFor(g1), school_name: school } as never, ...empty,
+  })
+  /** 머리글 학교 칸에 **우리가 찍은** 글자 조각들. 공백만인 조각은 검사지에 원래 인쇄된
+   *  것이라 뺀다 — 넣으면 두 줄 판정과 문자열 비교가 둘 다 어긋난다. */
+  const schoolPieces = (items: { str: string; x: number; y: number }[]) => {
+    const { header } = g1.layout
+    return items.filter(i => i.str.trim() !== ''
+      && i.x >= header.school.lo - 1 && i.x < header.school.hi
+      && i.y > header.baselineY - 12 && i.y < header.baselineY + 12)
+  }
+  /** 두 줄이면 위→아래, 같은 줄이면 왼→오른쪽으로 이어 붙여 원래 이름을 복원한다. */
+  async function headerSchool(bytes: Uint8Array): Promise<string> {
+    return schoolPieces(await textItems(bytes))
+      .sort((a, b) => b.y - a.y || a.x - b.x)
+      .map(i => i.str).join('')
+  }
+
+  it('[REGRESSION] 칸보다 긴 학교명도 한 글자도 빠지지 않는다', async () => {
+    for (const name of ['경기초등학교', '부산해운대초등학교', '서울대학교사범대학부설초등학교']) {
+      const got = await headerSchool(await stamp(name))
+      expect(got, `${name}이(가) 온전히 찍히지 않았다`).toBe(name)
+      expect(got).not.toContain('…')
+    }
+  })
+
+  // 칸을 넘겨 흘려보내면 옆 칸(학년/반)을 덮어 아동의 학년이 읽히지 않는다.
+  it('[REGRESSION] 긴 학교명이 옆 칸(학년/반)을 침범하지 않는다', async () => {
+    const { header } = g1.layout
+    const pieces = schoolPieces(await textItems(await stamp('서울대학교사범대학부설초등학교')))
+    expect(pieces.length).toBeGreaterThan(0)
+    // 학년 칸 시작 지점을 넘어선 학교명 조각이 없어야 한다
+    for (const p of pieces) expect(p.x).toBeLessThan(header.grade.lo)
+  })
+
+  // 학교명이 긴 아동의 검사지만 다른 높이로 찍히면 인쇄물이 들쭉날쭉해진다.
+  it('짧은 학교명은 종전대로 한 줄, 기존 베이스라인에 찍힌다', async () => {
+    const pieces = schoolPieces(await textItems(await stamp('경기초등학교')))
+    expect(pieces).toHaveLength(1)
+    expect(pieces[0].y).toBe(g1.layout.header.baselineY)
+  })
+})
