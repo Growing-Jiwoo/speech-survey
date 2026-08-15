@@ -89,7 +89,11 @@ export function AdminDashboard() {
   )
 
   return (
-    <div className="overflow-hidden rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
+    // overflow-hidden이면 이 카드가 스크롤 컨테이너가 되어 **안쪽 sticky의 기준이 뷰포트가
+    // 아니라 이 카드**가 된다 — 카드는 세로로 스크롤하지 않으므로 필터 툴바·표 헤더가
+    // 화면에 붙지 못하고 카드와 함께 밀려 나간다(실측 2026-08-15). clip은 같은 모서리
+    // 클리핑을 주되 스크롤 컨테이너를 만들지 않는다(결과지 카드도 같은 이유로 clip이다).
+    <div className="overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <Blip variant="logo" className="h-8 w-8" />
         <div>
@@ -117,7 +121,7 @@ export function AdminDashboard() {
       <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
-      <SessionTable rows={rows} total={sessions.length} filters={filters} sort={sort}
+      <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}
         schools={schools} grades={grades}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />
     </div>

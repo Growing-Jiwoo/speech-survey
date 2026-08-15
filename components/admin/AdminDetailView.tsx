@@ -115,24 +115,7 @@ export function AdminDetailView() {
   return (
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-        <div className="flex items-center justify-between gap-2 print:hidden">
-          <a href={listHref} onClick={e => { e.preventDefault(); go(listHref) }}
-            className="text-sm text-ink-mute underline">← 목록</a>
-          {/* 이전/다음 아동: 캐시 목록이 없거나 경계면 비활성. 필터(back) 보존.
-              (파괴적인 [세션 삭제]는 오클릭 방지를 위해 페이지 하단으로 분리) */}
-          <div className="flex items-center gap-1.5">
-            <button type="button" disabled={!nav.prev}
-              onClick={() => nav.prev && go(goHref(nav.prev))}
-              className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
-              ◀ 이전 아동
-            </button>
-            <button type="button" disabled={!nav.next}
-              onClick={() => nav.next && go(goHref(nav.next))}
-              className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40">
-              다음 아동 ▶
-            </button>
-          </div>
-        </div>
+        <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
         {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <span className="kpi">녹음 <b>{recordedCount} / {expected.rec}</b></span>
@@ -151,8 +134,18 @@ export function AdminDetailView() {
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>
 
-        {/* 파괴적 동작은 본문과 분리된 하단 영역에 배치(고빈도 내비 버튼과의 오클릭 방지) */}
-        <div className="mt-4 flex justify-end print:hidden">
+        {/* 하단에도 같은 내비를 둔다. 결과지는 한 화면에 안 들어가고(1,600px 넘음) 채점은
+            위에서 아래로 흐르는데, 다 찍고 나면 커서는 맨 아래에 있다. 상단 내비만 있으면
+            아동 한 명 넘길 때마다 맨 위로 되돌아가야 했다.
+            상단 바를 sticky로 만드는 방법은 쓰지 않았다 — 결과지 안의 그룹 플레이어 바가
+            같은 `sticky top-0`이라 서로 겹쳐, "들으면서 찍기" 동선이 깨진다. */}
+        <div className="mt-4 print:hidden">
+          <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
+        </div>
+
+        {/* 파괴적 동작은 내비와 **다른 줄**에 두고 경계선으로 끊는다 — 하단 내비가 생기면서
+            [다음 아동]과 [세션 삭제]가 가까워졌기 때문에, 종전보다 간격을 더 벌린다. */}
+        <div className="mt-6 flex justify-end border-t border-line pt-4 print:hidden">
           <button type="button" onClick={() => setDelModal(true)}
             className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
             세션 삭제
@@ -182,5 +175,29 @@ export function AdminDetailView() {
         <LoadingOverlay show={deleting} />
       </main>
     </AudioBusProvider>
+  )
+}
+
+/** 목록 복귀 + 이전/다음 아동. 결과지 위아래 두 곳에 같은 것을 쓰므로 한 곳에서 만든다
+ *  — 한쪽만 고쳐 두 내비가 어긋나는 일을 막는다.
+ *  이전/다음은 캐시된 목록의 앞뒤를 가리키며, 경계이거나 목록 캐시가 없으면 비활성이다. */
+function NavBar({ listHref, nav, go, goHref }: {
+  listHref: string
+  nav: { prev: string | null; next: string | null }
+  go: (href: string) => void
+  goHref: (target: string) => string
+}) {
+  const btn = 'rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition disabled:opacity-40'
+  return (
+    <div className="flex items-center justify-between gap-2 print:hidden">
+      <a href={listHref} onClick={e => { e.preventDefault(); go(listHref) }}
+        className="text-sm text-ink-mute underline">← 목록</a>
+      <div className="flex items-center gap-1.5">
+        <button type="button" disabled={!nav.prev} className={btn}
+          onClick={() => nav.prev && go(goHref(nav.prev))}>◀ 이전 아동</button>
+        <button type="button" disabled={!nav.next} className={btn}
+          onClick={() => nav.next && go(goHref(nav.next))}>다음 아동 ▶</button>
+      </div>
+    </div>
   )
 }

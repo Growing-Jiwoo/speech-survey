@@ -8,6 +8,7 @@ vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 
 import { POST } from '@/app/api/sessions/route'
 import * as db from '@/lib/db'
+import { PUBLIC_RATE_LIMIT } from '@/lib/request'
 
 const CODE_ROW = {
   id: '11111111-1111-1111-1111-111111111111', code: 'K7M2P9',
@@ -78,9 +79,20 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
     expect(res.status).toBe(502)
     expect((await res.json()).error).not.toMatch(/pg secret/)
   })
-  it('같은 IP 21번째 요청 429 (레이트리밋 유지)', async () => {
+  // 상한을 숫자로 박지 않고 상수에서 끌어온다 — 값이 바뀌어도 "상한+1에서 막힌다"는
+  // 성질만 고정해, 정책값 조정 때 테스트가 함께 썩지 않게 한다.
+  it(`같은 IP ${PUBLIC_RATE_LIMIT + 1}번째 요청 429 (레이트리밋 유지)`, async () => {
     let last = 0
-    for (let i = 0; i < 21; i++) last = (await POST(makeReq(VALID, '8.8.8.8'))).status
+    for (let i = 0; i < PUBLIC_RATE_LIMIT + 1; i++) last = (await POST(makeReq(VALID, '8.8.8.8'))).status
     expect(last).toBe(429)
+  })
+  // 한 학급이 컴퓨터실에서 일제히 시작하면 학교 NAT IP 하나로 아이 수만큼의 세션 생성이
+  // 몰린다. 구 상한 20은 21번째 아이의 검사를 막았다(사용자 보고 2026-08-15).
+  // 40대 규모 컴퓨터실 + 재시도를 감당하는지 성질로 고정한다.
+  it('[REGRESSION] 한 학급 40명이 한 IP에서 연달아 시작해도 막히지 않는다', async () => {
+    for (let i = 0; i < 40; i++) {
+      const res = await POST(makeReq(VALID, '10.0.0.1'))
+      expect(res.status, `${i + 1}번째 아동에서 막힘`).not.toBe(429)
+    }
   })
 })
