@@ -195,7 +195,8 @@ function SurveyInner() {
 
   // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
   // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용 —
-  // 응답 거부·모름도 유효한 관찰이다). 담당자 확정: 별도 버튼을 만들지 않고 이 라벨을 쓴다.
+  // 응답 거부·모름도 유효한 관찰이다). 담당자 확정(2026-08-07): 별도 버튼을 만들지 않고
+  // 기존 건너뛰기 버튼의 라벨만 바꾼다 — 근거 docs/superpowers/plans/2026-08-07-survey-session-controls.md
   // (연습 페이지는 제외한다 — 연습을 건너뛰는 것은 "모름"의 관찰이 아니라 그냥 넘기는 것이다.)
   const skipping = !fromReview && !isLast && !page.practice
     && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0

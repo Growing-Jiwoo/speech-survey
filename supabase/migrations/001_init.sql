@@ -75,7 +75,7 @@ create table writing_answers (
   unique (session_id, item_code)
 );
 
--- ── 5. 낱말 해독 O/X (관리자 채점 전용 저장소 — 현장 채점은 2026-08-13 폐기) ──
+-- ── 5. 낱말 해독 O/X (관리자 채점 전용 저장소 — 현장 채점은 담당자 확정 2026-08-13으로 폐기) ──
 create table reading_marks (
   id         uuid primary key default gen_random_uuid(),
   session_id uuid not null references sessions(id) on delete cascade,

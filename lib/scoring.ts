@@ -18,8 +18,10 @@ export function itemMaxWords(item: SurveyItem): number {
 }
 
 /**
- * ⚠️ Pass 기준은 아직 **임시값**이다(양식별 `passMark`).
- * 담당자 확인: "점수 기준이 아직 명확하지 않은데 대강 입력해둬도 괜찮다."
+ * ⚠️ 담당자 확인 대기 — 확정 아님. Pass 기준은 아직 **임시값**이다(양식별 `passMark`).
+ * 담당자 회신(2026-08-11): "점수 기준이 아직 명확하지 않은데 대강 입력해둬도 괜찮다."
+ * — 즉 담당자가 승낙한 것은 "임시값을 써도 된다"까지이고, **숫자 자체는 개발 판단이다**
+ * (만점의 약 65%, 사용자 확정 2026-08-11).
  * 임의의 숫자이므로 이 플래그가 true인 동안 화면·인쇄물에 "임시 기준 · 확정 전"을 함께 표시한다
  * (시범 운영 중 나온 판정이 실제 판정으로 학교에 전달되는 것을 막기 위함).
  * 실제 기준표가 오면 양식의 숫자만 바꾸면 되고, 이미 채점한 세션도 저장된 점수로 다시 계산된다.
@@ -202,8 +204,9 @@ const allAnswered = (codes: Iterable<string>, m: Partial<Record<string, unknown>
 export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const f = itemsFor(form)
   const { passMark } = scoringFor(form)
-  // 읽은 것·쓴 것은 전부 산입한다 — 중단 규칙으로 뒤 과제를 채점에서 빼던 파생은 폐기됐다
-  // (담당자 확정 2026-08-13).
+  // 읽은 것·쓴 것은 전부 산입한다 — 중단 규칙으로 뒤 과제를 채점에서 빼던 파생은 폐기됐다.
+  // 담당자 회신("가정이 필요없을 것 같아")이 근거이나, **사후 채점 파생까지 걷어내는
+  // 폐기 범위는 사용자 확정(2026-08-13)이다** — 담당자가 그 범위까지 답한 것은 아니다.
   const total = (codes: string[]) => codes.reduce((n, c) => n + clampWords(f, c, s.writing[c]), 0)
   const wordMeaning = countTrue(f.meaningReadCodes, s.marks)
   const wordNonsense = countTrue(f.nonsenseReadCodes, s.marks)

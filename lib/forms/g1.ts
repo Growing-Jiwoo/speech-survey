@@ -30,7 +30,9 @@ export const G1: SurveyForm = {
     nonsense: ['오거', '끼추', '소벅', '당송', '갈먹'],
   },
   limits: { wordSec: 30, sentenceSec: 40 },
-  // 임시값(만점의 약 65%). 실제 기준표가 오면 이 숫자만 바꾸면 되고 채점된 세션도 다시 계산된다.
+  // ⚠️ 담당자 확인 대기 — 확정 아님. 담당자에게 **실제 Pass 기준표**를 받아야 한다.
+  // 현재 숫자는 만점의 약 65%로 잡은 개발 판단이다(사용자 확정 2026-08-11 "임시로 일단
+  // 해두고 나중에 바꾼다"). 기준표가 오면 이 숫자만 바꾸면 되고 채점된 세션도 다시 계산된다.
   passMark: { wordReading: 9, sentenceReading: 23, writing: 6 },
   layout: G1_LAYOUT,
 }

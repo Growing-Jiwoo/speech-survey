@@ -18,7 +18,7 @@
 | `AudioBus.tsx` | 동시 재생 1개 보장 컨텍스트(새 재생 시작 시 직전 플레이어 정지) |
 | `LoadingOverlay.tsx` | 전역 로딩 dim — 지연 노출(150ms)·최소 노출(250ms)로 깜빡임 방지 |
 | `Spinner.tsx` | 인라인 스피너(currentColor 상속) |
-| `ProgressBar.tsx` | 검사 진행률(현재/전체 문항) |
+| `ProgressBar.tsx` | 검사 진행률. 세는 단위는 **페이지**다(화면 문구만 "문항"으로 남아 있다 — 파일 주석 참고) |
 | `SchoolPicker.tsx` | 지역(교육청) 선택 → 학교 검색·선택 (데이터: `public/schools/*.json`) |
 
 ## 스타일 관례

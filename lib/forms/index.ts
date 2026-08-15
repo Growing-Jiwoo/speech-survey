@@ -34,7 +34,8 @@ export interface SurveyForm {
   /** 검사지 제한 시간(초) — 채점 기준 */
   limits: { wordSec: number; sentenceSec: number }
   /**
-   * ⚠️ 임시 Pass 기준 — 담당자에게 실제 기준표를 받기 전까지 쓰는 값.
+   * ⚠️ 담당자 확인 대기 — 확정 아님. 담당자에게 실제 Pass 기준표를 받기 전까지 쓰는 값이며,
+   * 숫자는 만점의 약 65%로 잡은 개발 판단이다(사용자 확정 2026-08-11).
    * 양식마다 만점이 다르므로(문장 읽기 G1 36 / G2 35) 양식 데이터로 둔다.
    * `PROVISIONAL_CRITERIA`가 true인 동안 화면·인쇄물에 "임시 기준 · 확정 전"이 붙는다.
    */

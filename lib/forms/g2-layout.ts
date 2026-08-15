@@ -1,7 +1,9 @@
 // lib/forms/g2-layout.ts — KODYS-G2 검사지 좌표.
 // scripts/extract-form-layout.mjs 가 assets/forms/kodys-g2.pdf 에서 뽑은 값이다.
 // 검사지가 개정되면 손으로 고치지 말고 스크립트를 다시 돌려 통째로 교체한다.
-//   node scripts/extract-form-layout.mjs assets/forms/kodys-g2.pdf 2
+//   node scripts/extract-form-layout.mjs assets/forms/kodys-g2.pdf 친구 고춘
+// (2번째 인자는 학년이 아니라 **낱말 해독 의미/무의미 행의 첫 낱말**이다. G2는 낱말 쓰기가
+//  없어 뒤 두 인자를 생략한다 — 생략하면 스크립트가 낱말 쓰기 없는 양식으로 본다.)
 // G1과 같은 PowerPoint 템플릿이지만 머리글 블록이 통째로 3.0pt 위로 밀려 있다
 // (머리글 가로선 G1 702.1·729.9 → G2 705.1·733.0). 좌표를 G1에서 복사하지 말 것.
 import type { SheetLayout } from './layout'
