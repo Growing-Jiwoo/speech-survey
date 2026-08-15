@@ -10,7 +10,7 @@ URL searchParams**(딥링크·뒤로가기 복원 가능)이고, 데이터는 re
 | `StatsCards.tsx` | KPI 카드 4장(전체/제출/진행중/오늘) — 클릭 시 해당 필터 토글 |
 | `SchoolBreakdown.tsx` | 학교별 참여·제출 막대 — 클릭 시 학교 필터 토글 |
 | `FilterToolbar.tsx` | 검색(250ms 디바운스)·상태 탭·학교/학년 Select·초기화 |
-| `SessionTable.tsx` | 세션 목록 표 — react-table(컬럼 골격) + 행 가상화(5,000행 대비). 정렬은 URL 로직 사용(내장 모델 미사용 — 이중 상태 방지) |
+| `SessionTable.tsx` | 세션 목록 표 — react-table(컬럼 골격) + 행 가상화(5,000행 대비). 가상화 기준은 **페이지(window) 스크롤**이다: 표에 자체 스크롤 상자를 두면 페이지와 겹쳐 스크롤바가 둘이 되고 휠이 표 안에 갇힌다. 정렬은 URL 로직 사용(내장 모델 미사용 — 이중 상태 방지) |
 | `AdminDetailView.tsx` | `/admin/[id]` 오케스트레이션 — 수집 진행 KPI·이전/다음 아동 내비·세션 삭제(확인 모달). 결과지 본문은 `ResultSheet`에 위임 |
 | `ResultSheet.tsx` | 결과지 본문 — 검사지의 **과제 순서**만 따르는 채점 작업대. 각 과제에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 두고, 채점 상태·저장을 소유. 양식 재현은 PDF가 담당한다 |
 | `sheet/ScoreBand.tsx` | 상단 총평 밴드 — 과제별 점수·Pass/Fail. **채점이 끝나지 않은 과제는 판정을 내지 않는다** |

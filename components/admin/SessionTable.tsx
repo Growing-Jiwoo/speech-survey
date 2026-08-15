@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import {
   createColumnHelper, flexRender, getCoreRowModel, useReactTable, type RowData,
 } from '@tanstack/react-table'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
 import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
@@ -132,27 +132,41 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
   })
 
   // ---- 행 가상화 ----
-  const scrollRef = useRef<HTMLDivElement>(null)
+  // 스크롤 주체는 **페이지(window)**다. 표에 자체 스크롤 상자를 두면 페이지 스크롤과 겹쳐
+  // 스크롤바가 둘이 되고, 휠을 굴리다 표에 닿는 순간 스크롤이 표 안에 갇힌다(실측 2026-08-15:
+  // 1280×560·세션 8건에서 페이지 428px + 표 70px 이중 스크롤). 목록은 페이지의 본문이지
+  // 페이지 안의 독립된 창이 아니므로, 스크롤도 페이지 하나만 갖는다.
+  //
+  // scrollMargin: window 가상화는 문서 최상단을 원점으로 계산하므로, 표가 문서에서
+  // 시작하는 위치를 알려 줘야 한다. 빠뜨리면 필터·통계 카드 높이만큼 행이 어긋난다.
+  const listRef = useRef<HTMLDivElement>(null)
   const modelRows = table.getRowModel().rows
-  const rowVirtualizer = useVirtualizer({
+  const rowVirtualizer = useWindowVirtualizer({
     count: modelRows.length,
-    getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
   })
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
-  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
-  const paddingBottom = virtualRows.length > 0 ? totalSize - virtualRows[virtualRows.length - 1].end : 0
+  const scrollMargin = rowVirtualizer.options.scrollMargin
+  const paddingTop = virtualRows.length > 0 ? virtualRows[0].start - scrollMargin : 0
+  const paddingBottom = virtualRows.length > 0
+    ? totalSize - (virtualRows[virtualRows.length - 1].end - scrollMargin)
+    : 0
   const colCount = table.getAllLeafColumns().length
 
   return (
     <>
       <FilterToolbar filters={filters} schools={schools} grades={grades}
         shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
-      {/* 세로 가상화를 위한 스크롤 컨테이너. 긴 학교명 등은 셀 nowrap + 가로 스크롤로 처리. */}
-      <div ref={scrollRef} className="max-h-[70vh] overflow-auto">
+      {/* 세로 스크롤은 페이지가 맡는다(위 주석) — 여기서는 좁은 화면의 가로 넘침만 처리한다.
+          가로만 auto로 둬도 CSS 규칙상 세로는 auto로 계산되지만, 세로로 넘칠 내용이 없어
+          스크롤바가 생기지 않는다(높이를 제한하지 않으므로). */}
+      <div ref={listRef} className="overflow-x-auto">
         <table className="min-w-full text-sm">
+          {/* 페이지가 스크롤 주체가 되면서 헤더가 뷰포트 상단에 붙는다 — 표 상자 안이 아니라
+              화면 끝까지 따라와, 아래쪽 행을 볼 때도 열 이름이 남는다. */}
           <thead className="sticky top-0 z-10 bg-white">
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id} className="text-left text-xs text-ink-mute">
