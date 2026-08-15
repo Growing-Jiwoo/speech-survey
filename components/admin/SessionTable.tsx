@@ -1,6 +1,6 @@
 // components/admin/SessionTable.tsx — 관리자 세션 목록 표(가상화 렌더).
 'use client'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { filtersToQuery, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { filtersToQuery, retestOrdinals, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
@@ -30,8 +30,11 @@ const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measure
 /** 관리자 세션 목록 — 필터/정렬 상태는 부모(AdminDashboard)가 보유, 여기는 표시와 콜백만.
  * react-table은 컬럼/가상 렌더 골격으로만 쓰고, 정렬·필터는 기존 URL 동기화 로직을 그대로 사용한다
  * (내장 sorting/filtering 모델은 사용하지 않음 — 이중 정렬/충돌 상태를 피하기 위함). */
-export function SessionTable({ rows, total, filters, sort, schools, grades, onFilters, onSort, onReset }: {
+export function SessionTable({ rows, all, total, filters, sort, schools, grades, onFilters, onSort, onReset }: {
   rows: SessionListRow[]           // 필터·정렬 적용 완료본
+  /** 필터 이전의 전체 목록 — 재검사 회차를 세는 데 쓴다. 필터된 rows로 세면 걸러진
+   *  앞선 검사가 없는 것처럼 보여 회차가 거짓이 된다(retestOrdinals 호출부 주석 참고). */
+  all: SessionListRow[]
   total: number                    // 전체 세션 수 (빈 상태 문구 분기용)
   filters: Filters
   sort: Sort
@@ -51,6 +54,10 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
     [backQuery],
   )
 
+  // 회차는 **필터를 통과한 rows가 아니라 전체 목록**에서 센다 — "진행 중"만 걸러 본 화면에서
+  // 2회차 세션만 남았다고 "1/1회차"로 보이면, 앞선 검사가 없는 것처럼 읽혀 거짓이 된다.
+  const retest = useMemo(() => retestOrdinals(all), [all])
+
   // ---- react-table 컬럼 정의 (셀 마크업·클래스는 기존 디자인 그대로 보존) ----
   const columns = useMemo(() => {
     const col = createColumnHelper<SessionListRow>()
@@ -58,11 +65,24 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
       col.accessor('child_name', {
         id: 'name', header: '이름',
         meta: { sortKey: 'name', thClassName: 'whitespace-nowrap px-5 py-3', tdClassName: 'whitespace-nowrap px-5 py-2.5' },
-        cell: ({ row }) => (
-          <Link href={detailHref(row.original.id)} onClick={e => e.stopPropagation()} className="font-bold text-blue">
-            {row.original.child_name}
-          </Link>
-        ),
+        // 재검사한 아동만 "2/2회차" 꼬리표가 붙는다. 이름·학교·번호가 전부 같은 행이
+        // 나란히 뜰 때 어느 것이 나중 검사인지 가리는 유일한 단서다(lib/adminStats 참고).
+        cell: ({ row }) => {
+          const nth = retest.get(row.original.id)
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              <Link href={detailHref(row.original.id)} onClick={e => e.stopPropagation()} className="font-bold text-blue">
+                {row.original.child_name}
+              </Link>
+              {nth && (
+                <span className="rounded-full bg-well px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-ink-mute"
+                  title={`같은 번호로 ${nth.of}번 검사한 아동의 ${nth.nth}번째 검사입니다`}>
+                  {nth.nth}/{nth.of}회차
+                </span>
+              )}
+            </span>
+          )
+        },
       }),
       col.accessor('school_name', {
         id: 'school', header: '학교',
@@ -120,7 +140,10 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
         },
       }),
     ]
-  }, [detailHref])
+    // retest를 빼면 새 재검사가 들어와도 배지가 옛 회차에 머문다 — 목록을 새로고침한
+    // 채점자가 "2회차"를 보고 실제로는 3회차인 세션을 열게 된다. retestOrdinals는
+    // 전체 목록이 바뀔 때만 새 Map을 내므로 이 의존성이 렌더를 흔들지 않는다.
+  }, [detailHref, retest])
 
   // tanstack table v8은 React Compiler 미호환 목록에 있으나(내부 캐시 뮤테이션),
   // 자체 메모이제이션으로 동작은 안전하다 — v9 호환판이 나올 때까지 경고만 억제.
@@ -147,6 +170,28 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
     overscan: 12,
     scrollMargin: listRef.current?.offsetTop ?? 0,
   })
+  // 필터 툴바와 표 헤더를 **둘 다** 화면 상단에 붙인다. 목록이 길어지면 아래로 내려간 상태에서
+  // 검색·필터를 쓰려고 매번 맨 위로 올라가야 했고, 열 이름만 붙어 있으면 지금 어떤 필터가
+  // 걸려 있는지도 보이지 않는다.
+  //
+  // 헤더의 top 오프셋을 상수로 박지 않고 재는 이유: 툴바가 flex-wrap이라 폭이 좁아지면
+  // 두 줄·세 줄로 늘어난다. 박아 두면 그 순간 헤더가 툴바를 파고들거나 사이가 벌어진다.
+  //
+  // 첫 값은 ResizeObserver를 기다리지 않고 **직접 재서** 넣는다. 옵저버 콜백에만 맡기면
+  // 그것이 늦거나(혹은 아예 발화하지 않는 환경에서) top이 0으로 남아 헤더가 툴바 뒤에
+  // 겹친 채 보인다 — 화면이 깨진 상태로 첫 프레임이 나가는 셈이다. 옵저버는 그 뒤의
+  // "폭이 바뀌어 툴바가 두 줄이 됐다" 같은 변화를 따라가는 역할만 맡는다.
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const [toolbarH, setToolbarH] = useState(0)
+  useLayoutEffect(() => {
+    const el = toolbarRef.current
+    if (!el) return
+    setToolbarH(el.getBoundingClientRect().height)
+    const ro = new ResizeObserver(([e]) => setToolbarH(e.contentRect.height))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const virtualRows = rowVirtualizer.getVirtualItems()
   const totalSize = rowVirtualizer.getTotalSize()
   const scrollMargin = rowVirtualizer.options.scrollMargin
@@ -158,16 +203,26 @@ export function SessionTable({ rows, total, filters, sort, schools, grades, onFi
 
   return (
     <>
-      <FilterToolbar filters={filters} schools={schools} grades={grades}
-        shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
+      {/* 툴바가 헤더보다 위에 오도록 z를 한 단계 높인다(헤더 z-10).
+          lg 미만에서는 아래 래퍼가 가로 스크롤 컨테이너가 되어 sticky 기준이 뷰포트가
+          아니게 되므로, 그 폭에서는 둘 다 붙이지 않는다(래퍼 주석 참고). */}
+      <div ref={toolbarRef} className="bg-white lg:sticky lg:top-0 lg:z-20">
+        <FilterToolbar filters={filters} schools={schools} grades={grades}
+          shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
+      </div>
       {/* 세로 스크롤은 페이지가 맡는다(위 주석) — 여기서는 좁은 화면의 가로 넘침만 처리한다.
-          가로만 auto로 둬도 CSS 규칙상 세로는 auto로 계산되지만, 세로로 넘칠 내용이 없어
-          스크롤바가 생기지 않는다(높이를 제한하지 않으므로). */}
-      <div ref={listRef} className="overflow-x-auto">
+          `overflow-x: auto`는 CSS 규칙상 세로도 auto로 계산시켜 **이 div를 스크롤 컨테이너로
+          만든다.** 그러면 안쪽 `sticky`의 기준이 뷰포트가 아니라 이 div가 되어, 헤더가 화면에
+          붙는 대신 div와 함께 위로 밀려 나간다(실측 2026-08-15: scrollY 498에서 헤더 y=-68).
+          그래서 가로 스크롤은 **실제로 넘치는 폭(lg 미만)에서만** 건다 — lg 이상에서는
+          overflow가 visible이라 조상에 스크롤 컨테이너가 없고, 헤더·툴바가 뷰포트에 붙는다.
+          (1280px에서 가로 넘침 0, 420px에서 387px — 실측) */}
+      <div ref={listRef} className="overflow-x-auto lg:overflow-x-visible">
         <table className="min-w-full text-sm">
           {/* 페이지가 스크롤 주체가 되면서 헤더가 뷰포트 상단에 붙는다 — 표 상자 안이 아니라
-              화면 끝까지 따라와, 아래쪽 행을 볼 때도 열 이름이 남는다. */}
-          <thead className="sticky top-0 z-10 bg-white">
+              화면 끝까지 따라와, 아래쪽 행을 볼 때도 열 이름이 남는다.
+              top은 위 툴바 높이만큼 밀어 둘이 겹치지 않게 한다(실측값, 위 주석 참고). */}
+          <thead className="bg-white lg:sticky lg:z-10" style={{ top: toolbarH }}>
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id} className="text-left text-xs text-ink-mute">
                 {hg.headers.map(h => {

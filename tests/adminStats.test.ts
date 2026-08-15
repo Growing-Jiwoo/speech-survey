@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
 import {
   sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
-  parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds,
+  parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -309,5 +309,69 @@ describe('URL 직렬화', () => {
     const sort = { key: 'progress' as const, dir: 'asc' as const }
     const qs = filtersToQuery(filters, sort)
     expect(parseFilters(new URLSearchParams(qs))).toEqual({ filters, sort })
+  })
+})
+
+describe('retestOrdinals', () => {
+  const CODE_A = 'aaaaaaaa-1111-1111-1111-111111111111'
+  const CODE_B = 'bbbbbbbb-2222-2222-2222-222222222222'
+
+  it('한 번만 검사한 아동은 표에 담지 않는다 — 1/1 표기는 잡음이다', () => {
+    const m = retestOrdinals([
+      mkSession({ id: 's1', class_code_id: CODE_A, child_no: 3 }),
+      mkSession({ id: 's2', class_code_id: CODE_A, child_no: 4 }),
+    ])
+    expect(m.size).toBe(0)
+  })
+
+  it('같은 학급·번호를 다시 검사하면 시작 시각 순으로 회차를 매긴다', () => {
+    const m = retestOrdinals([
+      mkSession({ id: 'late', class_code_id: CODE_A, child_no: 3, started_at: '2026-08-02T00:00:00.000Z' }),
+      mkSession({ id: 'early', class_code_id: CODE_A, child_no: 3, started_at: '2026-08-01T00:00:00.000Z' }),
+    ])
+    expect(m.get('early')).toEqual({ nth: 1, of: 2 })
+    expect(m.get('late')).toEqual({ nth: 2, of: 2 })
+  })
+
+  // 번호는 학급 안에서만 뜻이 있다 — 코드가 다르면 3번은 서로 다른 아이다.
+  it('번호가 같아도 학급 코드가 다르면 다른 아동으로 본다', () => {
+    const m = retestOrdinals([
+      mkSession({ id: 'a3', class_code_id: CODE_A, child_no: 3 }),
+      mkSession({ id: 'b3', class_code_id: CODE_B, child_no: 3 }),
+    ])
+    expect(m.size).toBe(0)
+  })
+
+  // 이름으로 묶으면 동명이인이 한 아이로 합쳐진다 — 임상 기록이 섞이는 것과 같다.
+  it('[REGRESSION] 이름이 같아도 번호가 다르면 합치지 않는다', () => {
+    const m = retestOrdinals([
+      mkSession({ id: 'x', class_code_id: CODE_A, child_no: 3, child_name: '김지우' }),
+      mkSession({ id: 'y', class_code_id: CODE_A, child_no: 9, child_name: '김지우' }),
+    ])
+    expect(m.size).toBe(0)
+  })
+
+  // 화면 정렬을 바꿨다고 "1회차"가 다른 세션을 가리키면 회차 표기가 무의미해진다.
+  it('[REGRESSION] 입력 순서가 달라도 회차는 그대로다', () => {
+    const rows = [
+      mkSession({ id: 'a', class_code_id: CODE_A, child_no: 3, started_at: '2026-08-01T00:00:00.000Z' }),
+      mkSession({ id: 'b', class_code_id: CODE_A, child_no: 3, started_at: '2026-08-02T00:00:00.000Z' }),
+      mkSession({ id: 'c', class_code_id: CODE_A, child_no: 3, started_at: '2026-08-03T00:00:00.000Z' }),
+    ]
+    const forward = retestOrdinals(rows)
+    const backward = retestOrdinals([...rows].reverse())
+    for (const id of ['a', 'b', 'c']) expect(backward.get(id)).toEqual(forward.get(id))
+    expect(forward.get('c')).toEqual({ nth: 3, of: 3 })
+  })
+
+  // 같은 시각에 두 건이 생기면(동시 시작) 정렬이 흔들려 회차가 렌더마다 바뀔 수 있다.
+  it('시작 시각이 같으면 id로 갈라 순서를 고정한다', () => {
+    const t = '2026-08-01T00:00:00.000Z'
+    const m1 = retestOrdinals([
+      mkSession({ id: 'zzz', class_code_id: CODE_A, child_no: 3, started_at: t }),
+      mkSession({ id: 'aaa', class_code_id: CODE_A, child_no: 3, started_at: t }),
+    ])
+    expect(m1.get('aaa')).toEqual({ nth: 1, of: 2 })
+    expect(m1.get('zzz')).toEqual({ nth: 2, of: 2 })
   })
 })
