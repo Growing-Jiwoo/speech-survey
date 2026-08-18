@@ -121,6 +121,14 @@ export default function StartPage() {
     if (last) setCode(last)
   }, [])
 
+  // 단계가 바뀌면 방금 나타난 첫 칸으로 포커스를 옮긴다. 눌렀던 [확인]은 다음 단계에서
+  // (보호자 동의 미체크 탓에) disabled로 다시 그려지므로 브라우저가 포커스를 body로 떨어뜨린다 —
+  // 그러면 키보드·스크린리더 검사자는 문서 처음부터 Tab을 다시 밟아야 새 칸에 닿는다.
+  useEffect(() => {
+    if (step === 'code') return
+    document.getElementById(step === 'roster' ? 'pick' : 'childNo')?.focus()
+  }, [step])
+
   // 선택한 연·월에 맞는 일수 (윤년 반영)
   const daysInMonth = year && month ? new Date(Number(year), Number(month), 0).getDate() : 31
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
@@ -228,7 +236,9 @@ export default function StartPage() {
         <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
       </div>
       <h1 className="mt-10 text-2xl font-bold">안녕하세요!</h1>
-      <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
+      {/* aria-live — 단계 전환은 이 문구만이 말로 알려 준다(화면에서는 폼 모양이 바뀌어 보이지만
+          스크린리더에는 아무 일도 일어나지 않은 것과 같다). */}
+      <p aria-live="polite" className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
         {step === 'code' ? <>선생님께 받은 학급 코드를<br />입력해 주세요.</>
           : step === 'roster' ? '검사할 학생을 골라 주세요.'
             : '아동 정보를 입력해 주세요.'}
@@ -275,9 +285,13 @@ export default function StartPage() {
             onChange={e => {
               setCode(e.target.value.toUpperCase())
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
+              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 서면 동의서를 받았다"는
+              // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
-              if (step === 'roster') { setStep('code'); setCls(null); setRoster([]); setPick('') }
+              if (step === 'roster') {
+                setStep('code'); setCls(null); setRoster([]); setPick(''); setConsent(false)
+              }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
           <FieldError id="err-code" msg={errors.code} />
@@ -285,8 +299,9 @@ export default function StartPage() {
 
         {step === 'roster' && cls && (
           <>
-            {/* 코드가 가리키는 학급을 먼저 밝힌다 — 직접 입력 폼과 한눈에 다른 모습이라
-                검사자가 지금 어느 모드인지 헷갈리지 않는다. */}
+            {/* 코드가 가리키는 학급을 밝혀 직접 입력 폼과 한눈에 구분되게 한다. 담임 이름·연락처는
+                일부러 넣지 않는다 — 이 화면은 아동이 보고 있고, 학급 확인에는 학교·학년·반·인원이면
+                충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
             <p className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
               {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명
             </p>
@@ -361,6 +376,16 @@ export default function StartPage() {
                 options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
             </div>
             <FieldError id="err-birth" msg={errors.birth} />
+            {/* 돌아가는 길. 위 폴백 링크는 드롭다운 바로 아래 있는 작은 글자라 터치 기기에서
+                잘못 눌리는데, 되돌릴 길이 없으면 남은 방법이 새로고침뿐이고 그러면 입력한 코드도
+                날아간다(코드는 세션 생성 성공 때만 기억된다). 「고르기」쪽이 정상 경로이므로
+                되돌리기가 아니라 그 이름으로 적는다. */}
+            {roster.length > 0 && (
+              <button type="button" onClick={() => setStep('roster')}
+                className="mt-4 text-[13px] font-bold text-blue underline underline-offset-2">
+                명단에서 고르기
+              </button>
+            )}
           </>
         )}
 
