@@ -29,11 +29,16 @@ const updateCallsByTable = new Map<string, unknown[]>()
 const deleteCallsByTable = new Map<string, unknown[]>()
 const eqCallsByTable = new Map<string, unknown[]>()
 const selectCallsByTable = new Map<string, unknown[]>()
+/** order() 인자 캡처. 정렬도 결과에 흔적을 남기지 않는다 — 스텁이 큐에 넣어 둔 배열을 그대로
+ *  돌려주므로 `.order()`를 지워도 반환값은 같다. 명단 순서는 관리자가 교사 명렬표와 눈으로
+ *  맞춰 보는 근거라, 인자로 못 박지 않으면 정렬이 사라진 것을 아무도 모른다. */
+const orderCallsByTable = new Map<string, unknown[]>()
 
-type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select'
+type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select' | 'order'
 const BUCKETS: Record<Captured, Map<string, unknown[]>> = {
   insert: insertCallsByTable, update: updateCallsByTable,
   delete: deleteCallsByTable, eq: eqCallsByTable, select: selectCallsByTable,
+  order: orderCallsByTable,
 }
 
 function chain(result: unknown, capture?: (kind: Captured, args: unknown[]) => void) {
@@ -60,7 +65,7 @@ vi.mock('@/lib/supabase', () => ({
       return chain(result, (kind, args) => {
         const bucket = BUCKETS[kind]
         const calls = bucket.get(table) ?? []
-        // insert/update는 payload 한 덩이가 관심사, delete/eq/select는 인자 자체가 관심사다.
+        // insert/update는 payload 한 덩이가 관심사, 나머지(delete/eq/select/order)는 인자 자체가 관심사다.
         calls.push(kind === 'insert' || kind === 'update' ? args[0] : args)
         bucket.set(table, calls)
       })
@@ -71,7 +76,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -96,6 +101,7 @@ beforeEach(() => {
   deleteCallsByTable.clear()
   eqCallsByTable.clear()
   selectCallsByTable.clear()
+  orderCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -350,6 +356,83 @@ describe('insertApplication — pending 코드 + 명단', () => {
     expect(await insertApplication(NEW_CODE_INPUT, ROSTER)).toBe('duplicate')
     // 코드가 없으면 참조할 FK도 없다 — 명단을 건드려선 안 된다.
     expect(fromCalls).toEqual(['class_codes'])
+  })
+})
+
+describe('approveClassCode — pending → active (멱등)', () => {
+  const APPROVED = { ...CLASS_CODE, status: 'active' as const, applied_at: '2026-08-14T00:00:00Z' }
+
+  it('pending을 active로 바꾸고 행을 돌려준다', async () => {
+    enqueue('class_codes', { data: [APPROVED], error: null })
+
+    expect(await approveClassCode(CLASS_CODE.id)).toEqual({ row: APPROVED, already: false })
+    expect(updateCallsByTable.get('class_codes')).toEqual([{ status: 'active' }])
+    // 멱등 가드의 본체 — 업데이트가 **pending 행만** 겨냥해야 한다. 반환값만 단언하면
+    // `.eq('status','pending')`을 지워도 테스트가 초록이라, 두 번째 클릭이 0건이 아니라
+    // 1건으로 잡히고 승인 메일이 다시 나간다.
+    expect(eqCallsByTable.get('class_codes')).toEqual([['id', CLASS_CODE.id], ['status', 'pending']])
+    // 업데이트가 잡혔으면 상태를 다시 물어볼 이유가 없다.
+    expect(fromCalls).toEqual(['class_codes'])
+  })
+
+  it('[REGRESSION] 이미 active면 already:true — 재클릭이 메일을 다시 보내지 않게', async () => {
+    enqueue('class_codes', { data: [], error: null })          // pending 필터에 걸려 0건
+    enqueue('class_codes', { data: APPROVED, error: null })     // 현재 상태 재조회
+
+    expect(await approveClassCode(CLASS_CODE.id)).toEqual({ row: APPROVED, already: true })
+    expect(eqCallsByTable.get('class_codes')).toEqual([
+      ['id', CLASS_CODE.id], ['status', 'pending'], ['id', CLASS_CODE.id],
+    ])
+  })
+
+  it('[REGRESSION] 0건인데 행이 여전히 pending이면 던진다 — 승인 안 된 코드를 already로 속이지 않게', async () => {
+    enqueue('class_codes', { data: [], error: null })
+    enqueue('class_codes', { data: { ...CLASS_CODE, status: 'pending' }, error: null })
+
+    // already:true로 돌려주면 라우트가 메일을 건너뛴다 — 교사는 코드를 못 받고 관리자는
+    // 보냈다고 생각한다. 실패로 알려 관리자가 다시 누르게 하는 편이 낫다.
+    await expect(approveClassCode(CLASS_CODE.id)).rejects.toThrow(/승인/)
+  })
+
+  it('행이 없으면 null', async () => {
+    enqueue('class_codes', { data: [], error: null })
+    enqueue('class_codes', { data: null, error: null })
+    expect(await approveClassCode(CLASS_CODE.id)).toBeNull()
+  })
+})
+
+describe('listRoster', () => {
+  it('학급의 명단을 번호 순으로 돌려준다', async () => {
+    const rows = [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
+    ]
+    enqueue('class_roster', { data: rows, error: null })
+
+    expect(await listRoster(CLASS_CODE.id)).toEqual(rows)
+    expect(eqCallsByTable.get('class_roster')).toEqual([['class_code_id', CLASS_CODE.id]])
+    // 번호 순 정렬은 스텁 반환값에 흔적이 없다 — 인자로 못 박는다(관리자가 교사 명렬표와
+    // 눈으로 맞춰 보는 순서라, 조용히 사라지면 검토가 어긋난다).
+    expect(orderCallsByTable.get('class_roster')).toEqual([['child_no']])
+  })
+
+  it('명단이 없으면 빈 배열', async () => {
+    enqueue('class_roster', { data: null, error: null })
+    expect(await listRoster(CLASS_CODE.id)).toEqual([])
+  })
+})
+
+describe('listClassCodes — 목록에 세션 수·명단 수를 함께 싣는다', () => {
+  it('class_roster(count)를 조인해 온다 — 승인 화면이 "몇 명 신청"을 보여줄 근거', async () => {
+    const row = { ...CLASS_CODE, sessions: [{ count: 2 }], class_roster: [{ count: 24 }] }
+    enqueue('class_codes', { data: [row], error: null })
+
+    const rows = await listClassCodes()
+    expect(rows[0].sessions).toEqual([{ count: 2 }])
+    expect(rows[0].class_roster).toEqual([{ count: 24 }])
+    // 컬럼 목록은 `as unknown as` 캐스팅 탓에 타입으로 전혀 안 잡힌다 — 인자로 확인한다.
+    expect(String((selectCallsByTable.get('class_codes') as unknown[][])[0][0]))
+      .toContain('class_roster(count)')
   })
 })
 

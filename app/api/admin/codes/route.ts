@@ -38,7 +38,11 @@ export async function GET() {
   try {
     const rows = await listClassCodes()
     return NextResponse.json({
-      codes: rows.map(({ sessions, ...c }) => ({ ...c, session_count: sessions[0]?.count ?? 0 })),
+      codes: rows.map(({ sessions, class_roster, ...c }) => ({
+        ...c,
+        session_count: sessions[0]?.count ?? 0,
+        roster_count: class_roster[0]?.count ?? 0,
+      })),
     })
   } catch (e) {
     console.error('[admin/codes] 목록 조회 실패', e)

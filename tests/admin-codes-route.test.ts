@@ -70,12 +70,23 @@ describe('POST /api/admin/codes', () => {
 })
 
 describe('GET /api/admin/codes', () => {
-  it('sessions(count)를 session_count로 펴서 내려준다', async () => {
-    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, sessions: [{ count: 7 }] }])
+  it('sessions(count)·class_roster(count)를 session_count·roster_count로 펴서 내려준다', async () => {
+    // 두 수를 다르게 둔다 — 같은 값이면 조인 결과가 뒤바뀌어도 단언이 통과한다.
+    vi.mocked(db.listClassCodes).mockResolvedValue([
+      { ...ROW, sessions: [{ count: 7 }], class_roster: [{ count: 24 }] },
+    ])
     const res = await GET()
     const json = await res.json()
     expect(json.codes[0].session_count).toBe(7)
+    expect(json.codes[0].roster_count).toBe(24)
     expect(json.codes[0]).not.toHaveProperty('sessions')
+    expect(json.codes[0]).not.toHaveProperty('class_roster')
+  })
+
+  it('조인이 비어 있으면 0 — 관리자 직접 발급분은 명단이 없다', async () => {
+    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, sessions: [], class_roster: [] }])
+    const json = await (await GET()).json()
+    expect(json.codes[0]).toMatchObject({ session_count: 0, roster_count: 0 })
   })
 })
 
