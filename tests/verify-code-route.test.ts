@@ -100,8 +100,8 @@ describe('POST /api/sessions/verify-code', () => {
 
   it('childNo 없이 호출하면 roster(번호별 검사 상태 포함)를 돌려주고 childTestState는 부르지 않는다', async () => {
     const roster = [
-      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: null },
-      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: 'submitted' as const },
+      { childNo: 1, name: '김서아', gender: '여' as const, birthYmd: '190304', tested: null },
+      { childNo: 2, name: '박도윤', gender: '남' as const, birthYmd: '190712', tested: 'submitted' as const },
     ]
     vi.mocked(db.rosterWithTested).mockResolvedValue(roster)
     const res = await POST(req({ code: 'K7M2P9' }))

@@ -360,9 +360,12 @@ export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
 /** 명단 + 각 아동의 검사 상태. 드롭다운이 "검사함"을 표시하기 위한 것 —
  *  학급 세션을 한 번에 읽어 childTestState와 같은 판정을 번호별로 만든다.
  *  (verify-code의 옛 방침 "번호 목록을 만들지 않는다"는 명단 도입으로 뒤집혔다:
- *   코드 소지 = 학급 접근이라는 전제에서, 명단을 주면서 검사 여부만 숨기는 것은 무의미하다.) */
+ *   코드 소지 = 학급 접근이라는 전제에서, 명단을 주면서 검사 여부만 숨기는 것은 무의미하다.)
+ *  참고(advisory, 실제 고치지는 않음): 직접 입력 모드로 만든 세션의 child_no가 우연히 명단의
+ *  번호와 같으면, 그 세션이 명단에 없는 아이 것이라도 이 함수는 명단의 그 번호를 "검사함"으로
+ *  표시한다 — child_no만으로 매칭하고 명단 소속 여부까지 확인하지 않기 때문이다. */
 export async function rosterWithTested(classCodeId: string): Promise<{
-  childNo: number; name: string; gender: string; birthYmd: string
+  childNo: number; name: string; gender: '남' | '여'; birthYmd: string
   tested: 'submitted' | 'inProgress' | null
 }[]> {
   const roster = await listRoster(classCodeId)
