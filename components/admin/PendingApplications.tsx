@@ -1,7 +1,7 @@
 // components/admin/PendingApplications.tsx — 교사 신청(pending) 검토·승인 섹션.
 // 발급 목록(active)보다 **위**에 둔다 — 관리자가 이 화면에 오는 이유는 대개 대기 건 처리다.
 'use client'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { approvalNoticeText, gradeClassLabel } from '@/lib/format'
 import { postJson } from '@/lib/http'
@@ -13,6 +13,9 @@ const btnCls = 'rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-
  *  있어야 하므로 이 섹션이 붙잡아 둔다(발급 폼의 `issued` 패널과 같은 이유). */
 interface Approved {
   code: string; teacherName: string; schoolName: string
+  /** 검사 주소 — 라우트가 실제로 쓴 origin(APP_URL 우선)을 그대로 받는다.
+   *  `window.location.origin`으로 다시 만들면 서버의 fallback만 흉내내 메일과 갈릴 수 있다. */
+  surveyUrl: string
   already: boolean; mailed: boolean
 }
 
@@ -33,13 +36,13 @@ export function PendingApplications({
 
   async function approve(c: ClassCodeItem) {
     setBusyId(c.id); setErr('')
-    const r = await postJson<{ already: boolean; mailed: boolean; code: string }>(
+    const r = await postJson<{ already: boolean; mailed: boolean; code: string; surveyUrl: string }>(
       `/api/admin/codes/${c.id}/approve`, undefined, '승인에 실패했어요. 다시 시도해 주세요.')
     setBusyId(null)
     if (!r.ok) { setErr(r.error); return }
     setApproved({
       code: r.data.code, teacherName: c.teacher_name, schoolName: c.school_name,
-      already: r.data.already, mailed: r.data.mailed,
+      surveyUrl: r.data.surveyUrl, already: r.data.already, mailed: r.data.mailed,
     })
     setCopied(false)
     setOpenId(null)
@@ -49,7 +52,7 @@ export function PendingApplications({
   function copyNotice(a: Approved) {
     const text = approvalNoticeText({
       teacherName: a.teacherName, schoolName: a.schoolName, code: a.code,
-      surveyUrl: window.location.origin,   // 서버의 APP_URL fallback과 같은 자리(현재 접속 origin)
+      surveyUrl: a.surveyUrl,   // 승인 응답이 준 값 — 메일에 찍힌 주소와 반드시 같아야 한다
     })
     void navigator.clipboard.writeText(text).then(() => setCopied(true))
   }
@@ -88,6 +91,7 @@ export function PendingApplications({
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <button type="button" className={btnCls}
+                  aria-expanded={openId === c.id} aria-controls={`roster-${c.id}`}
                   onClick={() => setOpenId(openId === c.id ? null : c.id)}>
                   {openId === c.id ? '명단 닫기' : '명단 보기'}
                 </button>
@@ -105,7 +109,7 @@ export function PendingApplications({
 
             {/* ⚠️ 아동 실명·생년월일 — 기본은 접힘이고, 관리자가 승인 판단을 위해 직접 열 때만 표시한다 */}
             {openId === c.id && (
-              <div className="mt-3 border-t border-line/60 pt-3">
+              <div id={`roster-${c.id}`} className="mt-3 border-t border-line/60 pt-3">
                 {roster.isLoading ? (
                   <p className="text-[13px] text-ink-mute">명단 불러오는 중…</p>
                 ) : roster.isError ? (
@@ -151,11 +155,19 @@ export function PendingApplications({
  *    발송 여부 미상이라고만 말한다 — 관리자가 보냈다고 믿으면 교사는 코드를 못 받는다.
  *  - (true, true)   승인하지 않은 호출이 메일을 보낼 수는 없으므로 발생하지 않는다(분기하지 않음).
  * 메일이 확실히 나간 경우가 아니면 [안내 문구 복사]를 항상 내어 예비 경로를 남긴다.
+ *
+ * 승인 직후 목록이 갱신되면 방금 누른 [승인] 버튼이 딸려 사라져 포커스가 body로 떨어진다 —
+ * 그래서 이 배너로 포커스를 옮긴다(`role="status"`는 화면을 보지 않는 사용자에게 읽어 주고,
+ * 포커스 이동은 그 다음 Tab이 사라진 버튼 자리가 아니라 여기서 이어지게 한다).
+ * 승인 1건마다 `a` 객체가 새로 만들어지므로 같은 학급을 다시 승인해도 다시 발화한다.
  */
 function ApprovedBanner({ a, copied, onCopy }: { a: Approved; copied: boolean; onCopy: () => void }) {
   const sure = !a.already && a.mailed
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => { ref.current?.focus() }, [a])
   return (
-    <div className={`mt-3 flex flex-wrap items-center gap-3 rounded-xl border-[1.5px] px-4 py-3 ${
+    <div ref={ref} role="status" tabIndex={-1}
+      className={`mt-3 flex flex-wrap items-center gap-3 rounded-xl border-[1.5px] px-4 py-3 outline-none ${
       sure ? 'border-blue/40 bg-blue/5' : 'border-amber/50 bg-amber/10'}`}>
       <div>
         <p className="text-sm font-bold">

@@ -10,9 +10,14 @@
 // 코드·메일 실패 후 재시도) 모두의 예비 경로다 — mail_sent_at 컬럼을 두지 않고 이 버튼으로
 // 해결하는 쪽을 택했다(DB 마이그레이션 없이 항상 쓸 수 있는 수동 경로가 더 단순하다).
 //
-// 메일 실패에도 승인은 유지한다(status 갱신을 롤백하지 않는다) — 응답에는 항상 `code`를
-// 실어 관리자가 [안내 문구 복사]로 직접 전달할 수 있게 한다(이 응답의 청자는 인증된 관리자이지,
-// /api/apply가 코드를 감추는 낯선 신청자가 아니다).
+// 메일 실패에도 승인은 유지한다(status 갱신을 롤백하지 않는다) — 응답에는 항상 `code`와
+// `surveyUrl`을 실어 관리자가 [안내 문구 복사]로 직접 전달할 수 있게 한다(이 응답의 청자는
+// 인증된 관리자이지, /api/apply가 코드를 감추는 낯선 신청자가 아니다).
+//
+// `surveyUrl`을 내려주는 이유: 화면이 `window.location.origin`으로 같은 값을 만들면 그건 서버의
+// **fallback**을 흉내낸 것이지 서버가 실제로 쓴 값(APP_URL 우선)이 아니다. 프리뷰·대체 호스트
+// 배포에서 둘이 갈라지면 **메일이 실패했을 때** 교사가 받는 주소만 틀리게 되는데, 그건 그 학급이
+// 검사를 시작할 수 없다는 뜻이다. 그래서 origin의 단일 소스를 이 응답으로 못박는다.
 import { NextResponse } from 'next/server'
 import { approveClassCode } from '@/lib/db'
 import { approvedMail, sendMail } from '@/lib/mail'
@@ -29,9 +34,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!result) return jsonError('존재하지 않는 코드입니다.', 404)
     const { row, already } = result
 
+    // 메일을 보내지 않는 경로(already·이메일 없음)에서도 응답에 실어야 하므로 밖에서 정한다.
+    const origin = process.env.APP_URL?.trim() || new URL(req.url).origin
+
     let mailed = false
     if (!already && row.teacher_email) {
-      const origin = process.env.APP_URL?.trim() || new URL(req.url).origin
       const mail = approvedMail({
         teacherName: row.teacher_name, schoolName: row.school_name,
         code: row.code, surveyUrl: origin,
@@ -41,7 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       else console.error('[admin/codes/:id/approve] 승인 메일 발송 실패', sent.error)
     }
 
-    return NextResponse.json({ ok: true, already, mailed, code: row.code })
+    return NextResponse.json({ ok: true, already, mailed, code: row.code, surveyUrl: origin })
   } catch (e) {
     console.error('[admin/codes/:id/approve] 승인 실패', e)
     return jsonError('승인 처리에 실패했습니다.', 502)

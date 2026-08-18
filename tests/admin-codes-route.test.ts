@@ -131,6 +131,9 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json).toMatchObject({ ok: true, already: false, mailed: true, code: ROW.code })
+    // 메일에 찍힌 주소와 화면이 복사하는 주소의 단일 소스 — 응답의 surveyUrl이 메일 인자와 같아야 한다.
+    expect(json.surveyUrl).toBe('http://x')
+    expect(vi.mocked(mail.approvedMail).mock.calls[0][0].surveyUrl).toBe('http://x')
     expect(mail.sendMail).toHaveBeenCalledTimes(1)
     const call = vi.mocked(mail.sendMail).mock.calls[0][0]
     expect(call.to).toBe('teacher@example.com')
@@ -152,6 +155,8 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json).toMatchObject({ ok: true, already: true, mailed: false, code: ROW.code })
+    // 메일을 보내지 않는 경로에서도 surveyUrl은 실려야 한다 — 여기서만 [안내 문구 복사]가 유일한 전달 경로다.
+    expect(json.surveyUrl).toBe('http://x')
     expect(mail.sendMail).not.toHaveBeenCalled()
   })
 
@@ -164,6 +169,15 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     expect(res.status).toBe(200)
     expect(json.mailed).toBe(false)
     expect(mail.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('APP_URL이 설정돼 있으면 그 값이 surveyUrl·메일 모두의 origin이다(Host 헤더보다 우선)', async () => {
+    vi.stubEnv('APP_URL', 'https://real.example.kr')
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    const json = await (await APPROVE(approveReq(), delParams(ROW.id))).json()
+    expect(json.surveyUrl).toBe('https://real.example.kr')
+    expect(vi.mocked(mail.approvedMail).mock.calls[0][0].surveyUrl).toBe('https://real.example.kr')
+    vi.unstubAllEnvs()
   })
 
   it('없는 id → 404', async () => {
