@@ -18,7 +18,7 @@ export const birthYmdSchema = z.string().regex(/^\d{6}$/).refine(v => {
 
 export const gradeSchema = z.number().int().min(1).max(6)
 /** 반 번호. 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용.
- *  화면 드롭다운은 20까지만 제공하지만(components/admin/CodeIssuer.tsx의 MAX_CLASS_NO), DB·스키마는 넓게 두어
+ *  화면 드롭다운은 20까지만 제공하지만(lib/format.ts의 MAX_CLASS_NO — 발급·신청 화면이 공유), DB·스키마는 넓게 두어
  *  나중에 범위를 늘릴 때 마이그레이션이 필요 없게 한다. */
 export const classNoSchema = z.number().int().min(0).max(99)
 export const genderSchema = z.enum(['남', '여'])

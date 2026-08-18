@@ -19,7 +19,7 @@
 
 ## 명단 유효성은 화면이 갖고 있지 않다
 
-`components/apply/RosterEditor.tsx`가 파일 파싱·칸 검증·확정 판정을 전부 소유하고,
+`components/apply/RosterEditor.tsx`가 파일 파싱·칸 검증·번호 중복·확정 판정을 전부 소유하고,
 이 화면은 `onChange`로 받은 값이 `null`인지만 본다. 제출 버튼은 **학급 정보 유효 +
 확정 명단 + 동의 3개**가 모두 참일 때만 열린다.
 

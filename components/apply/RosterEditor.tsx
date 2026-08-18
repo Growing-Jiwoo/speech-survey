@@ -5,9 +5,11 @@
 // (값 모양으로 추론하면 "반 번호 2"를 성별로 오인한다 — 프로토타입에서 확인.)
 'use client'
 import { useRef, useState } from 'react'
-import { normBirth, toYymmdd } from '@/lib/birth'
-import { cutText, parseRosterGrid, type RosterChild } from '@/lib/roster'
-import { validChildNo, validName } from '@/lib/validate'
+import { normBirth } from '@/lib/birth'
+import {
+  badCells, cutText, dupChildNos, parseRosterGrid, toChild,
+  type RosterCells, type RosterChild,
+} from '@/lib/roster'
 import { readXlsx } from '@/lib/xlsx'
 
 /** 읽을 수 없는 파일 전부에 같은 문구를 쓴다 — 확장자가 틀린 경우와 내용이 깨진 경우를
@@ -19,39 +21,25 @@ const cellCls = 'h-10 w-full rounded-lg border-[1.5px] bg-well px-2.5 text-[14px
 const okCls = 'border-line focus:border-blue'
 const badCls = 'border-rec bg-rec/5 focus:border-rec'
 
-/** 표 한 줄. **문자열로 들고 있는다** — 편집 중간값("2019-05-0", "1"만 친 상태)도 그대로
- *  보여야 하고, 숫자·날짜로 미리 바꾸면 교사가 무엇을 쳤는지 화면에서 사라진다. */
-interface Row { id: number; no: string; name: string; gender: string; birth: string }
+/** 표 한 줄 = 파일에서 읽은 네 칸(`RosterCells`) + React 키. **문자열로 들고 있는다** —
+ *  편집 중간값("2019-05-0", "1"만 친 상태)도 그대로 보여야 하고, 숫자·날짜로 미리 바꾸면
+ *  교사가 무엇을 쳤는지 화면에서 사라진다. 칸 검증은 파일에서 온 줄과 똑같이
+ *  `badCells`(lib/roster)가 한다 — 화면에만 있는 합격선을 만들지 않는다. */
+type Row = RosterCells & { id: number }
 
 let seq = 0
-const newRow = (r: Partial<Row> = {}): Row =>
-  ({ id: seq++, no: '', name: '', gender: '', birth: '', ...r })
+const newRow = (c?: RosterCells): Row =>
+  ({ id: seq++, childNo: '', name: '', gender: '', birth: '', ...c })
 
-const cleanName = (s: string) => s.trim().replace(/\s+/g, ' ')
-
-/** 아직 못 채운 칸 — 라벨은 lib/roster의 `RosterProblem.missing`과 같은 말을 쓴다
- *  (파일에서 온 문제 줄과 화면에서 만든 문제 줄이 다른 말로 불리지 않게). */
-function badFields(r: Row): string[] {
-  const bad: string[] = []
-  if (!validChildNo(Number(r.no)) || r.no.trim() === '') bad.push('번호')
-  if (!validName(cleanName(r.name))) bad.push('이름')
-  if (r.gender !== '남' && r.gender !== '여') bad.push('성별')
-  if (normBirth(r.birth) === null) bad.push('생년월일')
-  return bad
-}
-
-/** 전부 깨끗할 때만 확정 명단. 한 줄이라도 문제가 있거나 빈 표면 null — 부모의 제출 버튼이
- *  이 값 하나로 잠긴다(명단의 유효성은 이 컴포넌트가 전부 소유한다). */
+/** 전부 깨끗할 때만 확정 명단. 한 줄이라도 문제가 있거나, 번호가 겹치거나, 표가 비면 null —
+ *  부모의 제출 버튼이 이 값 하나로 잠긴다(명단의 유효성은 이 컴포넌트가 전부 소유한다). */
 function confirmOf(rows: Row[]): RosterChild[] | null {
-  if (rows.length === 0) return null
+  if (rows.length === 0 || dupChildNos(rows).size > 0) return null
   const out: RosterChild[] = []
   for (const r of rows) {
-    const iso = normBirth(r.birth)
-    if (iso === null || badFields(r).length > 0) return null
-    out.push({
-      childNo: Number(r.no), name: cleanName(r.name),
-      gender: r.gender as '남' | '여', birthYmd: toYymmdd(iso),
-    })
+    const child = toChild(r)
+    if (child === null) return null
+    out.push(child)
   }
   return out
 }
@@ -83,7 +71,9 @@ export function RosterEditor({ onChange }: {
     commit(rows.map(r => (r.id === id ? { ...r, ...part } : r)))
 
   async function load(file: File) {
-    setErr('')
+    // 안내 배너는 **시도할 때마다** 지운다 — 앞 파일의 "주민등록번호는 저장하지 않았습니다."가
+    // 실패한 다음 업로드 위에 그대로 남으면 올리지도 못한 파일을 두고 한 말이 된다.
+    setErr(''); setNotice({ rrnSeen: false, missingCols: [] })
     const name = file.name.toLowerCase()
     try {
       const grid = name.endsWith('.xlsx') ? await readXlsx(await file.arrayBuffer())
@@ -93,25 +83,24 @@ export function RosterEditor({ onChange }: {
       const parsed = parseRosterGrid(grid)
       if ('error' in parsed) { setErr(parsed.error); return }
       setNotice({ rrnSeen: parsed.rrnSeen, missingCols: parsed.missingCols })
-      // 문제 줄은 표 아래쪽에 모은다 — 고칠 것이 한 덩어리로 보인다.
-      // ⚠️ RosterProblem은 번호·이름만 들고 오므로(lib/roster) 성별·생년월일 칸이 하나라도
-      // 잘못된 줄은 그 줄의 **나머지 두 칸도 빈칸으로** 다시 채워야 한다. 파일의 원문
-      // 값을 화면에 남기려면 lib/roster가 원문을 함께 돌려줘야 한다.
-      commit([
-        ...parsed.children.map(c => newRow({
-          no: String(c.childNo), name: c.name, gender: c.gender,
-          birth: normBirth(c.birthYmd) ?? '',
-        })),
-        ...parsed.problems.map(p => newRow({
-          no: p.childNo === null ? '' : String(p.childNo), name: p.name,
-        })),
-      ])
+      // 파일에 적힌 순서 그대로, 못 읽은 칸도 원문째 싣는다(lib/roster의 RosterCells 주석).
+      // 교사는 엑셀을 옆에 띄워 놓고 대조하므로 줄 순서를 바꾸지 않는다.
+      commit(parsed.rows.map(c => newRow(c)))
     } catch {
       setErr(FILE_ERR)
     }
   }
 
-  const ready = rows.filter(r => badFields(r).length === 0).length
+  // 줄별 문제 목록을 한 번만 계산해 표·집계가 같은 값을 본다.
+  // 번호 중복은 칸 자체는 멀쩡해 badCells가 잡지 못한다 — 여기서 '번호'로 얹는다.
+  const dup = dupChildNos(rows)
+  const rowBad = rows.map(r => {
+    const bad = badCells(r)
+    const n = Number(r.childNo)
+    if (dup.has(n) && !bad.includes('번호')) bad.push('번호')
+    return bad
+  })
+  const ready = rowBad.filter(b => b.length === 0).length
   const broken = rows.length - ready
 
   return (
@@ -156,7 +145,8 @@ export function RosterEditor({ onChange }: {
       {rows.length > 0 && (
         <>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <p className="text-[13px] font-bold text-ink-soft">
+            {/* 칸을 고칠 때마다 숫자가 바뀐다 — 화면을 못 보는 사용자도 진척을 들을 수 있어야 한다 */}
+            <p aria-live="polite" className="text-[13px] font-bold text-ink-soft">
               {ready}명 준비됨
               {broken > 0 && <span className="text-rec-deep"> · {broken}줄 확인 필요</span>}
             </p>
@@ -170,15 +160,16 @@ export function RosterEditor({ onChange }: {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-ink-mute">
-                  {['번호', '이름', '성별', '생년월일', ''].map(h => (
+                  {['번호', '이름', '성별', '생년월일'].map(h => (
                     <th key={h} scope="col" className="whitespace-nowrap px-1 py-1.5 font-medium">{h}</th>
                   ))}
+                  {/* 삭제 버튼 열 — 화면에는 빈 칸이지만 스크린리더에는 이름이 있어야 한다 */}
+                  <th scope="col" className="px-1 py-1.5 font-medium"><span className="sr-only">작업</span></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const bad = badFields(r)
-                  const has = (f: string) => bad.includes(f)
+                  const has = (f: string) => rowBad[i].includes(f)
                   // 생년월일 칸은 값이 정규화될 때만 type="date"다. type="date"는 형식이 어긋난
                   // 값을 아예 표시하지 못하므로(브라우저가 빈칸으로 만든다), 파일에서 온 잘못된
                   // 값을 date로 넣으면 조용히 사라져 교사가 무엇이 틀렸는지 볼 수 없다.
@@ -187,9 +178,9 @@ export function RosterEditor({ onChange }: {
                   return (
                     <tr key={r.id} className="border-t border-line/60">
                       <td className="px-1 py-1">
-                        <input value={r.no} maxLength={2} inputMode="numeric" aria-label={`${i + 1}번째 줄 번호`}
+                        <input value={r.childNo} maxLength={2} inputMode="numeric" aria-label={`${i + 1}번째 줄 번호`}
                           aria-invalid={has('번호')}
-                          onChange={e => patch(r.id, { no: e.target.value.replace(/\D/g, '') })}
+                          onChange={e => patch(r.id, { childNo: e.target.value.replace(/\D/g, '') })}
                           className={`${cellCls} w-14 ${has('번호') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1">
@@ -235,7 +226,12 @@ export function RosterEditor({ onChange }: {
           </div>
           {broken > 0 && (
             <p className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">
-              붉게 표시된 칸을 채워 주세요. 파일에서 읽지 못한 줄은 표 아래쪽에 모여 있어요.
+              붉게 표시된 칸을 채워 주세요. 줄 순서는 올리신 파일 그대로예요.
+            </p>
+          )}
+          {dup.size > 0 && (
+            <p className="mt-1 text-[12.5px] leading-relaxed text-rec-deep">
+              {[...dup].sort((a, b) => a - b).join('·')}번이 두 번 있어요. 한 학급에 같은 번호를 둘 수는 없어요.
             </p>
           )}
         </>

@@ -8,20 +8,13 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { RosterEditor } from '@/components/apply/RosterEditor'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
+import { CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import type { RosterChild } from '@/lib/roster'
 import { validEmail, validName, validPhone } from '@/lib/validate'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-[15px] outline-none transition focus:border-blue focus:bg-white'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
-
-/** 반 선택지의 화면 상한 — 근거는 components/admin/CodeIssuer.tsx의 같은 상수 주석.
- *  두 화면이 같은 스키마(classCodeFields)로 들어가므로 선택지도 같게 맞춘다. */
-const MAX_CLASS_NO = 20
-const CLASS_OPTIONS = [
-  { value: '0', label: '단일학급 (반 없음)' },
-  ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
-]
 
 /** ⚠️ 담당자 확인 대기 — 확정 아님. 아래 문구는 개발용 초안이다(사용자 확정 2026-08-18).
  *  담당자가 안내 문구 예시를 만들기로 했고, 연구윤리 검토본이 오면 다시 교체된다.

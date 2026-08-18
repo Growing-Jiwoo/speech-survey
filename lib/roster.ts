@@ -1,4 +1,6 @@
-// lib/roster.ts — 업로드된 명단(그리드)을 검증된 아동 목록으로 바꾼다. 순수 함수만 둔다.
+// lib/roster.ts — 업로드된 명단(그리드)을 고정 4칸 표로 바꾼다. 순수 함수만 둔다.
+// **줄을 버리지 않는다**: 못 읽은 칸도 원문째 실어 돌려주고(RosterCells), 그 줄이 쓸 만한지는
+// badCells/toChild가 따로 답한다. 화면(RosterEditor)이 교사의 수정본에도 같은 함수를 쓴다.
 // 열 역할을 짐작하지 않는다 — 알려진 머리글 이름만 찾고, 못 찾으면 거부한다.
 // (값 모양으로 추론하는 방식은 "반 번호 2"를 성별로 오인했다 — 프로토타입에서 확인.
 //  자유도를 열면 실패 케이스마다 배포가 필요해진다. 스펙 "고정 4칸" 절.)
@@ -12,18 +14,28 @@ export interface RosterChild {
   birthYmd: string          // YYMMDD — sessions.birth_ymd와 같은 형식
 }
 
-/** 읽었지만 완성되지 못한 행 — 화면이 붉게 표시하고 교사가 채운다. */
-export interface RosterProblem {
-  childNo: number | null
+/**
+ * 한 줄의 네 칸 — **읽든 못 읽든 파일에 있던 값이 그대로 담긴다.**
+ * 읽힌 칸은 정규화된 모습(번호 `4` · 성별 `남` · 생년월일 `YYYY-MM-DD`)이고,
+ * 못 읽은 칸은 파일 원문("2-1", "43633", "미상")이 남는다. 빈 문자열은 파일에 값이
+ * 없었다는 뜻이다 — 화면은 이 둘을 구분해 보여줄 수 있어야 한다.
+ *
+ * 한 칸이 틀렸다고 그 줄의 **나머지 칸까지 버리지 않는 것**이 이 모양의 이유다. 이전에는
+ * 문제 행이 번호·이름만 들고 나와, 이름 하나가 빠진 줄의 성별까지 교사가 다시 채워야 했다.
+ * 생년월일은 파일을 다시 열어 보면 되지만 **성별은 기억으로 채우게 된다** — 그렇게 들어간
+ * 오기는 임상 기록에 그대로 남는다.
+ */
+export interface RosterCells {
+  childNo: string
   name: string
-  missing: string[]         // '번호' | '이름' | '성별' | '생년월일'
+  gender: string
+  birth: string             // YYYY-MM-DD(읽혔을 때) — 화면의 date 입력이 그대로 쓴다
 }
 
 export interface ParsedRoster {
-  /** 번호 중복 여부는 여기서 검사하지 않는다 — 학급 코드 발급과 마찬가지로 `applySchema`(서버)의
-   *  몫이다. 이 배열이 이미 유일하다고 가정하지 말 것. */
-  children: RosterChild[]
-  problems: RosterProblem[]
+  /** **파일에 적힌 순서 그대로.** 통과한 줄과 문제 있는 줄을 나누지 않는다 — 교사가 엑셀을
+   *  옆에 띄워 놓고 대조하므로 순서가 어긋나면 어느 줄을 고치는 중인지 잃는다. */
+  rows: RosterCells[]
   /** 파일 어딘가에 주민등록번호가 있었다 — 저장은 안 했지만 안내는 띄운다 */
   rrnSeen: boolean
   /** 파일에 아예 없던 열 — "직접 채워 주세요" 안내용 */
@@ -113,15 +125,16 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
   const missingCols = (['gender', 'birthYmd'] as const)
     .filter(f => col[f] === undefined).map(f => COL_LABEL[f])
 
-  const children: RosterChild[] = []
-  const problems: RosterProblem[] = []
+  const rows: RosterCells[] = []
   let rrnSeen = bannedCols.size > 0
 
   for (const line of grid.slice(headRow + 1)) {
     if (line.some(c => isRrn(c))) rrnSeen = true
     // 값 칸의 주민번호는 그 칸만 버린다 — 실제로 새는 것을 막는 유일한 층(위 bannedCols는
     // 열 이름 매칭이라 값 자체는 안 막는다). 이름·생년월일 칸에 주민번호가 섞여 들어와도
-    // 이 칸만 빈 값으로 취급해 problems로 보낸다.
+    // 이 칸만 빈 값으로 취급한다.
+    // **RosterCells의 네 칸은 전부 이 함수를 지나서만 만들어진다** — 원문을 화면에 되돌려
+    // 주게 된 뒤에도 주민번호가 셀에 실릴 경로가 생기지 않는 것은 그래서다.
     const pick = (f: keyof typeof COL_LABEL): string => {
       const i = col[f]
       if (i === undefined || bannedCols.has(i)) return ''
@@ -136,23 +149,64 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
     // 실물 나이스 파일이 없어 그 행 모양을 짐작해 특별 취급하면 스펙 "고정 4칸" 절이 금지한
     // 값-모양 추론이 된다. 교사가 지우면 되는 눈에 보이는 군더더기 행이, 조용히 사라지는
     // 아이보다 훨씬 싸다 — 실물을 구하기 전까지 이대로 둔다.
-    if (!rawNo && !rawName && !pick('gender') && !pick('birthYmd')) continue
+    const rawGender = pick('gender'), rawBirth = pick('birthYmd')
+    if (!rawNo && !rawName && !rawGender && !rawBirth) continue
 
-    const childNo = toNo(rawNo)
-    const name = rawName.replace(/\s+/g, ' ')
-    const gender = toGender(pick('gender'))
-    const birthIso = normBirth(pick('birthYmd'))
-
-    const missing: string[] = []
-    if (childNo === null) missing.push('번호')
-    if (!NAME_RE.test(name)) missing.push('이름')
-    if (gender === null) missing.push('성별')
-    if (birthIso === null) missing.push('생년월일')
-
-    if (missing.length > 0) problems.push({ childNo, name, missing })
-    else children.push({ childNo: childNo!, name, gender: gender!, birthYmd: toYymmdd(birthIso!) })
+    // 읽히면 정규화된 값을, 못 읽으면 파일 원문을 그대로 넣는다. 원문을 남기는 쪽이
+    // 중요하다 — 빈칸으로 지워 버리면 교사는 "파일에 없던 값"과 "우리가 못 읽은 값"을
+    // 구분할 수 없고, 화면 안내는 어느 쪽이든 "직접 채워 주세요"라고 말한다.
+    rows.push({
+      childNo: toNo(rawNo)?.toString() ?? rawNo,
+      name: rawName.replace(/\s+/g, ' '),
+      gender: toGender(rawGender) ?? rawGender,
+      birth: normBirth(rawBirth) ?? rawBirth,
+    })
   }
-  return { children, problems, rrnSeen, missingCols }
+  return { rows, rrnSeen, missingCols }
+}
+
+/** 표기 흔들림을 걷어낸 이름 — 앞뒤 공백과 연속 공백만 정리한다(서버 `cleaned`와 같은 규칙). */
+const trimName = (s: string) => s.trim().replace(/\s+/g, ' ')
+
+/**
+ * 아직 쓸 수 없는 칸의 이름들. 빈 배열이면 그 줄은 완성된 것이다.
+ * 파일에서 온 줄과 교사가 손으로 고친 줄이 **같은 함수**를 지나야 합격선이 갈리지 않는다 —
+ * 화면(RosterEditor)이 매 입력마다 이 함수를 부른다.
+ */
+export function badCells(c: RosterCells): string[] {
+  const bad: string[] = []
+  if (toNo(c.childNo) === null) bad.push(COL_LABEL.childNo)
+  if (!NAME_RE.test(trimName(c.name))) bad.push(COL_LABEL.name)
+  if (c.gender !== '남' && c.gender !== '여') bad.push(COL_LABEL.gender)
+  if (normBirth(c.birth) === null) bad.push(COL_LABEL.birthYmd)
+  return bad
+}
+
+/** 네 칸이 모두 성한 줄만 아동 한 명으로. **서버에 나가는 값은 이 함수가 만든 것뿐이다.** */
+export function toChild(c: RosterCells): RosterChild | null {
+  if (badCells(c).length > 0) return null
+  return {
+    childNo: toNo(c.childNo)!,
+    name: trimName(c.name),
+    gender: c.gender as '남' | '여',
+    birthYmd: toYymmdd(normBirth(c.birth)!),
+  }
+}
+
+/**
+ * 학급 안에서 두 번 이상 나오는 번호. 파서는 중복을 막지 않지만(`applySchema`가 서버에서
+ * 400으로 거른다) 그 400은 **어느 줄이 겹쳤는지 말해 주지 않는다** — 화면이 미리 짚어 준다.
+ * `1`과 `01`은 같은 번호다: 정규화된 값으로 센다.
+ */
+export function dupChildNos(rows: RosterCells[]): Set<number> {
+  const seen = new Set<number>(), dup = new Set<number>()
+  for (const r of rows) {
+    const n = toNo(r.childNo)
+    if (n === null) continue
+    if (seen.has(n)) dup.add(n)
+    else seen.add(n)
+  }
+  return dup
 }
 
 /** CSV·붙여넣기 텍스트 → 그리드. 엑셀 복사는 탭, CSV는 콤마 — 탭이 있으면 탭이 우선. */

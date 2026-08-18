@@ -7,22 +7,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
-import { gradeClassLabel } from '@/lib/format'
+import { CLASS_OPTIONS, gradeClassLabel } from '@/lib/format'
 import { postJson, requestJson } from '@/lib/http'
 import { validEmail, validName, validPhone } from '@/lib/validate'
 import { adminKeys, useClassCodesQuery, type ClassCodeItem } from '@/hooks/useAdminQueries'
 
 const inputCls = 'mt-1.5 h-[46px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-[15px] outline-none transition focus:border-blue focus:bg-white'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
-
-/** 반 선택지의 화면 상한. classNoSchema(lib/schema.ts)는 DB·검증용으로 0~99까지 넓게 열어 두지만,
- *  드롭다운은 실사용 범위에 맞춰 이만큼만 보여준다(lib/schema.ts의 classNoSchema 주석이 이 상수를 가리킨다). */
-const MAX_CLASS_NO = 20
-/** 반 선택지: 단일학급(반 없음) = 0, 그 외 1~MAX_CLASS_NO */
-const CLASS_OPTIONS = [
-  { value: '0', label: '단일학급 (반 없음)' },
-  ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
-]
 
 export function CodeIssuer() {
   const queryClient = useQueryClient()
