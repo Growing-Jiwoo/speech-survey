@@ -87,8 +87,9 @@ export const sessionEditSchema = z.object({
 })
 export type SessionEditInput = z.infer<typeof sessionEditSchema>
 
-/** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
-export const classCodeCreateSchema = z.object({
+/** 학급 코드 발급 폼의 공통 필드. refine이 걸리면 extend가 안 되므로 객체를 분리해 둔다 —
+ *  관리자 직접 발급(classCodeCreateSchema)과 교사 신청(applySchema)이 공유한다. */
+const classCodeFields = z.object({
   region: z.string().refine(r => REGION_NAMES.includes(r)),
   schoolId: cleaned.pipe(z.string().min(1)),
   schoolName: cleaned.pipe(z.string().min(1).max(100)),
@@ -97,9 +98,32 @@ export const classCodeCreateSchema = z.object({
   teacherName: cleaned.pipe(nameSchema),
   teacherPhone: optionalPhone,
   teacherEmail: optionalEmail,
-}).refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
-  { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
+})
+
+/** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
+export const classCodeCreateSchema = classCodeFields
+  .refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
+    { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
 export type ClassCodeCreateInput = z.infer<typeof classCodeCreateSchema>
+
+/** 신청 명단 한 줄 — sessions의 같은 컬럼과 동일 규칙(제약이 어긋나면 복사가 실패한다). */
+export const rosterChildSchema = z.object({
+  childNo: childNoSchema,
+  name: cleaned.pipe(nameSchema),
+  gender: genderSchema,
+  birthYmd: birthYmdSchema,
+})
+export type RosterChildInput = z.infer<typeof rosterChildSchema>
+
+/** POST /api/apply 바디 — 교사 신청. 직접 발급과 달리 **이메일이 필수**다:
+ *  승인 메일이 유일한 코드 전달 경로라서다(신청 완료 화면은 코드를 보여주지 않는다 — 스펙). */
+export const applySchema = classCodeFields.extend({
+  teacherEmail: emailSchema,
+  roster: z.array(rosterChildSchema).min(1, '학생을 한 명 이상 등록해 주세요.').max(99)
+    .refine(r => new Set(r.map(c => c.childNo)).size === r.length,
+      '같은 번호가 두 번 있습니다.'),
+})
+export type ApplyInput = z.infer<typeof applySchema>
 
 /** POST /api/sessions/verify-code 바디 */
 export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema })
