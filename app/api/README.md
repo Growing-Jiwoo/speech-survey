@@ -24,6 +24,7 @@
 | `GET /api/admin/sessions/[id]` | 결과지. 녹음은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출 |
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |
+| `GET /api/admin/codes/[id]/roster` | 신청 명단 조회(읽기 전용). **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단해야 해서 존재한다. 목록 라우트는 그래서 실명 대신 `roster_count`만 센다 |
 | `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
 | `POST /api/admin/codes/[id]/approve` | 신청 승인(pending→active, 멱등) + 교사에게 코드 안내 메일. 메일 실패에도 승인은 유지하고, 응답은 `already`(행이 이미 active였는지)와 `mailed`(이번 호출이 실제로 보냈는지)를 분리해 돌려준다 — `already:true`는 메일 발송 여부를 증명하지 않으므로 재발송을 시도하지 않는다. 응답에는 항상 `code`가 실려(호출자가 인증된 관리자이므로) 화면의 [안내 문구 복사] 예비 경로가 늘 동작한다 |
 

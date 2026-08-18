@@ -2,13 +2,14 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '@/lib/http'
-import type { MarkRow, SentenceScoreRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
+import type { MarkRow, RosterRow, SentenceScoreRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
 
 /** 관리자 쿼리 키 — 무효화/제거 호출부가 리터럴을 복사하다 어긋나지 않도록 한 곳에 정의. */
 export const adminKeys = {
   sessions: ['admin', 'sessions'] as const,
   session: (id: string) => ['admin', 'session', id] as const,
   codes: ['admin', 'codes'] as const,
+  roster: (id: string) => ['admin', 'roster', id] as const,
 }
 
 /** 학급 코드 목록 항목 — 발급 화면(CodeIssuer)이 쓴다. */
@@ -18,8 +19,14 @@ export interface ClassCodeItem {
   grade: number; class_no: number
   teacher_name: string; teacher_phone: string | null; teacher_email: string | null
   created_at: string
-  /** 이 코드로 만들어진 세션 수 — 0일 때만 삭제 버튼을 낸다 */
+  /** 'pending' = 교사 신청 접수만 된 상태 — 승인 대기 목록에, 'active'는 발급 목록에 놓인다 */
+  status: 'pending' | 'active'
+  /** 신청 접수 시각. 관리자 직접 발급분은 null */
+  applied_at: string | null
+  /** 이 코드로 만들어진 세션 수 — 0일 때만 삭제 버튼을 낸다(pending은 예외, 아직 검사 전이다) */
   session_count: number
+  /** 신청 명단 인원 수. **실명은 목록에 실리지 않는다** — 수만 센다(PII) */
+  roster_count: number
 }
 
 /** 결과지 녹음 항목(서명 URL 포함) — API가 audio_path를 서명 URL로 변환해 내려준다. */
@@ -64,5 +71,15 @@ export function useClassCodesQuery() {
   return useQuery({
     queryKey: adminKeys.codes,
     queryFn: () => fetchJson<{ codes: ClassCodeItem[] }>('/api/admin/codes').then(d => d.codes),
+  })
+}
+
+/** 신청 명단 — 승인 검토용. 관리자가 [명단 보기]를 누른 학급만 요청한다(⚠️ 아동 실명 PII).
+ *  캐시에 남는 것도 실명이므로, 로그아웃 시 지워지는 `adminKeys` 트리 안에 둔다. */
+export function useRosterQuery(id: string | null) {
+  return useQuery({
+    queryKey: adminKeys.roster(id ?? ''),
+    queryFn: () => fetchJson<{ roster: RosterRow[] }>(`/api/admin/codes/${id}/roster`).then(d => d.roster),
+    enabled: !!id,
   })
 }

@@ -23,11 +23,13 @@ URL searchParams**(딥링크·뒤로가기 복원 가능)이고, 데이터는 re
 | `sheet/SentenceRows.tsx` | 문장 읽기유창성 행 — 문장·점수 입력·플레이어(자기 줄)를 한 카드에 |
 | `sheet/SentenceWriteRows.tsx` | 문장 쓰기(G2) 행 — 검사 중 기록(읽기 전용). 검사지처럼 어절을 나눠 보여 준다 |
 | `sheet/PageAudio.tsx` | 섹션에 인라인으로 붙는 페이지 녹음 — 시도 전환·미녹음·제한시간 초과 표시 |
-| `CodeIssuer.tsx` | `/admin/codes` 오케스트레이션 — 학급 코드 발급(학교·학년·반·담임·연락처) + 발급 목록. 세션 0건인 코드만 삭제 버튼(FK restrict가 최종 방어). 데이터는 `useClassCodesQuery`(react-query), 필터·탭이 없어 URL searchParams는 쓰지 않는다 |
+| `CodeIssuer.tsx` | `/admin/codes` 오케스트레이션 — 학급 코드 발급(학교·학년·반·담임·연락처) + 목록. 목록은 `status`로 갈라 **대기(pending)는 `PendingApplications`가, 발급(active)만 이 파일의 표가** 그린다. 세션 0건인 코드만 삭제 버튼(FK restrict가 최종 방어)이고, 삭제 확인 모달은 두 섹션이 공유한다(pending 삭제 = 반려이므로 명단까지 지워진다고 문구에 밝힌다). 데이터는 `useClassCodesQuery`(react-query), 필터·탭이 없어 URL searchParams는 쓰지 않는다 |
+| `PendingApplications.tsx` | 교사 신청(pending) 검토·승인 섹션 — 발급 목록보다 **위**에 둔다(관리자가 이 화면에 오는 이유는 대개 대기 건 처리다). [명단 보기]는 `useRosterQuery`로 아동 명단을 가져오고 **기본 접힘**이다(⚠️ 아동 실명 PII — 관리자가 승인 판단을 위해 직접 열 때만 표시). [승인] 후 문구는 응답의 `(already, mailed)` 조합만으로 정한다: `(false,true)` 발송 완료 / `(false,false)` 발송 실패 / `(true,false)` **발송 여부 미상**(라우트가 이전 호출의 발송을 알 수 없으므로 보냈다고도 못 보냈다고도 말하지 않는다). 확실히 나간 경우가 아니면 [안내 문구 복사]를 항상 내어 예비 전달 경로를 남긴다. 결과 배너는 행이 active로 옮겨간 뒤에도 남는다 |
 
 **공식 출력물은 화면이 아니라 검사지 PDF다**(`/api/admin/sessions/[id]/sheet.pdf`).
 담당자 배포 원본 PDF에 점수만 얹으므로 양식이 어긋날 여지가 없다.
 
-주의: 세션 목록/결과지에는 아동 PII가, `CodeIssuer`에는 담임 성명·연락처(개인정보)가 표시된다 —
+주의: 세션 목록/결과지에는 아동 PII가, `CodeIssuer`에는 담임 성명·연락처가, `PendingApplications`의
+펼친 명단에는 **아동 실명·성별·생년월일**이 표시된다 —
 로그아웃 시 react-query 캐시를 비운다(`AdminDashboard.logout`의 전역 `queryClient.clear()`가
 `adminKeys.codes` 캐시도 함께 지운다). 새 화면을 추가하면 같은 원칙을 지킬 것.

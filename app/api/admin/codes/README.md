@@ -10,6 +10,7 @@
 |---|---|
 | `route.ts` | `POST` 발급(zod `classCodeCreateSchema` 검증 → `generateClassCode()` → insert), `GET` 목록 |
 | `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` |
+| `[id]/roster/route.ts` | `GET` 신청 명단 조회. UUID 형식 검증 후 `listRoster` — 승인 검토 전용(아래 PII 절) |
 | `[id]/approve/route.ts` | `POST` 신청 승인. UUID 형식 검증 후 `approveClassCode` → (조건부) 교사에게 안내 메일 |
 
 ## 설계 의도 · 제약
@@ -24,7 +25,8 @@
   `session_count`·`roster_count` 두 수로 펴서 내려준다 — 목록 화면이 필요한 것은 "이 코드로
   검사한 건수"와 "신청 인원 수"뿐이고, 세션 원본 키를 관리자 화면 밖으로 흘릴 이유가 없다.
   **명단 내용(아동 실명)은 목록에 실리지 않는다** — 수만 센다. 실명은 승인 검토 화면이
-  별도 요청으로 가져간다.
+  `[id]/roster`로 따로 가져간다: 관리자 화면을 열기만 해도 모든 학급의 아동 실명이 흘러나오지
+  않고, 실명은 관리자가 그 학급을 열겠다고 누른 순간에만 오간다.
 - **삭제 거부는 두 겹이다.** 화면은 `session_count === 0`인 코드에만 삭제 버튼을 보이고,
   라우트는 `deleteClassCode`가 `'in_use'`를 돌려주면 409를 낸다. 최종 방어는 DB의
   `sessions.class_code_id … on delete restrict`다 — 이 셋 중 하나만 고쳐서 삭제를 허용하지 말 것.
@@ -42,7 +44,8 @@
 
 ## PII
 
-발급 요청 본문과 목록 응답에 **담임 성명·전화·이메일**이 들어 있다. 전화번호는 zod 스키마가
+발급 요청 본문과 목록 응답에 **담임 성명·전화·이메일**이, `[id]/roster` 응답에는 **아동 실명·성별·
+생년월일**이 들어 있다(신청 학급을 삭제하면 `on delete cascade`로 명단도 함께 파기된다). 전화번호는 zod 스키마가
 하이픈을 제거한 형태로 정규화해 저장한다(DB 주석의 저장 규약). 이 데이터는 세션과 달리
 `class_codes`에 영구 보관되므로 파기 절차의 대상이다 — 루트 README "운영 · 개인정보" 절 참고.
 

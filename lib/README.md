@@ -40,7 +40,7 @@
 | `http.ts` | `requestJson/postJson`(던지지 않는 결과형) + `fetchJson`(react-query용) + 네트워크 오류 카피 단일화 |
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
-| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷. 학년/반 드롭다운 선택지(`CLASS_OPTIONS`·`MAX_CLASS_NO`)도 여기가 단일 소스 — 코드 발급 화면과 신청 화면이 공유한다 |
+| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정)·`approvalNoticeText`(승인 안내 평문 — `lib/mail.ts`의 `approvedMail`과 **문구를 맞춰 유지할 것**) 등 표시 포맷. 학년/반 드롭다운 선택지(`CLASS_OPTIONS`·`MAX_CLASS_NO`)도 여기가 단일 소스 — 코드 발급 화면과 신청 화면이 공유한다 |
 | `birth.ts` | 생년월일 표기 정규화(`2019. 5. 9.`·`19-5-9`·엑셀 날짜 일련번호 → `YYYY-MM-DD`)와 DB 저장형(`YYMMDD`) 변환. 신청 폼이 올린 명단을 이 함수 하나로 모은다 |
 | `xlsx.ts` | `.xlsx`에서 표 읽기 — **외부 라이브러리 없이** ZIP(DecompressionStream)+XML 스캐너로. **브라우저에서 파싱해 파일을 서버로 보내지 않는다**(명렬표의 주민등록번호가 서버에 도달하지 않게) |
 | `roster.ts` | `parseRosterGrid` — 업로드된 명단 그리드(`xlsx.ts`/붙여넣기)를 **파일 순서 그대로의 고정 4칸 표**(`RosterCells`)로. 열 역할을 짐작하지 않고 **알려진 머리글 이름만 찾으며**, 못 찾으면 거부한다. 못 읽은 칸은 지우지 않고 원문을 남긴다 — 한 칸이 틀렸다고 그 줄의 성별까지 교사가 기억으로 다시 채우게 하지 않기 위함. 줄의 합격 판정은 `badCells`/`toChild`, 번호 중복은 `dupChildNos`이며 화면이 교사의 수정본에도 같은 함수를 쓴다. 주민등록번호는 머리글 이름과 값 모양 양쪽에서 2중으로 걸러 네 칸에 절대 섞이지 않게 한다(`rrnSeen`으로 있었다는 사실만 알림). `cutText`는 탭·콤마 붙여넣기 텍스트를 같은 그리드로 |

@@ -5,6 +5,7 @@ vi.mock('@/lib/db', () => ({
   listClassCodes: vi.fn().mockResolvedValue([]),
   deleteClassCode: vi.fn().mockResolvedValue('ok'),
   approveClassCode: vi.fn(),
+  listRoster: vi.fn().mockResolvedValue([]),
 }))
 vi.mock('@/lib/mail', () => ({
   approvedMail: vi.fn((v: { teacherName: string; schoolName: string; code: string; surveyUrl: string }) => ({
@@ -16,6 +17,7 @@ vi.mock('@/lib/mail', () => ({
 import { GET, POST } from '@/app/api/admin/codes/route'
 import { DELETE } from '@/app/api/admin/codes/[id]/route'
 import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
+import { GET as ROSTER } from '@/app/api/admin/codes/[id]/roster/route'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
 
@@ -42,6 +44,7 @@ beforeEach(() => {
   vi.mocked(db.listClassCodes).mockResolvedValue([])
   vi.mocked(db.deleteClassCode).mockResolvedValue('ok')
   vi.mocked(mail.sendMail).mockResolvedValue({ ok: true, id: 'mail-1' })
+  vi.mocked(db.listRoster).mockResolvedValue([])
 })
 
 describe('POST /api/admin/codes', () => {
@@ -182,5 +185,38 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     expect(res.status).toBe(502)
     expect(json.error).not.toMatch(/반영되지 않았습니다/)
     expect(json.error).not.toMatch(ROW.code)
+  })
+})
+
+describe('GET /api/admin/codes/[id]/roster', () => {
+  const rosterReq = () => new Request('http://x', { method: 'GET' })
+
+  it('명단을 db 순서 그대로 내려준다', async () => {
+    vi.mocked(db.listRoster).mockResolvedValue([
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+    ])
+    const res = await ROSTER(rosterReq(), delParams(ROW.id))
+    expect(res.status).toBe(200)
+    expect(db.listRoster).toHaveBeenCalledWith(ROW.id)
+    expect((await res.json()).roster).toEqual([
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+    ])
+  })
+
+  it('잘못된 UUID → 400, db 미호출 (가드 순서)', async () => {
+    const res = await ROSTER(rosterReq(), delParams('nope'))
+    expect(res.status).toBe(400)
+    expect(db.listRoster).not.toHaveBeenCalled()
+  })
+
+  it('db 오류 502 + 내부 문구·아동 실명 비노출', async () => {
+    vi.mocked(db.listRoster).mockRejectedValue(new Error('pg: relation class_roster 김아동'))
+    const res = await ROSTER(rosterReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(502)
+    expect(json.error).not.toMatch(/relation/)
+    expect(json.error).not.toMatch(/김아동/)
   })
 })
