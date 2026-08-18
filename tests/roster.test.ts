@@ -26,15 +26,17 @@ describe('parseRosterGrid — 나이스 명렬표', () => {
 })
 
 describe('parseRosterGrid — 번호 칸 표기(toNo)', () => {
-  it('번·명 접미사와 숫자 서식 소수점 꼬리는 받는다', () => {
+  it('번·명 접미사(공백 포함)·숫자 서식 소수점 꼬리·전각 숫자는 받는다', () => {
     const r = parseRosterGrid([
       ['번호', '성명', '성별', '생년월일'],
       ['1번', '김서아', '여', '2019-03-04'],
       ['01', '이도윤', '남', '2019-03-04'],
       ['1.0', '박하윤', '여', '2019-03-04'],
+      ['1 번', '최시우', '남', '2019-03-04'],   // 접미사 앞 공백
+      ['１', '정지아', '여', '2019-03-04'],     // 전각 숫자(한글 IME)
     ])
     if ('error' in r) throw new Error(r.error)
-    expect(r.children.map(c => c.childNo)).toEqual([1, 1, 1])
+    expect(r.children.map(c => c.childNo)).toEqual([1, 1, 1, 1, 1])
     expect(r.problems).toHaveLength(0)
   })
   it('[REGRESSION] "2-1"(반-번호) 같은 애매한 표기는 숫자만 이어붙이지 않고 거부한다', () => {
@@ -45,10 +47,17 @@ describe('parseRosterGrid — 번호 칸 표기(toNo)', () => {
       ['2-1', '김서아', '여', '2019-03-04'],
       ['1.5', '이도윤', '남', '2019-03-04'],
       ['12-3', '박하윤', '여', '2019-03-04'],
+      ['0', '최시우', '남', '2019-03-04'],
+      ['100', '정지아', '여', '2019-03-04'],
+      ['일', '김하람', '남', '2019-03-04'],
+      ['1-', '이서준', '남', '2019-03-04'],
+      ['no.1', '박다인', '여', '2019-03-04'],
+      ['1.0.0', '최유나', '여', '2019-03-04'],
+      ['+1', '정하은', '여', '2019-03-04'],
     ])
     if ('error' in r) throw new Error(r.error)
     expect(r.children).toHaveLength(0)
-    expect(r.problems).toHaveLength(3)
+    expect(r.problems).toHaveLength(10)
     for (const p of r.problems) expect(p.missing).toContain('번호')
   })
 })
@@ -62,7 +71,10 @@ describe('parseRosterGrid — 배포 양식', () => {
 })
 
 describe('parseRosterGrid — 주민번호 2중 차단', () => {
-  it('[REGRESSION] 주민등록번호 열은 머리글 이름으로 아예 읽지 않는다', async () => {
+  it('주민등록번호 열의 값은 결과에 나타나지 않고, rrnSeen만 켠다', async () => {
+    // 이 열은 어떤 별칭에도 매치되지 않아 애초에 읽히지 않는다 — bannedCols를 꺼도
+    // 그 사실은 그대로다(별칭 완전 일치라 값이 새는 경로 자체가 없다, finding 7 참고).
+    // 그래서 이름은 "머리글 이름으로 읽지 않는다"가 아니라 "값이 결과에 없다"로 둔다.
     const r = parseRosterGrid(await grid('rrn-and-gaps.xlsx'))
     if ('error' in r) throw new Error(r.error)
     expect(JSON.stringify(r)).not.toMatch(/\d{6}-\d{7}/)
@@ -90,6 +102,28 @@ describe('parseRosterGrid — 주민번호 2중 차단', () => {
     expect(r.children).toHaveLength(0)
     expect(r.problems[0]).toMatchObject({ childNo: 1, name: '김서아' })
     expect(r.rrnSeen).toBe(true)
+  })
+  it('[REGRESSION] 대시 없는 주민번호도 값 칸에서 걸러 새지 않고 rrnSeen을 켠다', () => {
+    // 대시가 반드시 있어야 잡는다면(round 1 구현) 이 값은 그대로 통과해 이름 칸에 남는다.
+    // isRrn이 13자리 뭉치의 앞 6자리를 날짜로 검증하기 때문에 잡힌다 — 대시를 다시 필수로
+    // 만들면 이 테스트가 레드가 되는 것으로 확인했다(작업 보고 참고).
+    const r = parseRosterGrid([
+      ['번호', '성명', '성별', '생년월일'],
+      ['1', '김서아 1903044234567', '여', '2019-03-04'],   // 성명 칸에 대시 없는 주민번호가 섞임
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(JSON.stringify(r)).not.toMatch(/\d{13}/)
+    expect(r.problems[0]).toMatchObject({ childNo: 1, missing: ['이름'] })
+    expect(r.rrnSeen).toBe(true)
+  })
+  it('13자리 학번처럼 앞 6자리가 날짜가 아닌 숫자열은 주민번호로 오인해 경고를 켜지 않는다', () => {
+    // 202601은 26월이 되어 날짜가 아니다 — 학번을 주민번호로 잘못 알려 교사를 헷갈리게 하지 않는다.
+    const r = parseRosterGrid([
+      ['번호', '성명', '성별', '생년월일', '비고'],
+      ['1', '김서아', '여', '2019-03-04', '2026010112345'],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(r.rrnSeen).toBe(false)
   })
 })
 

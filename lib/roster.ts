@@ -40,10 +40,19 @@ const HEADERS: Record<keyof typeof COL_LABEL, string[]> = {
   birthYmd: ['생년월일', '생일'],
 }
 const BANNED = ['주민등록번호', '주민번호', '외국인등록번호']
-// 대시 없이 붙여 오는 표기(1903044234567)·공백 표기(190304 4234567)도 잡는다 — 이 값 자체가
-// 안전한 필드에 남는 일은 없지만(normBirth·NAME_RE가 따로 거른다), rrnSeen 안내가 빠지면
-// 교사가 파일에 주민번호가 있었다는 사실을 모른 채 넘어간다.
-const RRN = /\d{6}\s*[-–]?\s*\d{7}/
+// 대시가 있으면 애매하지 않다 — 그대로 주민번호로 본다.
+const RRN_DASHED = /\d{6}\s*[-–]\s*\d{7}/
+/**
+ * 값 하나에 주민등록번호가 들어 있는지. 대시 없는 13자리 숫자는 그 자체로는 학번
+ * (`2026010112345`처럼) 같은 일반 숫자와 모양이 같아 구분이 안 된다 — 앞 6자리가 실제
+ * 날짜(YYMMDD)일 때만 주민번호로 본다. 날짜 판정은 새로 만들지 않고 `normBirth`를 그대로
+ * 쓴다(YYMMDD 6자리를 이미 검증한다).
+ */
+function isRrn(v: string): boolean {
+  if (RRN_DASHED.test(v)) return true
+  const m = v.match(/\d{13}/)
+  return m !== null && normBirth(m[0].slice(0, 6)) !== null
+}
 const HEAD_SCAN_ROWS = 8    // 제목·안내 문구가 이 안에 있다(나이스 1줄·배포 양식 5줄)
 
 /** 머리글 비교용 정규화. "생일(양력)"·"생일."처럼 괄호 부연·마침표가 붙어도 별칭과 매치되게 한다. */
@@ -58,9 +67,14 @@ const toGender = (v: string): '남' | '여' | null => {
 /** 번호 칸에 "2-1"(2반 1번)이나 "1.0"(CSV 숫자 서식)이 흔히 온다. 숫자만 뽑아 붙이면
  *  "2-1"이 21이 되어 **다른 아이의 번호**가 조용히 기록된다 — 임상 기록이므로 애매한
  *  표기는 받지 않고 교사가 고치게 한다(lib/birth.ts의 5/9/2019 거부와 같은 원칙).
- *  받는 것: 1 · 01 · 1번 · 1명 · 1.0(숫자 서식의 소수점 꼬리) */
+ *  받는 것: 1 · 01 · 1번 · 1 번(접미사 앞 공백) · 1명 · 1.0(숫자 서식의 소수점 꼬리) ·
+ *  １(한글 IME가 잘 만드는 전각 숫자). 이 정도는 애매함이 없어 문제 행으로 돌려보내면
+ *  교사가 안 고쳐도 되는 수정을 억지로 시키는 셈이라 여기서 받는다. */
 const toNo = (v: string): number | null => {
-  const s = v.trim().replace(/(번|명)$/, '').replace(/\.0+$/, '')
+  const s = v.trim()
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFF10 + 0x30))  // 전각 숫자
+    .replace(/\s*(번|명)$/, '')
+    .replace(/\.0+$/, '')
   if (!/^\d{1,2}$/.test(s)) return null
   const n = Number(s)
   return n >= 1 && n <= 99 ? n : null
@@ -104,7 +118,7 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
   let rrnSeen = bannedCols.size > 0
 
   for (const line of grid.slice(headRow + 1)) {
-    if (line.some(c => RRN.test(c))) rrnSeen = true
+    if (line.some(c => isRrn(c))) rrnSeen = true
     // 값 칸의 주민번호는 그 칸만 버린다 — 실제로 새는 것을 막는 유일한 층(위 bannedCols는
     // 열 이름 매칭이라 값 자체는 안 막는다). 이름·생년월일 칸에 주민번호가 섞여 들어와도
     // 이 칸만 빈 값으로 취급해 problems로 보낸다.
@@ -112,12 +126,16 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
       const i = col[f]
       if (i === undefined || bannedCols.has(i)) return ''
       const v = (line[i] ?? '').trim()
-      return RRN.test(v) ? '' : v
+      return isRrn(v) ? '' : v
     }
     const rawNo = pick('childNo'), rawName = pick('name')
     // 성별·생년월일 값이 있는데 번호·이름이 둘 다 빈 줄은 건너뛰지 않는다 — 병합 셀이나
     // 밀린 붙여넣기로 번호·이름만 빠진 실제 아동 행을 조용히 통째로 잃는 사고를 막는다
     // (각주 행처럼 네 칸이 전부 빈 진짜 빈 줄만 건너뛴다).
+    // 이 때문에 나이스 "계 5명" 같은 합계 행도 문제 행으로 걸러진다 — 의도한 트레이드오프다.
+    // 실물 나이스 파일이 없어 그 행 모양을 짐작해 특별 취급하면 스펙 "고정 4칸" 절이 금지한
+    // 값-모양 추론이 된다. 교사가 지우면 되는 눈에 보이는 군더더기 행이, 조용히 사라지는
+    // 아이보다 훨씬 싸다 — 실물을 구하기 전까지 이대로 둔다.
     if (!rawNo && !rawName && !pick('gender') && !pick('birthYmd')) continue
 
     const childNo = toNo(rawNo)
