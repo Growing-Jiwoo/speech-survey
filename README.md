@@ -104,6 +104,10 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
        `.env.local용`(이스케이프된 `\$argon2id\$v=19\$...`)을 반드시 사용할 것 — 원본 해시는 Vercel 등 대시보드
        전용(아래 배포 절 참고).
    - `SESSION_SECRET`: `openssl rand -hex 32`
+   - `RESEND_API_KEY`·`MAIL_FROM`·`MAIL_TO_OVERRIDE`: 메일 발송용(선택 — 신청·승인 메일을 쓸 때만).
+     [resend.com](https://resend.com) 가입 후 API Keys에서 발급한다. **도메인을 인증하기 전에는
+     `onboarding@resend.dev`에서 가입 이메일로만 발송된다** — 그래서 `MAIL_TO_OVERRIDE`에 그 주소를 넣어
+     모든 수신자를 본인에게 돌려 두고 개발한다. 도메인이 생기면 `MAIL_FROM`을 바꾸고 이 줄을 비운다.
 4. `npm run build:schools` — 전국 초등학교 원본 JSON을 지역별 경량 JSON(`public/schools/`)으로 생성.
    원본 폴더 경로가 다르면 `npm run build:schools -- <원본디렉터리>`로 지정.
    (생성물은 저장소에 이미 커밋돼 있으므로, 학교 데이터를 갱신할 때만 재실행하면 된다.)
@@ -167,7 +171,9 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
    - `ADMIN_PASSWORD_HASH` — ⚠️ **로컬에서 쓰던 값이나 예시용 약한 비번 금지.** `npm run hash-password -- '강한랜덤비번'` 출력 중
      **"원본 해시"** 줄(이스케이프 없는 `$argon2id$v=19$...`)을 그대로 붙여넣는다. Vercel 대시보드는 셸/dotenv
      파싱을 거치지 않으므로 `$`를 이스케이프하면 안 된다(로컬 `.env.local`용 `\$` 이스케이프 버전과 다름 — 위 셋업 절 참고).
-   - (네 변수 모두 서버 전용 — `NEXT_PUBLIC_` 접두사 붙이지 말 것. 붙이면 클라이언트에 노출된다.)
+   - `RESEND_API_KEY`·`MAIL_FROM` — 메일을 쓸 경우. `MAIL_TO_OVERRIDE`는 **운영에서 반드시 비운다**
+     (설정돼 있으면 교사에게 갈 메일이 전부 그 주소로 간다).
+   - (모든 변수가 서버 전용 — `NEXT_PUBLIC_` 접두사 붙이지 말 것. 붙이면 클라이언트에 노출된다.)
 4. **Deploy** → 자동 HTTPS 발급. 마이크 녹음은 HTTPS에서만 동작하므로 배포 후 정상 작동한다.
 5. 배포 도메인을 확인하고 `/`(아동)·`/admin`(관리자) 흐름을 실기기로 점검한다.
 

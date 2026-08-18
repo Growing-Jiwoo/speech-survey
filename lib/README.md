@@ -30,6 +30,7 @@
 | `audio-ext.ts` | 저장 파일 확장자 결정(표기용 — 재생은 Content-Type 기준) |
 | `pdf/` | 공식 검사지 PDF 스탬핑 — 원본 PDF(`assets/forms/`)에 점수만 얹는다 |
 | `consent.ts` | 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) |
+| `mail.ts` | 메일 발송 단일 창구 + 문구(신청 알림·승인 안내). Resend HTTP API를 `fetch`로 직접 부른다(SDK 미사용). `MAIL_TO_OVERRIDE`가 있으면 수신자를 그 주소로 강제해 실수 발송을 막는다 |
 | `login-policy.ts` | 관리자 로그인 실패 누적·잠금 정책 |
 
 ## 클라이언트 유틸
@@ -40,5 +41,7 @@
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
 | `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷 |
+| `birth.ts` | 생년월일 표기 정규화(`2019. 5. 9.`·`19-5-9`·엑셀 날짜 일련번호 → `YYYY-MM-DD`)와 DB 저장형(`YYMMDD`) 변환. 신청 폼이 올린 명단을 이 함수 하나로 모은다 |
+| `xlsx.ts` | `.xlsx`에서 표 읽기 — **외부 라이브러리 없이** ZIP(DecompressionStream)+XML 스캐너로. **브라우저에서 파싱해 파일을 서버로 보내지 않는다**(명렬표의 주민등록번호가 서버에 도달하지 않게) |
 | `platform.ts` | 브라우저·플랫폼 판별(녹음 지원 여부 안내용) |
 | `schools.ts` | 지역(시도교육청) 상수와 학교 타입 — 학교 목록 데이터는 `public/schools/*.json` |
