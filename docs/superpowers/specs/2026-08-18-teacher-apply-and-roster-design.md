@@ -124,7 +124,7 @@ delete from class_codes where status = 'pending' and applied_at < now() - interv
 
 | 상황 | 처리 |
 |---|---|
-| 파일이 xlsx/zip 아님 | 거부 + 안내. zip인데 `Index/Document.iwa`가 있으면 **Numbers 파일** — "파일 › 보내기 › Excel로 저장" 안내(실제 겪은 사례) |
+| 파일이 xlsx/zip 아님 | 거부 + "엑셀 파일(.xlsx)로 저장해서 올려 주세요" 안내. Numbers 감지 같은 특수 처리는 하지 않는다 — 교사 현장은 윈도우라 발생하지 않는 케이스다(사용자 확정 2026-08-18) |
 | 명단에 오류 행 잔존 | [신청하기] 잠금(행별 오류 표시) |
 | /api/apply 행 일부 위반 | 전체 400 — 부분 저장 없음(반쪽 명단이 승인되는 사고 방지) |
 | 관리자 알림 메일 실패 | 신청 성공 유지, 로그만(화면 배지가 예비 채널) |
