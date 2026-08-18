@@ -16,6 +16,7 @@ const CODE_ROW = {
   grade: 2, class_no: 3, teacher_name: '박선생',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
+  status: 'active' as const, applied_at: null,
 }
 const VALID = { code: 'K7M2P9', childNo: 7, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
 

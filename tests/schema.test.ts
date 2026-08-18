@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   sessionCreateSchema, phoneSchema, classCodeSchema, childNoSchema, classCodeCreateSchema,
+  applySchema, rosterChildSchema,
 } from '@/lib/schema'
 
 describe('sessionCreateSchema — 코드 기반 (스펙 2026-08-13)', () => {
@@ -87,5 +88,56 @@ describe('classCodeCreateSchema — 학급 코드 발급 폼', () => {
   })
   it('teacherEmail 형식이 틀리면 거부', () => {
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '', teacherEmail: 'not-an-email' }).success).toBe(false)
+  })
+})
+
+describe('rosterChildSchema — 명단 한 줄', () => {
+  const ok = { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304' }
+  it('정상 행을 통과시킨다', () => {
+    expect(rosterChildSchema.safeParse(ok).success).toBe(true)
+  })
+  it.each([
+    ['번호 0', { ...ok, childNo: 0 }],
+    ['번호 100', { ...ok, childNo: 100 }],
+    ['이름에 숫자', { ...ok, name: '김서아1' }],
+    ['성별 남자(정규화 전 값)', { ...ok, gender: '남자' }],
+    ['생년월일 8자리', { ...ok, birthYmd: '20190304' }],
+  ])('%s 는 거부한다', (_label, bad) => {
+    expect(rosterChildSchema.safeParse(bad).success).toBe(false)
+  })
+})
+
+describe('applySchema — 신청 폼', () => {
+  const base = {
+    region: '서울특별시교육청', schoolId: 'S001', schoolName: '서울예시초',
+    grade: 1, classNo: 2, teacherName: '김담임',
+    teacherPhone: '', teacherEmail: 'teacher@school.kr',
+    roster: [
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304' },
+      { childNo: 2, name: '이도윤', gender: '남', birthYmd: '190122' },
+    ],
+  }
+  it('정상 신청을 통과시킨다', () => {
+    expect(applySchema.safeParse(base).success).toBe(true)
+  })
+  it('이메일이 없으면 거부한다 — 승인 메일이 유일한 코드 전달 경로다', () => {
+    expect(applySchema.safeParse({ ...base, teacherEmail: '' }).success).toBe(false)
+  })
+  it('이메일 앞뒤 공백은 trim 후 통과한다 — 엑셀·메일 클라이언트 붙여넣기 대비', () => {
+    const r = applySchema.safeParse({ ...base, teacherEmail: '  teacher@school.kr  ' })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.teacherEmail).toBe('teacher@school.kr')
+  })
+  it('명단이 비면 거부한다', () => {
+    expect(applySchema.safeParse({ ...base, roster: [] }).success).toBe(false)
+  })
+  it('명단 100행은 거부한다 (child_no 범위 99와 일치)', () => {
+    const roster = Array.from({ length: 100 }, (_, i) =>
+      ({ childNo: i + 1, name: '김서아', gender: '여', birthYmd: '190304' }))
+    expect(applySchema.safeParse({ ...base, roster }).success).toBe(false)
+  })
+  it('[REGRESSION] 같은 번호가 두 번 있으면 거부한다', () => {
+    const dup = { ...base, roster: [base.roster[0], { ...base.roster[1], childNo: 1 }] }
+    expect(applySchema.safeParse(dup).success).toBe(false)
   })
 })

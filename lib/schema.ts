@@ -18,7 +18,7 @@ export const birthYmdSchema = z.string().regex(/^\d{6}$/).refine(v => {
 
 export const gradeSchema = z.number().int().min(1).max(6)
 /** 반 번호. 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용.
- *  화면 드롭다운은 20까지만 제공하지만(components/admin/CodeIssuer.tsx의 MAX_CLASS_NO), DB·스키마는 넓게 두어
+ *  화면 드롭다운은 20까지만 제공하지만(lib/format.ts의 MAX_CLASS_NO — 발급·신청 화면이 공유), DB·스키마는 넓게 두어
  *  나중에 범위를 늘릴 때 마이그레이션이 필요 없게 한다. */
 export const classNoSchema = z.number().int().min(0).max(99)
 export const genderSchema = z.enum(['남', '여'])
@@ -52,6 +52,13 @@ const optionalPhone = z.string().max(60).default('')
 const optionalEmail = z.string().max(60).default('')
   .transform(s => s.trim())
   .refine(s => s === '' || EMAIL_RE.test(s), '이메일 형식이 올바르지 않습니다.')
+
+/** 필수 이메일 + trim. 엑셀·메일 클라이언트에서 그대로 붙여넣으면 앞뒤 공백이 따라오기 쉬운데
+ *  EMAIL_RE는 완전 앵커라 trim 없이는 그 공백만으로 거부된다 — applySchema에서 이메일은
+ *  승인 코드를 받는 유일한 경로라 이 오탐이 특히 치명적이라 별도로 둔다. */
+const requiredEmail = z.string().max(60)
+  .transform(s => s.trim())
+  .pipe(z.string().regex(EMAIL_RE, '이메일 형식이 올바르지 않습니다.'))
 
 /** 문자열 정규화: trim + 연속 공백 1칸 (기존 라우트 cleanStr와 동일 규칙). */
 const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
@@ -87,8 +94,9 @@ export const sessionEditSchema = z.object({
 })
 export type SessionEditInput = z.infer<typeof sessionEditSchema>
 
-/** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
-export const classCodeCreateSchema = z.object({
+/** 학급 코드 발급 폼의 공통 필드. refine이 걸리면 extend가 안 되므로 객체를 분리해 둔다 —
+ *  관리자 직접 발급(classCodeCreateSchema)과 교사 신청(applySchema)이 공유한다. */
+const classCodeFields = z.object({
   region: z.string().refine(r => REGION_NAMES.includes(r)),
   schoolId: cleaned.pipe(z.string().min(1)),
   schoolName: cleaned.pipe(z.string().min(1).max(100)),
@@ -97,9 +105,34 @@ export const classCodeCreateSchema = z.object({
   teacherName: cleaned.pipe(nameSchema),
   teacherPhone: optionalPhone,
   teacherEmail: optionalEmail,
-}).refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
-  { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
+})
+
+/** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
+export const classCodeCreateSchema = classCodeFields
+  .refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
+    { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
 export type ClassCodeCreateInput = z.infer<typeof classCodeCreateSchema>
+
+/** 신청 명단 한 줄 — sessions의 같은 컬럼과 동일 규칙(제약이 어긋나면 복사가 실패한다). */
+export const rosterChildSchema = z.object({
+  childNo: childNoSchema,
+  name: cleaned.pipe(nameSchema),
+  gender: genderSchema,
+  birthYmd: birthYmdSchema,
+})
+export type RosterChildInput = z.infer<typeof rosterChildSchema>
+
+/** POST /api/apply 바디 — 교사 신청. 직접 발급과 달리 **이메일이 필수**다:
+ *  승인 메일이 유일한 코드 전달 경로라서다(신청 완료 화면은 코드를 보여주지 않는다 — 스펙). */
+export const applySchema = classCodeFields.extend({
+  teacherEmail: requiredEmail,
+  // .max(99)는 child_no 범위(1~99)+중복 검사로 보면 도달 불가능해 보이지만, zod는 array().max()를
+  // refine보다 먼저 평가한다 — 수천 행짜리 잘못된 파일이 Set 중복 검사를 돌기 전에 여기서 바로 끊긴다.
+  roster: z.array(rosterChildSchema).min(1, '학생을 한 명 이상 등록해 주세요.').max(99)
+    .refine(r => new Set(r.map(c => c.childNo)).size === r.length,
+      '같은 번호가 두 번 있습니다.'),
+})
+export type ApplyInput = z.infer<typeof applySchema>
 
 /** POST /api/sessions/verify-code 바디 */
 export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema })

@@ -10,6 +10,19 @@ export function fmtDuration(sec: number | null | undefined): string {
   return `${Math.floor(sec / 60)}:${pad2(Math.floor(sec % 60))}`
 }
 
+/** 반 선택지의 화면 상한. `classNoSchema`(lib/schema.ts)는 DB·검증용으로 0~99까지 넓게 열어
+ *  두지만, 드롭다운은 실사용 범위에 맞춰 이만큼만 보여준다. */
+export const MAX_CLASS_NO = 20
+
+/** 반 드롭다운 선택지: 단일학급(반 없음) = 0, 그 외 1~MAX_CLASS_NO.
+ *  관리자 발급 화면(CodeIssuer)과 교사 신청 화면(/apply)이 **같은 스키마**(classCodeFields)로
+ *  들어가므로 선택지도 한 곳에서 나온다 — 한쪽만 늘리면 같은 학급을 한 화면에서는 만들 수
+ *  있고 다른 화면에서는 못 만드는 일이 생긴다. */
+export const CLASS_OPTIONS = [
+  { value: '0', label: '단일학급 (반 없음)' },
+  ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
+]
+
 /** 학년·반 표기. 반 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용했다. */
 export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`

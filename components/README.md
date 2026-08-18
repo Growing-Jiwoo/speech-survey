@@ -1,7 +1,7 @@
 # components/ — UI 컴포넌트
 
 루트에는 화면을 가리지 않는 **공용 컴포넌트**, 하위 폴더에 도메인별 컴포넌트를 둔다
-(`survey/` 참여자 검사 화면, `admin/` 관리자 화면). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
+(`survey/` 참여자 검사 화면, `admin/` 관리자 화면, `apply/` 교사 신청 화면). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
 데이터 로딩은 `hooks/`.
 
 ## 공용
@@ -20,6 +20,14 @@
 | `Spinner.tsx` | 인라인 스피너(currentColor 상속) |
 | `ProgressBar.tsx` | 검사 진행률. 세는 단위는 **페이지**다(화면 문구만 "문항"으로 남아 있다 — 파일 주석 참고) |
 | `SchoolPicker.tsx` | 지역(교육청) 선택 → 학교 검색·선택 (데이터: `public/schools/*.json`) |
+
+## 하위 폴더
+
+| 폴더 | 화면 |
+|---|---|
+| `survey/` | 참여자(아동) 검사 화면 — [survey/README.md](survey/README.md) |
+| `admin/` | 관리자(채점자) 화면 — [admin/README.md](admin/README.md) |
+| `apply/` | 교사 신청 화면(`/apply`) — [apply/README.md](apply/README.md). `RosterEditor.tsx`(명단 업로드·고정 4칸 표) 하나뿐 |
 
 ## 스타일 관례
 

@@ -84,7 +84,7 @@ export function applyNoticeMail(v: {
         <tr><td style="padding:4px 14px 4px 0;color:#6E7994">담임</td><td>${escapeHtml(v.teacherName)} 선생님</td></tr>
         <tr><td style="padding:4px 14px 4px 0;color:#6E7994">등록 학생</td><td>${v.childCount}명</td></tr>
       </table>
-      <p style="margin:18px 0 0"><a href="${v.adminUrl}"
+      <p style="margin:18px 0 0"><a href="${escapeHtml(v.adminUrl)}"
         style="background:#2F6BFF;color:#fff;text-decoration:none;border-radius:9px;padding:11px 18px;
         display:inline-block;font-weight:700;font-size:14px">신청 확인하고 승인하기</a></p>
       <p style="font-size:13px;color:#6E7994;margin:14px 0 0">
@@ -106,7 +106,7 @@ export function approvedMail(v: {
         <p style="margin:0 0 4px;font-size:12.5px;font-weight:700;color:#2F6BFF">학급 코드</p>
         <p style="margin:0;font-size:30px;font-weight:800;letter-spacing:.1em">${escapeHtml(v.code)}</p>
       </div>
-      <p style="margin:0 0 6px">검사 주소: <a href="${v.surveyUrl}" style="color:#2F6BFF">${v.surveyUrl}</a></p>
+      <p style="margin:0 0 6px">검사 주소: <a href="${escapeHtml(v.surveyUrl)}" style="color:#2F6BFF">${escapeHtml(v.surveyUrl)}</a></p>
       <p style="margin:0 0 18px;font-size:14px;color:#3A4256">
         시작 화면에서 이 코드를 입력하시면 등록하신 <b>학생 명단</b>이 나옵니다.
         검사할 학생을 고르고 정보를 확인한 뒤 시작해 주세요.</p>

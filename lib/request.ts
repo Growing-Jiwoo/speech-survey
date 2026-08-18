@@ -54,6 +54,13 @@ export const PUBLIC_RATE_WINDOW_MS = 10 * 60_000
 export const VERIFY_CODE_RATE_LIMIT = 300 // IP당 시간창 내 허용 요청 수
 export const VERIFY_CODE_RATE_WINDOW_MS = 10 * 60_000
 
+/** 신청 접수 상한 — 공개 쓰기 라우트지만 verify-code와 반대로 낮게 잡는다:
+ *  한 교사가 신청할 일은 학기에 한 번이고, 명단(아동 실명) 행이 대량 생성되는 지점이라
+ *  방어 대상이 스팸 행 생성이다. 같은 학교 NAT에서 여러 교사가 같은 날 신청해도
+ *  15분에 20건이면 충분하다. */
+export const APPLY_RATE_LIMIT = 20
+export const APPLY_RATE_WINDOW_MS = 15 * 60_000
+
 /** best-effort 인메모리 IP 레이트리미터. 서버리스에서는 인스턴스별 독립이라 완벽한
  *  전역 방어는 아니며, 스팸성 요청에 마찰을 주는 목적이다. sweepEvery번째 요청마다
  *  만료 키를 걷어내 장수 인스턴스의 메모리 단조 증가를 막는다. */
