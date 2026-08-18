@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel, gradeClassLines } from '@/lib/format'
+import { approvalNoticeText, contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel, gradeClassLines } from '@/lib/format'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
   it('정상 값', () => {
@@ -74,5 +74,22 @@ describe('gradeClassLines — 검사지 학년 칸(두 줄)', () => {
   it('화면용 한 줄 표기(gradeClassLabel)와 별개다', () => {
     expect(gradeClassLabel(1, 2)).toBe('1-2')
     expect(gradeClassLines(1, 2).join('')).not.toBe(gradeClassLabel(1, 2))
+  })
+})
+
+describe('approvalNoticeText', () => {
+  const V = { teacherName: '김선생', schoolName: '서울가곡초등학교', code: 'SGT2E4', surveyUrl: 'https://x.kr' }
+
+  it('교사·학교·코드·검사 주소와 시작 안내를 모두 담는다', () => {
+    const t = approvalNoticeText(V)
+    expect(t).toContain('김선생 선생님')
+    expect(t).toContain('서울가곡초등학교')
+    expect(t).toContain('학급 코드: SGT2E4')
+    expect(t).toContain('검사 주소: https://x.kr')
+    expect(t).toMatch(/시작 화면에서 이 코드를 입력/)
+  })
+
+  it('평문이다 — HTML 태그가 섞이지 않는다(카톡·문자에 그대로 붙인다)', () => {
+    expect(approvalNoticeText(V)).not.toMatch(/[<>]/)
   })
 })

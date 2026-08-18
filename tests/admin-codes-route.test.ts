@@ -4,11 +4,22 @@ vi.mock('@/lib/db', () => ({
   insertClassCode: vi.fn(),
   listClassCodes: vi.fn().mockResolvedValue([]),
   deleteClassCode: vi.fn().mockResolvedValue('ok'),
+  approveClassCode: vi.fn(),
+  listRoster: vi.fn().mockResolvedValue([]),
+}))
+vi.mock('@/lib/mail', () => ({
+  approvedMail: vi.fn((v: { teacherName: string; schoolName: string; code: string; surveyUrl: string }) => ({
+    to: '', subject: `승인 — ${v.code}`, html: `<p>${v.teacherName} ${v.schoolName} ${v.code} ${v.surveyUrl}</p>`,
+  })),
+  sendMail: vi.fn(),
 }))
 
 import { GET, POST } from '@/app/api/admin/codes/route'
 import { DELETE } from '@/app/api/admin/codes/[id]/route'
+import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
+import { GET as ROSTER } from '@/app/api/admin/codes/[id]/roster/route'
 import * as db from '@/lib/db'
+import * as mail from '@/lib/mail'
 
 const ROW = {
   id: '11111111-1111-1111-1111-111111111111', code: 'K7M2P9',
@@ -32,6 +43,8 @@ beforeEach(() => {
   vi.mocked(db.insertClassCode).mockResolvedValue(ROW)
   vi.mocked(db.listClassCodes).mockResolvedValue([])
   vi.mocked(db.deleteClassCode).mockResolvedValue('ok')
+  vi.mocked(mail.sendMail).mockResolvedValue({ ok: true, id: 'mail-1' })
+  vi.mocked(db.listRoster).mockResolvedValue([])
 })
 
 describe('POST /api/admin/codes', () => {
@@ -70,12 +83,23 @@ describe('POST /api/admin/codes', () => {
 })
 
 describe('GET /api/admin/codes', () => {
-  it('sessions(count)를 session_count로 펴서 내려준다', async () => {
-    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, sessions: [{ count: 7 }] }])
+  it('sessions(count)·class_roster(count)를 session_count·roster_count로 펴서 내려준다', async () => {
+    // 두 수를 다르게 둔다 — 같은 값이면 조인 결과가 뒤바뀌어도 단언이 통과한다.
+    vi.mocked(db.listClassCodes).mockResolvedValue([
+      { ...ROW, sessions: [{ count: 7 }], class_roster: [{ count: 24 }] },
+    ])
     const res = await GET()
     const json = await res.json()
     expect(json.codes[0].session_count).toBe(7)
+    expect(json.codes[0].roster_count).toBe(24)
     expect(json.codes[0]).not.toHaveProperty('sessions')
+    expect(json.codes[0]).not.toHaveProperty('class_roster')
+  })
+
+  it('조인이 비어 있으면 0 — 관리자 직접 발급분은 명단이 없다', async () => {
+    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, sessions: [], class_roster: [] }])
+    const json = await (await GET()).json()
+    expect(json.codes[0]).toMatchObject({ session_count: 0, roster_count: 0 })
   })
 })
 
@@ -94,5 +118,119 @@ describe('DELETE /api/admin/codes/[id]', () => {
     const res = await DELETE(new Request('http://x', { method: 'DELETE' }), delParams('nope'))
     expect(res.status).toBe(400)
     expect(db.deleteClassCode).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/admin/codes/[id]/approve', () => {
+  const PENDING_ROW = { ...ROW, teacher_email: 'teacher@example.com', status: 'pending' as const, applied_at: '2026-08-13T00:00:00.000Z' }
+  const approveReq = () => new Request('http://x', { method: 'POST' })
+
+  it('승인 성공 — already:false, mailed:true, 교사 메일로 발송, 코드가 실린다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, already: false, mailed: true, code: ROW.code })
+    // 메일에 찍힌 주소와 화면이 복사하는 주소의 단일 소스 — 응답의 surveyUrl이 메일 인자와 같아야 한다.
+    expect(json.surveyUrl).toBe('http://x')
+    expect(vi.mocked(mail.approvedMail).mock.calls[0][0].surveyUrl).toBe('http://x')
+    expect(mail.sendMail).toHaveBeenCalledTimes(1)
+    const call = vi.mocked(mail.sendMail).mock.calls[0][0]
+    expect(call.to).toBe('teacher@example.com')
+    expect(call.html).toMatch(ROW.code)
+  })
+
+  it('[REGRESSION] 메일 실패에도 승인은 유지 — 200, mailed:false', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    vi.mocked(mail.sendMail).mockResolvedValue({ ok: false, error: 'quota exceeded' })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, mailed: false })
+  })
+
+  it('[REGRESSION] 이미 active인 코드 — already:true, 메일은 재시도하지 않는다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: { ...PENDING_ROW, status: 'active' }, already: true })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, already: true, mailed: false, code: ROW.code })
+    // 메일을 보내지 않는 경로에서도 surveyUrl은 실려야 한다 — 여기서만 [안내 문구 복사]가 유일한 전달 경로다.
+    expect(json.surveyUrl).toBe('http://x')
+    expect(mail.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('teacher_email이 없는 학급은 mailed:false, 발송 시도 자체가 없다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({
+      row: { ...PENDING_ROW, teacher_email: null, teacher_phone: '01012345678' }, already: false,
+    })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.mailed).toBe(false)
+    expect(mail.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('APP_URL이 설정돼 있으면 그 값이 surveyUrl·메일 모두의 origin이다(Host 헤더보다 우선)', async () => {
+    vi.stubEnv('APP_URL', 'https://real.example.kr')
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    const json = await (await APPROVE(approveReq(), delParams(ROW.id))).json()
+    expect(json.surveyUrl).toBe('https://real.example.kr')
+    expect(vi.mocked(mail.approvedMail).mock.calls[0][0].surveyUrl).toBe('https://real.example.kr')
+    vi.unstubAllEnvs()
+  })
+
+  it('없는 id → 404', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue(null)
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    expect(res.status).toBe(404)
+  })
+
+  it('잘못된 UUID → 400, db 미호출', async () => {
+    const res = await APPROVE(approveReq(), delParams('nope'))
+    expect(res.status).toBe(400)
+    expect(db.approveClassCode).not.toHaveBeenCalled()
+  })
+
+  it('db 오류 502 + 내부 문구·코드 비노출', async () => {
+    vi.mocked(db.approveClassCode).mockRejectedValue(new Error(`승인이 반영되지 않았습니다(코드 ${ROW.code}) — 다시 시도해 주세요.`))
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(502)
+    expect(json.error).not.toMatch(/반영되지 않았습니다/)
+    expect(json.error).not.toMatch(ROW.code)
+  })
+})
+
+describe('GET /api/admin/codes/[id]/roster', () => {
+  const rosterReq = () => new Request('http://x', { method: 'GET' })
+
+  it('명단을 db 순서 그대로 내려준다', async () => {
+    vi.mocked(db.listRoster).mockResolvedValue([
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+    ])
+    const res = await ROSTER(rosterReq(), delParams(ROW.id))
+    expect(res.status).toBe(200)
+    expect(db.listRoster).toHaveBeenCalledWith(ROW.id)
+    expect((await res.json()).roster).toEqual([
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+    ])
+  })
+
+  it('잘못된 UUID → 400, db 미호출 (가드 순서)', async () => {
+    const res = await ROSTER(rosterReq(), delParams('nope'))
+    expect(res.status).toBe(400)
+    expect(db.listRoster).not.toHaveBeenCalled()
+  })
+
+  it('db 오류 502 + 내부 문구·아동 실명 비노출', async () => {
+    vi.mocked(db.listRoster).mockRejectedValue(new Error('pg: relation class_roster 김아동'))
+    const res = await ROSTER(rosterReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(502)
+    expect(json.error).not.toMatch(/relation/)
+    expect(json.error).not.toMatch(/김아동/)
   })
 })

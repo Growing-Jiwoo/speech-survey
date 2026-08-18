@@ -310,11 +310,63 @@ export async function insertApplication(
   return row
 }
 
-export type ClassCodeListRow = ClassCodeRow & { sessions: { count: number }[] }
+/**
+ * 승인: pending → active. 멱등 — 이미 active면 already:true로 알려 라우트가 승인 메일을
+ * 다시 보내지 않게 한다(더블클릭·새로고침 재전송 방지).
+ *
+ * 가드를 여기 두는 이유: `.eq('status','pending')`이 붙은 **업데이트 한 방**만이 경쟁 없이
+ * "내가 pending을 active로 바꾼 첫 호출인지"를 판정한다. 라우트가 먼저 조회해 확인하면
+ * 조회~업데이트 사이에 다른 탭이 승인해도 둘 다 "내가 했다"로 보고 메일이 두 번 나간다.
+ *
+ * 업데이트 0건인데 행이 여전히 pending이면 던진다. **정상 경로로는 일어날 수 없다** —
+ * service role 클라이언트라 RLS가 걸릴 일도 없고, 같은 행을 겨냥한 두 승인 중 하나는 반드시
+ * active를 본다. 즉 이 분기는 원인을 아는 복구 로직이 아니라 이상 감지기다(공짜이고
+ * fail-closed라 남겨 둔다). 그래도 already:true로 뭉개면 안 되는 이유는 분명하다 —
+ * 라우트가 메일을 건너뛰어 교사는 코드를 못 받고 관리자는 보냈다고 생각한다.
+ */
+export async function approveClassCode(
+  id: string,
+): Promise<{ row: ClassCodeRow; already: boolean } | null> {
+  const { data, error } = await sb().from('class_codes')
+    .update({ status: 'active' }).eq('id', id).eq('status', 'pending')
+    .select(CLASS_CODE_COLS)
+  fail(error)
+  if ((data ?? []).length > 0) return { row: data![0] as unknown as ClassCodeRow, already: false }
+  const { data: cur, error: e2 } = await sb().from('class_codes')
+    .select(CLASS_CODE_COLS).eq('id', id).maybeSingle()
+  fail(e2)
+  if (!cur) return null
+  const row = cur as unknown as ClassCodeRow
+  if (row.status !== 'active') throw new Error(`승인이 반영되지 않았습니다(코드 ${row.code}) — 다시 시도해 주세요.`)
+  return { row, already: true }
+}
+
+/** 승인 화면이 검토하는 신청 명단 1줄. 읽기 전용 — 이 앱에서 명단을 고치는 경로는 없다
+ *  (교사가 올린 원문 그대로 관리자가 확인하고, 틀렸으면 반려 = 삭제 후 재신청이다). */
+export interface RosterRow {
+  child_no: number; child_name: string; gender: '남' | '여'; birth_ymd: string
+}
+
+/** 학급 신청 명단 조회. **번호 순**으로 고정한다 — 관리자는 이 표를 교사가 보낸 명렬표와
+ *  줄을 맞춰 보며 검토하므로, 순서가 흔들리면 같은 명단인지 눈으로 확인할 수 없다. */
+export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
+  const { data, error } = await sb().from('class_roster')
+    .select('child_no, child_name, gender, birth_ymd')
+    .eq('class_code_id', classCodeId).order('child_no')
+  fail(error)
+  return (data ?? []) as unknown as RosterRow[]
+}
+
+export type ClassCodeListRow = ClassCodeRow & {
+  sessions: { count: number }[]
+  /** 신청 명단 인원 수. 목록에서 "몇 명 신청인지"를 보여줘 관리자가 명단을 펼칠지 판단한다
+   *  (관리자 직접 발급분은 명단이 없어 0이다). */
+  class_roster: { count: number }[]
+}
 
 export async function listClassCodes(): Promise<ClassCodeListRow[]> {
   const { data, error } = await sb().from('class_codes')
-    .select(`${CLASS_CODE_COLS}, sessions(count)`)
+    .select(`${CLASS_CODE_COLS}, sessions(count), class_roster(count)`)
     .order('created_at', { ascending: false })
   fail(error)
   return (data ?? []) as unknown as ClassCodeListRow[]

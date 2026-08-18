@@ -2,6 +2,7 @@
 // 특히 MAIL_TO_OVERRIDE는 "실수로 진짜 교사에게 나가는 것"을 막는 안전장치라 회귀 핀을 둔다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { approvedMail, applyNoticeMail, escapeHtml, sendMail } from '@/lib/mail'
+import { approvalNoticeText } from '@/lib/format'
 
 const okResponse = (id = 'msg_1') =>
   new Response(JSON.stringify({ id }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -112,5 +113,20 @@ describe('문구', () => {
       surveyUrl: 'https://evil.test/"><script>x</script>',
     })
     expect(m.html).not.toContain('"><script>')
+  })
+})
+
+// 승인 안내는 메일(HTML)과 관리자 복사용 평문 두 갈래로 나간다. **문장**은 담당자 확정본이 오면
+// 통째로 바뀔 예정이라 핀하지 않고(그 시점에 거짓 실패만 낸다), 어느 쪽에서든 빠지면 교사가
+// 검사를 시작할 수 없는 **필수 정보의 존재**만 고정한다.
+describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => {
+  it('두 채널이 같은 정보를 담는다 — 교사명·학교·코드·검사 주소', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const html = approvedMail(v).html
+    const text = approvalNoticeText(v)
+    for (const s of [v.teacherName, v.schoolName, v.code, v.surveyUrl]) {
+      expect(html).toContain(s)
+      expect(text).toContain(s)
+    }
   })
 })

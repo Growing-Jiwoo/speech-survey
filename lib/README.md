@@ -22,7 +22,7 @@
 | 파일 | 역할 |
 |---|---|
 | `supabase.ts` | service role 클라이언트 싱글턴. RLS는 전면 차단이므로 모든 DB/스토리지 접근은 이 경유 |
-| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회·학급 코드 발급/목록/삭제/조회/중복검사 상태). 코드 조회 계열은 `status`(`pending`/`active`)·`applied_at`을 함께 돌려준다 — 승인 전 코드로 검사가 시작되지 않게 호출부가 판단할 근거. 교사 신청 접수는 `insertApplication`(pending 코드 + 명단, `'duplicate'`면 호출부가 새 코드로 재시도) — 부분 삽입을 되돌리는 방식과 그 이유는 함수 docblock이 갖는다 |
+| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회·학급 코드 발급/목록/삭제/조회/중복검사 상태). 코드 조회 계열은 `status`(`pending`/`active`)·`applied_at`을 함께 돌려준다 — 승인 전 코드로 검사가 시작되지 않게 호출부가 판단할 근거. 교사 신청 접수는 `insertApplication`(pending 코드 + 명단, `'duplicate'`면 호출부가 새 코드로 재시도) — 부분 삽입을 되돌리는 방식과 그 이유는 함수 docblock이 갖는다. 승인은 `approveClassCode`(pending → active) — `.eq('status','pending')` 한 방으로 멱등을 판정해 `already:true`를 돌려주고, 라우트는 그때 승인 메일을 건너뛴다(더블클릭 재전송 방지). 0건인데 행이 아직 pending이면 던진다 — 승인 안 된 코드를 already로 보고하면 교사가 코드를 못 받는다. 승인 화면이 검토하는 명단은 `listRoster`(번호 순 고정, 읽기 전용) |
 | `env.ts` | 필수 환경변수 로더 — 미설정 시 즉시 throw(fail-fast) |
 | `request.ts` | 라우트 공용: `clientIp`(위조 불가 헤더 우선 규칙), `UUID_RE`, `jsonError`, `createRateLimiter`(best-effort 인메모리 IP 레이트리미터). 레이트리밋 상한은 라우트마다 위협 모델이 달라 값도 분리했다 — `PUBLIC_RATE_LIMIT`·`PUBLIC_RATE_WINDOW_MS`(`/api/sessions` 전용, 스팸 세션 행 생성 방어)와 `VERIFY_CODE_RATE_LIMIT`·`VERIFY_CODE_RATE_WINDOW_MS`(`/api/sessions/verify-code` 전용, 코드 열거 방어). **다만 둘 다 학교 건물 NAT·다중 PC 동시 검사라는 같은 현장 제약을 받는다** — 한 학급이 컴퓨터실에서 일제히 시작하면 아이 수만큼의 요청이 IP 하나로 몰린다. 상한을 조일 때는 "몇 명이 동시에 시작할 수 있어야 하는가"를 먼저 따질 것(구 값 20이 21번째 아이를 막았다 — 2026-08-15) |
 | `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(Edge middleware·Node 라우트 공용) |
@@ -40,7 +40,7 @@
 | `http.ts` | `requestJson/postJson`(던지지 않는 결과형) + `fetchJson`(react-query용) + 네트워크 오류 카피 단일화 |
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
-| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷. 학년/반 드롭다운 선택지(`CLASS_OPTIONS`·`MAX_CLASS_NO`)도 여기가 단일 소스 — 코드 발급 화면과 신청 화면이 공유한다 |
+| `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정)·`approvalNoticeText`(승인 안내 평문 — `lib/mail.ts`의 `approvedMail`과 **문구를 맞춰 유지할 것**. 필수 정보 누락은 `tests/mail.test.ts`가 두 채널을 대조해 막는다) 등 표시 포맷. 학년/반 드롭다운 선택지(`CLASS_OPTIONS`·`MAX_CLASS_NO`)도 여기가 단일 소스 — 코드 발급 화면과 신청 화면이 공유한다 |
 | `birth.ts` | 생년월일 표기 정규화(`2019. 5. 9.`·`19-5-9`·엑셀 날짜 일련번호 → `YYYY-MM-DD`)와 DB 저장형(`YYMMDD`) 변환. 신청 폼이 올린 명단을 이 함수 하나로 모은다 |
 | `xlsx.ts` | `.xlsx`에서 표 읽기 — **외부 라이브러리 없이** ZIP(DecompressionStream)+XML 스캐너로. **브라우저에서 파싱해 파일을 서버로 보내지 않는다**(명렬표의 주민등록번호가 서버에 도달하지 않게) |
 | `roster.ts` | `parseRosterGrid` — 업로드된 명단 그리드(`xlsx.ts`/붙여넣기)를 **파일 순서 그대로의 고정 4칸 표**(`RosterCells`)로. 열 역할을 짐작하지 않고 **알려진 머리글 이름만 찾으며**, 못 찾으면 거부한다. 못 읽은 칸은 지우지 않고 원문을 남긴다 — 한 칸이 틀렸다고 그 줄의 성별까지 교사가 기억으로 다시 채우게 하지 않기 위함. 줄의 합격 판정은 `badCells`/`toChild`, 번호 중복은 `dupChildNos`이며 화면이 교사의 수정본에도 같은 함수를 쓴다. 주민등록번호는 머리글 이름과 값 모양 양쪽에서 2중으로 걸러 네 칸에 절대 섞이지 않게 한다(`rrnSeen`으로 있었다는 사실만 알림). `cutText`는 탭·콤마 붙여넣기 텍스트를 같은 그리드로 |

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
+import { PendingApplications } from '@/components/admin/PendingApplications'
 import { Select } from '@/components/Select'
 import { CLASS_OPTIONS, gradeClassLabel } from '@/lib/format'
 import { postJson, requestJson } from '@/lib/http'
@@ -35,6 +36,9 @@ export function CodeIssuer() {
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
 
+  // 대기(pending)와 발급(active)은 다른 섹션이 맡는다 — 아래 표는 active만 그린다.
+  const active = (codes ?? []).filter(c => c.status === 'active')
+
   const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
   const cleanPhone = phone.trim()
   const cleanEmail = email.trim()
@@ -49,14 +53,14 @@ export function CodeIssuer() {
     if (cleanEmail && !validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
 
     setErr(''); setBusy(true)
-    const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count'> }>('/api/admin/codes', {
+    const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count' | 'roster_count'> }>('/api/admin/codes', {
       region: school.region, schoolId: school.schoolId, schoolName: school.schoolName,
       grade: Number(grade), classNo: Number(classNo),
       teacherName: cleanTeacher, teacherPhone: cleanPhone, teacherEmail: cleanEmail,
     }, '코드 발급에 실패했어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
-    setIssued({ ...r.data.code, session_count: 0 })
+    setIssued({ ...r.data.code, session_count: 0, roster_count: 0 })
     setCopied(false)
     await queryClient.invalidateQueries({ queryKey: adminKeys.codes })
   }
@@ -145,7 +149,11 @@ export function CodeIssuer() {
         )}
       </div>
 
-      {/* 발급 목록 */}
+      {/* 신청 대기(pending) — 대기 건이 없으면 스스로 아무것도 그리지 않는다 */}
+      <PendingApplications items={(codes ?? []).filter(c => c.status === 'pending')}
+        onDelete={c => { setDelErr(''); setToDelete(c) }} />
+
+      {/* 발급된 코드(active) */}
       {isLoading ? (
         <p className="p-8 text-center text-sm text-ink-mute">불러오는 중…</p>
       ) : isError ? (
@@ -167,7 +175,7 @@ export function CodeIssuer() {
               </tr>
             </thead>
             <tbody>
-              {(codes ?? []).map(c => (
+              {active.map(c => (
                 <tr key={c.id} className="border-t border-line/60">
                   <td className="font-read whitespace-nowrap px-4 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
                   <td className="whitespace-nowrap px-4">{c.school_name}</td>
@@ -181,7 +189,8 @@ export function CodeIssuer() {
                   </td>
                   <td className="whitespace-nowrap px-4 tabular-nums">{c.session_count}</td>
                   <td className="whitespace-nowrap px-4 text-right">
-                    {/* 세션이 있는 코드는 지울 수 없다(FK restrict) — 버튼 자체를 내지 않는다 */}
+                    {/* 세션이 있는 코드는 지울 수 없다(FK restrict) — 버튼 자체를 내지 않는다.
+                        대기(pending) 건의 삭제(반려)는 위 섹션이 맡으므로 여기에는 오지 않는다 */}
                     {c.session_count === 0 && (
                       <button type="button" onClick={() => { setDelErr(''); setToDelete(c) }}
                         className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec">
@@ -193,7 +202,7 @@ export function CodeIssuer() {
               ))}
             </tbody>
           </table>
-          {(codes ?? []).length === 0 && (
+          {active.length === 0 && (
             <p className="p-8 text-center text-sm text-ink-mute">아직 발급한 코드가 없습니다.</p>
           )}
         </div>
@@ -206,6 +215,10 @@ export function CodeIssuer() {
         <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
           <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
           코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
+          {/* pending 삭제 = 신청 반려. cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
+          {toDelete?.status === 'pending' && (
+            <> 신청한 <b>학생 명단 {toDelete.roster_count}명</b>도 함께 삭제되며, 되돌릴 수 없습니다.</>
+          )}
         </p>
       </ConfirmDialog>
     </div>

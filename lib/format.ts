@@ -61,3 +61,28 @@ export function contactLabel(
 export function sheetDateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
 }
+
+/**
+ * 승인 안내 문구(평문) — 관리자가 [안내 문구 복사]로 교사에게 직접 전달하는 예비 경로.
+ * 메일이 실패했거나 발송 여부를 알 수 없을 때(`already:true`) 교사가 코드를 받는 **유일한** 길이다.
+ *
+ * ⚠️ `lib/mail.ts`의 `approvedMail`과 **같은 내용을 유지할 것** — 교사가 메일로 받든 관리자가
+ * 붙여넣어 전하든 같은 안내를 읽어야 한다. 한쪽 문구만 고치면 채널에 따라 안내가 갈린다.
+ * (mail 쪽은 HTML, 이쪽은 카톡·문자에 그대로 붙일 평문이라 함수를 공유하지는 않는다.)
+ */
+export function approvalNoticeText(v: {
+  teacherName: string; schoolName: string; code: string; surveyUrl: string
+}): string {
+  return [
+    `${v.teacherName} 선생님, 안녕하세요.`,
+    `${v.schoolName} 읽기 선별검사 신청이 승인되었습니다.`,
+    '',
+    `학급 코드: ${v.code}`,
+    `검사 주소: ${v.surveyUrl}`,
+    '',
+    '시작 화면에서 이 코드를 입력하시면 등록하신 학생 명단이 나옵니다.',
+    '검사할 학생을 고르고 정보를 확인한 뒤 시작해 주세요.',
+    '',
+    '※ 검사 전 보호자 서면 동의서를 회수해 주시고, 동의를 받은 학생만 검사해 주세요.',
+  ].join('\n')
+}
