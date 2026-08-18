@@ -9,7 +9,7 @@
 | 라우트 | 역할 · 방어 |
 |---|---|
 | `POST /api/sessions` | 세션 생성. zod 검증(`lib/schema`) + IP 레이트리밋(인메모리, best-effort) → **세션 스코프 HMAC 토큰**(24h) 발급. 이후 쓰기 요청은 이 토큰 필수 |
-| `POST /api/sessions/verify-code` | 학급 코드 조회(검사 시작 전 확인 모달용). **인증 없음** — 코드를 아는 사람 누구나 호출 가능하고 응답에 담임 연락처가 실린다. IP 레이트리밋으로 코드 열거를 억제하되 **전용 상한**(`VERIFY_CODE_RATE_LIMIT`)을 쓴다 — 세션 생성(`PUBLIC_RATE_LIMIT`)과 위협 모델이 달라 **일부러 분리한 값이니 "일관성" 명목으로 합치지 말 것**(근거는 `lib/request.ts` 주석). 아동 번호는 **물어본 번호 하나의 상태만** 답한다(`alreadyTested`) — 학급 번호 목록은 만들지도 반환하지도 않는다(사용자 확정 2026-08-13, 중복 검사 경고 스펙) |
+| `POST /api/sessions/verify-code` | 학급 코드 조회(검사 시작 전 확인 모달용). **인증 없음** — 코드를 아는 사람 누구나 호출 가능하고 응답에 담임 연락처가 실린다. IP 레이트리밋으로 코드 열거를 억제하되 **전용 상한**(`VERIFY_CODE_RATE_LIMIT`)을 쓴다 — 세션 생성(`PUBLIC_RATE_LIMIT`)과 위협 모델이 달라 **일부러 분리한 값이니 "일관성" 명목으로 합치지 말 것**(근거는 `lib/request.ts` 주석). `status !== 'active'`(pending·미승인)인 코드는 미존재 코드와 **같은 404**로 뭉뚱그린다 — 승인 여부를 구분해 알려주면 그 자체가 코드 열거에 새는 정보다. `childNo` 없이 부르면 드롭다운용 명단(`roster`, 번호별 검사 상태 포함)을, `childNo`와 함께 부르면(명단에 없는 학생 폴백) 그 번호 하나의 상태만(`alreadyTested`) 돌려준다 |
 | `POST /api/recordings` | 녹음 업로드. 검증 사슬: 형식 → 세션 토큰 → 5MB 상한 → MIME allowlist+매직바이트 → 미제출 세션인지(제출 후 변조 차단) → 세션당 총량 상한. DB 기록 실패 시 방금 올린 객체를 보상 정리(고아 파일 방지) |
 | `POST /api/sessions/submit` | 최종 제출. 낱말쓰기/체크리스트 형식 검증 → 토큰 검증 → 미제출 세션만 갱신(재제출 409) |
 | `POST /api/apply` | 교사 신청 접수. zod 검증(`applySchema`) + IP 레이트리밋(`APPLY_RATE_LIMIT`, verify-code와 별도로 낮게 잡음) → `pending` 학급 코드 + 명단 생성(unique 충돌 시 최대 5회 재시도) → 관리자에게 알림 메일(`ADMIN_NOTIFY_EMAIL`, 10분 합치기로 발송량 제한, 실패해도 신청 자체는 성공). **응답에 코드를 넣지 않는다** — 승인 메일이 유일한 코드 전달 경로여야 관리자 승인이 실제 관문이 된다 |

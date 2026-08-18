@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/db', () => ({
   findClassCode: vi.fn(),
   childTestState: vi.fn(),
+  rosterWithTested: vi.fn(),
 }))
 
 import { POST } from '@/app/api/sessions/verify-code/route'
@@ -27,6 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.findClassCode).mockResolvedValue(ROW)
   vi.mocked(db.childTestState).mockResolvedValue(null)
+  vi.mocked(db.rosterWithTested).mockResolvedValue([])
 })
 
 describe('POST /api/sessions/verify-code', () => {
@@ -72,13 +74,59 @@ describe('POST /api/sessions/verify-code', () => {
     expect(Object.keys(json).sort()).toEqual(
       ['alreadyTested', 'classNo', 'grade', 'schoolName', 'teacherEmail', 'teacherName', 'teacherPhone'])
   })
-  it('childNo 누락·범위 밖 400', async () => {
-    expect((await POST(req({ code: 'K7M2P9' }))).status).toBe(400)
+  it('childNo 없음은 유효(명단 조회) — 범위 밖 값만 400', async () => {
+    expect((await POST(req({ code: 'K7M2P9' }))).status).toBe(200)
     expect((await POST(req({ code: 'K7M2P9', childNo: 0 }))).status).toBe(400)
   })
   it('같은 IP 301번째 요청은 429 (코드 열거 방지, 다중 PC 동시 검사를 감안한 높은 상한)', async () => {
     let last = 0
     for (let i = 0; i < 301; i++) last = (await POST(req({ code: 'K7M2P9', childNo: 3 }, '9.9.9.9'))).status
     expect(last).toBe(429)
+  })
+
+  it('[REGRESSION] pending 코드는 404이고, 문구가 존재하지 않는 코드와 똑같다', async () => {
+    vi.mocked(db.findClassCode).mockResolvedValue({ ...ROW, status: 'pending', applied_at: '2026-08-01T00:00:00.000Z' })
+    const pendingRes = await POST(req({ code: 'K7M2P9', childNo: 3 }))
+    const pendingJson = await pendingRes.json()
+
+    vi.mocked(db.findClassCode).mockResolvedValue(null)
+    const missingRes = await POST(req({ code: 'AAAAAA', childNo: 3 }))
+    const missingJson = await missingRes.json()
+
+    expect(pendingRes.status).toBe(404)
+    expect(missingRes.status).toBe(404)
+    expect(pendingJson.error).toBe(missingJson.error)
+  })
+
+  it('childNo 없이 호출하면 roster(번호별 검사 상태 포함)를 돌려주고 childTestState는 부르지 않는다', async () => {
+    const roster = [
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: null },
+      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: 'submitted' as const },
+    ]
+    vi.mocked(db.rosterWithTested).mockResolvedValue(roster)
+    const res = await POST(req({ code: 'K7M2P9' }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.roster).toEqual(roster)
+    expect(db.rosterWithTested).toHaveBeenCalledWith(ROW.id)
+    expect(db.childTestState).not.toHaveBeenCalled()
+  })
+
+  it('childNo와 함께 호출하면 기존처럼 alreadyTested만 답하고 rosterWithTested는 부르지 않는다', async () => {
+    vi.mocked(db.childTestState).mockResolvedValue('inProgress')
+    const res = await POST(req({ code: 'K7M2P9', childNo: 3 }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.alreadyTested).toBe('inProgress')
+    expect(json.roster).toBeUndefined()
+    expect(db.rosterWithTested).not.toHaveBeenCalled()
+  })
+
+  it('명단이 빈 학급(관리자 직접 발급 코드)은 roster: []를 돌려준다', async () => {
+    vi.mocked(db.rosterWithTested).mockResolvedValue([])
+    const res = await POST(req({ code: 'K7M2P9' }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.roster).toEqual([])
   })
 })

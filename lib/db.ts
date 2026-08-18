@@ -357,6 +357,30 @@ export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
   return (data ?? []) as unknown as RosterRow[]
 }
 
+/** 명단 + 각 아동의 검사 상태. 드롭다운이 "검사함"을 표시하기 위한 것 —
+ *  학급 세션을 한 번에 읽어 childTestState와 같은 판정을 번호별로 만든다.
+ *  (verify-code의 옛 방침 "번호 목록을 만들지 않는다"는 명단 도입으로 뒤집혔다:
+ *   코드 소지 = 학급 접근이라는 전제에서, 명단을 주면서 검사 여부만 숨기는 것은 무의미하다.) */
+export async function rosterWithTested(classCodeId: string): Promise<{
+  childNo: number; name: string; gender: string; birthYmd: string
+  tested: 'submitted' | 'inProgress' | null
+}[]> {
+  const roster = await listRoster(classCodeId)
+  const { data, error } = await sb().from('sessions').select('child_no, submitted_at')
+    .eq('class_code_id', classCodeId)
+  fail(error)
+  const state = new Map<number, 'submitted' | 'inProgress'>()
+  for (const s of data ?? []) {
+    const cur = state.get(s.child_no)
+    if (s.submitted_at) state.set(s.child_no, 'submitted')
+    else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
+  }
+  return roster.map(r => ({
+    childNo: r.child_no, name: r.child_name, gender: r.gender, birthYmd: r.birth_ymd,
+    tested: state.get(r.child_no) ?? null,
+  }))
+}
+
 export type ClassCodeListRow = ClassCodeRow & {
   sessions: { count: number }[]
   /** 신청 명단 인원 수. 목록에서 "몇 명 신청인지"를 보여줘 관리자가 명단을 펼칠지 판단한다

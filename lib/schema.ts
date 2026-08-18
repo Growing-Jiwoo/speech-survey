@@ -134,5 +134,6 @@ export const applySchema = classCodeFields.extend({
 })
 export type ApplyInput = z.infer<typeof applySchema>
 
-/** POST /api/sessions/verify-code 바디 */
-export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema })
+/** POST /api/sessions/verify-code 바디. childNo가 없으면 시작 화면이 드롭다운용 명단을
+ *  요청하는 것이고, 있으면 "명단에 없는 학생" 폴백이 그 번호 하나의 중복 검사 상태를 묻는 것이다. */
+export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema.optional() })
