@@ -1,3 +1,4 @@
+import type { RosterChild } from './roster'
 import { sb } from './supabase'
 
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
@@ -242,9 +243,13 @@ export interface ClassCodeRow {
   grade: number; class_no: number
   teacher_name: string; teacher_phone: string | null; teacher_email: string | null
   created_at: string
+  /** 'pending' = 교사 신청 접수만 된 상태(관리자 승인 전) — 검사 시작에 쓸 수 없다 */
+  status: 'pending' | 'active'
+  /** 신청 접수 시각. 관리자 직접 발급분은 null(승인 절차를 거치지 않았다) */
+  applied_at: string | null
 }
 
-const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at'
+const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at, status, applied_at'
 
 export interface NewClassCodeInput {
   code: string
@@ -266,6 +271,43 @@ export async function insertClassCode(c: NewClassCodeInput): Promise<ClassCodeRo
   if ((error as { code?: string } | null)?.code === '23505') return 'duplicate'
   fail(error)
   return data as unknown as ClassCodeRow
+}
+
+/**
+ * 교사 신청 접수: pending 코드 + 명단을 넣는다.
+ * supabase 클라이언트에는 트랜잭션이 없어, 명단 삽입이 실패하면 코드 행을 지워 되돌린다 —
+ * 명단 없는 pending이 남으면 승인 화면에 빈 학급이 떠서 관리자가 판단할 수 없다.
+ * (cascade가 있으므로 코드 행 삭제로 부분 삽입된 명단도 함께 정리된다.)
+ *
+ * 빈 명단은 막지 않는다 — 최소 1명 규칙은 `applySchema`(schema.ts)가 단일 소스로 갖는다.
+ * 여기서 한 번 더 세면 규칙이 두 곳으로 갈라져, 고칠 때 한쪽만 고치게 된다.
+ */
+export async function insertApplication(
+  c: NewClassCodeInput, roster: RosterChild[],
+): Promise<ClassCodeRow | 'duplicate'> {
+  const { data, error } = await sb().from('class_codes').insert({
+    code: c.code,
+    school_region: c.schoolRegion, school_id: c.schoolId, school_name: c.schoolName,
+    grade: c.grade, class_no: c.classNo,
+    teacher_name: c.teacherName, teacher_phone: c.teacherPhone, teacher_email: c.teacherEmail,
+    status: 'pending', applied_at: new Date().toISOString(),
+  }).select(CLASS_CODE_COLS).single()
+  if ((error as { code?: string } | null)?.code === '23505') return 'duplicate'
+  fail(error)
+  const row = data as unknown as ClassCodeRow
+
+  const { error: e2 } = await sb().from('class_roster').insert(roster.map(r => ({
+    class_code_id: row.id, child_no: r.childNo, child_name: r.name,
+    gender: r.gender, birth_ymd: r.birthYmd,
+  })))
+  if (e2) {
+    const { error: rollbackErr } = await sb().from('class_codes').delete().eq('id', row.id)
+    // 롤백까지 실패하면 명단 없는 pending이 그대로 남는다. 자동 정리 경로가 없으므로
+    // 코드를 에러 문구에 실어, 로그를 본 사람이 무엇을 지워야 하는지 알 수 있게 한다.
+    if (rollbackErr) throw new Error(`${e2.message} (pending 코드 ${row.code} 롤백 실패 — 수동 삭제 필요)`)
+    fail(e2)
+  }
+  return row
 }
 
 export type ClassCodeListRow = ClassCodeRow & { sessions: { count: number }[] }

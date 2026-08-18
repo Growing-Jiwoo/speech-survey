@@ -22,7 +22,7 @@
 | 파일 | 역할 |
 |---|---|
 | `supabase.ts` | service role 클라이언트 싱글턴. RLS는 전면 차단이므로 모든 DB/스토리지 접근은 이 경유 |
-| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회·학급 코드 발급/목록/삭제/조회/중복검사 상태) |
+| `db.ts` | DB/스토리지 접근 함수 전부(세션 생성·녹음 기록·제출·삭제·로그인 레이트리밋·관리자 조회·학급 코드 발급/목록/삭제/조회/중복검사 상태). 코드 조회 계열은 `status`(`pending`/`active`)·`applied_at`을 함께 돌려준다 — 승인 전 코드로 검사가 시작되지 않게 호출부가 판단할 근거. 교사 신청 접수(`insertApplication`)는 pending 코드와 명단을 잇달아 넣는데, supabase에 트랜잭션이 없어 **명단 삽입이 실패하면 코드 행을 지워 수동 롤백한다**(명단 없는 pending이 남으면 승인 화면에 빈 학급이 떠 관리자가 판단할 수 없다. cascade로 부분 삽입된 명단도 함께 정리된다). 롤백 삭제까지 실패하면 자동 정리 경로가 없어, 남은 코드를 에러 문구에 실어 수동 삭제를 알린다. 빈 명단 가드는 두지 않는다 — 최소 1명 규칙은 `schema.ts`의 `applySchema`가 단일 소스다 |
 | `env.ts` | 필수 환경변수 로더 — 미설정 시 즉시 throw(fail-fast) |
 | `request.ts` | 라우트 공용: `clientIp`(위조 불가 헤더 우선 규칙), `UUID_RE`, `jsonError`, `createRateLimiter`(best-effort 인메모리 IP 레이트리미터). 레이트리밋 상한은 라우트마다 위협 모델이 달라 값도 분리했다 — `PUBLIC_RATE_LIMIT`·`PUBLIC_RATE_WINDOW_MS`(`/api/sessions` 전용, 스팸 세션 행 생성 방어)와 `VERIFY_CODE_RATE_LIMIT`·`VERIFY_CODE_RATE_WINDOW_MS`(`/api/sessions/verify-code` 전용, 코드 열거 방어). **다만 둘 다 학교 건물 NAT·다중 PC 동시 검사라는 같은 현장 제약을 받는다** — 한 학급이 컴퓨터실에서 일제히 시작하면 아이 수만큼의 요청이 IP 하나로 몰린다. 상한을 조일 때는 "몇 명이 동시에 시작할 수 있어야 하는가"를 먼저 따질 것(구 값 20이 21번째 아이를 막았다 — 2026-08-15) |
 | `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(Edge middleware·Node 라우트 공용) |

@@ -57,7 +57,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
+  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertApplication, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -283,7 +283,57 @@ const CLASS_CODE: ClassCodeRow = {
   grade: 3, class_no: 5,
   teacher_name: '김담임', teacher_phone: '01011112222', teacher_email: 'teacher@test.kr',
   created_at: '2026-01-01T00:00:00Z',
+  status: 'active', applied_at: null,
 }
+
+describe('insertApplication — pending 코드 + 명단', () => {
+  const ROSTER = [{ childNo: 1, name: '김서아', gender: '여' as const, birthYmd: '190304' }]
+
+  it('pending 코드와 명단을 함께 넣는다', async () => {
+    enqueue('class_codes', { data: CLASS_CODE, error: null })
+    enqueue('class_roster', { error: null })
+
+    const row = await insertApplication(NEW_CODE_INPUT, ROSTER)
+
+    expect(row).toEqual(CLASS_CODE)
+    // 명단 행은 방금 만든 코드 행의 id를 참조해야 한다 — 여기가 틀리면 승인 화면이 빈 학급을 본다.
+    expect(insertCallsByTable.get('class_roster')).toEqual([[{
+      class_code_id: CLASS_CODE.id, child_no: 1, child_name: '김서아',
+      gender: '여', birth_ymd: '190304',
+    }]])
+    const code = (insertCallsByTable.get('class_codes') as Record<string, unknown>[])[0]
+    // 신청은 반드시 pending으로 들어가야 한다 — active로 새면 승인 없이 검사가 시작된다.
+    expect(code.status).toBe('pending')
+    expect(code.applied_at).toEqual(expect.any(String))
+  })
+
+  it('[REGRESSION] 명단 삽입이 실패하면 코드 행을 지운다 — 명단 없는 pending이 남으면 안 된다', async () => {
+    enqueue('class_codes', { data: CLASS_CODE, error: null })
+    enqueue('class_roster', { data: null, error: { message: 'boom' } })
+
+    await expect(insertApplication(NEW_CODE_INPUT, ROSTER)).rejects.toThrow('boom')
+    // 이 스텁의 체인 프록시는 .delete().eq() 인자를 삼킨다 — 관찰 가능한 신호는
+    // "class_roster 실패 뒤 class_codes를 한 번 더 건드렸다"는 from() 호출 순서뿐이다.
+    expect(fromCalls).toEqual(['class_codes', 'class_roster', 'class_codes'])
+  })
+
+  it('[REGRESSION] 롤백 삭제까지 실패하면 수동 정리가 필요함을 에러에 남긴다', async () => {
+    enqueue('class_codes', { data: CLASS_CODE, error: null })
+    enqueue('class_roster', { data: null, error: { message: 'boom' } })
+    enqueue('class_codes', { error: { message: 'delete failed' } })
+
+    // 남은 pending 코드를 사람이 찾을 수 있어야 한다 — 자동 정리 경로가 없다.
+    await expect(insertApplication(NEW_CODE_INPUT, ROSTER)).rejects.toThrow(/boom.*K7M2P9/)
+  })
+
+  it('코드 unique 충돌은 duplicate를 돌려준다 (호출부가 재시도)', async () => {
+    enqueue('class_codes', { data: null, error: { message: 'dup', code: '23505' } })
+
+    expect(await insertApplication(NEW_CODE_INPUT, ROSTER)).toBe('duplicate')
+    // 코드가 없으면 참조할 FK도 없다 — 명단을 건드려선 안 된다.
+    expect(fromCalls).toEqual(['class_codes'])
+  })
+})
 
 describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르게 배선된다', () => {
   it('코드 행의 각 필드가 올바른 컬럼으로 가고, 아동 정보·guardian_consented_at도 함께 기록된다', async () => {

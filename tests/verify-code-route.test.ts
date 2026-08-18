@@ -14,6 +14,7 @@ const ROW = {
   grade: 1, class_no: 2, teacher_name: '김담임',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
+  status: 'active' as const, applied_at: null,
 }
 let ipSeq = 0
 const req = (body: unknown, ip = `10.0.0.${++ipSeq}`) => new Request('http://x/api/sessions/verify-code', {

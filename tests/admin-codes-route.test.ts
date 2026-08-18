@@ -16,6 +16,7 @@ const ROW = {
   grade: 1, class_no: 2, teacher_name: '김담임',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
+  status: 'active' as const, applied_at: null,
 }
 const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
