@@ -4,11 +4,20 @@ vi.mock('@/lib/db', () => ({
   insertClassCode: vi.fn(),
   listClassCodes: vi.fn().mockResolvedValue([]),
   deleteClassCode: vi.fn().mockResolvedValue('ok'),
+  approveClassCode: vi.fn(),
+}))
+vi.mock('@/lib/mail', () => ({
+  approvedMail: vi.fn((v: { teacherName: string; schoolName: string; code: string; surveyUrl: string }) => ({
+    to: '', subject: `승인 — ${v.code}`, html: `<p>${v.teacherName} ${v.schoolName} ${v.code} ${v.surveyUrl}</p>`,
+  })),
+  sendMail: vi.fn(),
 }))
 
 import { GET, POST } from '@/app/api/admin/codes/route'
 import { DELETE } from '@/app/api/admin/codes/[id]/route'
+import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
 import * as db from '@/lib/db'
+import * as mail from '@/lib/mail'
 
 const ROW = {
   id: '11111111-1111-1111-1111-111111111111', code: 'K7M2P9',
@@ -32,6 +41,7 @@ beforeEach(() => {
   vi.mocked(db.insertClassCode).mockResolvedValue(ROW)
   vi.mocked(db.listClassCodes).mockResolvedValue([])
   vi.mocked(db.deleteClassCode).mockResolvedValue('ok')
+  vi.mocked(mail.sendMail).mockResolvedValue({ ok: true, id: 'mail-1' })
 })
 
 describe('POST /api/admin/codes', () => {
@@ -105,5 +115,72 @@ describe('DELETE /api/admin/codes/[id]', () => {
     const res = await DELETE(new Request('http://x', { method: 'DELETE' }), delParams('nope'))
     expect(res.status).toBe(400)
     expect(db.deleteClassCode).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/admin/codes/[id]/approve', () => {
+  const PENDING_ROW = { ...ROW, teacher_email: 'teacher@example.com', status: 'pending' as const, applied_at: '2026-08-13T00:00:00.000Z' }
+  const approveReq = () => new Request('http://x', { method: 'POST' })
+
+  it('승인 성공 — already:false, mailed:true, 교사 메일로 발송, 코드가 실린다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, already: false, mailed: true, code: ROW.code })
+    expect(mail.sendMail).toHaveBeenCalledTimes(1)
+    const call = vi.mocked(mail.sendMail).mock.calls[0][0]
+    expect(call.to).toBe('teacher@example.com')
+    expect(call.html).toMatch(ROW.code)
+  })
+
+  it('[REGRESSION] 메일 실패에도 승인은 유지 — 200, mailed:false', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: PENDING_ROW, already: false })
+    vi.mocked(mail.sendMail).mockResolvedValue({ ok: false, error: 'quota exceeded' })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, mailed: false })
+  })
+
+  it('[REGRESSION] 이미 active인 코드 — already:true, 메일은 재시도하지 않는다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({ row: { ...PENDING_ROW, status: 'active' }, already: true })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json).toMatchObject({ ok: true, already: true, mailed: false, code: ROW.code })
+    expect(mail.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('teacher_email이 없는 학급은 mailed:false, 발송 시도 자체가 없다', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue({
+      row: { ...PENDING_ROW, teacher_email: null, teacher_phone: '01012345678' }, already: false,
+    })
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.mailed).toBe(false)
+    expect(mail.sendMail).not.toHaveBeenCalled()
+  })
+
+  it('없는 id → 404', async () => {
+    vi.mocked(db.approveClassCode).mockResolvedValue(null)
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    expect(res.status).toBe(404)
+  })
+
+  it('잘못된 UUID → 400, db 미호출', async () => {
+    const res = await APPROVE(approveReq(), delParams('nope'))
+    expect(res.status).toBe(400)
+    expect(db.approveClassCode).not.toHaveBeenCalled()
+  })
+
+  it('db 오류 502 + 내부 문구·코드 비노출', async () => {
+    vi.mocked(db.approveClassCode).mockRejectedValue(new Error(`승인이 반영되지 않았습니다(코드 ${ROW.code}) — 다시 시도해 주세요.`))
+    const res = await APPROVE(approveReq(), delParams(ROW.id))
+    const json = await res.json()
+    expect(res.status).toBe(502)
+    expect(json.error).not.toMatch(/반영되지 않았습니다/)
+    expect(json.error).not.toMatch(ROW.code)
   })
 })

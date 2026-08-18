@@ -1,4 +1,4 @@
-# app/api/admin/codes/ — 학급 코드 발급 · 목록 · 삭제
+# app/api/admin/codes/ — 학급 코드 발급 · 목록 · 삭제 · 승인
 
 관리자가 학급 하나에 대해 6자리 코드를 만들고, 그 코드로 검사 현장이 세션을 연다.
 학교·학년·반·담임·연락처가 **처음이자 마지막으로 입력되는 지점**이라, 여기서 만든 행이
@@ -10,6 +10,7 @@
 |---|---|
 | `route.ts` | `POST` 발급(zod `classCodeCreateSchema` 검증 → `generateClassCode()` → insert), `GET` 목록 |
 | `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` |
+| `[id]/approve/route.ts` | `POST` 신청 승인. UUID 형식 검증 후 `approveClassCode` → (조건부) 교사에게 안내 메일 |
 
 ## 설계 의도 · 제약
 
@@ -29,6 +30,15 @@
   `sessions.class_code_id … on delete restrict`다 — 이 셋 중 하나만 고쳐서 삭제를 허용하지 말 것.
   코드가 지워지면 그 코드로 만든 세션의 학급 출처가 사라진다.
 - `dynamic = 'force-dynamic'` — 발급 직후 목록이 최신이어야 하므로 라우트 응답을 캐시하지 않는다.
+- **승인(`approve`)의 `already`와 `mailed`는 서로 다른 것을 증명한다.** `approveClassCode`의
+  `already:true`는 "행이 이미 active"만 보장하고 "메일이 나갔다"는 보장하지 않는다 — 관리자
+  직접 발급 코드는 애초에 active로 태어나고(승인해도 메일 이력이 없다), 메일 발송이 실패한
+  뒤 재시도해도 이후 매번 already:true다. 그래서 라우트는 `already`와 `mailed`를 분리해
+  응답에 싣고, `already:true`에는 재발송을 시도하지 않는다(무료 한도를 다시 태우고 이미 코드를
+  받은 교사에게 중복 발송할 수 있어서). 응답에는 항상 `code`가 실린다 — 이 라우트의 청자는
+  인증된 관리자이므로(공개 `/api/apply`가 코드를 감추는 것과 반대), 메일이 안 나갔을 때
+  [안내 문구 복사]로 직접 전달할 수 있어야 한다. `mail_sent_at` 같은 컬럼 대신 이 수동 경로를
+  택했다 — 마이그레이션 없이 항상 쓸 수 있는 예비 경로가 더 단순하다.
 
 ## PII
 
