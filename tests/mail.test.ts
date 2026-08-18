@@ -95,4 +95,22 @@ describe('문구', () => {
   it('escapeHtml은 따옴표까지 처리한다', () => {
     expect(escapeHtml(`<a href="x">&'`)).toBe('&lt;a href=&quot;x&quot;&gt;&amp;&#39;')
   })
+
+  it('[REGRESSION] adminUrl에 큰따옴표가 있어도 href 속성을 벗어나지 못한다 — ' +
+    '요청 Host 헤더에서 만든 URL이라 신뢰할 수 없다', () => {
+    const m = applyNoticeMail({
+      schoolName: '예시초', grade: 1, classNo: 2, teacherName: '김담임', childCount: 1,
+      adminUrl: 'https://evil.test/"><script>x</script>',
+    })
+    expect(m.html).not.toContain('"><script>')
+    expect(m.html).toContain('href="https://evil.test/&quot;&gt;&lt;script&gt;x&lt;/script&gt;"')
+  })
+
+  it('[REGRESSION] surveyUrl도 같은 이유로 이스케이프한다 — 교사에게 나가는 메일이다', () => {
+    const m = approvedMail({
+      teacherName: '김담임', schoolName: '예시초', code: 'ABC123',
+      surveyUrl: 'https://evil.test/"><script>x</script>',
+    })
+    expect(m.html).not.toContain('"><script>')
+  })
 })
