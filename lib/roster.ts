@@ -20,6 +20,8 @@ export interface RosterProblem {
 }
 
 export interface ParsedRoster {
+  /** 번호 중복 여부는 여기서 검사하지 않는다 — 학급 코드 발급과 마찬가지로 `applySchema`(서버)의
+   *  몫이다. 이 배열이 이미 유일하다고 가정하지 말 것. */
   children: RosterChild[]
   problems: RosterProblem[]
   /** 파일 어딘가에 주민등록번호가 있었다 — 저장은 안 했지만 안내는 띄운다 */
@@ -38,20 +40,29 @@ const HEADERS: Record<keyof typeof COL_LABEL, string[]> = {
   birthYmd: ['생년월일', '생일'],
 }
 const BANNED = ['주민등록번호', '주민번호', '외국인등록번호']
-const RRN = /\d{6}\s*[-–]\s*\d{7}/
+// 대시 없이 붙여 오는 표기(1903044234567)·공백 표기(190304 4234567)도 잡는다 — 이 값 자체가
+// 안전한 필드에 남는 일은 없지만(normBirth·NAME_RE가 따로 거른다), rrnSeen 안내가 빠지면
+// 교사가 파일에 주민번호가 있었다는 사실을 모른 채 넘어간다.
+const RRN = /\d{6}\s*[-–]?\s*\d{7}/
 const HEAD_SCAN_ROWS = 8    // 제목·안내 문구가 이 안에 있다(나이스 1줄·배포 양식 5줄)
 
+/** 머리글 비교용 정규화. "생일(양력)"·"생일."처럼 괄호 부연·마침표가 붙어도 별칭과 매치되게 한다. */
 const key = (s: string) => s.trim().toLowerCase().replace(/\s|\(.*?\)|\./g, '')
 
+/** 나이스 내려받기가 성별을 숫자(1=남·2=여)로 주는 경우가 있어 그대로 받는다 — 학교 표기 관례. */
 const toGender = (v: string): '남' | '여' | null => {
   if (/^(남|남자|m|male|1)$/i.test(v.trim())) return '남'
   if (/^(여|여자|f|female|2)$/i.test(v.trim())) return '여'
   return null
 }
+/** 번호 칸에 "2-1"(2반 1번)이나 "1.0"(CSV 숫자 서식)이 흔히 온다. 숫자만 뽑아 붙이면
+ *  "2-1"이 21이 되어 **다른 아이의 번호**가 조용히 기록된다 — 임상 기록이므로 애매한
+ *  표기는 받지 않고 교사가 고치게 한다(lib/birth.ts의 5/9/2019 거부와 같은 원칙).
+ *  받는 것: 1 · 01 · 1번 · 1명 · 1.0(숫자 서식의 소수점 꼬리) */
 const toNo = (v: string): number | null => {
-  const d = v.replace(/\D/g, '')
-  if (!d) return null
-  const n = Number(d)
+  const s = v.trim().replace(/(번|명)$/, '').replace(/\.0+$/, '')
+  if (!/^\d{1,2}$/.test(s)) return null
+  const n = Number(s)
   return n >= 1 && n <= 99 ? n : null
 }
 
@@ -62,6 +73,9 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
   for (let i = 0; i < Math.min(grid.length, HEAD_SCAN_ROWS); i++) {
     const cells = grid[i].map(key)
     const found: typeof col = {}
+    // 별칭이 같은 행에 두 번 나오면(예: "출석번호"와 "번호"가 둘 다 있는 표) 별칭 우선순위가
+    // 아니라 **왼쪽 열이 이긴다** — findIndex가 앞에서부터 훑기 때문. 의도한 동작은 아니고
+    // 그런 표가 실제로 없어 지금은 문제되지 않는다.
     for (const [field, names] of Object.entries(HEADERS) as [keyof typeof COL_LABEL, string[]][]) {
       const at = cells.findIndex(c => names.includes(c))
       if (at >= 0) found[field] = at
@@ -75,7 +89,10 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
   if (headRow < 0)
     return { error: '번호·이름 머리글을 찾지 못했어요. 나이스 명렬표나 배포된 양식 파일인지 확인해 주세요.' }
 
-  // 금지 열(주민번호)은 머리글 이름으로 아예 읽지 않는다 — 1차 차단
+  // 금지 열(주민번호) 표시 — 지금은 값을 실제로 막는 효과가 없다: 열 역할은 별칭과 완전
+  // 일치로만 정해지므로(HEADERS), 금지 이름을 가진 열이 childNo/name/gender/birthYmd로
+  // 동시에 읽히는 일 자체가 없다. 그래도 남겨 두는 이유는 나중에 별칭 매칭이 느슨해질 때를
+  // 대비한 방어선이기 때문 — 지금 이 열이 실제로 막는 것은 rrnSeen 안내뿐이다.
   const bannedCols = new Set(
     grid[headRow].map((c, i) => (BANNED.some(b => key(c).includes(key(b))) ? i : -1)).filter(i => i >= 0))
 
@@ -88,7 +105,9 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
 
   for (const line of grid.slice(headRow + 1)) {
     if (line.some(c => RRN.test(c))) rrnSeen = true
-    // 값 칸의 주민번호는 그 칸만 버린다 — 2차 차단(다른 칸은 살린다)
+    // 값 칸의 주민번호는 그 칸만 버린다 — 실제로 새는 것을 막는 유일한 층(위 bannedCols는
+    // 열 이름 매칭이라 값 자체는 안 막는다). 이름·생년월일 칸에 주민번호가 섞여 들어와도
+    // 이 칸만 빈 값으로 취급해 problems로 보낸다.
     const pick = (f: keyof typeof COL_LABEL): string => {
       const i = col[f]
       if (i === undefined || bannedCols.has(i)) return ''
@@ -96,7 +115,10 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
       return RRN.test(v) ? '' : v
     }
     const rawNo = pick('childNo'), rawName = pick('name')
-    if (!rawNo && !rawName) continue                    // 완전히 빈 줄
+    // 성별·생년월일 값이 있는데 번호·이름이 둘 다 빈 줄은 건너뛰지 않는다 — 병합 셀이나
+    // 밀린 붙여넣기로 번호·이름만 빠진 실제 아동 행을 조용히 통째로 잃는 사고를 막는다
+    // (각주 행처럼 네 칸이 전부 빈 진짜 빈 줄만 건너뛴다).
+    if (!rawNo && !rawName && !pick('gender') && !pick('birthYmd')) continue
 
     const childNo = toNo(rawNo)
     const name = rawName.replace(/\s+/g, ' ')
