@@ -123,6 +123,11 @@ describe('applySchema — 신청 폼', () => {
   it('이메일이 없으면 거부한다 — 승인 메일이 유일한 코드 전달 경로다', () => {
     expect(applySchema.safeParse({ ...base, teacherEmail: '' }).success).toBe(false)
   })
+  it('이메일 앞뒤 공백은 trim 후 통과한다 — 엑셀·메일 클라이언트 붙여넣기 대비', () => {
+    const r = applySchema.safeParse({ ...base, teacherEmail: '  teacher@school.kr  ' })
+    expect(r.success).toBe(true)
+    if (r.success) expect(r.data.teacherEmail).toBe('teacher@school.kr')
+  })
   it('명단이 비면 거부한다', () => {
     expect(applySchema.safeParse({ ...base, roster: [] }).success).toBe(false)
   })

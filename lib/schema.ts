@@ -53,6 +53,13 @@ const optionalEmail = z.string().max(60).default('')
   .transform(s => s.trim())
   .refine(s => s === '' || EMAIL_RE.test(s), '이메일 형식이 올바르지 않습니다.')
 
+/** 필수 이메일 + trim. 엑셀·메일 클라이언트에서 그대로 붙여넣으면 앞뒤 공백이 따라오기 쉬운데
+ *  EMAIL_RE는 완전 앵커라 trim 없이는 그 공백만으로 거부된다 — applySchema에서 이메일은
+ *  승인 코드를 받는 유일한 경로라 이 오탐이 특히 치명적이라 별도로 둔다. */
+const requiredEmail = z.string().max(60)
+  .transform(s => s.trim())
+  .pipe(z.string().regex(EMAIL_RE, '이메일 형식이 올바르지 않습니다.'))
+
 /** 문자열 정규화: trim + 연속 공백 1칸 (기존 라우트 cleanStr와 동일 규칙). */
 const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
 
@@ -118,7 +125,9 @@ export type RosterChildInput = z.infer<typeof rosterChildSchema>
 /** POST /api/apply 바디 — 교사 신청. 직접 발급과 달리 **이메일이 필수**다:
  *  승인 메일이 유일한 코드 전달 경로라서다(신청 완료 화면은 코드를 보여주지 않는다 — 스펙). */
 export const applySchema = classCodeFields.extend({
-  teacherEmail: emailSchema,
+  teacherEmail: requiredEmail,
+  // .max(99)는 child_no 범위(1~99)+중복 검사로 보면 도달 불가능해 보이지만, zod는 array().max()를
+  // refine보다 먼저 평가한다 — 수천 행짜리 잘못된 파일이 Set 중복 검사를 돌기 전에 여기서 바로 끊긴다.
   roster: z.array(rosterChildSchema).min(1, '학생을 한 명 이상 등록해 주세요.').max(99)
     .refine(r => new Set(r.map(c => c.childNo)).size === r.length,
       '같은 번호가 두 번 있습니다.'),
