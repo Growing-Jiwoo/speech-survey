@@ -411,6 +411,11 @@ describe('listRoster', () => {
 
     expect(await listRoster(CLASS_CODE.id)).toEqual(rows)
     expect(eqCallsByTable.get('class_roster')).toEqual([['class_code_id', CLASS_CODE.id]])
+    // 컬럼 목록도 인자로만 검증된다(findClassCode와 같은 이유 — `as unknown as` 캐스팅이
+    // 빠진 컬럼을 tsc에서 숨긴다). 이름이 빠지면 승인 검토 화면이 빈 칸을 렌더한다 —
+    // 그 화면이 존재하는 이유가 바로 아동 이름 확인이다.
+    for (const col of ['child_no', 'child_name', 'gender', 'birth_ymd'])
+      expect(selectCallsByTable.get('class_roster')?.[0]).toEqual([expect.stringContaining(col)])
     // 번호 순 정렬은 스텁 반환값에 흔적이 없다 — 인자로 못 박는다(관리자가 교사 명렬표와
     // 눈으로 맞춰 보는 순서라, 조용히 사라지면 검토가 어긋난다).
     expect(orderCallsByTable.get('class_roster')).toEqual([['child_no']])
