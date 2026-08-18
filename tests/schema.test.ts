@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  sessionCreateSchema, phoneSchema, classCodeSchema, childNoSchema, classCodeCreateSchema,
+  sessionCreateSchema, sessionCreateDirectSchema, sessionCreateFromRosterSchema,
+  phoneSchema, classCodeSchema, childNoSchema, classCodeCreateSchema,
   applySchema, rosterChildSchema,
 } from '@/lib/schema'
+import { z } from 'zod'
 
 describe('sessionCreateSchema — 코드 기반 (스펙 2026-08-13)', () => {
   const VALID = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
@@ -14,6 +16,34 @@ describe('sessionCreateSchema — 코드 기반 (스펙 2026-08-13)', () => {
     const d = sessionCreateSchema.parse({ ...VALID, schoolName: '위조초', grade: 6 })
     expect(d).not.toHaveProperty('schoolName')
     expect(d).not.toHaveProperty('grade')
+  })
+})
+
+// Task 13 코드리뷰 후속(2026-08-18) — 유니온의 순서 의존성을 스키마 레벨에서 직접 고정한다.
+// 라우트 테스트만으로는 재정렬 사고가 나도 "gender: 남→여" 같은 무의미한 diff로만 드러난다.
+describe('sessionCreateSchema — 유니온(명단 모드/직접 입력) 불변식', () => {
+  const ROSTER_BODY = { fromRoster: true as const, code: 'K7M2P9', childNo: 3, guardianConsent: true }
+  const DIRECT_BODY = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
+
+  it('명단 모드 바디는 통과하고, 함께 실은 name/gender/birthYmd는 벗겨진다', () => {
+    const d = sessionCreateSchema.parse({ ...ROSTER_BODY, name: '위조', gender: '여', birthYmd: '000101' })
+    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3, guardianConsent: true })
+  })
+  it('fromRoster 없는 명단-모양 바디(이름 등 없이 code/childNo만)는 거부된다', () => {
+    // sessionCreateFromRosterSchema 쪽에서는 당연히 막히고, direct 쪽은 name 등 필수 필드가
+    // 없어 막힌다 — 어느 쪽으로도 새지 않는지가 요점이다.
+    expect(sessionCreateSchema.safeParse({ code: 'K7M2P9', childNo: 3, guardianConsent: true }).success).toBe(false)
+  })
+  it('[REGRESSION] fromRoster:true는 direct 스키마를 절대 통과할 수 없다 — 유니온 순서를 뒤집어도', () => {
+    expect(sessionCreateDirectSchema.safeParse(ROSTER_BODY).success).toBe(false)
+    // 순서를 반대로 둔 유니온이라도(재정렬 사고 재현) 위조 신원이 direct로 새지 않아야 한다.
+    const reordered = z.union([sessionCreateDirectSchema, sessionCreateFromRosterSchema])
+    const d = reordered.parse({ ...ROSTER_BODY, name: '위조', gender: '여', birthYmd: '000101' })
+    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3, guardianConsent: true })
+  })
+  it('직접 입력 바디는 그대로 direct 스키마로 통과한다(회귀 방지)', () => {
+    const d = sessionCreateSchema.parse(DIRECT_BODY)
+    expect(d).toMatchObject({ name: '김도연', gender: '남', birthYmd: '190101' })
   })
 })
 

@@ -63,8 +63,16 @@ const requiredEmail = z.string().max(60)
 /** 문자열 정규화: trim + 연속 공백 1칸 (기존 라우트 cleanStr와 동일 규칙). */
 const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
 
-/** POST /api/sessions 바디 — 학급 정보는 받지 않는다(서버가 코드에서 복사 — 스펙). */
-export const sessionCreateSchema = z.object({
+/** POST /api/sessions 바디 — 직접 입력 모드. 학급 정보는 받지 않는다(서버가 코드에서 복사 — 스펙).
+ *  `fromRoster: z.undefined().optional()` — `fromRoster: true`가 이 스키마를 통과하는 일을
+ *  원천 차단한다(`.optional()`이 없으면 이 필드를 아예 안 보내는 보통의 직접 입력 요청조차
+ *  키가 없다는 이유로 거부된다 — z.undefined()는 "값이 undefined"가 아니라 "키가 존재하고
+ *  그 값이 undefined"를 요구한다). 이게 없으면 z.union의 멤버 순서가 "명단 모드는 이름·
+ *  생년월일을 신뢰하지 않는다"는 불변식을 지키는 유일한 근거가 되어 버린다(뒤바뀌면
+ *  fromRoster:true + 위조 이름이 이 스키마를 통과해 fromRoster 키만 벗겨지고 위조값이 그대로
+ *  createSession에 실린다 — 리뷰에서 실증됨). 이 필드를 두면 순서와 무관하게 스키마 자체가 막는다. */
+export const sessionCreateDirectSchema = z.object({
+  fromRoster: z.undefined().optional(),
   code: classCodeSchema,
   childNo: childNoSchema,
   name: cleaned.pipe(nameSchema),
@@ -73,7 +81,29 @@ export const sessionCreateSchema = z.object({
   // 만 14세 미만 아동 — 법정대리인 서면 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
   guardianConsent: z.literal(true),
 })
-export type SessionCreateInput = z.infer<typeof sessionCreateSchema>
+
+/** 명단 모드 — 신청 때 등록한 명단에서 서버가 값을 복사한다. 클라이언트가 보낸
+ *  이름·생년월일을 믿지 않는 것이 핵심이라, 이 모드에는 그 필드 자체가 없다. */
+export const sessionCreateFromRosterSchema = z.object({
+  fromRoster: z.literal(true),
+  code: classCodeSchema,
+  childNo: childNoSchema,
+  guardianConsent: z.literal(true),
+})
+
+/** 두 모드의 유니온. z.union은 순서대로 시도해 처음 통과하는 스키마를 쓴다 — 명단 모드를
+ *  먼저 둔 것 자체는 우연이 아니지만(정상 요청이 어느 쪽이든 한 번에 맞는 스키마로 붙게),
+ *  **불변식(신원 위조 방지)이 이 순서에 기대면 안 된다** — 그래서 `sessionCreateDirectSchema`에
+ *  `fromRoster: z.undefined()`를 박아 뒀다: `fromRoster: true`인 바디는 순서를 뒤집어도
+ *  direct 스키마를 절대 통과할 수 없다.
+ *  두 z.object 모두 기본이 "모르는 키는 벗긴다"라, fromRoster:true와 함께
+ *  name/gender/birthYmd를 얹어 보내는 요청(클라이언트가 신원을 같이 보냈다고 착각하는 상황)은
+ *  명단 스키마가 통과해 그 필드들을 조용히 벗겨낸다. 이는 트랩이 아니라 의도다: 명단 모드가
+ *  서버 신뢰 값만 쓴다는 계약을 정확히 반영한다(라우트가 어차피 그 필드를 읽지 않으므로
+ *  .strict()로 400 처리해도 실질은 같지만, 400은 "형식 오류"를 뜻하고 여기 실제 상황은
+ *  "무시됐을 뿐 요청은 유효하다"이므로 200 + 조용한 무시 쪽이 상태 코드의 의미에 더 맞는다). */
+export const sessionCreateSchema = z.union([sessionCreateFromRosterSchema, sessionCreateDirectSchema])
+export type SessionCreateInput = z.infer<typeof sessionCreateDirectSchema>
 
 /** PATCH /api/admin/sessions/[id] 바디 — 검사자가 잘못 입력한 **아동 식별값**만 고친다.
  *
@@ -134,5 +164,6 @@ export const applySchema = classCodeFields.extend({
 })
 export type ApplyInput = z.infer<typeof applySchema>
 
-/** POST /api/sessions/verify-code 바디 */
-export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema })
+/** POST /api/sessions/verify-code 바디. childNo가 없으면 시작 화면이 드롭다운용 명단을
+ *  요청하는 것이고, 있으면 "명단에 없는 학생" 폴백이 그 번호 하나의 중복 검사 상태를 묻는 것이다. */
+export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema.optional() })

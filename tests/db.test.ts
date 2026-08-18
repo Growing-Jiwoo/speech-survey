@@ -76,7 +76,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  approveClassCode, childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -424,6 +424,45 @@ describe('listRoster', () => {
   it('명단이 없으면 빈 배열', async () => {
     enqueue('class_roster', { data: null, error: null })
     expect(await listRoster(CLASS_CODE.id)).toEqual([])
+  })
+})
+
+describe('rosterWithTested', () => {
+  it('submitted가 있으면 행 순서와 무관하게 submitted가 이긴다 — childTestState와 같은 판정', async () => {
+    const rows = [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
+    ]
+    enqueue('class_roster', { data: rows, error: null })
+    // 1번: submitted 행이 먼저 온다 / 2번: submitted 행이 나중에 온다 — 어느 쪽이든 submitted가 이겨야 한다.
+    enqueue('sessions', {
+      data: [
+        { child_no: 1, submitted_at: '2026-08-13T00:00:00Z' },
+        { child_no: 1, submitted_at: null },
+        { child_no: 2, submitted_at: null },
+        { child_no: 2, submitted_at: '2026-08-13T00:00:00Z' },
+      ],
+      error: null,
+    })
+
+    expect(await rosterWithTested(CLASS_CODE.id)).toEqual([
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'submitted' },
+      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: 'submitted' },
+    ])
+  })
+
+  it('미제출 세션만 있으면 inProgress, 세션이 없으면 null', async () => {
+    const rows = [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
+    ]
+    enqueue('class_roster', { data: rows, error: null })
+    enqueue('sessions', { data: [{ child_no: 1, submitted_at: null }], error: null })
+
+    expect(await rosterWithTested(CLASS_CODE.id)).toEqual([
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'inProgress' },
+      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: null },
+    ])
   })
 })
 
