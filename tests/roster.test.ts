@@ -173,6 +173,18 @@ describe('parseRosterGrid — 문제 행 보고', () => {
     const r = parseRosterGrid([['아무', '표'], ['1', '2']])
     expect(r).toHaveProperty('error')
   })
+  it('[REGRESSION] 31자 이름은 화면 maxLength(30)를 안 거치는 파일 경로에서도 badCells가 잡는다', () => {
+    // 화면 입력에는 maxLength=30이 있지만 파일 업로드는 그 제한을 거치지 않는다. badCells가
+    // 서버 nameSchema(NAME_RE + max(30))가 아니라 NAME_RE만 봤다면 31자 이름이 여기를
+    // 통과해 제출 버튼까지 갔다가 서버의 unactionable 400(어느 줄인지 안 알려줌)으로 끝났다.
+    const name31 = '가'.repeat(31)
+    const r = parseRosterGrid([
+      ['번호', '성명', '성별', '생년월일'],
+      ['1', name31, '여', '2019-03-04'],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(badCells(r.rows[0])).toEqual(['이름'])
+  })
 })
 
 describe('parseRosterGrid — 못 읽은 줄도 나머지 칸을 잃지 않는다', () => {

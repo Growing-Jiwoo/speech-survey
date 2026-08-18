@@ -5,7 +5,7 @@
 // (값 모양으로 추론하는 방식은 "반 번호 2"를 성별로 오인했다 — 프로토타입에서 확인.
 //  자유도를 열면 실패 케이스마다 배포가 필요해진다. 스펙 "고정 4칸" 절.)
 import { normBirth, toYymmdd } from './birth'
-import { NAME_RE } from './schema'
+import { validName } from './validate'
 
 export interface RosterChild {
   childNo: number
@@ -176,7 +176,7 @@ const trimName = (s: string) => s.trim().replace(/\s+/g, ' ')
 export function badCells(c: RosterCells): string[] {
   const bad: string[] = []
   if (toNo(c.childNo) === null) bad.push(COL_LABEL.childNo)
-  if (!NAME_RE.test(trimName(c.name))) bad.push(COL_LABEL.name)
+  if (!validName(trimName(c.name))) bad.push(COL_LABEL.name)
   if (c.gender !== '남' && c.gender !== '여') bad.push(COL_LABEL.gender)
   if (normBirth(c.birth) === null) bad.push(COL_LABEL.birthYmd)
   return bad
