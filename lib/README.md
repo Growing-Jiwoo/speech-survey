@@ -43,5 +43,6 @@
 | `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`·`contactLabel`·`sheetDateLabel`(KST 고정) 등 표시 포맷 |
 | `birth.ts` | 생년월일 표기 정규화(`2019. 5. 9.`·`19-5-9`·엑셀 날짜 일련번호 → `YYYY-MM-DD`)와 DB 저장형(`YYMMDD`) 변환. 신청 폼이 올린 명단을 이 함수 하나로 모은다 |
 | `xlsx.ts` | `.xlsx`에서 표 읽기 — **외부 라이브러리 없이** ZIP(DecompressionStream)+XML 스캐너로. **브라우저에서 파싱해 파일을 서버로 보내지 않는다**(명렬표의 주민등록번호가 서버에 도달하지 않게) |
+| `roster.ts` | `parseRosterGrid` — 업로드된 명단 그리드(`xlsx.ts`/붙여넣기)를 검증된 아동 목록으로. 열 역할을 짐작하지 않고 **알려진 머리글 이름만 찾으며**, 못 찾으면 거부한다. 주민등록번호는 머리글 이름과 값 모양 양쪽에서 2중으로 걸러 서버에 갈 4칸에 절대 섞이지 않게 한다(`rrnSeen`으로 있었다는 사실만 알림). `cutText`는 탭·콤마 붙여넣기 텍스트를 같은 그리드로 |
 | `platform.ts` | 브라우저·플랫폼 판별(녹음 지원 여부 안내용) |
 | `schools.ts` | 지역(시도교육청) 상수와 학교 타입 — 학교 목록 데이터는 `public/schools/*.json` |
