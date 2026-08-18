@@ -22,15 +22,28 @@ const insertCallsByTable = new Map<string, unknown[]>()
 /** update() 인자 캡처. insert와 같은 이유다 — updateSessionIdentity처럼 "어느 값이 어느
  *  컬럼으로 가는지"와 "원본을 덮어쓰지 않는지"는 결과가 아니라 **인자**로만 검증된다. */
 const updateCallsByTable = new Map<string, unknown[]>()
+/** delete()·eq()·select() 인자 캡처. 이 세 개는 결과에 흔적을 남기지 않아 인자로만 검증된다 —
+ *  "롤백이 정말 **삭제**였는지(조회로 바뀌지 않았는지)"와 "어느 행을 지웠는지",
+ *  그리고 "어떤 컬럼을 골랐는지"가 그렇다. 컬럼 목록은 `as unknown as` 캐스팅 때문에
+ *  타입으로는 전혀 안 잡힌다(컬럼을 빼도 tsc는 통과한다). */
+const deleteCallsByTable = new Map<string, unknown[]>()
+const eqCallsByTable = new Map<string, unknown[]>()
+const selectCallsByTable = new Map<string, unknown[]>()
 
-function chain(result: unknown, capture?: (kind: 'insert' | 'update', arg: unknown) => void) {
+type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select'
+const BUCKETS: Record<Captured, Map<string, unknown[]>> = {
+  insert: insertCallsByTable, update: updateCallsByTable,
+  delete: deleteCallsByTable, eq: eqCallsByTable, select: selectCallsByTable,
+}
+
+function chain(result: unknown, capture?: (kind: Captured, args: unknown[]) => void) {
   const target = () => {}
   const proxy: unknown = new Proxy(target, {
     get(_t, prop) {
       if (prop === 'then')
         return (resolve: (v: unknown) => void) => resolve(result)
-      if ((prop === 'insert' || prop === 'update') && capture)
-        return (arg: unknown) => { capture(prop, arg); return proxy }
+      if (typeof prop === 'string' && prop in BUCKETS && capture)
+        return (...args: unknown[]) => { capture(prop as Captured, args); return proxy }
       return () => proxy
     },
     apply() { return proxy },
@@ -44,10 +57,11 @@ vi.mock('@/lib/supabase', () => ({
       fromCalls.push(table)
       const queue = tableQueues.get(table)
       const result = queue && queue.length > 0 ? queue.shift() : { data: null, error: null }
-      return chain(result, (kind, arg) => {
-        const bucket = kind === 'insert' ? insertCallsByTable : updateCallsByTable
+      return chain(result, (kind, args) => {
+        const bucket = BUCKETS[kind]
         const calls = bucket.get(table) ?? []
-        calls.push(arg)
+        // insert/update는 payload 한 덩이가 관심사, delete/eq/select는 인자 자체가 관심사다.
+        calls.push(kind === 'insert' || kind === 'update' ? args[0] : args)
         bucket.set(table, calls)
       })
     },
@@ -57,7 +71,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, insertApplication, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
+  childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -79,6 +93,9 @@ beforeEach(() => {
   fromCalls.length = 0
   insertCallsByTable.clear()
   updateCallsByTable.clear()
+  deleteCallsByTable.clear()
+  eqCallsByTable.clear()
+  selectCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -312,9 +329,10 @@ describe('insertApplication — pending 코드 + 명단', () => {
     enqueue('class_roster', { data: null, error: { message: 'boom' } })
 
     await expect(insertApplication(NEW_CODE_INPUT, ROSTER)).rejects.toThrow('boom')
-    // 이 스텁의 체인 프록시는 .delete().eq() 인자를 삼킨다 — 관찰 가능한 신호는
-    // "class_roster 실패 뒤 class_codes를 한 번 더 건드렸다"는 from() 호출 순서뿐이다.
-    expect(fromCalls).toEqual(['class_codes', 'class_roster', 'class_codes'])
+    // "한 번 더 건드렸다"(fromCalls)로는 부족하다 — 조회로 바꿔치기해도 통과한다.
+    // 되돌리기가 정말 **삭제**였고, 방금 만든 그 행을 지목했는지를 인자로 못 박는다.
+    expect(deleteCallsByTable.get('class_codes')).toHaveLength(1)
+    expect(eqCallsByTable.get('class_codes')).toEqual([['id', CLASS_CODE.id]])
   })
 
   it('[REGRESSION] 롤백 삭제까지 실패하면 수동 정리가 필요함을 에러에 남긴다', async () => {
@@ -332,6 +350,20 @@ describe('insertApplication — pending 코드 + 명단', () => {
     expect(await insertApplication(NEW_CODE_INPUT, ROSTER)).toBe('duplicate')
     // 코드가 없으면 참조할 FK도 없다 — 명단을 건드려선 안 된다.
     expect(fromCalls).toEqual(['class_codes'])
+  })
+})
+
+describe('findClassCode', () => {
+  it('[REGRESSION] status·applied_at까지 select한다 — 빠지면 승인 게이트가 undefined를 읽는다', async () => {
+    enqueue('class_codes', { data: CLASS_CODE, error: null })
+
+    await findClassCode('K7M2P9')
+
+    // 컬럼 목록은 인자로만 검증된다 — 반환값은 `as unknown as ClassCodeRow`로 캐스팅돼
+    // 컬럼이 빠져도 타입 검사가 통과하고, status가 조용히 undefined로 온다.
+    // (승인 게이트를 `=== 'pending'`으로 쓰면 열린 채 실패하고, `!== 'active'`면 전부 막힌다.)
+    expect(selectCallsByTable.get('class_codes')?.[0]).toEqual([expect.stringContaining('status')])
+    expect(selectCallsByTable.get('class_codes')?.[0]).toEqual([expect.stringContaining('applied_at')])
   })
 })
 
