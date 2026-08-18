@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/db', () => ({
   createSession: vi.fn().mockResolvedValue('sess-1'),
   findClassCode: vi.fn(),
+  listRoster: vi.fn(),
 }))
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 
@@ -18,7 +19,13 @@ const CODE_ROW = {
   created_at: '2026-08-13T00:00:00.000Z',
   status: 'active' as const, applied_at: null,
 }
+const PENDING_CODE_ROW = { ...CODE_ROW, status: 'pending' as const, applied_at: '2026-08-13T00:00:00.000Z' }
 const VALID = { code: 'K7M2P9', childNo: 7, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
+const ROSTER = [
+  { child_no: 3, child_name: '이서준', gender: '여' as const, birth_ymd: '180505' },
+  { child_no: 7, child_name: '박지민', gender: '남' as const, birth_ymd: '190202' },
+]
+const FROM_ROSTER = { fromRoster: true as const, code: 'K7M2P9', childNo: 7, guardianConsent: true }
 
 let ipSeq = 0
 function makeReq(body: unknown, ip = `10.1.0.${++ipSeq}`) {
@@ -33,6 +40,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.createSession).mockResolvedValue('sess-1')
   vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
+  vi.mocked(db.listRoster).mockResolvedValue(ROSTER)
 })
 
 describe('POST /api/sessions — 코드 기반 생성', () => {
@@ -95,5 +103,64 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
       const res = await POST(makeReq(VALID, '10.0.0.1'))
       expect(res.status, `${i + 1}번째 아동에서 막힘`).not.toBe(429)
     }
+  })
+})
+
+describe('POST /api/sessions — 명단 모드(fromRoster)', () => {
+  it('fromRoster:true → 200, createSession이 명단 값을 받는다', async () => {
+    const res = await POST(makeReq(FROM_ROSTER))
+    expect(res.status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith({
+      classCode: CODE_ROW, childNo: 7,
+      birthYmd: '190202', gender: '남', childName: '박지민',
+    })
+  })
+  it('[REGRESSION] 클라이언트가 다른 name·gender·birthYmd를 함께 보내도 명단 값이 이긴다', async () => {
+    const res = await POST(makeReq({
+      ...FROM_ROSTER, name: '위조', gender: '여', birthYmd: '000101',
+    }))
+    expect(res.status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith({
+      classCode: CODE_ROW, childNo: 7,
+      birthYmd: '190202', gender: '남', childName: '박지민',
+    })
+  })
+  it('명단에 없는 번호 400, createSession 호출 안 됨', async () => {
+    const res = await POST(makeReq({ ...FROM_ROSTER, childNo: 99 }))
+    expect(res.status).toBe(400)
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
+  it('[REGRESSION] pending 코드는 명단 모드도 미존재와 같은 404', async () => {
+    vi.mocked(db.findClassCode).mockResolvedValue(PENDING_CODE_ROW)
+    const res = await POST(makeReq(FROM_ROSTER))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe('코드를 확인해 주세요.')
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
+  it('[REGRESSION] pending 코드는 직접 입력 모드도 같은 404 문구', async () => {
+    vi.mocked(db.findClassCode).mockResolvedValue(PENDING_CODE_ROW)
+    const res = await POST(makeReq(VALID))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe('코드를 확인해 주세요.')
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
+  it('[REGRESSION] 직접 입력 모드(기존 payload)는 그대로 동작한다', async () => {
+    const res = await POST(makeReq(VALID))
+    expect(res.status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith({
+      classCode: CODE_ROW, childNo: 7,
+      birthYmd: '190101', gender: '남', childName: '김도연',
+    })
+    expect(db.listRoster).not.toHaveBeenCalled()
+  })
+  it('명단 모드에서는 listRoster가 호출되고, 직접 입력 모드에서는 호출되지 않는다', async () => {
+    await POST(makeReq(FROM_ROSTER))
+    expect(db.listRoster).toHaveBeenCalledWith(CODE_ROW.id)
+    vi.clearAllMocks()
+    vi.mocked(db.createSession).mockResolvedValue('sess-1')
+    vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
+    vi.mocked(db.listRoster).mockResolvedValue(ROSTER)
+    await POST(makeReq(VALID))
+    expect(db.listRoster).not.toHaveBeenCalled()
   })
 })

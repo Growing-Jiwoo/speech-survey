@@ -1,8 +1,14 @@
 // POST /api/sessions — 검사 세션 생성(학급 코드 + 아동 정보) + 세션 스코프 토큰 발급.
 // 학급 정보(학교·학년·반·담임·연락처)는 클라이언트가 보낸 값을 받지 않는다 —
 // 코드를 다시 조회해 서버가 복사한다(스펙 2026-08-13). 이후 녹음 업로드·제출은 토큰 동봉 필수.
+//
+// 두 가지 아동 식별 모드가 있다(Task 13, 2026-08-18):
+// - 직접 입력(`d`에 name/gender/birthYmd) — 검사자가 화면에서 입력한 값을 그대로 쓴다.
+// - 명단 모드(`fromRoster:true`) — 신청 때 등록한 명단에서 번호로 찾아 서버가 이름·성별·
+//   생년월일을 복사한다. 클라이언트는 번호만 보낸다. 오타나 변조된 요청이 다른 아동의
+//   신원을 영구 임상 기록에 새기지 못하게 하는 것이 이 모드의 존재 이유다.
 import { NextResponse } from 'next/server'
-import { createSession, findClassCode } from '@/lib/db'
+import { createSession, findClassCode, listRoster } from '@/lib/db'
 import { createSessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
@@ -26,11 +32,26 @@ export async function POST(req: Request) {
   const d = parsed.data
   try {
     const classCode = await findClassCode(d.code)
-    if (!classCode) return jsonError('코드를 확인해 주세요.', 404)
-    const sessionId = await createSession({
-      classCode, childNo: d.childNo,
-      birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
-    })
+    // pending도 미존재와 같은 404 — verify-code(Task 12)와 같은 이유: 승인 전 코드가
+    // 실재한다는 사실을 노출하지 않기 위해서다. 이 검사가 없으면 verify-code가 막은
+    // pending 코드로도 세션 생성(직접 입력이든 명단이든)이 그대로 통과해 버린다.
+    if (!classCode || classCode.status !== 'active') return jsonError('코드를 확인해 주세요.', 404)
+
+    let sessionId: string
+    if ('fromRoster' in d) {
+      const roster = await listRoster(classCode.id)
+      const child = roster.find(r => r.child_no === d.childNo)
+      if (!child) return jsonError('명단에서 학생을 찾을 수 없어요. 직접 입력으로 진행해 주세요.', 400)
+      sessionId = await createSession({
+        classCode, childNo: child.child_no,
+        birthYmd: child.birth_ymd, gender: child.gender, childName: child.child_name,
+      })
+    } else {
+      sessionId = await createSession({
+        classCode, childNo: d.childNo,
+        birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
+      })
+    }
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
     // grade는 어떤 검사지(양식)로 진행할지 정한다 — 코드가 정한 값을 서버가 내려준다.
     return NextResponse.json({ sessionId, sessionToken, grade: classCode.grade })
