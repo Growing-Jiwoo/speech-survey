@@ -7,7 +7,7 @@ import { approvalNoticeText, gradeClassLabel } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { adminKeys, useRosterQuery, type ClassCodeItem } from '@/hooks/useAdminQueries'
 
-const btnCls = 'rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-xs font-bold text-ink-soft transition hover:border-blue'
+const btnCls = 'rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40'
 
 /** 승인 결과 — 행이 active 목록으로 옮겨가 사라진 뒤에도 관리자가 결과와 복사 버튼을 볼 수
  *  있어야 하므로 이 섹션이 붙잡아 둔다(발급 폼의 `issued` 패널과 같은 이유). */
@@ -90,7 +90,11 @@ export function PendingApplications({
                 </p>
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <button type="button" className={btnCls}
+                {/* 승인 요청은 메일 발송까지 끝난 뒤에 응답하므로 1~2초 머문다. 그 사이 같은 행의
+                    다른 버튼이 살아 있으면 승인 중인 학급을 삭제(반려)하거나 명단을 여닫을 수 있었다
+                    — 행 전체를 잠근다(사용자 보고 2026-08-19). 승인 버튼 자체는 첫 줄의
+                    setBusyId로 이미 즉시 잠긴다. */}
+                <button type="button" className={btnCls} disabled={busyId === c.id}
                   aria-expanded={openId === c.id} aria-controls={`roster-${c.id}`}
                   onClick={() => setOpenId(openId === c.id ? null : c.id)}>
                   {openId === c.id ? '명단 닫기' : '명단 보기'}
@@ -100,8 +104,8 @@ export function PendingApplications({
                   className="rounded-lg bg-blue px-3 py-1 text-xs font-bold text-white transition disabled:opacity-40">
                   {busyId === c.id ? '승인 중…' : '승인'}
                 </button>
-                <button type="button" onClick={() => onDelete(c)}
-                  className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec">
+                <button type="button" disabled={busyId === c.id} onClick={() => onDelete(c)}
+                  className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40">
                   삭제
                 </button>
               </div>

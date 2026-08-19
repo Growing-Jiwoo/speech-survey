@@ -73,6 +73,13 @@ export function CodeIssuer() {
     setDeleting(false)
     if (!r.ok) { setDelErr(r.error); return }
     if (issued?.id === toDelete.id) setIssued(null)
+    // 삭제된 행을 캐시에서 먼저 빼서 화면에서 즉시 사라지게 한다 — invalidate만 걸면 재조회가
+    // 돌아올 때까지 지운 행이 남아 있어 "안 지워졌나" 싶고, 그 사이 [삭제]를 다시 누를 수도
+    // 있었다(사용자 보고 2026-08-19). 낙관적 업데이트가 아니라 **성공 응답 뒤** 반영이므로
+    // 롤백이 필요 없다. 뒤이은 invalidate가 세션 수 같은 나머지 값을 서버 기준으로 맞춘다.
+    const deletedId = toDelete.id
+    queryClient.setQueryData<ClassCodeItem[]>(adminKeys.codes, prev =>
+      prev?.filter(c => c.id !== deletedId))
     setToDelete(null)
     await queryClient.invalidateQueries({ queryKey: adminKeys.codes })
   }
