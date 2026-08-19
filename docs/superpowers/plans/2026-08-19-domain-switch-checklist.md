@@ -20,6 +20,17 @@ Vercel → Settings → Environment Variables → Production
 ⚠️ `ADMIN_PASSWORD_HASH`는 **이스케이프 없는 원본 해시**를 넣는다(`$argon2id$v=19$…`).
 로컬 `.env.local`용 `\$` 버전을 붙이면 어떤 비밀번호로도 로그인이 안 된다 — README 배포 절 참고.
 
+⚠️ **`.env.local` 줄을 통째로 복사하지 말 것.** dotenv는 `주소@x.com  # 설명` 뒤의 주석을 떼지만
+**Vercel 대시보드는 안 뗀다** — 값에 주석이 그대로 들어간다. 한글 주석이 섞이면 Resend가
+`Invalid \`to\` field. The email address contains non-ASCII characters.`로 거부하고,
+신청은 201로 성공하므로 화면에는 아무 표시도 없다. 실제로 밟았다(2026-08-19, `MAIL_TO_OVERRIDE`).
+런타임 로그(`npx vercel logs <배포URL> --scope <팀>`)의 `[apply] 관리자 알림 메일 실패`가 유일한 단서다.
+
+⚠️ **환경변수는 기존 배포에 소급 적용되지 않는다.** 값은 배포 시점에 그 배포에 박히므로,
+등록·수정한 뒤 **반드시 재배포**해야 돌고 있는 함수가 그 값을 본다. 재배포 전에는
+`ADMIN_NOTIFY_EMAIL`이 빈 값이라 알림 메일 블록을 통째로 건너뛰고 **로그에 실패 기록조차 남지 않는다**
+(2026-08-19에 이걸로 "메일이 하나도 안 온다"를 한참 쫓았다).
+
 ### 이 상태에서 실제로 일어나는 일
 
 - 교사가 `/apply`로 신청 → 관리자에게 알림 메일 **옴**
