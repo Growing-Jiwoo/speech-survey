@@ -33,6 +33,14 @@ html, body {
   overscroll-behavior-y: none;
 }
 
+/* 확인 모달이 열릴 때 ConfirmDialog가 body 스크롤을 잠근다(overflow:hidden). 그러면 세로
+   스크롤바가 사라져 화면 폭이 스크롤바 너비만큼 늘었다가 닫을 때 되돌아왔다 — 삭제 확인처럼
+   모달을 여닫는 곳마다 화면이 가로로 튀었다(사용자 보고 2026-08-19). 스크롤바 자리를 항상
+   비워 두면 잠금이 폭을 바꾸지 않는다. 검사 중 제출 모달에도 같이 걸리는 문제였다. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-ink);
