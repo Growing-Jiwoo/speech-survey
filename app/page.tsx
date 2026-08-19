@@ -318,7 +318,10 @@ export default function StartPage() {
                 // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
                 label: `${r.childNo}번 ${r.name} (${r.gender})${r.tested ? ' · 검사함' : ''}`,
               }))} />
-            <button type="button" onClick={() => setStep('direct')}
+            {/* 명단에서 고른 아동과 직접 입력할 아동은 서로 다른 아이다 — 코드 수정 때와 같은
+                이유로 보호자 동의 체크를 함께 푼다(위 onChange 주석 참고). 안 풀면 명단 아동으로
+                받은 체크가 다른 아동에게 그대로 승계돼 동의서 없는 아이의 검사가 시작될 수 있다. */}
+            <button type="button" onClick={() => { setStep('direct'); setPick(''); setConsent(false) }}
               className="mt-2.5 text-[13px] font-bold text-blue underline underline-offset-2">
               명단에 없는 학생이에요
             </button>
@@ -381,7 +384,7 @@ export default function StartPage() {
                 날아간다(코드는 세션 생성 성공 때만 기억된다). 「고르기」쪽이 정상 경로이므로
                 되돌리기가 아니라 그 이름으로 적는다. */}
             {roster.length > 0 && (
-              <button type="button" onClick={() => setStep('roster')}
+              <button type="button" onClick={() => { setStep('roster'); setConsent(false) }}
                 className="mt-4 text-[13px] font-bold text-blue underline underline-offset-2">
                 명단에서 고르기
               </button>
