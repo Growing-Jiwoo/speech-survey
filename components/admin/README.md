@@ -1,8 +1,13 @@
 # components/admin/ — 관리자(채점자) 화면 컴포넌트
 
 교사·연구자가 세션을 훑고 녹음을 청취해 채점하는 화면. **필터·정렬 상태의 단일 소스는
-URL searchParams**(딥링크·뒤로가기 복원 가능)이고, 데이터는 react-query로 캐싱된다
-(`hooks/useAdminQueries.ts`).
+URL searchParams**이고, 데이터는 react-query로 캐싱된다(`hooks/useAdminQueries.ts`).
+
+필터·정렬은 **딥링크·새로고침·결과지 왕복(`?back=`)에서 보존**된다. 다만 필터를 바꾸는
+행위 자체는 히스토리에 쌓지 않으므로 **뒤로가기로 직전 필터로 되돌아가지는 않는다** —
+`AdminDashboard`가 `router.push`가 아니라 `replace`를 쓰기 때문이고, 검색창이 250ms
+디바운스라 push로 두면 타이핑 한 번에 이력이 수십 개 쌓여 뒤로가기가 못 쓰게 된다
+(의도된 트레이드오프 · E2E 2026-08-20에 문구가 실제 동작보다 넓다는 것이 확인돼 정정).
 
 | 파일 | 역할 |
 |---|---|
