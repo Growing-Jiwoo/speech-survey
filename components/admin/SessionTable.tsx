@@ -169,38 +169,50 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   // 페이지 안의 독립된 창이 아니므로, 스크롤도 페이지 하나만 갖는다.
   //
   // scrollMargin: window 가상화는 문서 최상단을 원점으로 계산하므로, 표가 문서에서
-  // 시작하는 위치를 알려 줘야 한다. 빠뜨리면 필터·통계 카드 높이만큼 행이 어긋난다.
+  // 시작하는 y를 알려 줘야 한다. 틀리거나 낡으면 **어느 인덱스 구간을 그릴지**가 필터·통계
+  // 카드 높이만큼 밀려 뷰포트에 빈 띠가 생긴다(행 자체의 위치는 아래 start - scrollMargin
+  // 상쇄가 잡아 주므로 어긋나지 않는다 — 증상은 "행이 밀림"이 아니라 "행이 없음"이다).
   const listRef = useRef<HTMLDivElement>(null)
   const modelRows = table.getRowModel().rows
-  // scrollMargin은 렌더 중 ref를 읽는다 — react-hooks가 이를 지적하지만 v8에서는 뜨지 않았다.
-  // 플러그인이 v8의 `useReactTable`을 "메모이제이션 불가"로 등록해 두어 이 컴포넌트 분석 자체가
-  // 중단됐고, 그래서 이 지적도 함께 묻혀 있었다(v9의 `useTable`은 목록에 없어 분석이 살아났다).
-  // 즉 마이그레이션이 만든 결함이 아니라 원래 있던 것이 드러난 것이다. 대안인 state+layout
-  // effect는 첫 프레임의 행 위치를 어긋나게 할 수 있어(아래 toolbarH 주석의 실측 근거와 같은
-  // 함정) 이 마이그레이션 범위에서는 손대지 않고 억제만 한다 — 별도 과제로 남긴다.
+
+  // 이 y는 **렌더 중 ref를 읽지 않고**(옛 `listRef.current?.offsetTop ?? 0`) 실측 상태로 든다.
+  // 렌더 중 레이아웃 읽기(react-hooks/refs)는 값의 갱신 시점을 "누가 리렌더를 일으키나"에
+  // 맡기는 것이어서, 실제로 이 표의 가상화는 우연에 얹혀 있었다 — 첫 렌더에는 0이고, 아래
+  // toolbarH useLayoutEffect가 일으키는 리렌더에서야 실제 y가 들어왔다. 그 effect를
+  // "정리"하면 scrollMargin이 0으로 남는 구조였다. (v8에서 이 지적이 안 뜬 것은 플러그인이
+  // v8 `useReactTable`을 "메모이제이션 불가"로 등록해 컴포넌트 분석 자체를 중단했기 때문이고,
+  // v9 `useTable`은 그 목록에 없어 분석이 살아나며 드러났다 — 마이그레이션이 만든 결함이 아니다.)
   //
-  // 지금은 lint 전용 신호다 — next.config.ts에 experimental.reactCompiler가 없어 이 저장소
-  // 빌드에서는 React Compiler 자체가 꺼져 있다(다음 사람이 긴급도를 매길 때 필요한 사실).
+  // 관찰 대상이 표 자신이 아니라 **document.body**인 이유: 표를 위아래로 미는 변화는 셋 다
+  // 문서의 크기를 바꾼다 — ① 툴바 flex-wrap 재접힘(좁은 폭) ② 위쪽 카드(KPI·학교별) 높이
+  // 변화 ③ 창 리사이즈(body 폭이 곧 뷰포트 폭). 표 자신에 RO를 붙여서는 못 잡는다 —
+  // RO는 **크기** 변화만 보고, 요소가 위쪽 변화로 밀려 내려간 것(위치 변화)은 알려 주지 않는다.
   //
-  // 가상화는 우연에 얹혀 있다 — scrollMargin이 0이 아닌 값을 갖는 유일한 계기는 아래 toolbarH
-  // useLayoutEffect가 일으키는 리렌더다. 그 effect를 "정리"하면 scrollMargin이 0으로 남아
-  // 가상 행 구간 선택이 어긋난다(행 위치가 아니라 **어느 인덱스를 그릴지**가 밀려
-  // 뷰포트에 빈 띠가 생긴다).
+  // 첫 값은 옵저버를 기다리지 않고 직접 1회 실측한다(아래 toolbarH와 같은 이유): 0으로 시작하면
+  // 그 프레임에서 그릴 인덱스 구간이 밀려 빈 띠가 보인다. layout effect의 setState는 paint 전에
+  // 동기 리렌더를 일으키므로 이 실측이 화면에서 점프로 보이지는 않는다.
   //
-  // 후속 과제(추적용 세션 칩 id는 이 저장소에서 해석할 수 없어 내용을 여기 남긴다): 렌더 중
-  // listRef.current?.offsetTop 읽기를 effect/상태로 옮기는 것이 정식 수정이며, offsetTop이
-  // offsetParent 기준이라 조상에 relative가 붙으면 조용히 틀려지는 문제도 같이 봐야 한다.
-  //
-  // 지시문이 두 줄인 이유: 플러그인이 "ref 읽기" 자체와 "그 값을 넘겨받는 훅 호출"을 별개
-  // 진단으로 낸다 — next-line은 줄 단위라 둘 다 짚어야 사라진다. 그래도 count·estimateSize·
-  // overscan에는 걸리지 않으니, 옛 6줄 블록 억제보다는 여전히 좁다.
-  // eslint-disable-next-line react-hooks/refs
+  // 주의: offsetTop은 **offsetParent 기준**이다. 지금은 표의 조상(main·카드 div·body) 중
+  // positioned 요소가 없어 offsetParent가 body = 문서 y와 같지만, 조상에 `relative`가 붙으면
+  // 조용히 그 조상 기준으로 바뀐다.
+  const [listTop, setListTop] = useState(0)
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const measure = () => setListTop(el.offsetTop)
+    measure()
+    // 같은 값을 setState하면 React가 리렌더를 생략하므로(bail out) 옵저버 루프가 되지 않는다.
+    const ro = new ResizeObserver(measure)
+    ro.observe(document.body)
+    return () => ro.disconnect()
+  }, [])
+
   const rowVirtualizer = useWindowVirtualizer({
     count: modelRows.length,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
-    // eslint-disable-next-line react-hooks/refs
-    scrollMargin: listRef.current?.offsetTop ?? 0,
+    // options는 렌더에서 그대로 반영된다 — 실측값이 바뀌면 리렌더가 일어나고 여기에 들어온다.
+    scrollMargin: listTop,
   })
   // 필터 툴바와 표 헤더를 **둘 다** 화면 상단에 붙인다. 목록이 길어지면 아래로 내려간 상태에서
   // 검색·필터를 쓰려고 매번 맨 위로 올라가야 했고, 열 이름만 붙어 있으면 지금 어떤 필터가
