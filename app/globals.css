@@ -74,6 +74,10 @@ button, a, label {
   outline: 3px solid color-mix(in srgb, var(--color-blue) 55%, transparent);
   outline-offset: 2px;
 }
+/* 입체 버튼(.cta·.btn-primary·.btn-danger)은 `0 3px 0`으로 아래쪽에 두께를 그린다.
+ * 기본 offset 2px은 그 두께보다 얇아 링이 버튼 몸통에 파묻힌 것처럼 보였다 —
+ * 두께(3px)를 넘겨 띄워야 링이 버튼 바깥의 테두리로 읽힌다(사용자 보고 2026-08-21). */
+:where(.cta, .btn-primary, .btn-danger):focus-visible { outline-offset: 5px; }
 
 /* 제시 낱말·문장용: 길게 눌러도 텍스트 선택·iOS 콜아웃(복사 메뉴)이 뜨지 않게 */
 .no-select-callout {

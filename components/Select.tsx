@@ -3,7 +3,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export interface SelectOption { value: string; label: string }
+export interface SelectOption {
+  value: string
+  label: string
+  /** 라벨 뒤에 붙는 작은 표식(예: 「검사함」). 라벨 문자열에 ' · 검사함'처럼 이어 붙이면
+   *  같은 크기·같은 색이라 긴 라벨 끝에 묻혀 눈에 걸리지 않는다 — 배지로 분리해 대비를 준다
+   *  (사용자 확정 2026-08-21). 트리거(선택된 값)에도 같이 나타난다. */
+  badge?: string
+}
 
 // 목록 최대 높이(max-h-56 = 224px)와 옵션당 추정 높이 — 아래 공간이 부족하면 위로 펼치기 위한 계산용
 const MAX_LIST_H = 224
@@ -129,7 +136,10 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
         disabled={disabled} onClick={() => (isOpen ? setOpen(false) : openList())} onKeyDown={onTriggerKeyDown}
         className={`flex w-full items-center justify-between rounded-xl border-[1.5px] bg-well transition disabled:opacity-50 ${trigger} ${
           isOpen ? 'border-blue' : 'border-line'}`}>
-        <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>{selected ? selected.label : placeholder}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>{selected ? selected.label : placeholder}</span>
+          {selected?.badge && <Badge text={selected.badge} />}
+        </span>
         <svg className={`ml-2 h-4 w-4 flex-none text-ink-mute transition-transform ${isOpen ? 'rotate-180' : ''}`}
           viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -144,14 +154,25 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
             <li key={o.value} id={optionId(i)} role="option" aria-selected={o.value === value}
               onPointerEnter={() => setActive(i)}
               onClick={() => choose(i)}
-              className={`cursor-pointer px-4 py-2.5 text-left text-sm ${i === active ? 'bg-well' : ''} ${
-                o.value === value ? 'font-bold text-blue' : 'text-ink'}`}>
-              {o.label}
+              className={`flex cursor-pointer items-center gap-1.5 px-4 py-2.5 text-left text-sm ${
+                i === active ? 'bg-well' : ''} ${o.value === value ? 'font-bold text-blue' : 'text-ink'}`}>
+              <span className="min-w-0 truncate">{o.label}</span>
+              {o.badge && <Badge text={o.badge} />}
             </li>
           ))}
         </ul>,
         document.body,
       )}
     </div>
+  )
+}
+
+/** 옵션 뒤에 붙는 작은 표식. 라벨과 같은 흐름에 두되 배경·색으로 대비를 줘,
+ *  긴 라벨 끝에서도 눈에 걸리게 한다(SelectOption.badge 주석 참고). */
+function Badge({ text }: { text: string }) {
+  return (
+    <span className="flex-none rounded-full bg-amber/15 px-1.5 py-0.5 text-[11px] font-bold text-amber">
+      {text}
+    </span>
   )
 }

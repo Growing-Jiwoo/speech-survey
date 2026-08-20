@@ -72,12 +72,13 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
             마이크가 잘 인식됐어요!
           </>
         ) : micOk === 'quiet'
-          ? '목소리가 잘 안 들려요. 마이크 가까이에서 다시 한번 해 주세요.'
+          ? <>목소리가 잘 안 들려요.<br />마이크 가까이에서 다시 한번 해 주세요.</>
           : '목소리가 들리면 막대가 움직여요.'}
       </p>
       <div className="mt-auto w-full pb-2 lg:mt-10 lg:max-w-md lg:pb-0">
-        {/* 아동용 쉬운 고지(개인정보보호법 제22조의2 제3항) — 검사(녹음) 시작 직전에 보여준다 */}
-        <p className="mb-3 text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
+        {/* 아동용 쉬운 고지(개인정보보호법 제22조의2 제3항) — 검사(녹음) 시작 직전에 보여준다.
+            문구가 `\n`으로 두 문장을 나눠 오므로 pre-line으로 그 줄바꿈을 살린다(lib/consent.ts). */}
+        <p className="mb-3 whitespace-pre-line text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
       </div>
     </main>
