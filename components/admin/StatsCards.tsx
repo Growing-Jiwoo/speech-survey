@@ -8,7 +8,7 @@ export function StatsCards({ kpis, activeStatus, activeToday, onSelect }: {
   kpis: Kpis; activeStatus: StatusFilter; activeToday: boolean; onSelect: (kind: KpiKind) => void
 }) {
   const cards: { kind: KpiKind; label: string; value: number; on: boolean }[] = [
-    { kind: 'total', label: '전체 세션', value: kpis.total, on: activeStatus === 'all' && !activeToday },
+    { kind: 'total', label: '전체 검사', value: kpis.total, on: activeStatus === 'all' && !activeToday },
     { kind: 'submitted', label: '제출 완료', value: kpis.submitted, on: activeStatus === 'submitted' },
     { kind: 'inProgress', label: '진행 중', value: kpis.inProgress, on: activeStatus === 'inProgress' },
     { kind: 'today', label: '오늘 참여', value: kpis.today, on: activeToday },

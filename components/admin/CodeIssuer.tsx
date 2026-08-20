@@ -93,7 +93,7 @@ export function CodeIssuer() {
         </div>
         <Link href="/admin"
           className="ml-auto rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
-          ← 세션 목록
+          ← 검사 목록
         </Link>
       </div>
 
@@ -176,7 +176,7 @@ export function CodeIssuer() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-mute">
-                {['코드', '학교', '학년/반', '담임', '연락처', '발급일', '세션', ''].map(h => (
+                {['코드', '학교', '학년/반', '담임', '연락처', '발급일', '검사 수', ''].map(h => (
                   <th key={h} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{h}</th>
                 ))}
               </tr>

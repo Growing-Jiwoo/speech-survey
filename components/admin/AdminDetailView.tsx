@@ -84,7 +84,7 @@ export function AdminDetailView() {
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
         <p className="text-sm text-ink-soft">
-          {notFound ? '이 세션을 찾을 수 없어요. 이미 삭제되었을 수 있어요.' : '결과지를 불러오지 못했어요.'}
+          {notFound ? '이 검사 기록을 찾을 수 없어요. 이미 삭제되었을 수 있어요.' : '결과지를 불러오지 못했어요.'}
         </p>
         {/* 없는 세션은 재시도해도 달라지지 않는다 — 목록으로 돌아가는 길만 남긴다. */}
         {!notFound && (
@@ -120,7 +120,7 @@ export function AdminDetailView() {
         <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
         {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다.
             [정보 수정]도 여기 둔다 — 결과지 본문은 검사지를 재현하는 영역이라 편집 컨트롤을
-            섞지 않고, [세션 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
+            섞지 않고, [검사 기록 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <span className="kpi">녹음 <b>{recordedCount} / {expected.rec}</b></span>
           <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {expected.write}</b></span>
@@ -159,11 +159,11 @@ export function AdminDetailView() {
         </div>
 
         {/* 파괴적 동작은 내비와 **다른 줄**에 두고 경계선으로 끊는다 — 하단 내비가 생기면서
-            [다음 아동]과 [세션 삭제]가 가까워졌기 때문에, 종전보다 간격을 더 벌린다. */}
+            [다음 아동]과 [검사 기록 삭제]가 가까워졌기 때문에, 종전보다 간격을 더 벌린다. */}
         <div className="mt-6 flex justify-end border-t border-line pt-4 print:hidden">
           <button type="button" onClick={() => setDelModal(true)}
             className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-3 py-1.5 text-xs font-bold text-rec-deep transition hover:border-rec">
-            세션 삭제
+            검사 기록 삭제
           </button>
         </div>
 
@@ -196,7 +196,7 @@ export function AdminDetailView() {
         </ConfirmDialog>
 
         <ConfirmDialog open={delModal} busy={deleting} error={delErr} danger
-          title="이 세션을 삭제할까요?"
+          title="이 검사 기록을 삭제할까요?"
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
