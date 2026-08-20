@@ -94,7 +94,10 @@ button, a, label {
   display: flex; height: 54px; width: 100%; align-items: center; justify-content: center;
   border-radius: 15px; background: var(--color-blue);
   font-size: 16px; font-weight: 700; color: #fff;
-  box-shadow: 0 3px 0 var(--color-blue-deep), 0 12px 20px -10px rgb(30 79 204 / .45);
+  /* 확산 그림자는 변수로 빼 둔다 — 포커스 규칙이 3D 두께만 접고 이 그림자는 유지하는데,
+     값을 두 곳에 적으면 한쪽만 고쳐져 포커스할 때 버튼이 미묘하게 달라 보인다. */
+  --cta-glow: 0 12px 20px -10px rgb(30 79 204 / .45);
+  box-shadow: 0 3px 0 var(--color-blue-deep), var(--cta-glow);
   transition: transform .08s, box-shadow .08s, opacity .15s;
 }
 .cta:hover:not(:disabled) { box-shadow: 0 3px 0 var(--color-blue-deep), 0 16px 26px -10px rgb(30 79 204 / .55); }
@@ -142,9 +145,12 @@ button, a, label {
  * ⚠️ 위치와 명시도를 함께 지킬 것: (a) `:where()`로 감싸면 명시도가 0이 되어 위 스킨 규칙에
  * 밀린다, (b) `:hover:not(:disabled)`가 (0,3,0)이므로 같은 (0,3,0)으로 맞추고 **그 뒤에**
  * 두어야 이긴다. 앞쪽 전역 포커스 블록으로 옮기면 조용히 무효가 된다. */
-.cta:focus-visible:not(:disabled),
 .btn-primary:focus-visible:not(:disabled),
 .btn-danger:focus-visible:not(:disabled) { box-shadow: none; }
+/* .cta는 3D 두께 외에 부드러운 확산 그림자도 갖는다. 그것까지 지우면 버튼이 카드 위로
+ * 떠 있던 느낌이 사라져 포커스할 때 오히려 가라앉아 보인다 — 두께만 접고 확산은 남긴다.
+ * 확산은 blur라 뚜렷한 경계를 만들지 않아 링과 겹쳐 보이지 않는다. */
+.cta:focus-visible:not(:disabled) { box-shadow: var(--cta-glow); }
 
 @keyframes blip-blink { 0%, 93%, 100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
 @keyframes blip-antp { 0%, 100% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.28); opacity: .85 } }
