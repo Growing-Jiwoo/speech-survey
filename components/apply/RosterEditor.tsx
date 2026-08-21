@@ -11,11 +11,20 @@ import {
   type RosterCells, type RosterChild,
 } from '@/lib/roster'
 import { readXlsx } from '@/lib/xlsx'
+import { Select, type SelectOption } from '@/components/Select'
 
 /** 읽을 수 없는 파일 전부에 같은 문구를 쓴다 — 확장자가 틀린 경우와 내용이 깨진 경우를
  *  나눠 안내해도 교사가 할 일은 하나뿐이다(엑셀로 다시 저장). Numbers·한셀 같은 앱별
  *  판별은 넣지 않는다(사용자 확정 2026-08-18: 교사 현장은 윈도우). */
 const FILE_ERR = '엑셀 파일(.xlsx)로 저장해서 올려 주세요.'
+
+/** 빈 값을 고를 수 있어야 한다 — 파일에서 성별이 안 읽힌 줄을 교사가 일단 비워 두고
+ *  나머지를 채우는 흐름을 막지 않기 위함(빈 줄은 「확인 필요」로 이미 붉게 표시된다). */
+const GENDER_OPTIONS: SelectOption[] = [
+  { value: '', label: '—' },
+  { value: '남', label: '남' },
+  { value: '여', label: '여' },
+]
 
 const cellCls = 'h-10 w-full rounded-lg border-[1.5px] bg-well px-2.5 text-[14px] outline-none transition focus:bg-white'
 const okCls = 'border-line focus:border-blue'
@@ -221,14 +230,14 @@ export function RosterEditor({ onChange }: {
                           className={`${cellCls} w-28 ${has('이름') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1">
-                        {/* 성별은 select — 잘못된 값을 타이핑할 길 자체를 없앤다 */}
-                        <select value={r.gender} aria-label={`${i + 1}번째 줄 성별`} aria-invalid={has('성별')}
-                          onChange={e => patch(r.id, { gender: e.target.value })}
-                          className={`${cellCls} w-20 ${has('성별') ? badCls : okCls}`}>
-                          <option value="">—</option>
-                          <option value="남">남</option>
-                          <option value="여">여</option>
-                        </select>
+                        {/* 성별은 드롭다운 — 잘못된 값을 타이핑할 길 자체를 없앤다. 네이티브
+                            select가 아니라 앱의 Select를 쓰는 이유는 이 화면의 학교·학년·반이
+                            이미 그것이고, 한 폼에서 같은 역할의 칸이 OS 기본 모양과 앱 모양으로
+                            갈리면 그 칸만 남의 것처럼 보이기 때문이다(사용자 지적 2026-08-22). */}
+                        <Select size="grid" className="w-20" placeholder="—"
+                          ariaLabel={`${i + 1}번째 줄 성별`} ariaInvalid={has('성별')}
+                          value={r.gender} options={GENDER_OPTIONS}
+                          onChange={v => patch(r.id, { gender: v })} />
                       </td>
                       <td className="px-1 py-1">
                         <input type={iso ? 'date' : 'text'} value={iso ?? r.birth}

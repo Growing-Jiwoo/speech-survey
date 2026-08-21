@@ -35,8 +35,9 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
   ariaInvalid?: boolean
   disabled?: boolean
   className?: string
-  /** 'lg'(기본, 검사 화면용 큰 터치 타깃) | 'sm'(관리자 툴바 등 밀도 높은 화면용) */
-  size?: 'lg' | 'sm'
+  /** 'lg'(기본, 검사 화면용 큰 터치 타깃) | 'sm'(관리자 툴바 등 밀도 높은 화면용)
+   *  | 'grid'(표 한 칸 — 옆 input과 높이·모서리를 맞춘다) */
+  size?: 'lg' | 'sm' | 'grid'
 }) {
   const [open, setOpen] = useState(false)
   // 키보드 하이라이트 위치(마우스 hover와 공유). 목록을 열 때 현재 선택값으로 초기화된다.
@@ -124,7 +125,19 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
   }, [isOpen, options.length])
 
   const selected = selectedIdx >= 0 ? options[selectedIdx] : undefined
-  const trigger = size === 'sm' ? 'h-9 px-2.5 text-xs' : 'h-[50px] px-4 text-base'
+  // 'grid'는 표 안의 한 칸이라 옆 input(h-10 · rounded-lg · text-[14px])과 정확히 같은
+  // 치수를 쓴다 — 한 줄에 나란히 서는 칸끼리 높이·모서리가 다르면 그 줄이 어긋나 보인다.
+  const trigger = size === 'sm' ? 'h-9 rounded-xl px-2.5 text-xs'
+    : size === 'grid' ? 'h-10 rounded-lg px-2.5 text-[14px]'
+    : 'h-[50px] rounded-xl px-4 text-base'
+  // 오류 표시는 호출부가 className으로 못 준다 — Tailwind 클래스는 특이도가 같아 순서로
+  // 이기지 못한다(속성 안 뒤쪽이 아니라 스타일시트 뒤쪽이 이긴다). 그래서 여기서 판단한다.
+  // 오류일 때도 배경은 bg-well이다 — 옆 input의 badCls가 bg-rec/5를 적고 있지만 cellCls의
+  // bg-well에 밀려(같은 특이도, 스타일시트 순서) 실제로는 well로 그려진다. 여기서 붉은 기를
+  // 넣으면 같은 줄에서 성별 칸만 분홍이 된다.
+  const tone = ariaInvalid
+    ? 'border-rec bg-well'
+    : isOpen ? 'border-blue bg-well' : 'border-line bg-well'
   const optionId = (i: number) => `${listboxId}-opt-${i}`
 
   return (
@@ -134,8 +147,7 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
         role="combobox" aria-haspopup="listbox" aria-expanded={isOpen} aria-controls={listboxId}
         aria-activedescendant={isOpen && active >= 0 ? optionId(active) : undefined}
         disabled={disabled} onClick={() => (isOpen ? setOpen(false) : openList())} onKeyDown={onTriggerKeyDown}
-        className={`flex w-full items-center justify-between rounded-xl border-[1.5px] bg-well transition disabled:opacity-50 ${trigger} ${
-          isOpen ? 'border-blue' : 'border-line'}`}>
+        className={`flex w-full items-center justify-between border-[1.5px] transition disabled:opacity-50 ${trigger} ${tone}`}>
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>{selected ? selected.label : placeholder}</span>
           {selected?.badge && <Badge text={selected.badge} />}
