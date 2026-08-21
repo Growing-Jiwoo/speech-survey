@@ -126,10 +126,12 @@ export default function ApplyPage() {
           <input id="ap-teacher" value={teacherName} maxLength={30}
             onChange={e => setTeacherName(e.target.value)} className={inputCls} />
           <label className={labelCls} htmlFor="ap-email">승인 안내를 받을 이메일 (필수)</label>
-          <input id="ap-email" value={email} maxLength={60} inputMode="email" placeholder="teacher@school.kr"
+          <input id="ap-email" value={email} maxLength={60} inputMode="email" placeholder="name@example.com"
             onChange={e => setEmail(e.target.value)} className={inputCls} />
           <p className="mt-1.5 text-[12px] leading-relaxed text-ink-mute">
-            학급 코드는 이 주소로만 보내드려요. 학교 메일 주소를 적어 주세요.
+            {/* "학교 메일"로 못 박지 않는다 — 개인 메일을 쓰는 교사도 있고, 승인 메일이 코드가
+                닿는 유일한 경로라 받을 수 있는 주소가 맞다(사용자 확정 2026-08-21). */}
+            학급 코드는 이 주소로만 보내드려요.<br />메일을 받을 수 있는 주소를 적어 주세요.
           </p>
           <label className={labelCls} htmlFor="ap-phone">연락처 (선택)</label>
           <input id="ap-phone" value={phone} maxLength={60} inputMode="tel" placeholder="01012345678"

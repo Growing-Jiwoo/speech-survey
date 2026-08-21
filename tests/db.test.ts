@@ -108,38 +108,67 @@ beforeEach(() => {
   storage.list.mockResolvedValue({ data: [], error: null })
 })
 
-describe('submitSession — 미제출 세션만 갱신하고 결과를 구분한다', () => {
-  it('업데이트 성공 + 낱말쓰기 있음 → writing_answers upsert 후 ok', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
+describe('submitSession — 쓰기 답을 먼저 넣고 submitted_at을 마지막에 확정한다', () => {
+  /** 선행 상태 조회(sessionState) 응답 — 모든 케이스가 이걸 먼저 소비한다 */
+  const openSession = () => enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+
+  it('낱말쓰기 있음 → writing_answers upsert 뒤 sessions 확정 순서로 ok', async () => {
+    openSession()
     enqueue('writing_answers', { error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
     const result = await submit({ writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'] })
     expect(result).toBe('ok')
+    // 확정(sessions 두 번째)이 답 저장보다 **뒤**여야 한다 — 순서가 이 함수의 요점이다
+    expect(fromCalls).toEqual(['sessions', 'writing_answers', 'sessions'])
+  })
+
+  it('문장쓰기(G2)도 확정보다 먼저 저장된다', async () => {
+    openSession()
+    enqueue('sentence_scores', { error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ sentenceWriting: [{ itemCode: 'sw01', words: 2 }] })).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sentence_scores', 'sessions'])
+  })
+
+  it('쓰기 답이 비어 있으면 답 테이블을 건드리지 않는다', async () => {
+    openSession()
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({})).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sessions'])
+  })
+
+  it('[REGRESSION] 쓰기 답 저장이 실패하면 submitted_at을 확정하지 않는다 — 재시도가 409로 막히면 그 점수는 영구 유실이다', async () => {
+    openSession()
+    enqueue('writing_answers', { error: { message: 'duplicate key' } })
+    await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
+    // sessions 확정 호출이 일어나지 않았어야 한다(선행 조회 1회뿐)
     expect(fromCalls).toEqual(['sessions', 'writing_answers'])
   })
 
-  it('낱말쓰기가 비어 있으면 writing_answers를 건드리지 않는다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    const result = await submit({})
-    expect(result).toBe('ok')
-    expect(fromCalls).toEqual(['sessions'])
+  it('이미 제출된 세션은 답을 덮어쓰지 않고 already_submitted (409 신호)', async () => {
+    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z', grade: 1 }, error: null })
+    expect(await submit({ writing: [{ itemCode: 'ww01', canWrite: true }] })).toBe('already_submitted')
+    expect(fromCalls).toEqual(['sessions'])   // 제출 잠금 — 쓰기 테이블에 손대지 않는다
   })
 
-  it('업데이트 0건 + 세션이 이미 제출됨 → already_submitted (409 신호)', async () => {
-    enqueue('sessions', { data: [], error: null })                                  // update … is('submitted_at', null)
-    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null }) // 상태 재조회
+  it('미존재 세션은 답을 넣지 않고 not_found (404 신호)', async () => {
+    enqueue('sessions', { data: null, error: null })
+    expect(await submit({ writing: [{ itemCode: 'ww01', canWrite: true }] })).toBe('not_found')
+    expect(fromCalls).toEqual(['sessions'])   // FK 위반으로 던지는 대신 404를 준다
+  })
+
+  it('확정 직전에 다른 기기가 제출하면(0건) 상태를 다시 읽어 already_submitted', async () => {
+    openSession()
+    enqueue('sessions', { data: [], error: null })                                       // 확정 0건
+    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null })  // 재조회
     expect(await submit({})).toBe('already_submitted')
   })
 
-  it('업데이트 0건 + 세션 미존재 → not_found (404 신호)', async () => {
+  it('확정 직전에 세션이 삭제되면(0건) not_found', async () => {
+    openSession()
     enqueue('sessions', { data: [], error: null })
     enqueue('sessions', { data: null, error: null })
     expect(await submit({})).toBe('not_found')
-  })
-
-  it('낱말쓰기 upsert 실패는 예외로 전파된다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    enqueue('writing_answers', { error: { message: 'duplicate key' } })
-    await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
   })
 })
 
@@ -533,6 +562,53 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     expect(consentedAt).toBeGreaterThanOrEqual(before)
     expect(consentedAt).toBeLessThanOrEqual(Date.now())
   })
+  it('idemKey를 주면 idem_key 컬럼으로 실린다', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    await createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })
+    const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect(row.idem_key).toBe('key-1')
+  })
+
+  it('idemKey가 없으면 idem_key 컬럼을 아예 보내지 않는다 (null 행이 unique를 다투지 않게)', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    await createSession({
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+    })
+    const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect('idem_key' in row).toBe(false)
+  })
+
+  it('[REGRESSION] 같은 idemKey로 두 번째 요청이 오면 새 행을 만들지 않고 첫 세션 id를 돌려준다', async () => {
+    // insert가 unique 충돌(23505) → 같은 키의 기존 행을 조회해 그 id를 반환해야 한다
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'duplicate key value' } })
+    enqueue('sessions', { data: { id: 'first-session' }, error: null })
+    const id = await createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })
+    expect(id).toBe('first-session')
+    expect(fromCalls).toEqual(['sessions', 'sessions'])   // insert 시도 1 + 조회 1
+  })
+
+  it('[REGRESSION] 23505인데 그 키의 행이 없으면 삼키지 않고 던진다 — 다른 unique 제약이 깨진 것이다', async () => {
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'sessions_pkey 위반' } })
+    enqueue('sessions', { data: null, error: null })   // 조회 결과 없음
+    await expect(createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })).rejects.toThrow('sessions_pkey 위반')
+  })
+
+  it('idemKey가 없으면 23505도 그대로 던진다 (멱등 해석 대상이 아니다)', async () => {
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'duplicate key value' } })
+    await expect(createSession({
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+    })).rejects.toThrow('duplicate key value')
+  })
+
 })
 
 const RS = ['rs01', 'rs02', 'rs03', 'rs04']

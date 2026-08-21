@@ -77,6 +77,17 @@ button, a, label {
 /* 입체 버튼의 포커스 링 처리는 버튼 스킨 정의 뒤(.btn-danger 아래)에 있다 —
  * 여기 두면 `.btn-primary`·`.btn-primary:hover`의 box-shadow에 밀린다. */
 
+/* 결과지의 채점 컨트롤 — 위(그룹 플레이어)·아래(저장 줄) sticky 바가 키보드 포커스를
+ * 가리지 않도록 스크롤 여백을 준다. 브라우저는 "화면 안에 있다"고 보면 스크롤하지 않으므로,
+ * 바에 덮인 자리도 그대로 뒀다(E2E 2026-08-20 항목 5.18). 두 값은 각 바가 자기 높이를
+ * 실측해 CSS 변수로 넘긴다(WordScoreRows·ResultSheet) — 좁은 폭에서 바가 두 줄이 되므로
+ * 상수로 박으면 그 순간 다시 가려진다. 바가 없는 구역은 변수가 없어 0으로 떨어진다.
+ * +8px는 바에 딱 붙지 않게 하는 여유다. */
+.result-sheet :where(button, input, select, a, [tabindex]) {
+  scroll-margin-top: calc(var(--sheet-top-bar, 0px) + 8px);
+  scroll-margin-bottom: calc(var(--sheet-bottom-bar, 0px) + 8px);
+}
+
 /* 제시 낱말·문장용: 길게 눌러도 텍스트 선택·iOS 콜아웃(복사 메뉴)이 뜨지 않게 */
 .no-select-callout {
   user-select: none;

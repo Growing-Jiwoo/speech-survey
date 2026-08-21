@@ -9,8 +9,22 @@ export interface NewSessionInput {
   classCode: ClassCodeRow
   childNo: number
   birthYmd: string; gender: '남' | '여'; childName: string
+  /** 멱등 키 — 확인 모달을 열 때 화면이 한 번 만든다. 연타·재전송은 같은 키로 오므로
+   *  두 번째부터는 새 행을 만들지 않고 첫 세션을 그대로 돌려준다(migration 004 주석).
+   *  키가 없는 호출(테스트 등)은 멱등 보장 없이 그냥 만든다. */
+  idemKey?: string
 }
 
+/**
+ * 검사 세션 생성. `idemKey`가 오면 **같은 키로는 세션이 하나만 만들어진다.**
+ *
+ * unique 충돌(23505)을 "이미 내가 만든 그 세션"으로 해석해 기존 행의 id를 돌려준다 —
+ * 먼저 조회해서 확인하는 방식은 쓰지 않는다: 조회~삽입 사이에 같은 키의 다른 요청이
+ * 끼면 둘 다 "없다"를 보고 두 세션을 만든다(`approveClassCode`가 같은 이유로 조회 대신
+ * 조건부 업데이트 한 방을 쓴다). 삽입을 먼저 던지고 충돌을 해석하는 쪽만 경쟁에 안전하다.
+ *
+ * 재검사는 막지 않는다 — 모달을 다시 열면 새 키가 나오므로 새 세션이 만들어진다.
+ */
 export async function createSession(s: NewSessionInput): Promise<string> {
   const c = s.classCode
   const { data, error } = await sb().from('sessions').insert({
@@ -22,7 +36,17 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
+    ...(s.idemKey ? { idem_key: s.idemKey } : {}),
   }).select('id').single()
+
+  if ((error as { code?: string } | null)?.code === '23505' && s.idemKey) {
+    // 같은 키로 이미 만들어진 세션이 있다 = 이 요청은 그 요청의 재시도다.
+    const { data: prev, error: e2 } = await sb().from('sessions')
+      .select('id').eq('idem_key', s.idemKey).maybeSingle()
+    fail(e2)
+    // 행이 없다면 idem_key가 아닌 다른 unique 제약이 깨진 것이다 — 삼키지 말고 던진다.
+    if (prev) return (prev as { id: string }).id
+  }
   fail(error)
   return data!.id
 }
@@ -58,21 +82,31 @@ export interface SubmitInput {
 }
 
 /**
- * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
- * 쓰기 답을 upsert한다.
+ * 최종 제출: 쓰기 답을 먼저 저장하고 **`submitted_at`을 마지막에** 확정한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
+ *
+ * ⚠️ 순서를 되돌리지 말 것. 예전에는 `submitted_at`을 먼저 확정하고 쓰기 답을 나중에
+ * 넣었는데, 그 사이에 일시 장애가 끼면 **쓰기 점수가 영구히 사라졌다**: 함수가 던져
+ * 라우트가 502를 주고, 검사자가 다시 [제출]을 누르면 세션이 이미 제출 상태라 409로
+ * 막힌다. 쓰기 채점(낱말 쓰기·문장 쓰기)은 녹음이 없어 **검사 중 검사자 입력이 유일한
+ * 채점 경로**이므로(README "문항 구성") 관리자 결과지에서 채울 수도 없다 — 10점 만점
+ * 과제가 기록에서 통째로 빈다. 검사자는 "제출 실패"와 "이미 제출됨"이 모순돼 갇힌다.
+ *
+ * 지금 순서에서는 확정이 실패해도 세션이 미제출로 남아 **재시도가 그대로 통과한다.**
+ * 쓰기 답 upsert는 `(session_id, item_code)` 멱등이라 두 번 들어가도 같은 결과다.
+ * (사용자 확정 2026-08-21 — 임상 규칙 아님, 실패 모드 비교에 따른 개발 판단)
  */
 export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
   const { sessionId, writing, sentenceWriting, checklist } = input
-  const now = new Date().toISOString()
-  const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: now })
-    .eq('id', sessionId).is('submitted_at', null).select('id')
-  fail(error)
-  if ((data ?? []).length === 0) {
-    const { state } = await sessionState(sessionId)
-    return state === 'submitted' ? 'already_submitted' : 'not_found'
-  }
+
+  // 쓰기 답보다 먼저 상태를 본다: 미존재 세션에 답을 넣으면 FK 위반으로 던져
+  // 404·409를 구분할 수 없고, 제출된 세션은 애초에 잠겨 있어야 한다.
+  // 라우트도 같은 조회를 한다(학년으로 문항 코드를 검증해야 하므로) — 중복이지만
+  // 한쪽을 지우지 말 것: 라우트 것은 검증용이고 이것은 쓰기 순서의 전제다.
+  const before = await sessionState(sessionId)
+  if (before.state === 'missing') return 'not_found'
+  if (before.state === 'submitted') return 'already_submitted'
+
   if (writing.length > 0) {
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
@@ -82,6 +116,17 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const rows = sentenceWriting.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
+  }
+
+  // `.is('submitted_at', null)`은 여기 남겨 둔다 — 위 상태 확인과 이 업데이트 사이에
+  // 다른 기기가 제출했을 때 재제출을 막는 것은 이 조건뿐이다(경쟁 조건의 최종 방어).
+  const { data, error } = await sb().from('sessions')
+    .update({ checklist, submitted_at: new Date().toISOString() })
+    .eq('id', sessionId).is('submitted_at', null).select('id')
+  fail(error)
+  if ((data ?? []).length === 0) {
+    const after = await sessionState(sessionId)
+    return after.state === 'submitted' ? 'already_submitted' : 'not_found'
   }
   return 'ok'
 }

@@ -128,7 +128,7 @@ export function CodeIssuer() {
           </div>
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-email">담임 이메일</label>
-            <input id="cc-email" value={email} maxLength={60} inputMode="email" placeholder="teacher@school.kr"
+            <input id="cc-email" value={email} maxLength={60} inputMode="email" placeholder="name@example.com"
               onChange={e => setEmail(e.target.value)} className={inputCls} />
           </div>
         </div>
