@@ -98,7 +98,7 @@ function sheetXml(): { xml: string; headerRow: number } {
   // 안내
   for (const g of GUIDE) {
     const st = g.warn ? S.warn : S.guide
-    rows.push(`<row r="${r}" ht="21" customHeight="1">${cell(r, 0, g.text, st)}${
+    rows.push(`<row r="${r}" ht="26" customHeight="1">${cell(r, 0, g.text, st)}${
       [1, 2, 3].map(i => blank(r, i, st)).join('')}</row>`)
     merges.push(`<mergeCell ref="A${r}:D${r}"/>`)
     r++
@@ -173,8 +173,11 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   + `<fonts count="5">`
     + font(11, C.ink)                    // 0 기본(데이터 칸)
     + font(15, C.white, true)            // 1 제목
-    + font(10, C.inkSoft)                // 2 안내
-    + font(10, C.amber, true)            // 3 안내(경고)
+    // 안내는 **데이터 칸보다 크고 굵게** 둔다. 10pt로 뒀더니 채워 넣는 칸(11pt)보다도
+    // 작아 눈에 걸리지 않았다(사용자 지적 2026-08-22) — 읽고 나서 적어야 하는 순서를
+    // 글자 크기가 거스르면 안 된다.
+    + font(12, C.ink, true)              // 2 안내
+    + font(12, C.amber, true)            // 3 안내(경고)
     + font(11, C.white, true)            // 4 머리글
   + `</fonts>`
   + `<fills count="5"><fill><patternFill patternType="none"/></fill>`
