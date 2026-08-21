@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "build:schools": "tsx scripts/build-schools.ts",
+    "build:roster-template": "tsx scripts/build-roster-template.ts",
     "hash-password": "tsx scripts/hash-password.ts"
   },
   "dependencies": {

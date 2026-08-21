@@ -42,7 +42,9 @@ export interface ParsedRoster {
   missingCols: string[]
 }
 
-const COL_LABEL = { childNo: '번호', name: '이름', gender: '성별', birthYmd: '생년월일' } as const
+/** 화면·오류 문구·**배포 양식**이 함께 쓰는 열 이름. 양식 생성 스크립트가 이 값을 가져가므로
+ *  여기를 고치면 `npm run build:roster-template`을 다시 돌려야 한다(테스트가 어긋남을 잡는다). */
+export const COL_LABEL = { childNo: '번호', name: '이름', gender: '성별', birthYmd: '생년월일' } as const
 
 /** 알려진 머리글 이름. 나이스 명렬표(반·번호·성명·성별·생년월일·비고)와 배포 양식이 이 이름을 쓴다. */
 const HEADERS: Record<keyof typeof COL_LABEL, string[]> = {
@@ -207,36 +209,6 @@ export function dupChildNos(rows: RosterCells[]): Set<number> {
     else seen.add(n)
   }
   return dup
-}
-
-/**
- * 교사에게 내려주는 빈 학급 명단 양식(CSV 본문).
- *
- * 왜 여기 있나: 머리글 이름을 `COL_LABEL`에서 그대로 가져와, 양식과 파서가 **어긋날 수
- * 없게** 한다. 정적 파일로 저장소에 두면 `HEADERS`를 고쳤을 때 양식만 옛 이름으로 남는다.
- *
- * 왜 CSV인가: 이 파서가 `.csv`를 1급으로 받고(`cutText`), 진짜 `.xlsx`는 ZIP 안에
- * `[Content_Types].xml`·`_rels`까지 조립해야 하는데 그것이 엑셀에서 실제로 열리는지는
- * 이 저장소에서 검증할 방법이 없다. 검증할 수 있는 형식을 준다(사용자 확정 2026-08-21).
- *
- * ⚠️ **어떤 칸에도 콤마를 넣지 말 것.** `cutText`는 따옴표를 해석하지 않고 콤마로만
- * 자르므로, 안내 문구에 콤마가 있으면 그 줄이 여러 칸으로 쪼개진다(테스트가 막는다).
- *
- * 안내 5줄 + 머리글 1줄이고 **데이터 줄은 비운다** — 예시 아동을 데이터 영역에 넣으면
- * 교사가 그대로 제출해 가짜 아동이 명단에 섞인다. 적는 방법은 안내 줄이 말한다.
- * (`HEAD_SCAN_ROWS`가 8이라 안내가 5줄까지 늘어도 머리글을 찾는다.)
- */
-export function rosterTemplateCsv(): string {
-  const 머리글 = [COL_LABEL.childNo, COL_LABEL.name, COL_LABEL.gender, COL_LABEL.birthYmd].join(',')
-  return [
-    '읽기 선별검사 · 학급 명단',
-    '보호자 서면 동의를 받은 학생만 적어 주세요.',
-    '아래 4개 열의 이름과 순서는 바꾸지 마세요. 줄 수는 필요한 만큼 늘려도 됩니다.',
-    '적는 방법 — 번호: 1 / 이름: 김서아 / 성별: 여 / 생년월일: 2019-03-04',
-    '주민등록번호는 넣지 마세요. 넣어도 저장되지 않습니다.',
-    머리글,
-    '',
-  ].join('\r\n')
 }
 
 /** CSV·붙여넣기 텍스트 → 그리드. 엑셀 복사는 탭, CSV는 콤마 — 탭이 있으면 탭이 우선. */

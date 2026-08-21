@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readXlsx } from '@/lib/xlsx'
-import { badCells, cutText, dupChildNos, parseRosterGrid, rosterTemplateCsv, toChild, type ParsedRoster } from '@/lib/roster'
+import { badCells, cutText, dupChildNos, parseRosterGrid, toChild, type ParsedRoster } from '@/lib/roster'
 
 const grid = async (name: string) => {
   const b = readFileSync(join(__dirname, 'fixtures', name))
@@ -246,37 +246,33 @@ describe('cutText — CSV·붙여넣기 텍스트를 그리드로', () => {
   })
 })
 
-describe('rosterTemplateCsv — 교사에게 주는 빈 양식이 자기 파서를 통과한다', () => {
-  const grid = () => cutText(rosterTemplateCsv())
+describe('배포 양식(public/roster-template.xlsx) — 교사에게 주는 양식이 자기 파서를 통과한다', () => {
+  // 생성물을 **실제 파서에 물려** 검증한다. lib/roster의 COL_LABEL을 고치고 스크립트를
+  // 다시 돌리지 않으면 여기서 깨진다 — 교사가 받은 양식이 거부되는 사고를 막는 핀이다.
+  const grid = () => {
+    const b = readFileSync(join(process.cwd(), 'public/roster-template.xlsx'))
+    return readXlsx(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer)
+  }
 
-  it('[REGRESSION] 양식의 머리글을 파서가 알아본다 — 상수가 갈라지면 교사가 받은 양식이 거부된다', () => {
-    const parsed = parseRosterGrid(grid())
+  it('[REGRESSION] 양식의 머리글 네 열을 파서가 모두 알아본다', async () => {
+    const parsed = parseRosterGrid(await grid())
     expect('error' in parsed).toBe(false)
-    const ok = parsed as ParsedRoster
-    // 안내 5줄을 건너뛰고 머리글을 찾아야 하며, 네 열이 모두 인식돼야 한다
-    expect(ok.missingCols).toEqual([])
+    expect((parsed as ParsedRoster).missingCols).toEqual([])
   })
 
-  it('데이터 줄이 비어 있다 — 예시 아동을 넣으면 교사가 그대로 제출한다', () => {
-    const parsed = parseRosterGrid(grid()) as ParsedRoster
-    expect(parsed.rows).toEqual([])
+  it('데이터 줄이 비어 있다 — 예시 아동을 넣으면 교사가 그대로 제출한다', async () => {
+    expect((parseRosterGrid(await grid()) as ParsedRoster).rows).toEqual([])
   })
 
-  it('안내 문구가 주민등록번호 경고 배너를 잘못 띄우지 않는다', () => {
-    // 안내 줄에 "주민등록번호"라는 낱말이 있지만 머리글 행이 아니고 데이터 행도 아니다
-    const parsed = parseRosterGrid(grid()) as ParsedRoster
-    expect(parsed.rrnSeen).toBe(false)
+  it('안내 문구가 주민등록번호 경고 배너를 잘못 띄우지 않는다', async () => {
+    // 안내 줄에 "주민등록번호"라는 낱말이 있지만 머리글 행도 데이터 행도 아니다
+    expect((parseRosterGrid(await grid()) as ParsedRoster).rrnSeen).toBe(false)
   })
 
-  it('[REGRESSION] 어떤 줄에도 콤마가 없다 — cutText는 따옴표를 해석하지 않아 안내 줄이 쪼개진다', () => {
-    const lines = rosterTemplateCsv().split(/\r?\n/).filter(l => l !== '')
-    const 머리글 = lines[lines.length - 1]
-    for (const l of lines.slice(0, -1)) expect(l).not.toContain(',')
-    // 머리글만 콤마로 네 칸을 가른다
-    expect(머리글.split(',')).toHaveLength(4)
-  })
-
-  it('엑셀에서 읽히도록 CRLF로 끝나고 마지막 줄이 비어 있다', () => {
-    expect(rosterTemplateCsv().endsWith('\r\n')).toBe(true)
+  it('안내 줄이 머리글 탐색 범위(HEAD_SCAN_ROWS=8) 안에 있다', async () => {
+    const g = await grid()
+    const headRow = g.findIndex(r => r[0] === '번호')
+    expect(headRow).toBeGreaterThanOrEqual(0)
+    expect(headRow).toBeLessThan(8)
   })
 })
