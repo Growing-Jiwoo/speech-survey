@@ -58,21 +58,31 @@ export interface SubmitInput {
 }
 
 /**
- * 최종 제출: 미제출 세션만 업데이트하고(제출 후 재제출·변조 차단), 성공했을 때만
- * 쓰기 답을 upsert한다.
+ * 최종 제출: 쓰기 답을 먼저 저장하고 **`submitted_at`을 마지막에** 확정한다.
  * 업데이트 0건이면 미존재/기제출을 구분해 반환(라우트에서 404/409 처리).
+ *
+ * ⚠️ 순서를 되돌리지 말 것. 예전에는 `submitted_at`을 먼저 확정하고 쓰기 답을 나중에
+ * 넣었는데, 그 사이에 일시 장애가 끼면 **쓰기 점수가 영구히 사라졌다**: 함수가 던져
+ * 라우트가 502를 주고, 검사자가 다시 [제출]을 누르면 세션이 이미 제출 상태라 409로
+ * 막힌다. 쓰기 채점(낱말 쓰기·문장 쓰기)은 녹음이 없어 **검사 중 검사자 입력이 유일한
+ * 채점 경로**이므로(README "문항 구성") 관리자 결과지에서 채울 수도 없다 — 10점 만점
+ * 과제가 기록에서 통째로 빈다. 검사자는 "제출 실패"와 "이미 제출됨"이 모순돼 갇힌다.
+ *
+ * 지금 순서에서는 확정이 실패해도 세션이 미제출로 남아 **재시도가 그대로 통과한다.**
+ * 쓰기 답 upsert는 `(session_id, item_code)` 멱등이라 두 번 들어가도 같은 결과다.
+ * (사용자 확정 2026-08-21 — 임상 규칙 아님, 실패 모드 비교에 따른 개발 판단)
  */
 export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
   const { sessionId, writing, sentenceWriting, checklist } = input
-  const now = new Date().toISOString()
-  const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: now })
-    .eq('id', sessionId).is('submitted_at', null).select('id')
-  fail(error)
-  if ((data ?? []).length === 0) {
-    const { state } = await sessionState(sessionId)
-    return state === 'submitted' ? 'already_submitted' : 'not_found'
-  }
+
+  // 쓰기 답보다 먼저 상태를 본다: 미존재 세션에 답을 넣으면 FK 위반으로 던져
+  // 404·409를 구분할 수 없고, 제출된 세션은 애초에 잠겨 있어야 한다.
+  // 라우트도 같은 조회를 한다(학년으로 문항 코드를 검증해야 하므로) — 중복이지만
+  // 한쪽을 지우지 말 것: 라우트 것은 검증용이고 이것은 쓰기 순서의 전제다.
+  const before = await sessionState(sessionId)
+  if (before.state === 'missing') return 'not_found'
+  if (before.state === 'submitted') return 'already_submitted'
+
   if (writing.length > 0) {
     const rows = writing.map(w => ({ session_id: sessionId, item_code: w.itemCode, can_write: w.canWrite }))
     const { error: e2 } = await sb().from('writing_answers').upsert(rows, { onConflict: 'session_id,item_code' })
@@ -82,6 +92,17 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const rows = sentenceWriting.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
+  }
+
+  // `.is('submitted_at', null)`은 여기 남겨 둔다 — 위 상태 확인과 이 업데이트 사이에
+  // 다른 기기가 제출했을 때 재제출을 막는 것은 이 조건뿐이다(경쟁 조건의 최종 방어).
+  const { data, error } = await sb().from('sessions')
+    .update({ checklist, submitted_at: new Date().toISOString() })
+    .eq('id', sessionId).is('submitted_at', null).select('id')
+  fail(error)
+  if ((data ?? []).length === 0) {
+    const after = await sessionState(sessionId)
+    return after.state === 'submitted' ? 'already_submitted' : 'not_found'
   }
   return 'ok'
 }
