@@ -4,7 +4,7 @@
 // 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
@@ -22,6 +22,10 @@ import { SentenceRows } from './sheet/SentenceRows'
 import { SentenceWriteRows } from './sheet/SentenceWriteRows'
 import { PageAudio, type Attempt } from './sheet/PageAudio'
 import type { SessionRow } from '@/lib/db'
+
+/** 자동 저장 디바운스(ms). 채점자가 O/X를 연달아 찍는 속도보다 길고, 화면을 떠나기 전에
+ *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
+const AUTOSAVE_DELAY_MS = 1500
 
 export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
   sessionId: string
@@ -45,6 +49,10 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
+  // 자동 저장이 실패한 뒤에는 채점자가 무언가 고칠 때까지 다시 시도하지 않는다 —
+  // dirty가 그대로라 조건이 계속 참이어서, 이 플래그가 없으면 실패하는 엔드포인트를
+  // 1.5초마다 영원히 두드린다.
+  const [autoFailed, setAutoFailed] = useState(false)
 
   // 하단 저장 줄(sticky)의 높이 — 채점 컨트롤의 scroll-margin-bottom으로 넘긴다.
   // 위쪽 그룹 플레이어 바와 같은 이유(E2E 5.18): 키보드로 아래 방향으로 내려가면
@@ -88,16 +96,48 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  async function save() {
-    setSaving(true); setMsg('')
+  const save = useCallback(async (auto = false) => {
+    setSaving(true)
+    if (!auto) setMsg('')
     // requestJson은 init으로 { method?, body? }만 받고, body가 있으면 Content-Type과 직렬화를 스스로 한다.
     const res = await requestJson(`/api/admin/sessions/${sessionId}/scores`,
       { method: 'PUT', body: { marks, sentences } },
       '채점 저장에 실패했어요. 다시 시도해 주세요.')
     setSaving(false)
-    setMsg(res.ok ? '저장했어요.' : res.error)
-    if (res.ok) { setSavedMarks(marks); setSavedSentences(sentences) }
-  }
+    if (res.ok) {
+      setSavedMarks(marks); setSavedSentences(sentences); setAutoFailed(false)
+      // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
+      // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다.
+      setMsg(auto ? '자동 저장됨' : '저장했어요.')
+    } else {
+      setMsg(res.error)
+      if (auto) setAutoFailed(true)
+    }
+  }, [marks, sentences, sessionId])
+
+  /**
+   * 자동 저장 — dirty가 생기면 잠시 뒤 스스로 저장한다.
+   *
+   * 왜 경고가 아니라 저장인가: **브라우저 뒤로가기는 앱이 막을 수 없다.** SPA popstate는
+   * beforeunload도 확인 모달도 타지 않아, 채점자가 뒤로가기(또는 트랙패드 스와이프) 한 번에
+   * 녹음 14개를 듣고 찍은 판단이 조용히 사라졌다(브라우저에서 재현 확인, 리뷰 G-06).
+   * 그런데 이 화면의 동선이 목록↔결과지를 계속 오가는 것이라 그 경로가 유난히 잦다.
+   * 경고를 하나 더 붙이는 것보다 **잃을 것 자체를 없애는 쪽**이 맞다.
+   *
+   * 채점은 제출 여부와 무관하게 언제든 다시 고칠 수 있으므로(saveScores docblock) 중간
+   * 상태가 저장돼도 해가 없다. 저장 의미는 explicit save와 완전히 같다 — 화면에 보이는
+   * 그대로를 보내고, 문장 점수는 "보낸 것이 전부"로 취급된다.
+   *
+   * [채점 저장] 버튼은 그대로 둔다: 자동 저장이 실패했을 때 다시 시도하는 손잡이이고,
+   * 검사지 PDF 관문 모달도 그 동작을 호출한다.
+   */
+  useEffect(() => {
+    if (!dirty || saving || autoFailed) return
+    const t = setTimeout(() => { void save(true) }, AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(t)
+    // save는 marks·sentences가 바뀌면 새로 만들어진다 — 그래서 타이핑 중에는 타이머가
+    // 계속 미뤄지고(디바운스), 손을 멈춘 뒤에 한 번만 저장된다.
+  }, [dirty, saving, autoFailed, save])
 
   // 채점을 고치면 이전 저장 결과 안내("저장했어요.")를 지운다 — 안 지우면 옆의
   // "저장하지 않은 채점이 있어요"와 동시에 떠서 무엇이 저장된 상태인지 알 수 없다
@@ -111,9 +151,13 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
     writing: writingLabel,
   }
 
-  const setMark = (code: string, v: boolean) => { setMsg(''); setMarks(m => ({ ...m, [code]: v })) }
+  // 채점을 고치면 자동 저장 재시도를 다시 허용한다 — 실패가 그 값 때문이었을 수 있고,
+  // 무엇보다 채점자가 방금 한 작업은 반드시 저장 시도를 한 번 더 받아야 한다.
+  const setMark = (code: string, v: boolean) => {
+    setMsg(''); setAutoFailed(false); setMarks(m => ({ ...m, [code]: v }))
+  }
   const setSentence = (code: string, v: number | undefined) => {
-    setMsg('')
+    setMsg(''); setAutoFailed(false)
     setSentences(s => {
       const next = { ...s }
       if (v === undefined) delete next[code]
@@ -233,7 +277,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
           있으면 끝까지 스크롤해야 하고, "저장하지 않은 채점이 있어요" 경고도 그때서야 보인다 —
           정작 채점하는 동안 눈에 띄어야 하는 경고다. 설명 문구는 아래 줄로 내려 띠를 얇게 유지한다. */}
       <div ref={saveBarRef} className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 print:hidden">
-        <button type="button" onClick={save} disabled={saving}
+        {/* 이벤트 객체가 auto 인자로 새지 않게 감싼다 — onClick={save}로 두면 MouseEvent가
+            첫 인자로 들어가 자동 저장으로 오해된다(타입체커가 잡았다). */}
+        <button type="button" onClick={() => void save()} disabled={saving}
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}
         </button>
