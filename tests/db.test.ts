@@ -108,38 +108,67 @@ beforeEach(() => {
   storage.list.mockResolvedValue({ data: [], error: null })
 })
 
-describe('submitSession — 미제출 세션만 갱신하고 결과를 구분한다', () => {
-  it('업데이트 성공 + 낱말쓰기 있음 → writing_answers upsert 후 ok', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
+describe('submitSession — 쓰기 답을 먼저 넣고 submitted_at을 마지막에 확정한다', () => {
+  /** 선행 상태 조회(sessionState) 응답 — 모든 케이스가 이걸 먼저 소비한다 */
+  const openSession = () => enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+
+  it('낱말쓰기 있음 → writing_answers upsert 뒤 sessions 확정 순서로 ok', async () => {
+    openSession()
     enqueue('writing_answers', { error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
     const result = await submit({ writing: [{ itemCode: 'ww01', canWrite: true }], checklist: ['none'] })
     expect(result).toBe('ok')
+    // 확정(sessions 두 번째)이 답 저장보다 **뒤**여야 한다 — 순서가 이 함수의 요점이다
+    expect(fromCalls).toEqual(['sessions', 'writing_answers', 'sessions'])
+  })
+
+  it('문장쓰기(G2)도 확정보다 먼저 저장된다', async () => {
+    openSession()
+    enqueue('sentence_scores', { error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ sentenceWriting: [{ itemCode: 'sw01', words: 2 }] })).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sentence_scores', 'sessions'])
+  })
+
+  it('쓰기 답이 비어 있으면 답 테이블을 건드리지 않는다', async () => {
+    openSession()
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({})).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sessions'])
+  })
+
+  it('[REGRESSION] 쓰기 답 저장이 실패하면 submitted_at을 확정하지 않는다 — 재시도가 409로 막히면 그 점수는 영구 유실이다', async () => {
+    openSession()
+    enqueue('writing_answers', { error: { message: 'duplicate key' } })
+    await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
+    // sessions 확정 호출이 일어나지 않았어야 한다(선행 조회 1회뿐)
     expect(fromCalls).toEqual(['sessions', 'writing_answers'])
   })
 
-  it('낱말쓰기가 비어 있으면 writing_answers를 건드리지 않는다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    const result = await submit({})
-    expect(result).toBe('ok')
-    expect(fromCalls).toEqual(['sessions'])
+  it('이미 제출된 세션은 답을 덮어쓰지 않고 already_submitted (409 신호)', async () => {
+    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z', grade: 1 }, error: null })
+    expect(await submit({ writing: [{ itemCode: 'ww01', canWrite: true }] })).toBe('already_submitted')
+    expect(fromCalls).toEqual(['sessions'])   // 제출 잠금 — 쓰기 테이블에 손대지 않는다
   })
 
-  it('업데이트 0건 + 세션이 이미 제출됨 → already_submitted (409 신호)', async () => {
-    enqueue('sessions', { data: [], error: null })                                  // update … is('submitted_at', null)
-    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null }) // 상태 재조회
+  it('미존재 세션은 답을 넣지 않고 not_found (404 신호)', async () => {
+    enqueue('sessions', { data: null, error: null })
+    expect(await submit({ writing: [{ itemCode: 'ww01', canWrite: true }] })).toBe('not_found')
+    expect(fromCalls).toEqual(['sessions'])   // FK 위반으로 던지는 대신 404를 준다
+  })
+
+  it('확정 직전에 다른 기기가 제출하면(0건) 상태를 다시 읽어 already_submitted', async () => {
+    openSession()
+    enqueue('sessions', { data: [], error: null })                                       // 확정 0건
+    enqueue('sessions', { data: { submitted_at: '2026-07-15T00:00:00Z' }, error: null })  // 재조회
     expect(await submit({})).toBe('already_submitted')
   })
 
-  it('업데이트 0건 + 세션 미존재 → not_found (404 신호)', async () => {
+  it('확정 직전에 세션이 삭제되면(0건) not_found', async () => {
+    openSession()
     enqueue('sessions', { data: [], error: null })
     enqueue('sessions', { data: null, error: null })
     expect(await submit({})).toBe('not_found')
-  })
-
-  it('낱말쓰기 upsert 실패는 예외로 전파된다', async () => {
-    enqueue('sessions', { data: [{ id: SID }], error: null })
-    enqueue('writing_answers', { error: { message: 'duplicate key' } })
-    await expect(submit({ writing: [{ itemCode: 'ww01', canWrite: false }] })).rejects.toThrow('duplicate key')
   })
 })
 
