@@ -71,10 +71,16 @@ const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
  *  생년월일을 신뢰하지 않는다"는 불변식을 지키는 유일한 근거가 되어 버린다(뒤바뀌면
  *  fromRoster:true + 위조 이름이 이 스키마를 통과해 fromRoster 키만 벗겨지고 위조값이 그대로
  *  createSession에 실린다 — 리뷰에서 실증됨). 이 필드를 두면 순서와 무관하게 스키마 자체가 막는다. */
+/** 세션 생성 멱등 키 — 확인 모달을 열 때 화면이 만드는 UUID. 연타·재전송이 같은 키로
+ *  오면 서버가 첫 세션을 그대로 돌려준다(migration 004). 없어도 통과시킨다 —
+ *  구버전 화면이나 테스트가 키 없이 부를 수 있고, 그때는 멱등 보장만 없다. */
+export const idemKeySchema = z.string().uuid().optional()
+
 export const sessionCreateDirectSchema = z.object({
   fromRoster: z.undefined().optional(),
   code: classCodeSchema,
   childNo: childNoSchema,
+  idemKey: idemKeySchema,
   name: cleaned.pipe(nameSchema),
   gender: genderSchema,
   birthYmd: birthYmdSchema,
@@ -88,6 +94,7 @@ export const sessionCreateFromRosterSchema = z.object({
   fromRoster: z.literal(true),
   code: classCodeSchema,
   childNo: childNoSchema,
+  idemKey: idemKeySchema,
   guardianConsent: z.literal(true),
 })
 

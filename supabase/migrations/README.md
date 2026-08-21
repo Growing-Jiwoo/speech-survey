@@ -5,6 +5,7 @@
 | `001_init.sql` | 초기 스키마 통합본(사용자 확정 2026-08-14). 테이블 7개 + 로그인 실패 기록 RPC + RLS + 인덱스 + 녹음 스토리지 버킷까지 한 파일 |
 | `002_session_edit_trace.sql` | `sessions.edited_at`·`original_identity` — 관리자가 아동 식별값을 고칠 때 **처음 들어온 값**을 남긴다(사용자 확정 2026-08-15). 없으면 임상 기록이 다른 아이에게 넘어가도 알 수 없다 |
 | `003_apply_and_roster.sql` | 교사 신청: `class_codes.status`(pending/active)·`applied_at` + 학급 명단 `class_roster`(RLS). 스펙 2026-08-18 |
+| `004_session_idempotency.sql` | `sessions.idem_key` + 부분 unique 인덱스 — 시작 화면의 [맞아요, 시작하기] 연타·재전송이 세션을 두 개 만들지 않게 한다(사용자 확정 2026-08-21). **시간 창으로 막지 않은 이유**가 파일 주석에 있다: 이 앱은 재검사를 허용하고 정상 재검사가 짧은 간격으로 일어나므로, 시간 창은 현장에서 검사를 막는 쪽으로 실패한다 |
 
 적용 방법은 [../README.md](../README.md)와 루트 README 셋업 절 참고 — **Supabase CLI를 쓰지 않고
 SQL Editor에서 위→아래로 한 번에 실행한다.**

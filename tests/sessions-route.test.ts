@@ -64,6 +64,28 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
       birthYmd: '190101', gender: '남', childName: '김도연',
     })
   })
+  it('idemKey를 그대로 db 계층에 넘긴다 — 직접 입력 모드', async () => {
+    const key = '11111111-2222-4333-8444-555555555555'
+    await POST(makeReq({ ...VALID, idemKey: key }))
+    expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({ idemKey: key }))
+  })
+  it('idemKey를 그대로 db 계층에 넘긴다 — 명단 모드', async () => {
+    const key = '11111111-2222-4333-8444-555555555555'
+    await POST(makeReq({ ...FROM_ROSTER, idemKey: key }))
+    expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({
+      idemKey: key, childName: '박지민',   // 신원은 여전히 서버가 명단에서 복사한다
+    }))
+  })
+  it('idemKey가 UUID가 아니면 400 — 세션이 만들어지지 않는다', async () => {
+    const res = await POST(makeReq({ ...VALID, idemKey: 'not-a-uuid' }))
+    expect(res.status).toBe(400)
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
+  it('idemKey 없이도 생성된다 — 멱등 보장만 없다(구버전 화면 호환)', async () => {
+    const res = await POST(makeReq(VALID))
+    expect(res.status).toBe(200)
+    expect(db.createSession).toHaveBeenCalledWith(expect.objectContaining({ idemKey: undefined }))
+  })
   it('미존재 코드 404 — 세션이 만들어지지 않는다', async () => {
     vi.mocked(db.findClassCode).mockResolvedValue(null)
     const res = await POST(makeReq(VALID))

@@ -6,6 +6,11 @@
 // - 직접 입력(`d`에 name/gender/birthYmd) — 검사자가 화면에서 입력한 값을 그대로 쓴다.
 //   신원은 여전히 클라이언트가 보낸 그대로다 — 「명단에 없는 학생」 폴백 경로라 없앨 수 없고,
 //   여기서는 변조를 막지 않는다.
+// 연타·재전송 방어: 바디의 `idemKey`(확인 모달을 열 때 화면이 만든 UUID)가 세션 행에
+// unique로 저장돼, 같은 키가 두 번 오면 새 행을 만들지 않고 첫 세션을 돌려준다.
+// 시간 창으로 막지 않는 이유는 migration 004 주석 — 이 앱은 재검사를 허용하고, 정상
+// 재검사가 짧은 간격으로 일어난다(마이크 문제로 나갔다 다시 시작하는 경우).
+//
 // - 명단 모드(`fromRoster:true`) — 신청 때 등록한 명단에서 번호로 찾아 서버가 이름·성별·
 //   생년월일을 복사한다. 클라이언트는 번호만 보낸다. **이 모드가 막는 것은 전사(transcription)
 //   오류(오타)뿐이다** — 명단에 있는 아동을 고른다는 전제에서 이름을 잘못 옮겨 적는 실수를
@@ -50,11 +55,13 @@ export async function POST(req: Request) {
       sessionId = await createSession({
         classCode, childNo: child.child_no,
         birthYmd: child.birth_ymd, gender: child.gender, childName: child.child_name,
+        idemKey: d.idemKey,
       })
     } else {
       sessionId = await createSession({
         classCode, childNo: d.childNo,
         birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
+        idemKey: d.idemKey,
       })
     }
     const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
