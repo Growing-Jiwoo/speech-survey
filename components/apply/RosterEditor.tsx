@@ -118,9 +118,16 @@ export function RosterEditor({ onChange }: {
           drag ? 'border-blue bg-blue/5' : 'border-line bg-well'}`}>
         <p className="text-[13px] font-bold text-ink-soft">명단 파일을 올려 주세요</p>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-mute">
-          나이스 명렬표나 배포된 양식(.xlsx)을 그대로 올리시면 돼요.<br />
+          나이스 명렬표를 그대로 올리셔도 되고, 아래 양식을 받아 채우셔도 돼요.<br />
           파일은 이 화면에서만 읽고 서버로 보내지 않아요.
         </p>
+        {/* 양식을 화면에서 받을 수 있게 둔다 — 종전에는 "배포된 양식(.xlsx)"을 안내하면서
+            그 파일을 받을 길이 없었다. 따로 전달한 파일을 교사가 잃으면 신청 자체가 막힌다
+            (사용자 지적 2026-08-21). 라우트가 파서와 같은 머리글로 만들어 준다. */}
+        <a href="/api/roster-template" download
+          className="mt-2 inline-block text-[12px] font-bold text-blue underline underline-offset-2">
+          명단 양식 내려받기 (.csv)
+        </a>
         <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden"
           onChange={e => { const f = e.target.files?.[0]; if (f) void load(f); e.target.value = '' }} />
         <button type="button" onClick={() => fileRef.current?.click()}

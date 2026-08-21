@@ -13,6 +13,7 @@
 | `POST /api/recordings` | 녹음 업로드. 검증 사슬: 형식 → 세션 토큰 → 5MB 상한 → MIME allowlist+매직바이트 → 미제출 세션인지(제출 후 변조 차단) → 세션당 총량 상한. DB 기록 실패 시 방금 올린 객체를 보상 정리(고아 파일 방지) |
 | `POST /api/sessions/submit` | 최종 제출. 낱말쓰기/체크리스트 형식 검증 → 토큰 검증 → 미제출 세션만 갱신(재제출 409) |
 | `POST /api/apply` | 교사 신청 접수. zod 검증(`applySchema`) + IP 레이트리밋(`APPLY_RATE_LIMIT`, verify-code와 별도로 낮게 잡음) → `pending` 학급 코드 + 명단 생성(unique 충돌 시 최대 5회 재시도) → 관리자에게 알림 메일(`ADMIN_NOTIFY_EMAIL`, 10분 합치기로 발송량 제한, 실패해도 신청 자체는 성공). **응답에 코드를 넣지 않는다** — 승인 메일이 유일한 코드 전달 경로여야 관리자 승인이 실제 관문이 된다 |
+| `GET /api/roster-template` | 교사가 내려받는 **빈 학급 명단 양식**(CSV). 인증 없음 — 신청 화면이 공개이고 이 응답에는 아동 정보가 한 글자도 없다. 내용은 `lib/roster`의 `rosterTemplateCsv`가 만들어 **파서와 머리글을 공유**한다(정적 파일이면 상수를 고쳤을 때 양식만 옛 이름으로 남는다). `data:`/`blob:` URI가 아니라 라우트인 이유도 같다 — CSP `default-src 'self'`에 걸리지 않고 파일명도 서버가 정한다. 엑셀 한글 깨짐 방지용 BOM 포함 |
 
 ## 관리자 라우트 (인증: middleware)
 
