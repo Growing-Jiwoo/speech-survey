@@ -109,6 +109,13 @@ export default function StartPage() {
   // 번호를 같이 밝히는 이유: 이 흐름은 아동을 코드+번호로 지목하므로 이름만으로는
   // 검사자가 "지금 부른 아이"와 같은 아이인지 대조할 근거가 한 칸 부족하다.
   const [resume, setResume] = useState<{ childName: string; childNo: number } | null>(null)
+  // [새로 시작] 확인 모달 — 진행 상태를 지우면 그 검사를 **이어갈 수단이 사라진다**
+  // (세션 토큰이 이 기기의 localStorage에만 있고 서버가 다시 발급해 주는 경로가 없다).
+  // 이미 올라간 녹음은 서버에 남아 관리자가 볼 수 있지만, 아동은 처음부터 다시 검사해야
+  // 한다. 되돌릴 수 없는 동작이 [이어서 하기] 바로 옆이라 오탭이 쉽고, 이 앱의 다른
+  // 파괴적 동작(검사 기록 삭제·코드 삭제·신청 반려)은 전부 확인 모달을 갖는다 —
+  // 여기만 예외로 두지 않는다(리뷰 G-07).
+  const [confirmRestart, setConfirmRestart] = useState(false)
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
@@ -265,7 +272,7 @@ export default function StartPage() {
               className="flex-1 rounded-lg bg-blue py-2.5 text-sm font-bold text-white">
               이어서 하기
             </button>
-            <button type="button" onClick={() => { clearState(); setResume(null) }}
+            <button type="button" onClick={() => setConfirmRestart(true)}
               className="flex-1 rounded-lg border-[1.5px] border-line bg-white py-2.5 text-sm font-bold text-ink-soft">
               새로 시작
             </button>
@@ -437,6 +444,21 @@ export default function StartPage() {
         )}
       </form>
       <p className="mt-auto pt-6 text-center text-[12px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
+
+      {/* [새로 시작] 확인 — 진행 중 검사를 버리는 동작이라 한 번 묻는다(위 confirmRestart 주석). */}
+      <ConfirmDialog open={confirmRestart} danger
+        title="진행 중인 검사를 지울까요?"
+        confirmLabel="지우고 새로 시작" cancelLabel="아니에요"
+        onConfirm={() => { clearState(); setResume(null); setConfirmRestart(false) }}
+        onClose={() => setConfirmRestart(false)}>
+        <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+          {resume?.childName
+            ? <><b>{resume.childNo}번 {resume.childName}</b> 학생의 검사를 </>
+            : '이 기기에 진행 중인 검사를 '}
+          이 기기에서 <b className="text-rec-deep">이어서 할 수 없게</b> 됩니다.<br />
+          처음부터 다시 검사해야 해요.
+        </p>
+      </ConfirmDialog>
 
       {/* 확인 모달 — 코드가 가리키는 학급과 아동이 맞는지 시작 전에 한 번 묻는다(스펙 "흐름" 3).
           이미 검사한 번호면 경고형으로 바뀐다 — 막지는 않는다(재검사 허용, 스펙 "중복 검사 경고").
