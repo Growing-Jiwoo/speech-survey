@@ -245,3 +245,48 @@ describe('cutText — CSV·붙여넣기 텍스트를 그리드로', () => {
     expect(cutText('번호\t성,명\n1\t김서아')).toEqual([['번호', '성,명'], ['1', '김서아']])
   })
 })
+
+describe('배포 양식(public/roster-template.xlsx) — 교사에게 주는 양식이 자기 파서를 통과한다', () => {
+  // 생성물을 **실제 파서에 물려** 검증한다. lib/roster의 COL_LABEL을 고치고 스크립트를
+  // 다시 돌리지 않으면 여기서 깨진다 — 교사가 받은 양식이 거부되는 사고를 막는 핀이다.
+  const grid = () => {
+    const b = readFileSync(join(process.cwd(), 'public/roster-template.xlsx'))
+    return readXlsx(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer)
+  }
+
+  it('[REGRESSION] 양식의 머리글 네 열을 파서가 모두 알아본다', async () => {
+    const parsed = parseRosterGrid(await grid())
+    expect('error' in parsed).toBe(false)
+    expect((parsed as ParsedRoster).missingCols).toEqual([])
+  })
+
+  it('데이터 줄이 비어 있다 — 예시 아동을 넣으면 교사가 그대로 제출한다', async () => {
+    expect((parseRosterGrid(await grid()) as ParsedRoster).rows).toEqual([])
+  })
+
+  it('안내 문구가 주민등록번호 경고 배너를 켜지 않는다', async () => {
+    // 안내 줄에 숫자가 섞여 있어도(`2-1`·`2019-03-04`) 주민번호로 오인되면 교사에게
+    // 엉뚱한 배너가 뜬다 — 문구를 고칠 때 이 핀이 지켜 준다.
+    expect((parseRosterGrid(await grid()) as ParsedRoster).rrnSeen).toBe(false)
+  })
+
+  it('[REGRESSION] 양식이 약속한 생년월일 표기가 실제로 통과한다 — 안내가 사실보다 좁으면 교사가 헛수고한다', () => {
+    // 양식은 "연도를 먼저 — 2019-03-04 · 190304 다 괜찮아요"라고 말한다. 그 약속을 핀한다.
+    for (const v of ['2019-03-04', '190304'])
+      expect(badCells({ childNo: '1', name: '김서아', gender: '여', birth: v })).toEqual([])
+    // 연도가 뒤면 월·일 순서를 알 수 없어 거부한다 — 안내가 "연도를 먼저"라고 말하는 근거다
+    expect(badCells({ childNo: '1', name: '김서아', gender: '여', birth: '3/4/2019' })).toEqual(['생년월일'])
+  })
+
+  it('[REGRESSION] 양식이 금지한 번호 표기가 실제로 거부된다', () => {
+    // "2-1처럼 반을 붙이면 안 돼요" — 숫자만 뽑아 붙이면 21이 되어 다른 아이의 번호가 된다
+    expect(badCells({ childNo: '2-1', name: '김서아', gender: '여', birth: '190304' })).toEqual(['번호'])
+  })
+
+  it('안내 줄이 머리글 탐색 범위(HEAD_SCAN_ROWS=8) 안에 있다', async () => {
+    const g = await grid()
+    const headRow = g.findIndex(r => r[0] === '번호')
+    expect(headRow).toBeGreaterThanOrEqual(0)
+    expect(headRow).toBeLessThan(8)
+  })
+})

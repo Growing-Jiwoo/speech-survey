@@ -42,7 +42,9 @@ export interface ParsedRoster {
   missingCols: string[]
 }
 
-const COL_LABEL = { childNo: '번호', name: '이름', gender: '성별', birthYmd: '생년월일' } as const
+/** 화면·오류 문구·**배포 양식**이 함께 쓰는 열 이름. 양식 생성 스크립트가 이 값을 가져가므로
+ *  여기를 고치면 `npm run build:roster-template`을 다시 돌려야 한다(테스트가 어긋남을 잡는다). */
+export const COL_LABEL = { childNo: '번호', name: '이름', gender: '성별', birthYmd: '생년월일' } as const
 
 /** 알려진 머리글 이름. 나이스 명렬표(반·번호·성명·성별·생년월일·비고)와 배포 양식이 이 이름을 쓴다. */
 const HEADERS: Record<keyof typeof COL_LABEL, string[]> = {
