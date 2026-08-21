@@ -41,8 +41,12 @@ function SurveyInner() {
   // 일시정지 오버레이도 다이얼로그이므로 ConfirmDialog와 같은 포커스 트랩을 쓴다
   // (초기 포커스·Tab 순환·Esc로 재개·해제 시 포커스 복귀).
   const pauseRef = useFocusTrap(paused, () => setPaused(false))
-  // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다
-  const [pendingRetries, setPendingRetries] = useState<Record<string, Recording>>({})
+  // 페이지 이동 중 업로드가 실패한 녹음: 다른 페이지로 넘어가도 배너에서 재시도할 수 있다.
+  // **attemptNo를 blob과 함께 들고 있어야 한다** — 재시도 때 다시 계산하면 그 사이에 성공한
+  // 재녹음의 번호를 집어, 스토리지 upsert가 최신 녹음을 옛 소리로 덮어쓴다(같은 경로
+  // `{sessionId}/{itemCode}_{attemptNo}`). 실패한 시도의 번호는 그때 고정된 값이다.
+  const [pendingRetries, setPendingRetries] =
+    useState<Record<string, { rec: Recording; attemptNo: number }>>({})
   const fromReview = params.get('from') === 'review'
 
   useEffect(() => {
@@ -114,14 +118,27 @@ function SurveyInner() {
     })
   }, [patch])
 
-  /** 낙관적 완료 표시를 되돌린다 — 업로드가 실패했으면 그 녹음은 실제로 없다.
-   *  되돌리지 않으면 검토 화면이 "녹음 완료"라 말하는데 서버에는 파일이 없다. */
-  const undoSaved = useCallback((code: string, rec: Recording) => {
-    patch(prev => ({
-      recorded: { ...prev.recorded, [code]: Math.max(0, (prev.recorded[code] ?? 1) - 1) },
-    }))
-    setPendingRetries(prev => ({ ...prev, [code]: rec }))
-  }, [patch])
+  /**
+   * 낙관적 완료 표시를 되돌린다 — 업로드가 실패했으면 그 녹음은 실제로 없다.
+   * 되돌리지 않으면 검토 화면이 "녹음 완료"라 말하는데 서버에는 파일이 없다.
+   *
+   * ⚠️ localStorage를 `patch`(=setState 업데이터) 안에서 고치지 말 것. 업로드는 화면을
+   * 잠그지 않고 백그라운드로 도는데, 검사자가 [저장하고 나가기]나 검토 화면으로 옮겨
+   * 이 컴포넌트가 언마운트된 뒤 실패가 도착하면 **업데이터가 실행되지 않아 롤백이 통째로
+   * 사라진다.** 그러면 저장된 상태에 "녹음 완료"가 남고, 검토 화면이 그것을 그대로 믿어
+   * 제출까지 통과한 다음 `withUnrecordedDefaults`가 오반응(X·0점)으로 기본 채점한다 —
+   * README가 경계하는 "조용히 실패하는 부류"가 정확히 이 경로다.
+   * 그래서 저장된 상태를 직접 읽어 고치고(컴포넌트 생존과 무관), 화면 상태는 살아 있을
+   * 때만 따라 갱신한다. 둘은 각자의 현재 값에서 1을 빼므로 이중 차감이 되지 않는다.
+   * (사용자 확정 2026-08-21 — 임상 규칙 아님, 개발 판단)
+   */
+  const undoSaved = useCallback((code: string, rec: Recording, attemptNo: number) => {
+    const dec = (n: number | undefined) => Math.max(0, (n ?? 1) - 1)
+    const saved = loadState()
+    if (saved) saveState({ ...saved, recorded: { ...saved.recorded, [code]: dec(saved.recorded[code]) } })
+    setSt(prev => prev && ({ ...prev, recorded: { ...prev.recorded, [code]: dec(prev.recorded[code]) } }))
+    setPendingRetries(prev => ({ ...prev, [code]: { rec, attemptNo } }))
+  }, [])
 
   if (!st) return null
 
@@ -166,7 +183,7 @@ function SurveyInner() {
     if (page.practice) return   // 연습은 서버에 남기지 않는다
     setUploading(n => n + 1)
     void uploadRecording({ sessionId: st!.sessionId, sessionToken: st!.sessionToken, itemCode: code, attemptNo, rec })
-      .then(ok => { if (!ok) undoSaved(code, rec) })
+      .then(ok => { if (!ok) undoSaved(code, rec, attemptNo) })
       .finally(() => setUploading(n => n - 1))
   }
 
@@ -182,10 +199,11 @@ function SurveyInner() {
   }
 
   async function retryUpload(code: string) {
-    const rec = pendingRetries[code]
-    if (!rec || !st) return
+    // attemptNo를 다시 계산하지 않고 실패 시점 값을 그대로 쓴다(pendingRetries 주석 참고).
+    const pending = pendingRetries[code]
+    if (!pending || !st) return
     const ok = await uploadRecording({ sessionId: st.sessionId, sessionToken: st.sessionToken,
-      itemCode: code, attemptNo: (st.recorded[code] ?? 0) + 1, rec })
+      itemCode: code, attemptNo: pending.attemptNo, rec: pending.rec })
     if (ok) markSaved(code)
   }
 

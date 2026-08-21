@@ -4,7 +4,7 @@
 // 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
@@ -53,6 +53,25 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   // dirty가 그대로라 조건이 계속 참이어서, 이 플래그가 없으면 실패하는 엔드포인트를
   // 1.5초마다 영원히 두드린다.
   const [autoFailed, setAutoFailed] = useState(false)
+
+  // 하단 저장 줄(sticky)의 높이 — 채점 컨트롤의 scroll-margin-bottom으로 넘긴다.
+  // 위쪽 그룹 플레이어 바와 같은 이유(E2E 5.18): 키보드로 아래 방향으로 내려가면
+  // 브라우저가 스크롤하지 않고, 그 자리가 이 줄에 덮인다. flex-wrap이라 좁은 폭에서
+  // 두 줄이 되므로 상수로 박지 않는다(WordScoreRows·SessionTable과 같은 관례).
+  const saveBarRef = useRef<HTMLDivElement>(null)
+  const [saveBarH, setSaveBarH] = useState(0)
+  useLayoutEffect(() => {
+    const el = saveBarRef.current
+    if (!el) return
+    setSaveBarH(el.getBoundingClientRect().height)
+      // ⚠️ contentRect는 **content box**(패딩·보더 제외)다 — 이 바는 py-2.5 + border-b-2라
+      // 실제 높이보다 22px 작게 보고돼 포커스한 버튼의 위쪽이 그만큼 덮였다(실측 2026-08-21).
+      // 테두리까지 포함한 값이 필요하므로 borderBoxSize를 쓰고, 없으면 실측으로 떨어진다.
+    const ro = new ResizeObserver(([e]) =>
+      setSaveBarH(e.borderBoxSize?.[0]?.blockSize ?? el.getBoundingClientRect().height))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   const form = formForGrade(session.grade)
   const f = itemsFor(form)
@@ -150,7 +169,9 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
   const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
 
   return (
-    <section className="result-sheet">
+    <section className="result-sheet"
+      // 채점 컨트롤이 이 값을 scroll-margin-bottom으로 쓴다(globals.css)
+      style={{ '--sheet-bottom-bar': `${saveBarH}px` } as React.CSSProperties}>
       {/* 머리글 — 종이 검사지 상단과 같은 항목 */}
       <header className="border-b-2 border-ink/80 px-5 pb-3 pt-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -255,7 +276,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
       {/* 저장 줄은 화면 아래에 붙여 둔다(sticky). 채점은 위에서부터 하는데 저장 버튼이 문서 끝에만
           있으면 끝까지 스크롤해야 하고, "저장하지 않은 채점이 있어요" 경고도 그때서야 보인다 —
           정작 채점하는 동안 눈에 띄어야 하는 경고다. 설명 문구는 아래 줄로 내려 띠를 얇게 유지한다. */}
-      <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 print:hidden">
+      <div ref={saveBarRef} className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-white px-4 py-3 print:hidden">
         {/* 이벤트 객체가 auto 인자로 새지 않게 감싼다 — onClick={save}로 두면 MouseEvent가
             첫 인자로 들어가 자동 저장으로 오해된다(타입체커가 잡았다). */}
         <button type="button" onClick={() => void save()} disabled={saving}

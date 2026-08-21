@@ -38,7 +38,7 @@ DB 테이블·코드 식별자는 `sessions`·`SessionRow`이지만 **화면 문
 | `BadgeLegend.tsx` | 상태 배지 범례 — 화면에 **상시** 둔다. "채점 전"을 0점으로 오독하면 아직 채점하지 않은 아동이 결과지에서 0점 받은 아동과 같아 보인다 |
 | `sheet/TaskSection.tsx` | 과제 한 덩어리(제목 밴드 + 구분 띠). 과제 경계를 눈으로 끊어 채점자가 지금 어느 과제를 찍는지 잃지 않게 한다 |
 | `sheet/Subtotal.tsx` | 검사지의 소계 행(의미/무의미/총점). 미완료면 숫자 대신 `—` |
-| `sheet/WordScoreRows.tsx` | 낱말 해독 채점 — 그룹(의미/무의미)별 **sticky 플레이어 바** + 낱말 행 리스트. 스크롤해도 지금 듣는 그룹의 플레이어가 화면 위에 붙어 "들으면서 찍기"가 된다 |
+| `sheet/WordScoreRows.tsx` | 낱말 해독 채점 — 그룹(의미/무의미)별 **sticky 플레이어 바** + 낱말 행 리스트. 스크롤해도 지금 듣는 그룹의 플레이어가 화면 위에 붙어 "들으면서 찍기"가 된다. 바가 **자기 높이를 실측해 `--sheet-top-bar`로 넘긴다** — 키보드로 O/X를 오갈 때 포커스한 버튼이 이 바에 덮이지 않도록 `globals.css`가 그 값을 `scroll-margin`으로 쓴다(E2E 2026-08-20 항목 5.18). 상수로 박지 않는 이유는 `SessionTable`의 `toolbarH`와 같다 |
 | `sheet/WritingChips.tsx` | 낱말 쓰기(G1) 검사 중 기록 — 읽기 전용이라 행 대신 낱말+O/X 칩 흐름 |
 | `sheet/SentenceRows.tsx` | 문장 읽기유창성 행 — 문장·점수 입력·플레이어(자기 줄)를 한 카드에 |
 | `sheet/SentenceWriteRows.tsx` | 문장 쓰기(G2) 행 — 검사 중 기록(읽기 전용). 검사지처럼 어절을 나눠 보여 준다 |
