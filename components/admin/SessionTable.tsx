@@ -4,7 +4,8 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  createColumnHelper, flexRender, getCoreRowModel, useReactTable, type RowData,
+  createColumnHelper, tableFeatures, useTable,
+  type CellData, type RowData, type TableFeatures,
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
@@ -16,9 +17,9 @@ import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
 // 컬럼별 정렬 키·셀 클래스를 meta로 실어 헤더/셀 렌더에서 사용한다.
 declare module '@tanstack/react-table' {
-  // 선언 병합은 원본과 타입 파라미터 이름까지 동일해야 한다(TS2428) — 이 확장에서는 미사용.
+  // 선언 병합은 원본과 타입 파라미터(이름·제약·기본값)까지 동일해야 한다(TS2428) — 이 확장에서는 미사용.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface ColumnMeta<TData extends RowData, TValue> {
+  interface ColumnMeta<in out TFeatures extends TableFeatures, in out TData extends RowData, TValue extends CellData = CellData> {
     sortKey?: SortKey
     thClassName?: string
     tdClassName?: string
@@ -26,6 +27,11 @@ declare module '@tanstack/react-table' {
 }
 
 const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measureElement로 실측 보정)
+
+// v9: 사용할 기능을 명시해 그 코드만 번들에 담는다(코어 행 모델은 자동 포함).
+// 이 표는 정렬·필터를 URL 동기화 로직(lib/adminStats)이 담당하므로 테이블 기능을 켜지 않는다.
+// 참조가 흔들리면 타입·메모가 같이 흔들리므로 반드시 모듈 상수로 둔다.
+const features = tableFeatures({})
 
 /** 관리자 세션 목록 — 필터/정렬 상태는 부모(AdminDashboard)가 보유, 여기는 표시와 콜백만.
  * react-table은 컬럼/가상 렌더 골격으로만 쓰고, 정렬·필터는 기존 URL 동기화 로직을 그대로 사용한다
@@ -60,8 +66,10 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
 
   // ---- react-table 컬럼 정의 (셀 마크업·클래스는 기존 디자인 그대로 보존) ----
   const columns = useMemo(() => {
-    const col = createColumnHelper<SessionListRow>()
-    return [
+    const col = createColumnHelper<typeof features, SessionListRow>()
+    // v9에서는 배열을 col.columns()로 감싼다 — 그냥 배열로 넘기면 accessor 열마다 다른 셀 값
+    // 타입(이름=string, 번호=number)이 useTable의 columns 옵션에서 하나로 안 맞아 TS2322가 난다.
+    return col.columns([
       col.accessor('child_name', {
         id: 'name', header: '이름',
         meta: { sortKey: 'name', thClassName: 'whitespace-nowrap px-5 py-3', tdClassName: 'whitespace-nowrap px-5 py-2.5' },
@@ -139,20 +147,20 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
         },
       }),
-    ]
+    ])
     // retest를 빼면 새 재검사가 들어와도 배지가 옛 회차에 머문다 — 목록을 새로고침한
     // 채점자가 "2회차"를 보고 실제로는 3회차인 세션을 열게 된다. retestOrdinals는
     // 전체 목록이 바뀔 때만 새 Map을 내므로 이 의존성이 렌더를 흔들지 않는다.
   }, [detailHref, retest])
 
-  // tanstack table v8은 React Compiler 미호환 목록에 있으나(내부 캐시 뮤테이션),
-  // 자체 메모이제이션으로 동작은 안전하다 — v9 호환판이 나올 때까지 경고만 억제.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data: rows,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-  })
+  // 억제(react-hooks/incompatible-library)를 뗀 이유는 "v9가 Compiler 안전해져서"가
+  // 아니다 — eslint-plugin-react-hooks@7.1.1 실측: knownIncompatible 목록에 v8의
+  // `useReactTable`만 등록돼 있고 `useTable`은 0회 등장한다. 훅 이름이 목록에 없어
+  // 이 컴포넌트에 대한 분석 자체가 조용해진 것뿐이다. `useTable`도 여전히 렌더 본문에서
+  // 옵션 스토어를 갱신한다(react-table/dist/useTable.js의 table_setOptions 호출) —
+  // 상태만 TanStack Store로 옮겨졌고, 테이블 API는 지금도 인스턴스 메모다
+  // (assignTableAPIs → tableMemo).
+  const table = useTable({ features, columns, data: rows })
 
   // ---- 행 가상화 ----
   // 스크롤 주체는 **페이지(window)**다. 표에 자체 스크롤 상자를 두면 페이지 스크롤과 겹쳐
@@ -161,14 +169,50 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   // 페이지 안의 독립된 창이 아니므로, 스크롤도 페이지 하나만 갖는다.
   //
   // scrollMargin: window 가상화는 문서 최상단을 원점으로 계산하므로, 표가 문서에서
-  // 시작하는 위치를 알려 줘야 한다. 빠뜨리면 필터·통계 카드 높이만큼 행이 어긋난다.
+  // 시작하는 y를 알려 줘야 한다. 틀리거나 낡으면 **어느 인덱스 구간을 그릴지**가 필터·통계
+  // 카드 높이만큼 밀려 뷰포트에 빈 띠가 생긴다(행 자체의 위치는 아래 start - scrollMargin
+  // 상쇄가 잡아 주므로 어긋나지 않는다 — 증상은 "행이 밀림"이 아니라 "행이 없음"이다).
   const listRef = useRef<HTMLDivElement>(null)
   const modelRows = table.getRowModel().rows
+
+  // 이 y는 **렌더 중 ref를 읽지 않고**(옛 `listRef.current?.offsetTop ?? 0`) 실측 상태로 든다.
+  // 렌더 중 레이아웃 읽기(react-hooks/refs)는 값의 갱신 시점을 "누가 리렌더를 일으키나"에
+  // 맡기는 것이어서, 실제로 이 표의 가상화는 우연에 얹혀 있었다 — 첫 렌더에는 0이고, 아래
+  // toolbarH useLayoutEffect가 일으키는 리렌더에서야 실제 y가 들어왔다. 그 effect를
+  // "정리"하면 scrollMargin이 0으로 남는 구조였다. (v8에서 이 지적이 안 뜬 것은 플러그인이
+  // v8 `useReactTable`을 "메모이제이션 불가"로 등록해 컴포넌트 분석 자체를 중단했기 때문이고,
+  // v9 `useTable`은 그 목록에 없어 분석이 살아나며 드러났다 — 마이그레이션이 만든 결함이 아니다.)
+  //
+  // 관찰 대상이 표 자신이 아니라 **document.body**인 이유: 표를 위아래로 미는 변화는 셋 다
+  // 문서의 크기를 바꾼다 — ① 툴바 flex-wrap 재접힘(좁은 폭) ② 위쪽 카드(KPI·학교별) 높이
+  // 변화 ③ 창 리사이즈(body 폭이 곧 뷰포트 폭). 표 자신에 RO를 붙여서는 못 잡는다 —
+  // RO는 **크기** 변화만 보고, 요소가 위쪽 변화로 밀려 내려간 것(위치 변화)은 알려 주지 않는다.
+  //
+  // 첫 값은 옵저버를 기다리지 않고 직접 1회 실측한다(아래 toolbarH와 같은 이유): 0으로 시작하면
+  // 그 프레임에서 그릴 인덱스 구간이 밀려 빈 띠가 보인다. layout effect의 setState는 paint 전에
+  // 동기 리렌더를 일으키므로 이 실측이 화면에서 점프로 보이지는 않는다.
+  //
+  // 주의: offsetTop은 **offsetParent 기준**이다. 지금은 표의 조상(main·카드 div·body) 중
+  // positioned 요소가 없어 offsetParent가 body = 문서 y와 같지만, 조상에 `relative`가 붙으면
+  // 조용히 그 조상 기준으로 바뀐다.
+  const [listTop, setListTop] = useState(0)
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    const measure = () => setListTop(el.offsetTop)
+    measure()
+    // 같은 값을 setState하면 React가 리렌더를 생략하므로(bail out) 옵저버 루프가 되지 않는다.
+    const ro = new ResizeObserver(measure)
+    ro.observe(document.body)
+    return () => ro.disconnect()
+  }, [])
+
   const rowVirtualizer = useWindowVirtualizer({
     count: modelRows.length,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
-    scrollMargin: listRef.current?.offsetTop ?? 0,
+    // options는 렌더에서 그대로 반영된다 — 실측값이 바뀌면 리렌더가 일어나고 여기에 들어온다.
+    scrollMargin: listTop,
   })
   // 필터 툴바와 표 헤더를 **둘 다** 화면 상단에 붙인다. 목록이 길어지면 아래로 내려간 상태에서
   // 검색·필터를 쓰려고 매번 맨 위로 올라가야 했고, 열 이름만 붙어 있으면 지금 어떤 필터가
@@ -227,7 +271,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
               <tr key={hg.id} className="text-left text-xs text-ink-mute">
                 {hg.headers.map(h => {
                   const meta = h.column.columnDef.meta
-                  const label = flexRender(h.column.columnDef.header, h.getContext())
+                  const label = <table.FlexRender header={h} />
                   const sortKey = meta?.sortKey
                   const on = sortKey !== undefined && sort.key === sortKey
                   return (
@@ -263,9 +307,9 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
                     router.push(detailHref(row.original.id))
                   }}
                   className="cursor-pointer border-t border-line/60 hover:bg-well">
-                  {row.getVisibleCells().map(cell => (
+                  {row.getAllCells().map(cell => (
                     <td key={cell.id} className={cell.column.columnDef.meta?.tdClassName ?? 'px-4'}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      <table.FlexRender cell={cell} />
                     </td>
                   ))}
                 </tr>
