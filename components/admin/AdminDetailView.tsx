@@ -172,7 +172,11 @@ export function AdminDetailView() {
             ⚠️ 그래서 여기서 removeQueries를 쓰면 안 된다 — 캐시가 비면 로딩 상태로 떨어져
             결과지가 언마운트되고, 채점자가 찍어 둔 O/X가 통째로 사라진다.
             invalidate는 이전 데이터를 보여준 채 뒤에서 다시 받아온다. */}
-        <SessionEditDialog open={editOpen} session={s}
+        {/* key(id): 아동 간 이동에서 페이지가 리마운트된다는 전제가 어떤 이유로든 깨져도
+            폼 상태(useState 1회 초기화)가 세션별로 격리되게 한다 — 깨지면 이전 아동의
+            신원이 다음 아동의 수정 폼에 프리필되는 경로다(임상 기록 오염).
+            ResultSheet의 key(id)와 같은 방어선이다. */}
+        <SessionEditDialog key={s.id} open={editOpen} session={s}
           onClose={() => setEditOpen(false)}
           onSaved={() => {
             setEditOpen(false)
