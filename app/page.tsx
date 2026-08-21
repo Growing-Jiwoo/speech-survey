@@ -20,6 +20,7 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Select } from '@/components/Select'
+import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
 import { postJson } from '@/lib/http'
@@ -169,7 +170,12 @@ export default function StartPage() {
     setConfirmErr('')
     setConfirm({
       cls, childNo: child.childNo, name: child.name,
-      identity: `${child.gender} · ${child.birthYmd}`, tested: child.tested,
+      // 생년월일은 저장형(YYMMDD)이 아니라 읽는 형(YYYY-MM-DD)으로 보여준다 — 검사자가
+      // 명단·출석부와 눈으로 대조하는 값이라 `190509`는 대조가 안 된다(사용자 확정 2026-08-21).
+      // 변환은 lib/birth의 normBirth를 쓴다(실사례 29개가 테스트로 고정된 함수) — 못 읽으면
+      // 원문을 그대로 남긴다: 임상 기록 화면에서 값을 조용히 감추는 것이 더 나쁘다.
+      identity: `${child.gender} · ${normBirth(child.birthYmd) ?? child.birthYmd}`,
+      tested: child.tested,
     })
   }
 
@@ -465,7 +471,7 @@ export default function StartPage() {
               {confirm.tested ? ' 다시' : ''} 시작할까요?
             </p>
             {/* 명단에서 고른 경우에만 — 검사자가 타이핑하지 않은 값이므로 시작 전에 한 번은
-                눈으로 대조할 기회를 준다(생년월일은 저장 형식 그대로 YYMMDD). */}
+                눈으로 대조할 기회를 준다(생년월일은 읽는 형 YYYY-MM-DD — 위 identity 주석 참고). */}
             {confirm.identity && (
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
