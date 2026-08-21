@@ -4,7 +4,7 @@
 // 열 역할 지정 UI가 없다: lib/roster가 알려진 머리글 이름으로만 찾고, 못 찾으면 양식을 안내한다.
 // (값 모양으로 추론하면 "반 번호 2"를 성별로 오인한다 — 프로토타입에서 확인.)
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { normBirth } from '@/lib/birth'
 import {
   badCells, cutText, dupChildNos, parseRosterGrid, toChild,
@@ -54,6 +54,27 @@ export function RosterEditor({ onChange }: {
   const [err, setErr] = useState('')
   const [drag, setDrag] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  /**
+   * 표에 줄이 있는 동안 탭 닫기·새로고침을 브라우저 기본 경고에 맡긴다.
+   *
+   * 이 저장소에서 가장 긴 입력 세션인데 유일하게 보호가 없었다 — 검사 진행 화면(녹음 중·
+   * 업로드 중)과 관리자 결과지(미저장 채점)는 이미 같은 장치를 갖고 있다. 명단 30줄을
+   * 올리고 붉은 칸을 손보는 작업이 탭 닫기 한 번에 통째로 사라졌다(리뷰 G-05).
+   *
+   * 학교·담임·이메일 4칸은 일부러 조건에 넣지 않는다 — 다시 채우는 데 몇 초라 경고할 값이
+   * 아니고, 사소한 상태에도 뜨는 경고는 사용자가 무조건 무시하게 만들어 정작 중요할 때
+   * 안 읽힌다. 지켜야 할 것은 표다.
+   *
+   * 접수가 끝나면(`done`) 부모가 이 폼을 통째로 다른 화면으로 갈아치우므로 이 컴포넌트가
+   * 언마운트되며 리스너도 함께 사라진다 — 완료 화면에서 경고가 뜨는 일은 없다.
+   */
+  useEffect(() => {
+    if (rows.length === 0) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [rows.length])
 
   /**
    * 표를 바꾸는 **모든** 경로가 이 함수를 지난다 — 그래서 부모 통보를 여기서 한 번 하면 된다.
