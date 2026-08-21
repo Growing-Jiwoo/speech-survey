@@ -270,6 +270,19 @@ describe('배포 양식(public/roster-template.xlsx) — 교사에게 주는 양
     expect((parseRosterGrid(await grid()) as ParsedRoster).rrnSeen).toBe(false)
   })
 
+  it('[REGRESSION] 양식이 약속한 생년월일 표기가 실제로 통과한다 — 안내가 사실보다 좁으면 교사가 헛수고한다', () => {
+    // 양식은 "연도를 먼저 — 2019-03-04 · 190304 다 괜찮아요"라고 말한다. 그 약속을 핀한다.
+    for (const v of ['2019-03-04', '190304'])
+      expect(badCells({ childNo: '1', name: '김서아', gender: '여', birth: v })).toEqual([])
+    // 연도가 뒤면 월·일 순서를 알 수 없어 거부한다 — 안내가 "연도를 먼저"라고 말하는 근거다
+    expect(badCells({ childNo: '1', name: '김서아', gender: '여', birth: '3/4/2019' })).toEqual(['생년월일'])
+  })
+
+  it('[REGRESSION] 양식이 금지한 번호 표기가 실제로 거부된다', () => {
+    // "2-1처럼 반을 붙이면 안 돼요" — 숫자만 뽑아 붙이면 21이 되어 다른 아이의 번호가 된다
+    expect(badCells({ childNo: '2-1', name: '김서아', gender: '여', birth: '190304' })).toEqual(['번호'])
+  })
+
   it('안내 줄이 머리글 탐색 범위(HEAD_SCAN_ROWS=8) 안에 있다', async () => {
     const g = await grid()
     const headRow = g.findIndex(r => r[0] === '번호')
