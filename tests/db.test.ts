@@ -533,6 +533,53 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     expect(consentedAt).toBeGreaterThanOrEqual(before)
     expect(consentedAt).toBeLessThanOrEqual(Date.now())
   })
+  it('idemKey를 주면 idem_key 컬럼으로 실린다', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    await createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })
+    const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect(row.idem_key).toBe('key-1')
+  })
+
+  it('idemKey가 없으면 idem_key 컬럼을 아예 보내지 않는다 (null 행이 unique를 다투지 않게)', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    await createSession({
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+    })
+    const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect('idem_key' in row).toBe(false)
+  })
+
+  it('[REGRESSION] 같은 idemKey로 두 번째 요청이 오면 새 행을 만들지 않고 첫 세션 id를 돌려준다', async () => {
+    // insert가 unique 충돌(23505) → 같은 키의 기존 행을 조회해 그 id를 반환해야 한다
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'duplicate key value' } })
+    enqueue('sessions', { data: { id: 'first-session' }, error: null })
+    const id = await createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })
+    expect(id).toBe('first-session')
+    expect(fromCalls).toEqual(['sessions', 'sessions'])   // insert 시도 1 + 조회 1
+  })
+
+  it('[REGRESSION] 23505인데 그 키의 행이 없으면 삼키지 않고 던진다 — 다른 unique 제약이 깨진 것이다', async () => {
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'sessions_pkey 위반' } })
+    enqueue('sessions', { data: null, error: null })   // 조회 결과 없음
+    await expect(createSession({
+      classCode: CLASS_CODE, childNo: 7,
+      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+    })).rejects.toThrow('sessions_pkey 위반')
+  })
+
+  it('idemKey가 없으면 23505도 그대로 던진다 (멱등 해석 대상이 아니다)', async () => {
+    enqueue('sessions', { data: null, error: { code: '23505', message: 'duplicate key value' } })
+    await expect(createSession({
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+    })).rejects.toThrow('duplicate key value')
+  })
+
 })
 
 const RS = ['rs01', 'rs02', 'rs03', 'rs04']

@@ -9,8 +9,22 @@ export interface NewSessionInput {
   classCode: ClassCodeRow
   childNo: number
   birthYmd: string; gender: '남' | '여'; childName: string
+  /** 멱등 키 — 확인 모달을 열 때 화면이 한 번 만든다. 연타·재전송은 같은 키로 오므로
+   *  두 번째부터는 새 행을 만들지 않고 첫 세션을 그대로 돌려준다(migration 004 주석).
+   *  키가 없는 호출(테스트 등)은 멱등 보장 없이 그냥 만든다. */
+  idemKey?: string
 }
 
+/**
+ * 검사 세션 생성. `idemKey`가 오면 **같은 키로는 세션이 하나만 만들어진다.**
+ *
+ * unique 충돌(23505)을 "이미 내가 만든 그 세션"으로 해석해 기존 행의 id를 돌려준다 —
+ * 먼저 조회해서 확인하는 방식은 쓰지 않는다: 조회~삽입 사이에 같은 키의 다른 요청이
+ * 끼면 둘 다 "없다"를 보고 두 세션을 만든다(`approveClassCode`가 같은 이유로 조회 대신
+ * 조건부 업데이트 한 방을 쓴다). 삽입을 먼저 던지고 충돌을 해석하는 쪽만 경쟁에 안전하다.
+ *
+ * 재검사는 막지 않는다 — 모달을 다시 열면 새 키가 나오므로 새 세션이 만들어진다.
+ */
 export async function createSession(s: NewSessionInput): Promise<string> {
   const c = s.classCode
   const { data, error } = await sb().from('sessions').insert({
@@ -22,7 +36,17 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
     guardian_consented_at: new Date().toISOString(),
+    ...(s.idemKey ? { idem_key: s.idemKey } : {}),
   }).select('id').single()
+
+  if ((error as { code?: string } | null)?.code === '23505' && s.idemKey) {
+    // 같은 키로 이미 만들어진 세션이 있다 = 이 요청은 그 요청의 재시도다.
+    const { data: prev, error: e2 } = await sb().from('sessions')
+      .select('id').eq('idem_key', s.idemKey).maybeSingle()
+    fail(e2)
+    // 행이 없다면 idem_key가 아닌 다른 unique 제약이 깨진 것이다 — 삼키지 말고 던진다.
+    if (prev) return (prev as { id: string }).id
+  }
   fail(error)
   return data!.id
 }

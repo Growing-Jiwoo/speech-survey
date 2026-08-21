@@ -75,6 +75,11 @@ interface Confirmed {
   cls: ClassInfo
   childNo: number
   name: string
+  /** 이 확인 모달 한 번에 대응하는 멱등 키. **모달을 열 때 만들고 재시도 동안 유지한다** —
+   *  `begin()` 안에서 만들면 실패 후 다시 누를 때마다 새 키가 나와 서버가 재시도를 구분할
+   *  수 없다(연타·재전송이 그대로 세션 두 개가 된다). 모달을 닫고 다시 열면 새 키가 되므로
+   *  정상 재검사는 막히지 않는다(migration 004 주석). */
+  idemKey: string
   /** 성별·생년월일 한 줄. 명단 모드에서만 채운다 — 직접 입력은 검사자가 방금 그 칸에
    *  타이핑한 값이라 모달에서 되풀이할 것이 없다(직접 입력 모달은 변경 전과 같다). */
   identity: string | null
@@ -170,6 +175,7 @@ export default function StartPage() {
     setConfirm({
       cls, childNo: child.childNo, name: child.name,
       identity: `${child.gender} · ${child.birthYmd}`, tested: child.tested,
+      idemKey: crypto.randomUUID(),
     })
   }
 
@@ -199,6 +205,7 @@ export default function StartPage() {
     setConfirm({
       cls: r.data, childNo: childNoNum, name: cleanName,
       identity: null, tested: r.data.alreadyTested,
+      idemKey: crypto.randomUUID(),
     })
   }
 
@@ -207,15 +214,20 @@ export default function StartPage() {
    *  있는 값을 보내면 서버 복사라는 보장이 무의미해진다.
    *  성공 분기에서는 busy를 풀지 않는다 — router.push가 끝나기 전에 확인 버튼이 다시
    *  활성화되면 느린 기기에서 두 번 탭해 세션이 중복 생성될 수 있다(첫 세션이 고아로 남음).
-   *  화면을 완전히 떠날 때까지 잠가 두고, 실패했을 때만 재시도할 수 있게 푼다. */
+   *  화면을 완전히 떠날 때까지 잠가 두고, 실패했을 때만 재시도할 수 있게 푼다.
+   *  이 잠금은 클라이언트 방어일 뿐이라 서버에도 멱등 키를 보낸다(`c.idemKey`) — 그 키가
+   *  없으면 재전송·연타가 서버까지 도달했을 때 막을 근거가 없다(E2E 2026-08-20 항목 3.17). */
   async function begin(c: Confirmed) {
     setBusy(true)
     const r = await postJson<{ sessionId: string; sessionToken: string; grade: number }>('/api/sessions',
       step === 'roster'
-        ? { fromRoster: true, code: cleanCode, childNo: c.childNo, guardianConsent: consent }
+        ? { fromRoster: true, code: cleanCode, childNo: c.childNo, guardianConsent: consent,
+            idemKey: c.idemKey }
         : {
           code: cleanCode, childNo: c.childNo, name: c.name, gender, birthYmd,
           guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
+          // 모달을 열 때 만든 키를 그대로 쓴다 — 재시도가 같은 키여야 서버가 멱등을 판정한다
+          idemKey: c.idemKey,
         })
     if (!r.ok) { setBusy(false); setConfirmErr(r.error); return }
     saveClassCode(cleanCode)
