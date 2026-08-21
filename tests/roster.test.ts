@@ -264,8 +264,9 @@ describe('배포 양식(public/roster-template.xlsx) — 교사에게 주는 양
     expect((parseRosterGrid(await grid()) as ParsedRoster).rows).toEqual([])
   })
 
-  it('안내 문구가 주민등록번호 경고 배너를 잘못 띄우지 않는다', async () => {
-    // 안내 줄에 "주민등록번호"라는 낱말이 있지만 머리글 행도 데이터 행도 아니다
+  it('안내 문구가 주민등록번호 경고 배너를 켜지 않는다', async () => {
+    // 안내 줄에 숫자가 섞여 있어도(`2-1`·`2019-03-04`) 주민번호로 오인되면 교사에게
+    // 엉뚱한 배너가 뜬다 — 문구를 고칠 때 이 핀이 지켜 준다.
     expect((parseRosterGrid(await grid()) as ParsedRoster).rrnSeen).toBe(false)
   })
 
