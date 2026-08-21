@@ -130,11 +130,16 @@ function sheetXml(): { xml: string; headerRow: number } {
   }
   const lastData = r - 1
 
+  // E열 이후는 숨긴다. 격자선을 끈 탓에 표 밖이 순백이 되어, 남은 열이 형태 없는 빈
+  // 공간으로 붙어 보였다(사용자 지적 2026-08-22 — "옆에 E열 빈거 생기는 것 같은데").
+  // 숨기면 시트가 표에서 끝나 서식으로 읽힌다. 16384는 엑셀의 마지막 열 번호다.
+  // 파서는 셀이 있는 칸만 읽으므로(readXlsx) 숨김은 파싱에 영향이 없다.
   const cols = [
     `<col min="1" max="1" width="9" customWidth="1"/>`,
     `<col min="2" max="2" width="18" customWidth="1"/>`,
     `<col min="3" max="3" width="10" customWidth="1"/>`,
     `<col min="4" max="4" width="18" customWidth="1"/>`,
+    `<col min="5" max="16384" width="9" hidden="1" customWidth="1"/>`,
   ].join('')
 
   // 격자선을 끄면 위에서 그린 테두리만 남아 표가 폼처럼 도드라진다.
