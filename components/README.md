@@ -10,7 +10,7 @@
 |---|---|
 | `Badge.tsx` | 상태 pill(tone: blue/mint/amber/rec/mute) — 완료/누락/주의 표시의 단일 스타일 소스 |
 | `ConfirmDialog.tsx` | 확인 모달 — 포커스 트랩·Esc/오버레이 닫기·busy 잠금·배경 스크롤 잠금 내장. 파괴적 동작은 `danger`. 스크롤 잠금이 화면 폭을 바꾸지 않게 `app/globals.css`가 `html { scrollbar-gutter: stable }`로 스크롤바 자리를 항상 비워 둔다 — 없으면 모달을 여닫을 때마다 화면이 가로로 튄다 |
-| `Select.tsx` | 커스텀 드롭다운 — body 포탈(overflow 클리핑 회피) + ARIA listbox 키보드 내비(`aria-activedescendant`) |
+| `Select.tsx` | 커스텀 드롭다운 — body 포탈(overflow 클리핑 회피) + ARIA listbox 키보드 내비(`aria-activedescendant`). 크기 3종: `lg`(기본) · `sm`(관리자 툴바) · `grid`(표 한 칸 — 옆 input과 높이·모서리를 맞춘다). `ariaInvalid`를 주면 테두리를 붉게 하는 것도 여기서 판단한다 — 호출부가 className으로 못 준다(Tailwind 클래스는 특이도가 같아 순서로 못 이긴다) |
 | `Blip.tsx` | 마스코트/로고 SVG. 감정 연출(축하·응원) 변형은 만들지 않는다(스펙: 평가 비노출) |
 | `RecordButton.tsx` | 대형 녹음 버튼 + 남은 시간 진행 링(strokeDashoffset 카운트다운) |
 | `LevelMeter.tsx` | 목소리 크기 막대 5개 — "기계가 듣고 있다"는 기능 피드백(칭찬 신호 아님) |
