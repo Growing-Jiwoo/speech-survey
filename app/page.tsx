@@ -239,7 +239,10 @@ export default function StartPage() {
       {/* aria-live — 단계 전환은 이 문구만이 말로 알려 준다(화면에서는 폼 모양이 바뀌어 보이지만
           스크린리더에는 아무 일도 일어나지 않은 것과 같다). */}
       <p aria-live="polite" className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
-        {step === 'code' ? <>선생님께 받은 학급 코드를<br />입력해 주세요.</>
+        {/* "선생님께 받은"은 이 화면을 조작하는 사람이 교사라 누가 준 것인지 오히려 흐렸다 —
+            발급 경로가 관리자 직접 발급/교사 신청 승인 둘이라 주는 쪽을 특정하지 않는다
+            (사용자 확정 2026-08-21). */}
+        {step === 'code' ? <>전달받은 학급 코드를<br />입력해 주세요.</>
           : step === 'roster' ? '검사할 학생을 골라 주세요.'
             : '아동 정보를 입력해 주세요.'}
       </p>
@@ -310,13 +313,15 @@ export default function StartPage() {
                 두면 지금 검사하지 않는 아이들의 이름까지 계속 노출된다.
                 라벨에 생년월일은 넣지 않는다 — 선택 시점에 신원 대조에 가장 덜 필요한 칸이라
                 확인 모달에서만 보여준다. */}
-            <Select id="pick" ariaLabel="검사할 학생" placeholder="번호와 이름을 골라 주세요"
+            <Select id="pick" ariaLabel="검사할 학생" placeholder="학생을 선택해 주세요"
               className="mt-1.5" value={pick} onChange={setPick}
               options={roster.map(r => ({
                 value: String(r.childNo),
+                label: `${r.childNo}번 ${r.name} (${r.gender})`,
                 // 이미 검사한 아동도 그대로 고를 수 있다 — 재검사는 허용이고(스펙 "중복 검사
                 // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
-                label: `${r.childNo}번 ${r.name} (${r.gender})${r.tested ? ' · 검사함' : ''}`,
+                // 라벨에 이어 붙이지 않고 배지로 내보내는 이유는 Select의 badge 주석 참고.
+                badge: r.tested ? '검사함' : undefined,
               }))} />
             {/* 명단에서 고른 아동과 직접 입력할 아동은 서로 다른 아이다 — 코드 수정 때와 같은
                 이유로 보호자 동의 체크를 함께 푼다(위 onChange 주석 참고). 안 풀면 명단 아동으로
@@ -408,7 +413,7 @@ export default function StartPage() {
               ))}
             </dl>
             <p className="mt-2 text-[12px] leading-relaxed text-ink-mute">
-              만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.
+              만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.<br />
               학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
             </p>
             <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
@@ -439,16 +444,23 @@ export default function StartPage() {
           cancelLabel="아니에요"
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
-            <p className="font-bold text-ink">
-              {confirm.cls.schoolName} {gradeClassLabel(confirm.cls.grade, confirm.cls.classNo)}
-            </p>
-            <p className="mt-0.5 text-[13px]">
-              담임 {confirm.cls.teacherName}
-              {(confirm.cls.teacherPhone || confirm.cls.teacherEmail) && (
-                <> · {[confirm.cls.teacherPhone, confirm.cls.teacherEmail].filter(Boolean).join(' · ')}</>
-              )}
-            </p>
-            <p className="mt-2.5">
+            {/* 학급·담임(코드가 가리키는 것)과 아동(지금 검사할 사람)은 확인해야 할 대상이
+                다르다. 한 덩이로 흘리면 "담임 이름"과 "학생 이름"이 같은 묶음처럼 읽혀
+                검사자가 무엇을 대조하는 중인지 놓친다 — 학급 정보를 회색 블록으로 가두고
+                아동은 그 밖에 둬서 시선이 두 번 멈추게 한다(사용자 확정 2026-08-21). */}
+            <div className="rounded-xl bg-well px-3 py-2.5">
+              <p className="text-[11px] font-bold tracking-wide text-ink-mute">학급</p>
+              <p className="mt-0.5 font-bold text-ink">
+                {confirm.cls.schoolName} {gradeClassLabel(confirm.cls.grade, confirm.cls.classNo)}
+              </p>
+              <p className="mt-0.5 break-all text-[12.5px]">
+                담임 {confirm.cls.teacherName}
+                {(confirm.cls.teacherPhone || confirm.cls.teacherEmail) && (
+                  <> · {[confirm.cls.teacherPhone, confirm.cls.teacherEmail].filter(Boolean).join(' · ')}</>
+                )}
+              </p>
+            </div>
+            <p className="mt-3.5">
               <b className="text-blue">{confirm.childNo}번 {confirm.name}</b> 학생의 검사를
               {confirm.tested ? ' 다시' : ''} 시작할까요?
             </p>
@@ -458,13 +470,15 @@ export default function StartPage() {
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
             {confirm.tested === 'inProgress' && (
-              <p className="mt-2 text-[12.5px] text-amber">
-                이 번호로 진행 중인(제출 전) 검사가 있어요. 다른 기기에서 검사 중일 수 있어요.
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
+                다른 기기에서 검사 중일 수 있어요.
               </p>
             )}
             {confirm.tested === 'submitted' && (
-              <p className="mt-2 text-[12.5px] text-amber">
-                이 번호로 제출까지 끝난 검사가 있어요. 다시 검사하면 새 결과가 추가로 남아요.
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                이 번호로 제출까지 끝난 검사가 있어요.<br />
+                다시 검사하면 새 결과가 추가로 남아요.
               </p>
             )}
           </div>

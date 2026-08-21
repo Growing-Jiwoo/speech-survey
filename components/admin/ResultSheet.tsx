@@ -293,7 +293,7 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
               낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
               문장 읽기유창성 {passMark.sentenceReading} / {taskMax.sentenceReading} ·
               {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
-              기준표를 받으면 숫자만 교체되며 이미 채점한 세션도 저장된 점수로 다시 계산됩니다.</>,
+              기준표를 받으면 숫자만 교체되며 이미 채점한 검사도 저장된 점수로 다시 계산됩니다.</>,
           }] : []),
         ]}
         note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초, 문장 읽기유창성은 {form.limits.sentenceSec}초 내

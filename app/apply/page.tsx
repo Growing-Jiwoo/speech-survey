@@ -83,7 +83,7 @@ export default function ApplyPage() {
         <b className="text-ink">{cleanEmail}</b> 메일함을 확인해 주세요.
       </p>
       <p className="mt-6 text-center text-[12px] leading-relaxed text-ink-mute">
-        승인까지 며칠 걸릴 수 있어요. 메일이 오지 않으면 스팸함도 확인해 주세요.
+        승인까지 며칠 걸릴 수 있어요.<br />메일이 오지 않으면 스팸함도 확인해 주세요.
       </p>
     </main>
   )

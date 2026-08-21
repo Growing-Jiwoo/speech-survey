@@ -79,15 +79,46 @@ export function PendingApplications({
       <ul className="mt-3 flex flex-col gap-2.5">
         {items.map(c => (
           <li key={c.id} className="rounded-xl border-[1.5px] border-line bg-white px-4 py-3">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="min-w-0">
-                <p className="text-sm font-bold">
-                  {c.school_name} {gradeClassLabel(c.grade, c.class_no)} · 담임 {c.teacher_name}
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+              {/* 한 줄에 학교·학년반·담임·인원·신청시각·이메일을 「·」로 이어 붙이던 것을 나눴다.
+                  좁은 폭에서 줄바꿈이 「·」 아무 곳에서나 일어나 어느 값이 어디서 끝나는지
+                  읽히지 않았고, 이메일이 길면 버튼을 밀어냈다. 승인 판단에 먼저 필요한 것은
+                  학급과 **인원 수**이므로 그 둘을 제목 줄로 올리고, 나머지는 라벨을 붙인
+                  칩으로 흘린다(사용자 보고 2026-08-21). */}
+              {/* min-w-0이 아니라 최소 폭을 준다 — 0이면 좁은 화면에서 정보 블록이 끝없이
+                  눌려 버튼과 한 줄에 남으려 하고, 제목이 글자 단위로 접힌다. 이 폭보다
+                  좁아지면 버튼 묶음이 다음 줄로 내려간다(부모가 flex-wrap). */}
+              <div className="min-w-[13rem] flex-1">
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {/* 학년-반은 통째로 붙여 둔다 — `1-3`의 하이픈에서 줄바꿈이 일어나면
+                      `1-` / `3`으로 갈려 학급을 잘못 읽는다. */}
+                  <span className="break-keep text-sm font-bold">
+                    {c.school_name} <span className="whitespace-nowrap">{gradeClassLabel(c.grade, c.class_no)}</span>
+                  </span>
+                  <span className="flex-none rounded-full bg-amber/15 px-2 py-0.5 text-[11.5px] font-bold text-amber">
+                    학생 {c.roster_count}명
+                  </span>
                 </p>
-                <p className="text-[12px] text-ink-mute">
-                  {c.roster_count}명 · 신청 {c.applied_at ? new Date(c.applied_at).toLocaleString('ko-KR') : '—'}
-                  {c.teacher_email && ` · ${c.teacher_email}`}
-                </p>
+                <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px] text-ink-mute">
+                  <div className="flex min-w-0 gap-1">
+                    <dt className="flex-none">담임</dt>
+                    <dd className="min-w-0 truncate font-medium text-ink-soft">{c.teacher_name}</dd>
+                  </div>
+                  {c.teacher_email && (
+                    <div className="flex min-w-0 gap-1">
+                      <dt className="flex-none">메일</dt>
+                      {/* 이메일은 이 줄에서 가장 길어질 수 있는 값이다 — 넘치면 버튼을 밀지 않고
+                          말줄임한다(전체 값은 title로 확인). */}
+                      <dd className="min-w-0 truncate text-ink-soft" title={c.teacher_email}>{c.teacher_email}</dd>
+                    </div>
+                  )}
+                  <div className="flex flex-none gap-1">
+                    <dt>신청</dt>
+                    <dd className="tabular-nums text-ink-soft">
+                      {c.applied_at ? new Date(c.applied_at).toLocaleDateString('ko-KR') : '—'}
+                    </dd>
+                  </div>
+                </dl>
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 {/* 승인 요청은 메일 발송까지 끝난 뒤에 응답하므로 1~2초 머문다. 그 사이 같은 행의

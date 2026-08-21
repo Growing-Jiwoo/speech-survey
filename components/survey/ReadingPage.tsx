@@ -50,7 +50,9 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange 
 
   const saved = attemptCount > 0
   const savedMessage = lowVolume
-    ? '목소리가 잘 안 담긴 것 같아요. 한 번 더 해 볼까요?'
+    // 두 문장이라 좁은 배지 폭에서 어중간하게 접혔다 — `\n`으로 나누고 아래 배지가
+    // pre-line으로 살린다(sr-only 라이브 리전은 줄바꿈에 영향받지 않는다).
+    ? '목소리가 잘 안 담긴 것 같아요.\n한 번 더 해 볼까요?'
     : page.practice ? '잘했어요! 이제 진짜로 해 볼게요.' : '녹음이 완료됐어요.'
 
   return (
@@ -129,7 +131,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange 
                   <path d="M12 7v6" /><path d="M12 17h.01" />
                 </svg>
               </span>
-              <p className="text-sm font-bold text-amber">{savedMessage}</p>
+              <p className="whitespace-pre-line text-sm font-bold text-amber">{savedMessage}</p>
             </div>
           ) : saved ? (
             <div className="flex items-center gap-2.5 rounded-[14px] border border-line bg-well px-4 py-3">

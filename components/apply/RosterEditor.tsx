@@ -226,12 +226,12 @@ export function RosterEditor({ onChange }: {
           </div>
           {broken > 0 && (
             <p className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">
-              붉게 표시된 칸을 채워 주세요. 줄 순서는 올리신 파일 그대로예요.
+              붉게 표시된 칸을 채워 주세요.<br />줄 순서는 올리신 파일 그대로예요.
             </p>
           )}
           {dup.size > 0 && (
             <p className="mt-1 text-[12.5px] leading-relaxed text-rec-deep">
-              {[...dup].sort((a, b) => a - b).join('·')}번이 두 번 있어요. 한 학급에 같은 번호를 둘 수는 없어요.
+              {[...dup].sort((a, b) => a - b).join('·')}번이 두 번 있어요.<br />한 학급에 같은 번호를 둘 수는 없어요.
             </p>
           )}
         </>

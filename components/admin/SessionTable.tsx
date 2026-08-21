@@ -337,7 +337,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       />
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">
-          {total === 0 ? '아직 참여한 세션이 없습니다.' : '조건에 맞는 세션이 없습니다.'}
+          {total === 0 ? '아직 참여한 검사가 없습니다.' : '조건에 맞는 검사가 없습니다.'}
         </p>
       )}
     </>
