@@ -8,6 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { RosterEditor } from '@/components/apply/RosterEditor'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
+import { RETENTION_LABEL } from '@/lib/consent'
 import { CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import type { RosterChild } from '@/lib/roster'
@@ -16,15 +17,45 @@ import { validEmail, validName, validPhone } from '@/lib/validate'
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-[15px] outline-none transition focus:border-blue focus:bg-white'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
-/** ⚠️ 담당자 확인 대기 — 확정 아님. 아래 문구는 개발용 초안이다(사용자 확정 2026-08-18).
- *  담당자가 안내 문구 예시를 만들기로 했고, 연구윤리 검토본이 오면 다시 교체된다.
- *  교체할 때 이 상수만 고치면 되고 화면 구조는 건드릴 필요가 없다.
- *  ⚠️ 아동 개인정보·연구 활용 동의는 여기서 받을 수 없다 — 교사는 보호자의 대리인이
- *  아니다. 그것은 가정통신문(서면)의 몫이다(스펙 "동의" 절). */
-const APPLY_CHECKS = [
-  '개인정보(성명·연락처) 수집·이용에 동의합니다.',
-  '검사 절차 안내를 확인했습니다.',
-  '보호자 서면 동의를 받은 학생만 명단에 등록했습니다.',
+/**
+ * 안내·동의 문구. 사용자 확정 2026-08-22 — 이전 판은 개발용 초안이었고 두 곳이 실질적으로
+ * 틀렸다: ①「개인정보(성명·연락처)」가 **누구의** 것인지 없어 바로 위 학생 명단과 겹쳐
+ * 아동 정보 동의로 읽혔고, ②「검사 절차 안내를 확인했습니다」는 **확인할 안내가 화면에
+ * 없는 가짜 동의**였다(그래서 SURVEY_NOTICE를 만들고 체크가 그것을 가리키게 했다).
+ *
+ * ⚠️ 여전히 연구윤리 검토본 대기 중이다 — 검토본이 오면 이 상수들만 고치면 되고 화면
+ * 구조는 건드릴 필요가 없다.
+ * ⚠️ 아동 개인정보·연구 활용 동의는 여기서 받을 수 없다 — 교사는 보호자의 대리인이
+ * 아니다. 그것은 가정통신문(서면)의 몫이다(스펙 "동의" 절).
+ * ⚠️ 사실 관계 근거(문장을 고칠 때 함께 흔들지 말 것):
+ *   · 약 15~20분 …… docs/consent/guardian-consent-form.md(보호자에게 이미 고지한 값)
+ *   · 헤드셋·컴퓨터 … docs/superpowers/specs/2026-07-17-desktop-ui-design.md
+ *   · 담당자만 청취 … lib/consent.ts CHILD_NOTICE(아동에게 고지한 내용과 같아야 한다)
+ *   · 언제든 멈춤 …… README "아동이 힘들면 녹음 버튼을 다시 눌러 스스로 멈춘다"
+ */
+const SURVEY_NOTICE = [
+  '아이 한 명에 약 15~20분 걸립니다. 낱말과 문장을 소리 내어 읽고, 낱말 쓰기를 합니다.',
+  '헤드셋 마이크가 연결된 컴퓨터와 조용한 자리가 필요합니다.',
+  '읽는 목소리는 녹음됩니다. 녹음은 검사를 확인하는 담당자만 듣고, 채점에만 씁니다.',
+  '아이가 힘들어하면 녹음 버튼을 다시 눌러 언제든 멈출 수 있어요.',
+] as const
+
+/** 동의 체크 — `note`는 체크 아래 작은 글씨. 라벨은 짧게 두고 근거·제약을 note가 받는다
+ *  (라벨에 다 넣으면 길어져 읽지 않고 체크한다). */
+const APPLY_CHECKS: readonly { label: string; note?: string }[] = [
+  {
+    label: '선생님의 성함·이메일·연락처를 검사 안내에 쓰는 것에 동의합니다.',
+    // 개인정보보호법 제15조 제2항의 4대 고지사항을 한 줄로 압축한다 — 보관 기간은
+    // lib/consent의 RETENTION_LABEL을 그대로 써서 서면 동의서와 갈리지 않게 한다.
+    note: `학급 코드 발송과 검사 관련 연락에만 씁니다. 보관 기간은 「${RETENTION_LABEL}」이며, `
+      + '동의하지 않으실 수 있습니다(그 경우 신청은 할 수 없습니다).',
+  },
+  { label: '위 검사 안내를 확인했습니다.' },
+  {
+    label: '보호자 서면 동의를 받은 학생만 명단에 등록했습니다.',
+    note: '보호자 동의는 이 화면에서 받을 수 없습니다 — 가정통신문으로 회수해 주세요. '
+      + '만 14세 미만 아동의 개인정보는 법정대리인 동의가 필요합니다.',
+  },
 ] as const
 
 export default function ApplyPage() {
@@ -56,10 +87,10 @@ export default function ApplyPage() {
     if (!school) { setErr('학교를 선택해 주세요.'); return }
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('선생님 성함은 한글이나 영어로만 쓸 수 있어요.'); return }
-    if (!validEmail(cleanEmail)) { setErr('승인 안내를 받을 이메일을 형식에 맞게 입력해 주세요.'); return }
+    if (!validEmail(cleanEmail)) { setErr('이메일 형식을 확인해 주세요. (예: name@example.com)'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
     if (!roster) { setErr('학급 명단을 확인해 주세요.'); return }
-    if (!allChecked) { setErr('안내 및 동의 항목에 모두 체크해 주세요.'); return }
+    if (!allChecked) { setErr('검사 안내를 읽고 동의 항목 3개에 모두 체크해 주세요.'); return }
 
     setErr(''); setBusy(true)
     const r = await postJson('/api/apply', {
@@ -78,12 +109,15 @@ export default function ApplyPage() {
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center p-6">
       <Blip variant="logo" className="h-14 w-14" />
       <h1 className="mt-6 text-xl font-bold">신청이 접수됐어요.</h1>
+      {/* 종전은 「접수됐어요」(해요체)와 「보내드립니다」(합니다체)가 한 화면에 섞여 있었다. */}
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
-        승인되면 이메일로 학급 코드를 보내드립니다.<br />
+        담당자가 명단을 확인한 뒤 학급 코드를 보내드려요.<br />
         <b className="text-ink">{cleanEmail}</b> 메일함을 확인해 주세요.
       </p>
       <p className="mt-6 text-center text-[12px] leading-relaxed text-ink-mute">
-        승인까지 며칠 걸릴 수 있어요.<br />메일이 오지 않으면 스팸함도 확인해 주세요.
+        승인까지 며칠 걸릴 수 있어요.<br />
+        메일이 오지 않으면 스팸함도 확인해 주세요.<br />
+        학급 코드는 메일로만 전달되니 받으신 메일을 보관해 주세요.
       </p>
     </main>
   )
@@ -94,9 +128,15 @@ export default function ApplyPage() {
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
       </div>
-      <h1 className="mt-10 self-center text-2xl font-bold">검사 신청</h1>
+      <h1 className="mt-10 self-center text-2xl font-bold">읽기 선별검사 신청</h1>
+      {/* 종전 리드는 "학급 정보와 명단을 남겨 주시면…"뿐이라 **무슨 검사인지 한 줄도 없었다.**
+          이 화면에 처음 들어온 교사가 가장 먼저 알아야 하는 것을 먼저 말한다. */}
       <p className="mt-3 self-center text-center text-sm leading-relaxed text-ink-soft">
-        학급 정보와 명단을 남겨 주시면<br />확인 후 학급 코드를 메일로 보내드려요.
+        아이가 낱말과 문장을 소리 내어 읽는 과정을 녹음해<br />
+        읽기 발달을 조기에 확인하는 검사예요.
+      </p>
+      <p className="mt-2.5 self-center text-center text-[13px] leading-relaxed text-ink-mute">
+        학급 명단을 남겨 주시면 담당자가 확인한 뒤<br />학급 코드를 메일로 보내드려요.
       </p>
 
       {/* 자동완성은 끈다 — app/page.tsx와 같은 이유(개인 기기에서 남의 칸에 제안되는 것 방지) */}
@@ -125,41 +165,69 @@ export default function ApplyPage() {
           <label className={labelCls} htmlFor="ap-teacher">선생님 성함</label>
           <input id="ap-teacher" value={teacherName} maxLength={30}
             onChange={e => setTeacherName(e.target.value)} className={inputCls} />
-          <label className={labelCls} htmlFor="ap-email">승인 안내를 받을 이메일 (필수)</label>
-          <input id="ap-email" value={email} maxLength={60} inputMode="email" placeholder="name@example.com"
+          {/* 라벨에서 (필수)를 뗀다 — 학교·학년·반·성함·이메일이 모두 필수인데 이 칸만
+              (필수)가 붙어 나머지가 선택처럼 보였다. 선택인 것에만 (선택)을 붙인다. */}
+          <label className={labelCls} htmlFor="ap-email">이메일</label>
+          <input id="ap-email" value={email} maxLength={60} type="email" inputMode="email"
+            spellCheck={false} placeholder="name@example.com"
             onChange={e => setEmail(e.target.value)} className={inputCls} />
           <p className="mt-1.5 text-[12px] leading-relaxed text-ink-mute">
-            {/* "학교 메일"로 못 박지 않는다 — 개인 메일을 쓰는 교사도 있고, 승인 메일이 코드가
-                닿는 유일한 경로라 받을 수 있는 주소가 맞다(사용자 확정 2026-08-21). */}
-            학급 코드는 이 주소로만 보내드려요.<br />메일을 받을 수 있는 주소를 적어 주세요.
+            {/* 종전 둘째 줄("메일을 받을 수 있는 주소를 적어 주세요")은 동어반복이었다 —
+                실질 정보는 "이 주소로만"과 "학교 메일이 아니어도 된다"다.
+                "학교 메일"로 못 박지 않는 이유는 개인 메일을 쓰는 교사도 있고, 승인 메일이
+                코드가 닿는 유일한 경로이기 때문이다(사용자 확정 2026-08-21). */}
+            학급 코드는 <b className="text-ink-soft">이 주소로만</b> 보내드려요.<br />
+            학교 메일이 아니어도 괜찮아요.
           </p>
           <label className={labelCls} htmlFor="ap-phone">연락처 (선택)</label>
-          <input id="ap-phone" value={phone} maxLength={60} inputMode="tel" placeholder="01012345678"
+          <input id="ap-phone" value={phone} maxLength={60} inputMode="tel" spellCheck={false}
+            placeholder="01012345678"
             onChange={e => setPhone(e.target.value)} className={inputCls} />
+          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-mute">
+            메일이 닿지 않을 때만 연락드려요.
+          </p>
         </section>
 
         <section className="card mt-4 p-5">
           <h2 className="text-[15px] font-bold">학급 명단</h2>
           <p className="mt-1 mb-4 text-[12px] leading-relaxed text-ink-mute">
-            번호·이름·성별·생년월일 네 칸만 씁니다. 그 밖의 정보는 저장하지 않아요.
+            {/* "그 밖의 정보는 저장하지 않아요"보다 구체적으로 — 명렬표를 올릴 때 교사가
+                실제로 걱정하는 것은 주민등록번호다. 2중 차단이 실제 기능이므로 그것을 말한다
+                (lib/roster: 머리글 이름과 값 모양 양쪽에서 걸러 낸다). */}
+            번호·이름·성별·생년월일 <b className="text-ink-soft">네 칸만</b> 씁니다.
+            주민등록번호가 들어 있으면 읽지 않고 버려요.
           </p>
           <RosterEditor onChange={setRoster} />
         </section>
 
         <section className="card mt-4 p-5">
-          <h2 className="text-[15px] font-bold">안내 및 동의</h2>
+          <h2 className="text-[15px] font-bold">검사 안내 및 동의</h2>
           <ol className="mt-3 flex flex-wrap gap-x-2 gap-y-1 text-[12.5px] text-ink-soft">
             {['신청', '담당자 승인', '학급 코드 메일', '검사 진행'].map((s, i) => (
               <li key={s}>{i > 0 && <span className="mr-2 text-ink-mute">→</span>}{s}</li>
             ))}
           </ol>
+
+          {/* 「위 검사 안내를 확인했습니다」 체크가 가리킬 실체 — 종전에는 확인할 안내가
+              화면에 없는데 확인했다고 체크하게 만들었다(가짜 동의). */}
+          <ul className="mt-4 flex flex-col gap-1.5 rounded-xl border-[1.5px] border-line bg-well px-4 py-3.5">
+            {SURVEY_NOTICE.map(t => (
+              <li key={t} className="flex gap-2 text-[13px] leading-relaxed text-ink-soft">
+                <span aria-hidden="true" className="flex-none text-blue">·</span>{t}
+              </li>
+            ))}
+          </ul>
+
           <div className="mt-4 flex flex-col gap-2">
-            {APPLY_CHECKS.map((text, i) => (
-              <label key={text} className="flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-well px-3 py-2.5">
+            {APPLY_CHECKS.map((c, i) => (
+              <label key={c.label} className="flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
                 <input type="checkbox" checked={checks[i]}
-                  onChange={e => setChecks(c => c.map((v, j) => (j === i ? e.target.checked : v)))}
+                  onChange={e => setChecks(cs => cs.map((v, j) => (j === i ? e.target.checked : v)))}
                   className="mt-0.5 h-5 w-5 flex-none accent-[var(--color-blue)]" />
-                <span className="text-[13px] font-bold leading-relaxed text-ink-soft">{text}</span>
+                <span>
+                  <span className="block text-[13px] font-bold leading-relaxed text-ink-soft">{c.label}</span>
+                  {c.note && <span className="mt-1 block text-[11.5px] leading-relaxed text-ink-mute">{c.note}</span>}
+                </span>
               </label>
             ))}
           </div>
@@ -169,7 +237,7 @@ export default function ApplyPage() {
         <button type="submit" disabled={busy || !filled} className="cta mt-5">신청하기</button>
         {!filled && (
           <p className="mt-2 text-center text-[12px] leading-relaxed text-ink-mute">
-            학급 정보·명단을 채우고 동의 항목에 모두 체크하면 신청할 수 있어요.
+            학급 정보와 명단을 채우고 동의 항목 3개에 체크하면 신청할 수 있어요.
           </p>
         )}
       </form>

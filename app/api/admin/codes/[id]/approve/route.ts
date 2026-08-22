@@ -41,6 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!already && row.teacher_email) {
       const mail = approvedMail({
         teacherName: row.teacher_name, schoolName: row.school_name,
+        grade: row.grade, classNo: row.class_no,
         code: row.code, surveyUrl: origin,
       })
       const sent = await sendMail({ ...mail, to: row.teacher_email })
