@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { approvalNoticeText, contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel, gradeClassLines } from '@/lib/format'
+import { APPLY_CHECKS, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
   it('정상 값', () => {
@@ -90,16 +91,41 @@ describe('approvalNoticeText', () => {
     expect(t).toMatch(/학급 코드를 입력/)
   })
 
-  // 교사가 실제로 묻는 것(얼마나 걸리나·무엇이 필요하나)까지 담는다 — 짧게 줄일 때 여기부터
-  // 빠지기 쉬운데, 빠지면 안내가 아니라 코드 전달일 뿐이다(사용자 확정 2026-08-22).
-  it('[REGRESSION] 소요 시간·준비물·보호자 동의 조건을 담는다', () => {
-    const t = approvalNoticeText(V)
-    expect(t).toContain('15~20분')
-    expect(t).toContain('헤드셋 마이크')
-    expect(t).toContain('보호자 서면 동의')
+  it('[REGRESSION] 코드를 보관하라고 말한다 — 재발급 경로가 없어 잃으면 담당자 문의뿐이다', () => {
+    expect(approvalNoticeText(V)).toContain('보관')
   })
 
   it('평문이다 — HTML 태그가 섞이지 않는다(카톡·문자에 그대로 붙인다)', () => {
     expect(approvalNoticeText(V)).not.toMatch(/[<>]/)
+  })
+})
+
+// 승인 메일에서 뺀 검사 안내는 **신청 화면에 있어야 한다** — 두 곳 다 없으면 교사는 소요
+// 시간도 준비물도 모른 채 검사를 시작한다. 상수를 lib으로 옮긴 이유가 이 핀이다.
+describe('신청 화면 안내·동의 문구(lib/consent)', () => {
+  it('[REGRESSION] 검사 안내가 소요 시간·준비물·녹음 취급·중단 가능을 말한다', () => {
+    const all = SURVEY_NOTICE.join(' ')
+    expect(all).toContain('15~20분')
+    expect(all).toContain('헤드셋 마이크')
+    expect(all).toContain('녹음')
+    expect(all).toContain('멈출 수 있어요')
+  })
+
+  it('[REGRESSION] 동의 3개 중 하나는 보호자 서면 동의 조건이다', () => {
+    expect(APPLY_CHECKS).toHaveLength(3)
+    expect(APPLY_CHECKS.some(c => c.label.includes('보호자 서면 동의'))).toBe(true)
+  })
+
+  it('[REGRESSION] 개인정보 동의는 주체를 밝힌다 — 「선생님의」가 없으면 학생 명단 동의로 읽힌다', () => {
+    expect(APPLY_CHECKS[0].label).toContain('선생님의')
+  })
+
+  it('[REGRESSION] 보관 기간은 서면 동의서와 같은 상수를 쓴다', () => {
+    expect(APPLY_CHECKS[0].note).toContain(RETENTION_LABEL)
+  })
+
+  it('체크 2번은 화면의 검사 안내를 가리킨다 — 안내를 지우면 가짜 동의가 된다', () => {
+    expect(APPLY_CHECKS[1].label).toContain('위 검사 안내')
+    expect(SURVEY_NOTICE.length).toBeGreaterThan(0)
   })
 })

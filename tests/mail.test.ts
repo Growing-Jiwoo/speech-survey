@@ -130,10 +130,15 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     }
   })
 
-  it('[REGRESSION] 두 채널 모두 보호자 서면 동의 조건을 말한다 — 빠지면 동의 없는 아동이 검사된다', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test' }
-    expect(approvedMail(v).html).toContain('보호자 서면 동의')
-    expect(approvalNoticeText(v)).toContain('보호자 서면 동의')
+  // 승인 안내는 코드 전달이 목적이라 짧게 유지한다 — 소요 시간·준비물·보호자 동의 조건은
+  // 신청 화면에서 교사가 이미 읽고 체크한 것이므로 두 채널 모두 담지 않는다(사용자 확정
+  // 2026-08-22). 한쪽에만 되살아나면 채널에 따라 안내가 갈리므로 **둘 다 없음**을 핀한다.
+  it('[REGRESSION] 두 채널 모두 검사 안내를 중복해 담지 않는다', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
+      expect(out).not.toContain('15~20분')
+      expect(out).not.toContain('헤드셋')
+    }
   })
 
   it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다', () => {

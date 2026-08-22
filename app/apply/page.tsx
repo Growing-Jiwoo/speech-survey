@@ -8,7 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { RosterEditor } from '@/components/apply/RosterEditor'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
-import { RETENTION_LABEL } from '@/lib/consent'
+import { APPLY_CHECKS, SURVEY_NOTICE } from '@/lib/consent'
 import { CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import type { RosterChild } from '@/lib/roster'
@@ -16,47 +16,6 @@ import { validEmail, validName, validPhone } from '@/lib/validate'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-[15px] outline-none transition focus:border-blue focus:bg-white'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
-
-/**
- * 안내·동의 문구. 사용자 확정 2026-08-22 — 이전 판은 개발용 초안이었고 두 곳이 실질적으로
- * 틀렸다: ①「개인정보(성명·연락처)」가 **누구의** 것인지 없어 바로 위 학생 명단과 겹쳐
- * 아동 정보 동의로 읽혔고, ②「검사 절차 안내를 확인했습니다」는 **확인할 안내가 화면에
- * 없는 가짜 동의**였다(그래서 SURVEY_NOTICE를 만들고 체크가 그것을 가리키게 했다).
- *
- * ⚠️ 여전히 연구윤리 검토본 대기 중이다 — 검토본이 오면 이 상수들만 고치면 되고 화면
- * 구조는 건드릴 필요가 없다.
- * ⚠️ 아동 개인정보·연구 활용 동의는 여기서 받을 수 없다 — 교사는 보호자의 대리인이
- * 아니다. 그것은 가정통신문(서면)의 몫이다(스펙 "동의" 절).
- * ⚠️ 사실 관계 근거(문장을 고칠 때 함께 흔들지 말 것):
- *   · 약 15~20분 …… docs/consent/guardian-consent-form.md(보호자에게 이미 고지한 값)
- *   · 헤드셋·컴퓨터 … docs/superpowers/specs/2026-07-17-desktop-ui-design.md
- *   · 담당자만 청취 … lib/consent.ts CHILD_NOTICE(아동에게 고지한 내용과 같아야 한다)
- *   · 언제든 멈춤 …… README "아동이 힘들면 녹음 버튼을 다시 눌러 스스로 멈춘다"
- */
-const SURVEY_NOTICE = [
-  '아이 한 명에 약 15~20분 걸립니다. 낱말과 문장을 소리 내어 읽고, 낱말 쓰기를 합니다.',
-  '헤드셋 마이크가 연결된 컴퓨터와 조용한 자리가 필요합니다.',
-  '읽는 목소리는 녹음됩니다. 녹음은 검사를 확인하는 담당자만 듣고, 채점에만 씁니다.',
-  '아이가 힘들어하면 녹음 버튼을 다시 눌러 언제든 멈출 수 있어요.',
-] as const
-
-/** 동의 체크 — `note`는 체크 아래 작은 글씨. 라벨은 짧게 두고 근거·제약을 note가 받는다
- *  (라벨에 다 넣으면 길어져 읽지 않고 체크한다). */
-const APPLY_CHECKS: readonly { label: string; note?: string }[] = [
-  {
-    label: '선생님의 성함·이메일·연락처를 검사 안내에 쓰는 것에 동의합니다.',
-    // 개인정보보호법 제15조 제2항의 4대 고지사항을 한 줄로 압축한다 — 보관 기간은
-    // lib/consent의 RETENTION_LABEL을 그대로 써서 서면 동의서와 갈리지 않게 한다.
-    note: `학급 코드 발송과 검사 관련 연락에만 씁니다. 보관 기간은 「${RETENTION_LABEL}」이며, `
-      + '동의하지 않으실 수 있습니다(그 경우 신청은 할 수 없습니다).',
-  },
-  { label: '위 검사 안내를 확인했습니다.' },
-  {
-    label: '보호자 서면 동의를 받은 학생만 명단에 등록했습니다.',
-    note: '보호자 동의는 이 화면에서 받을 수 없습니다 — 가정통신문으로 회수해 주세요. '
-      + '만 14세 미만 아동의 개인정보는 법정대리인 동의가 필요합니다.',
-  },
-] as const
 
 export default function ApplyPage() {
   const [school, setSchool] = useState<SelectedSchool | null>(null)
