@@ -65,11 +65,12 @@ export function escapeHtml(s: string): string {
 // 무엇이 필요하나 · 코드를 잃으면)에 답하지 않았다.
 //
 // ⚠️ 여전히 연구윤리 검토본 대기 중이다 — 검토본이 오면 이 절만 교체하면 되고 발송 경로는
-// 건드릴 필요가 없다. 사실 관계는 아래 근거를 확인한 뒤에 썼으니, 문장을 고칠 때 함께 흔들지 말 것:
-//   · 소요 "약 15~20분" ……… docs/consent/guardian-consent-form.md(보호자에게 이미 고지한 값)
-//   · 헤드셋 마이크·컴퓨터 … docs/superpowers/specs/2026-07-17-desktop-ui-design.md
-//   · 녹음은 담당자만 청취 … lib/consent.ts CHILD_NOTICE(아동에게 고지한 내용과 같아야 한다)
-//   · 언제든 멈출 수 있음 …… README "아동이 힘들면 녹음 버튼을 다시 눌러 스스로 멈춘다"
+// 건드릴 필요가 없다.
+//
+// ⚠️ 승인 메일은 **코드 전달이 목적**이라 짧게 유지한다. 소요 시간·준비물·보호자 동의 조건을
+// 담은 「검사 전에 확인해 주세요」 블록은 실제 발송본을 검수한 뒤 뺐다(사용자 확정 2026-08-22)
+// — 그 내용은 신청 화면(`app/apply`의 `SURVEY_NOTICE`)에서 교사가 **이미 읽고 체크한 것**이라
+// 중복이었다. 다시 넣자는 말이 나오면 각 문장의 근거는 그쪽 상수 주석에 있다.
 // ⚠️ 승인 안내는 **3채널**이다 — 이 파일의 approvedMail(HTML), lib/format의 approvalNoticeText
 // (관리자가 카톡·문자로 붙여넣는 평문), 그리고 관리자 화면의 [안내 문구 복사]. 한쪽만 고치면
 // 채널에 따라 안내가 갈린다(tests/mail.test.ts가 필수 정보 존재를 대조한다).
@@ -140,7 +141,7 @@ export function approvedMail(v: {
     subject: `[읽기 선별검사] ${where} 학급 코드 ${v.code}`,
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
-      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 읽기 선별검사 신청을 확인했습니다.
+      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 읽기 선별검사 신청을 확인했습니다.<br>
         아래 학급 코드로 검사를 시작하실 수 있어요.</p>
 
       <div style="border:1.5px solid ${C.blue};background:${C.blueWell};border-radius:12px;
@@ -162,17 +163,10 @@ export function approvedMail(v: {
         '이름·생년월일을 확인하고 검사를 시작합니다.',
       ])}
 
-      ${H('검사 전에 확인해 주세요')}
-      ${UL([
-        '아이 한 명에 <b>약 15~20분</b> 걸립니다.',
-        '헤드셋 마이크가 연결된 컴퓨터와 조용한 자리가 필요합니다.',
-        '<b>보호자 서면 동의를 받은 학생만</b> 검사해 주세요.',
-        '아이가 힘들어하면 녹음 버튼을 다시 눌러 언제든 멈출 수 있어요.',
-      ])}
 
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
-        <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고, 다시 받으려면
-        담당자에게 문의하셔야 합니다.</p>`),
+        <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고,<br>
+        다시 받으려면 담당자에게 문의하셔야 합니다.</p>`),
   }
 }
