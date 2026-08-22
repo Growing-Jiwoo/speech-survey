@@ -78,15 +78,25 @@ describe('gradeClassLines — 검사지 학년 칸(두 줄)', () => {
 })
 
 describe('approvalNoticeText', () => {
-  const V = { teacherName: '김선생', schoolName: '서울가곡초등학교', code: 'SGT2E4', surveyUrl: 'https://x.kr' }
+  const V = { teacherName: '김선생', schoolName: '서울가곡초등학교', grade: 1, classNo: 3,
+    code: 'SGT2E4', surveyUrl: 'https://x.kr' }
 
-  it('교사·학교·코드·검사 주소와 시작 안내를 모두 담는다', () => {
+  it('교사·학교·학급·코드·검사 주소와 시작 안내를 모두 담는다', () => {
     const t = approvalNoticeText(V)
     expect(t).toContain('김선생 선생님')
-    expect(t).toContain('서울가곡초등학교')
+    expect(t).toContain('서울가곡초등학교 1-3')
     expect(t).toContain('학급 코드: SGT2E4')
     expect(t).toContain('검사 주소: https://x.kr')
-    expect(t).toMatch(/시작 화면에서 이 코드를 입력/)
+    expect(t).toMatch(/학급 코드를 입력/)
+  })
+
+  // 교사가 실제로 묻는 것(얼마나 걸리나·무엇이 필요하나)까지 담는다 — 짧게 줄일 때 여기부터
+  // 빠지기 쉬운데, 빠지면 안내가 아니라 코드 전달일 뿐이다(사용자 확정 2026-08-22).
+  it('[REGRESSION] 소요 시간·준비물·보호자 동의 조건을 담는다', () => {
+    const t = approvalNoticeText(V)
+    expect(t).toContain('15~20분')
+    expect(t).toContain('헤드셋 마이크')
+    expect(t).toContain('보호자 서면 동의')
   })
 
   it('평문이다 — HTML 태그가 섞이지 않는다(카톡·문자에 그대로 붙인다)', () => {

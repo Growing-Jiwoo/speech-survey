@@ -12,7 +12,7 @@ const btnCls = 'rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-
 /** 승인 결과 — 행이 active 목록으로 옮겨가 사라진 뒤에도 관리자가 결과와 복사 버튼을 볼 수
  *  있어야 하므로 이 섹션이 붙잡아 둔다(발급 폼의 `issued` 패널과 같은 이유). */
 interface Approved {
-  code: string; teacherName: string; schoolName: string
+  code: string; teacherName: string; schoolName: string; grade: number; classNo: number
   /** 검사 주소 — 라우트가 실제로 쓴 origin(APP_URL 우선)을 그대로 받는다.
    *  `window.location.origin`으로 다시 만들면 서버의 fallback만 흉내내 메일과 갈릴 수 있다. */
   surveyUrl: string
@@ -42,6 +42,7 @@ export function PendingApplications({
     if (!r.ok) { setErr(r.error); return }
     setApproved({
       code: r.data.code, teacherName: c.teacher_name, schoolName: c.school_name,
+      grade: c.grade, classNo: c.class_no,
       surveyUrl: r.data.surveyUrl, already: r.data.already, mailed: r.data.mailed,
     })
     setCopied(false)
@@ -52,6 +53,7 @@ export function PendingApplications({
   function copyNotice(a: Approved) {
     const text = approvalNoticeText({
       teacherName: a.teacherName, schoolName: a.schoolName, code: a.code,
+      grade: a.grade, classNo: a.classNo,
       surveyUrl: a.surveyUrl,   // 승인 응답이 준 값 — 메일에 찍힌 주소와 반드시 같아야 한다
     })
     void navigator.clipboard.writeText(text).then(() => setCopied(true))

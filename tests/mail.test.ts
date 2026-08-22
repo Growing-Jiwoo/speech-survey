@@ -75,7 +75,7 @@ describe('MAIL_TO_OVERRIDE — 실수 발송 방지', () => {
 
 describe('문구', () => {
   it('승인 메일에 학급 코드가 제목과 본문 모두에 들어간다', () => {
-    const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', code: 'K7M2P9', surveyUrl: 'https://x.test' })
+    const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' })
     expect(m.subject).toContain('K7M2P9')
     expect(m.html).toContain('K7M2P9')
   })
@@ -88,7 +88,7 @@ describe('문구', () => {
   })
 
   it('[REGRESSION] 학교명·교사명은 이스케이프한다 — 그대로 본문에 들어가는 값이다', () => {
-    const m = approvedMail({ teacherName: '<script>x</script>', schoolName: '예시초', code: 'ABC123', surveyUrl: 'https://x.test' })
+    const m = approvedMail({ teacherName: '<script>x</script>', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123', surveyUrl: 'https://x.test' })
     expect(m.html).not.toContain('<script>')
     expect(m.html).toContain('&lt;script&gt;')
   })
@@ -109,7 +109,7 @@ describe('문구', () => {
 
   it('[REGRESSION] surveyUrl도 같은 이유로 이스케이프한다 — 교사에게 나가는 메일이다', () => {
     const m = approvedMail({
-      teacherName: '김담임', schoolName: '예시초', code: 'ABC123',
+      teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123',
       surveyUrl: 'https://evil.test/"><script>x</script>',
     })
     expect(m.html).not.toContain('"><script>')
@@ -120,13 +120,25 @@ describe('문구', () => {
 // 통째로 바뀔 예정이라 핀하지 않고(그 시점에 거짓 실패만 낸다), 어느 쪽에서든 빠지면 교사가
 // 검사를 시작할 수 없는 **필수 정보의 존재**만 고정한다.
 describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => {
-  it('두 채널이 같은 정보를 담는다 — 교사명·학교·코드·검사 주소', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', code: 'K7M2P9', surveyUrl: 'https://x.test' }
+  it('두 채널이 같은 정보를 담는다 — 교사명·학교·학급·코드·검사 주소', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
     const html = approvedMail(v).html
     const text = approvalNoticeText(v)
-    for (const s of [v.teacherName, v.schoolName, v.code, v.surveyUrl]) {
+    for (const s of [v.teacherName, v.schoolName, '1-3', v.code, v.surveyUrl]) {
       expect(html).toContain(s)
       expect(text).toContain(s)
     }
+  })
+
+  it('[REGRESSION] 두 채널 모두 보호자 서면 동의 조건을 말한다 — 빠지면 동의 없는 아동이 검사된다', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    expect(approvedMail(v).html).toContain('보호자 서면 동의')
+    expect(approvalNoticeText(v)).toContain('보호자 서면 동의')
+  })
+
+  it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    expect(approvedMail(v).html).toContain('2학년 단일학급')
+    expect(approvalNoticeText(v)).toContain('2학년 단일학급')
   })
 })

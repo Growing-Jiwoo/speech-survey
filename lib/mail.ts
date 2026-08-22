@@ -5,6 +5,7 @@
 //  ① 새 신청 알림 → 관리자        ② 승인·학급 코드 안내 → 교사
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
+import { gradeClassLabel } from './format'
 
 const ENDPOINT = 'https://api.resend.com/emails'
 
@@ -60,57 +61,118 @@ export function escapeHtml(s: string): string {
 }
 
 // ── 문구 ───────────────────────────────────────────────────────────
-// ⚠️ 담당자 확인 대기 — 확정 아님. 아래 문구는 개발용 초안이다(사용자 확정 2026-08-18).
-// 해림(담당자)이 안내 문구 예시를 만들기로 했고, 연구윤리 검토본이 오면 다시 교체된다.
-// 교체할 때 이 두 함수만 고치면 되고 발송 경로는 건드릴 필요가 없다.
+// 사용자 확정 2026-08-22. 이전 판은 "개발용 초안"이었고 교사가 실제로 묻는 것(얼마나 걸리나 ·
+// 무엇이 필요하나 · 코드를 잃으면)에 답하지 않았다.
+//
+// ⚠️ 여전히 연구윤리 검토본 대기 중이다 — 검토본이 오면 이 절만 교체하면 되고 발송 경로는
+// 건드릴 필요가 없다. 사실 관계는 아래 근거를 확인한 뒤에 썼으니, 문장을 고칠 때 함께 흔들지 말 것:
+//   · 소요 "약 15~20분" ……… docs/consent/guardian-consent-form.md(보호자에게 이미 고지한 값)
+//   · 헤드셋 마이크·컴퓨터 … docs/superpowers/specs/2026-07-17-desktop-ui-design.md
+//   · 녹음은 담당자만 청취 … lib/consent.ts CHILD_NOTICE(아동에게 고지한 내용과 같아야 한다)
+//   · 언제든 멈출 수 있음 …… README "아동이 힘들면 녹음 버튼을 다시 눌러 스스로 멈춘다"
+// ⚠️ 승인 안내는 **3채널**이다 — 이 파일의 approvedMail(HTML), lib/format의 approvalNoticeText
+// (관리자가 카톡·문자로 붙여넣는 평문), 그리고 관리자 화면의 [안내 문구 복사]. 한쪽만 고치면
+// 채널에 따라 안내가 갈린다(tests/mail.test.ts가 필수 정보 존재를 대조한다).
 
-const WRAP = (body: string) => `<div style="font:15px/1.7 -apple-system,'Apple SD Gothic Neo',sans-serif;
-  color:#0E1526;max-width:560px">${body}
-  <hr style="border:0;border-top:1px solid #E3E8F3;margin:24px 0 12px">
-  <p style="font-size:12.5px;color:#6E7994;margin:0">읽기 선별검사</p></div>`
+const C = {
+  ink: '#0E1526', soft: '#3A4256', mute: '#6E7994',
+  line: '#E3E8F3', well: '#F7F9FE', blue: '#2F6BFF', blueWell: '#EDF2FF',
+} as const
+
+const FONT = `-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif`
+
+/** 메일 골격 — 이름표(누가 보낸 메일인지)를 위에 두고 본문을 감싼다. 교사가 받은 편지함에서
+ *  다시 찾을 물건이라 제목만으로 판별되지 않을 때 이 띠가 단서가 된다. */
+const WRAP = (body: string) => `<div style="font:15px/1.7 ${FONT};color:${C.ink};max-width:560px">
+  <p style="margin:0 0 20px;padding:0 0 14px;border-bottom:2px solid ${C.blue};
+    font-size:13px;font-weight:800;letter-spacing:.02em;color:${C.blue}">읽기 선별검사</p>
+  ${body}
+  <hr style="border:0;border-top:1px solid ${C.line};margin:26px 0 12px">
+  <p style="font-size:12px;color:${C.mute};margin:0;line-height:1.6">
+    초등학교 읽기 선별검사 · 이 메일은 신청하신 주소로 발송됐습니다.</p></div>`
+
+/** 소제목 — 메일에서는 h3보다 이 형태가 클라이언트별 여백 차이가 적다. */
+const H = (text: string) => `<p style="margin:24px 0 8px;font-size:13px;font-weight:800;
+  color:${C.soft};letter-spacing:.02em">${text}</p>`
+
+const UL = (items: string[]) => `<ul style="margin:0;padding:0 0 0 18px;font-size:14px;
+  color:${C.soft};line-height:1.75">${items.map(i => `<li style="margin:0 0 4px">${i}</li>`).join('')}</ul>`
 
 /** ① 새 신청이 들어왔을 때 관리자에게 */
 export function applyNoticeMail(v: {
   schoolName: string; grade: number; classNo: number; teacherName: string; childCount: number; adminUrl: string
 }): Mail {
-  const where = `${v.schoolName} ${v.grade}학년 ${v.classNo === 0 ? '' : `${v.classNo}반 `}`
+  const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
   return {
     to: '', // 호출부가 관리자 주소를 채운다
-    subject: `[읽기검사] 새 신청 — ${v.schoolName} ${v.teacherName} 선생님`,
+    subject: `[읽기 선별검사] 새 신청 — ${where} ${v.teacherName} 선생님 (${v.childCount}명)`,
     html: WRAP(`
-      <h2 style="font-size:18px;margin:0 0 14px">새 신청이 들어왔습니다</h2>
-      <table style="font-size:14px;border-collapse:collapse">
-        <tr><td style="padding:4px 14px 4px 0;color:#6E7994">학급</td><td><b>${escapeHtml(where)}</b></td></tr>
-        <tr><td style="padding:4px 14px 4px 0;color:#6E7994">담임</td><td>${escapeHtml(v.teacherName)} 선생님</td></tr>
-        <tr><td style="padding:4px 14px 4px 0;color:#6E7994">등록 학생</td><td>${v.childCount}명</td></tr>
+      <h2 style="font-size:19px;margin:0 0 4px;font-weight:800">승인 대기 신청이 있습니다</h2>
+      <p style="margin:0 0 18px;font-size:14px;color:${C.mute}">
+        승인하면 선생님께 학급 코드가 자동으로 발송됩니다. 승인 전에는 코드가 전달되지 않습니다.</p>
+      <table style="font-size:14px;border-collapse:collapse;background:${C.well};
+        border:1px solid ${C.line};border-radius:10px;padding:4px">
+        <tr><td style="padding:8px 16px 4px 14px;color:${C.mute};white-space:nowrap">학급</td>
+            <td style="padding:8px 14px 4px 0"><b>${escapeHtml(where)}</b></td></tr>
+        <tr><td style="padding:4px 16px 4px 14px;color:${C.mute};white-space:nowrap">담임</td>
+            <td style="padding:4px 14px 4px 0">${escapeHtml(v.teacherName)} 선생님</td></tr>
+        <tr><td style="padding:4px 16px 10px 14px;color:${C.mute};white-space:nowrap">등록 학생</td>
+            <td style="padding:4px 14px 10px 0">${v.childCount}명</td></tr>
       </table>
-      <p style="margin:18px 0 0"><a href="${escapeHtml(v.adminUrl)}"
-        style="background:#2F6BFF;color:#fff;text-decoration:none;border-radius:9px;padding:11px 18px;
-        display:inline-block;font-weight:700;font-size:14px">신청 확인하고 승인하기</a></p>
-      <p style="font-size:13px;color:#6E7994;margin:14px 0 0">
-        승인하면 선생님께 학급 코드가 자동으로 발송됩니다.</p>`),
+      <p style="margin:20px 0 0"><a href="${escapeHtml(v.adminUrl)}"
+        style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
+        display:inline-block;font-weight:700;font-size:14px">명단 확인하고 승인하기</a></p>
+      <p style="font-size:13px;color:${C.mute};margin:14px 0 0">
+        승인 화면에서 등록된 명단을 먼저 확인하실 수 있습니다.</p>`),
   }
 }
 
-/** ② 승인 후 교사에게 — 학급 코드 전달 */
+/** ② 승인 후 교사에게 — 학급 코드 전달.
+ *  교사가 **보관하는 유일한 물건**이므로 검사를 처음부터 끝까지 할 수 있는 정보가 다 있어야 한다.
+ *  코드 재발급 경로가 없어(관리자에게 문의하는 수밖에) 보관을 명시적으로 부탁한다. */
 export function approvedMail(v: {
-  teacherName: string; schoolName: string; code: string; surveyUrl: string
+  teacherName: string; schoolName: string; grade: number; classNo: number
+  code: string; surveyUrl: string
 }): Mail {
+  const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
   return {
     to: '', // 호출부가 교사 주소를 채운다
-    subject: `[읽기검사] 신청이 승인되었습니다 — 학급 코드 ${v.code}`,
+    subject: `[읽기 선별검사] ${where} 학급 코드 ${v.code}`,
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
-      <p style="margin:0 0 18px">${escapeHtml(v.schoolName)} 읽기 선별검사 신청이 <b>승인</b>되었습니다.</p>
-      <div style="border:1.5px solid #2F6BFF;background:#EDF2FF;border-radius:12px;padding:16px 18px;margin:0 0 18px">
-        <p style="margin:0 0 4px;font-size:12.5px;font-weight:700;color:#2F6BFF">학급 코드</p>
-        <p style="margin:0;font-size:30px;font-weight:800;letter-spacing:.1em">${escapeHtml(v.code)}</p>
+      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 읽기 선별검사 신청을 확인했습니다.
+        아래 학급 코드로 검사를 시작하실 수 있어요.</p>
+
+      <div style="border:1.5px solid ${C.blue};background:${C.blueWell};border-radius:12px;
+        padding:16px 18px;margin:0 0 20px">
+        <p style="margin:0 0 6px;font-size:12px;font-weight:800;color:${C.blue};letter-spacing:.04em">학급 코드</p>
+        <p style="margin:0;font-size:32px;font-weight:800;letter-spacing:.1em"
+          translate="no">${escapeHtml(v.code)}</p>
+        <p style="margin:6px 0 0;font-size:12.5px;color:${C.soft}">${escapeHtml(where)}</p>
       </div>
-      <p style="margin:0 0 6px">검사 주소: <a href="${escapeHtml(v.surveyUrl)}" style="color:#2F6BFF">${escapeHtml(v.surveyUrl)}</a></p>
-      <p style="margin:0 0 18px;font-size:14px;color:#3A4256">
-        시작 화면에서 이 코드를 입력하시면 등록하신 <b>학생 명단</b>이 나옵니다.
-        검사할 학생을 고르고 정보를 확인한 뒤 시작해 주세요.</p>
-      <p style="font-size:13px;color:#6E7994;margin:0">
-        ※ 검사 전 보호자 서면 동의서를 회수해 주시고, 동의를 받은 학생만 검사해 주세요.</p>`),
+
+      <p style="margin:0;font-size:14px;color:${C.mute}">검사 주소</p>
+      <p style="margin:2px 0 0"><a href="${escapeHtml(v.surveyUrl)}"
+        style="color:${C.blue};word-break:break-all">${escapeHtml(v.surveyUrl)}</a></p>
+
+      ${H('시작하는 방법')}
+      ${UL([
+        '검사 주소로 들어가 학급 코드를 입력합니다.',
+        '등록하신 학생 명단이 나옵니다. 검사할 학생을 고르세요.',
+        '이름·생년월일을 확인하고 검사를 시작합니다.',
+      ])}
+
+      ${H('검사 전에 확인해 주세요')}
+      ${UL([
+        '아이 한 명에 <b>약 15~20분</b> 걸립니다.',
+        '헤드셋 마이크가 연결된 컴퓨터와 조용한 자리가 필요합니다.',
+        '<b>보호자 서면 동의를 받은 학생만</b> 검사해 주세요.',
+        '아이가 힘들어하면 녹음 버튼을 다시 눌러 언제든 멈출 수 있어요.',
+      ])}
+
+      <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
+        border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
+        <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고, 다시 받으려면
+        담당자에게 문의하셔야 합니다.</p>`),
   }
 }
