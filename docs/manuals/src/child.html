@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>읽기 검사 · 우리가 할 일</title>
+<style>
+  /* 아동용은 판면이 다르다 — 읽기가 어려운 아이도 대상이므로 글자를 크게, 문장을 짧게.
+     선생님이 소리 내어 읽어 주는 것을 전제로 만든다. */
+  @page { size: A4; margin: 14mm 14mm 12mm; }
+
+  :root{
+    --ink:#0E1526; --soft:#3A4256; --mute:#6E7994;
+    --line:#E3E8F3; --well:#F7F9FE; --blue:#2F6BFF; --blue-well:#EDF2FF;
+    --red:#E2483A; --red-well:#FDF0EE; --mint:#0F7A55; --mint-well:#E8F6EF;
+    --amber-well:#FCF4E4; --amber:#96660C;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;
+    color:var(--ink); font-size:13pt; line-height:1.6; word-break:keep-all;
+  }
+  .page + .page{ break-before:page; }
+
+  /* 머리 */
+  .hd{ display:flex; align-items:flex-end; gap:5mm; border-bottom:3px solid var(--blue);
+    padding-bottom:3.5mm; margin-bottom:7mm; }
+  .hd h1{ font-size:29pt; font-weight:800; margin:0; letter-spacing:-.03em; line-height:1.1; }
+  .hd .tag{ margin-left:auto; font-size:10.5pt; font-weight:800; color:var(--blue);
+    background:var(--blue-well); border-radius:3mm; padding:1.6mm 4mm; white-space:nowrap; }
+  .say{ font-size:14pt; color:var(--soft); margin:0 0 7mm; line-height:1.55; }
+
+  /* 단계 카드 */
+  .steps{ display:grid; grid-template-columns:1fr 1fr; gap:6mm 6mm; }
+  .card{ border:1.6px solid var(--line); border-radius:5mm; padding:5mm 5mm 4mm;
+    background:#fff; break-inside:avoid; }
+  .card .n{ display:inline-flex; align-items:center; justify-content:center;
+    width:11mm; height:11mm; border-radius:50%; background:var(--blue); color:#fff;
+    font-size:15pt; font-weight:800; margin-bottom:3mm; }
+  .card h2{ font-size:19pt; font-weight:800; margin:0 0 2mm; line-height:1.25; letter-spacing:-.02em; }
+  .card p{ font-size:12.5pt; color:var(--soft); margin:0; line-height:1.55; }
+  .card .shotbox{ margin-top:4mm; height:40mm; border-radius:3.4mm; border:1px solid var(--line);
+    background-repeat:no-repeat; }
+
+  /* 기억할 것 */
+  .keeps{ display:flex; flex-direction:column; gap:4.5mm; }
+  .keep{ display:flex; gap:5mm; align-items:flex-start; border:1.6px solid var(--line);
+    border-radius:5mm; padding:4.5mm 5mm; background:#fff; break-inside:avoid; }
+  .keep .ic{ flex:none; width:13mm; height:13mm; border-radius:3.4mm; display:flex;
+    align-items:center; justify-content:center; font-size:17pt; }
+  .keep h2{ font-size:17.5pt; font-weight:800; margin:0 0 1.4mm; line-height:1.25; letter-spacing:-.02em; }
+  .keep p{ font-size:12pt; color:var(--soft); margin:0; line-height:1.55; }
+  .keep.ok{ border-color:#0F7A5540; background:var(--mint-well); }
+  .keep.ok .ic{ background:#0F7A5522; color:var(--mint); }
+  .keep.stop{ border-color:#E2483A40; background:var(--red-well); }
+  .keep.stop .ic{ background:#E2483A22; color:var(--red); }
+  .keep.info{ border-color:#2F6BFF40; background:var(--blue-well); }
+  .keep.info .ic{ background:#2F6BFF22; color:var(--blue); }
+  .keep.note{ border-color:#96660C40; background:var(--amber-well); }
+  .keep.note .ic{ background:#96660C22; color:var(--amber); }
+
+  /* 끝 화면 */
+  .end{ margin-top:7mm; display:flex; gap:6mm; align-items:center;
+    border:1.6px solid var(--line); border-radius:5mm; padding:5mm; background:var(--well); }
+  .end .pic{ flex:none; width:56mm; height:44mm; border-radius:3.4mm; border:1px solid var(--line);
+    background:#fff center 40% / 118% no-repeat; }
+  .end h2{ font-size:19pt; font-weight:800; margin:0 0 2mm; letter-spacing:-.02em; }
+  .end p{ font-size:12.5pt; color:var(--soft); margin:0; line-height:1.55; }
+
+  /* 표지 — 아이가 보는 두 쪽 앞에, 선생님이 읽는 한 쪽 */
+  .cover{ min-height:262mm; display:flex; flex-direction:column; }
+  .cv-top{ display:flex; align-items:center; gap:5mm; }
+  .cv-series{ font-size:10pt; font-weight:800; letter-spacing:.14em; color:var(--mute); }
+  .cv-chip{ margin-left:auto; font-size:10pt; font-weight:800; background:var(--amber);
+    color:#fff; border-radius:2.6mm; padding:1.5mm 4.5mm; }
+  .cv-rule{ height:5px; width:74px; border-radius:3px; background:var(--amber); margin:5mm 0 12mm; }
+  .cv-title{ font-size:40pt; line-height:1.1; font-weight:800; margin:0 0 8mm; letter-spacing:-.035em; }
+  .cv-lead{ font-size:13.5pt; line-height:1.6; color:var(--soft); margin:0 0 10mm; max-width:136mm; }
+  .cv-how{ border:1.6px solid var(--line); border-radius:5mm; padding:6mm 7mm; background:var(--well); }
+  .cv-how h2{ font-size:14pt; font-weight:800; margin:0 0 3.5mm; }
+  .cv-how ol{ margin:0; padding-left:6mm; font-size:12pt; line-height:1.7; color:var(--soft); }
+  .cv-how li{ margin-bottom:2mm; }
+  .cv-how li b{ color:var(--ink); }
+  .cv-peek{ margin-top:9mm; }
+  .cv-peek .row{ display:grid; grid-template-columns:repeat(3,1fr); gap:0 5mm; }
+  .cv-peek .fr{ height:58mm; border:1px solid var(--line); border-radius:3.4mm; background:var(--well);
+    display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .cv-peek .fr img{ max-width:100%; max-height:100%; width:auto; height:auto; display:block; }
+  .cv-peek p{ font-size:10pt; color:var(--mute); margin:2.6mm 0 0; }
+  .cv-set{ margin-top:auto; border-top:1px solid var(--line); padding-top:5mm;
+    font-size:10.5pt; color:var(--mute); line-height:1.7; }
+  .cv-set b{ color:var(--soft); }
+  .cv-foot{ display:flex; margin-top:4mm; border-top:1px solid var(--line);
+    padding-top:3.4mm; font-size:9.5pt; color:var(--mute); }
+  .cv-foot .r{ margin-left:auto; }
+
+  /* 어른에게 */
+  .adult{ margin-top:7mm; border-top:1px solid var(--line); padding-top:4mm;
+    font-size:10pt; color:var(--mute); line-height:1.6; }
+  .adult b{ color:var(--soft); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ 표지 ══════════════ -->
+<section class="page cover">
+  <div class="cv-top">
+    <span class="cv-series">읽기 선별검사</span>
+    <span class="cv-chip">아동용</span>
+  </div>
+  <div class="cv-rule"></div>
+
+  <h1 class="cv-title">아이와 함께<br>읽는 안내</h1>
+  <p class="cv-lead">
+    검사를 시작하기 전에 아이와 함께 소리 내어 읽는 <b>두 쪽</b>입니다.<br>
+    아이가 무엇을 하게 되는지, 무엇을 걱정하지 않아도 되는지 알려 줍니다.
+  </p>
+
+  <div class="cv-how">
+    <h2>선생님, 이렇게 써 주세요</h2>
+    <ol>
+      <li><b>검사를 시작하기 전에</b> 아이 옆에 앉아 다음 두 쪽을 소리 내어 읽어 주세요.</li>
+      <li>아이가 <b>글자를 읽기 어려워할 수 있습니다.</b> 그림을 함께 가리키며 읽어 주세요.</li>
+      <li>다 읽고 나서 <b>「궁금한 것 있어?」</b>라고 한 번 물어봐 주세요.</li>
+      <li>아이에게 꼭 전할 것은 넷입니다 —
+        <b>시험이 아니다 · 언제든 멈출 수 있다 · 모르면 넘어가도 된다 · 녹음은 선생님만 듣는다.</b></li>
+    </ol>
+  </div>
+
+  <div class="cv-peek">
+    <div class="row">
+      <div class="fr"><img src="shots/t-05-mic.png" alt="마이크 확인"></div>
+      <div class="fr"><img src="shots/t-15-reading-rec.png" alt="낱말 읽기"></div>
+      <div class="fr"><img src="shots/t-24-done.png" alt="검사 끝"></div>
+    </div>
+    <p>아이가 보게 될 화면입니다 — 마이크 확인 → 소리 내어 읽기 → 검사 끝.</p>
+  </div>
+
+  <div class="cv-set">
+    <b>이 검사의 설명서는 셋입니다.</b> 관리자용(담당자) · 검사 진행자용(선생님) ·
+    아동용(지금 보고 계신 문서). 검사 진행 방법은 <b>검사 진행자용</b>에 있습니다.
+  </div>
+
+  <div class="cv-foot">
+    <span>아이 한 명에 15~20분</span>
+    <span class="r">2026년 8월 판</span>
+  </div>
+</section>
+
+
+<!-- ══════════════ 1쪽 ══════════════ -->
+<section class="page">
+  <div class="hd">
+    <h1>읽기 검사<br>우리가 할 일</h1>
+    <span class="tag">선생님과 함께 읽어요</span>
+  </div>
+
+  <p class="say">
+    글자를 <b>소리 내어 읽는</b> 시간이에요.<br>
+    읽는 목소리를 녹음해요. 녹음한 소리는 <b>선생님만 들어요.</b>
+  </p>
+
+  <div class="steps">
+    <div class="card">
+      <span class="n">1</span>
+      <h2>마이크에 인사해요</h2>
+      <p>버튼을 누르고 <b>“안녕하세요”</b> 라고 말해요.
+        내 목소리가 잘 들어가는지 먼저 봐요.</p>
+      <div class="shotbox" style="background-image:url('shots/t-05-mic.png');
+        background-size:106%; background-position:center 40%"></div>
+    </div>
+
+    <div class="card">
+      <span class="n">2</span>
+      <h2>먼저 연습해요</h2>
+      <p>세 낱말로 <b>한 번 해 봐요.</b>
+        연습은 <b>점수가 없어요.</b> 틀려도 괜찮아요.</p>
+      <div class="shotbox" style="background-image:url('shots/t-10-practice-page.png');
+        background-size:118%; background-position:center 56%"></div>
+    </div>
+
+    <div class="card">
+      <span class="n">3</span>
+      <h2>빨간 버튼을 눌러요</h2>
+      <p>버튼을 누르면 <b>바로 녹음이 시작돼요.</b>
+        그다음에 글자를 읽어요.</p>
+      <div class="shotbox" style="background-image:url('shots/t-15-reading-rec.png');
+        background-size:170%; background-position:52% 68%"></div>
+    </div>
+
+    <div class="card">
+      <span class="n">4</span>
+      <h2>다 읽으면 또 눌러요</h2>
+      <p>같은 버튼을 <b>한 번 더</b> 누르면 녹음이 끝나요.
+        그리고 <b>[다음]</b> 을 눌러요.</p>
+      <div class="shotbox" style="background-image:url('shots/t-16-reading-done.png');
+        background-size:118%; background-position:center 62%"></div>
+    </div>
+  </div>
+
+  <p class="adult">
+    <b>선생님께.</b> 이 종이는 검사를 시작하기 전에 아이와 함께 소리 내어 읽어 주세요.
+    아이가 글자를 읽기 어려워할 수 있으므로, 그림을 함께 가리키며 읽어 주시면 좋습니다.
+  </p>
+</section>
+
+
+<!-- ══════════════ 2쪽 ══════════════ -->
+<section class="page">
+  <div class="hd">
+    <h1>이것만<br>기억해요</h1>
+    <span class="tag">네 가지</span>
+  </div>
+
+  <div class="keeps">
+    <div class="keep ok">
+      <span class="ic">✓</span>
+      <div>
+        <h2>틀려도 괜찮아요</h2>
+        <p>잘하는지 보는 시험이 아니에요. <b>지금 어떻게 읽는지</b> 보는 거예요.
+          모르는 글자가 있어도 괜찮아요.</p>
+      </div>
+    </div>
+
+    <div class="keep stop">
+      <span class="ic">■</span>
+      <div>
+        <h2>힘들면 멈춰도 돼요</h2>
+        <p>빨간 버튼을 <b>한 번 더</b> 누르면 멈춰요.
+          쉬고 싶으면 선생님에게 말해요.</p>
+      </div>
+    </div>
+
+    <div class="keep info">
+      <span class="ic">→</span>
+      <div>
+        <h2>모르는 건 넘어가요</h2>
+        <p>읽기 어려우면 <b>[모르겠어요]</b> 를 눌러요.
+          다음 글자로 넘어가요.</p>
+      </div>
+    </div>
+
+    <div class="keep note">
+      <span class="ic">✎</span>
+      <div>
+        <h2>낱말 쓰기도 해요</h2>
+        <p>마지막에는 선생님이 <b>불러 주는 낱말</b>을 종이에 써요.
+          이때는 소리 내어 읽지 않아요.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="end">
+    <div class="pic" style="background-image:url('shots/t-24-done.png')"></div>
+    <div>
+      <h2>「검사가 끝났어요」가 나오면 끝!</h2>
+      <p>이 그림이 나오면 다 한 거예요.<br>
+        <b>참여해 줘서 고마워요.</b></p>
+    </div>
+  </div>
+
+  <p class="adult">
+    <b>선생님께.</b> 아이에게 알려 줄 것은 이 네 가지입니다 —
+    <b>① 시험이 아니다 ② 언제든 멈출 수 있다 ③ 모르면 넘어가도 된다 ④ 녹음은 선생님만 듣는다.</b>
+    검사에 걸리는 시간은 아이 한 명에 15~20분입니다.
+  </p>
+</section>
+
+</body>
+</html>
