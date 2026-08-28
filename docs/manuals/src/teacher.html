@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>읽기 선별검사 검사 진행자 사용 설명서</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ══════════════ 표지 ══════════════ -->
+<section class="page title-page">
+  <div class="tp-top">
+    <span class="tp-series">읽기 선별검사</span>
+    <span class="tp-chip tester">검사 진행자용</span>
+  </div>
+  <div class="tp-rule" style="background:var(--mint)"></div>
+
+  <h1 class="tp-title">검사 진행자<br>사용 설명서</h1>
+  <p class="tp-lead">
+    아이가 낱말과 문장을 소리 내어 읽으면 그 목소리를 녹음합니다.<br>
+    선생님은 <b>진행</b>과 <b>낱말 쓰기 표시</b>만 맡습니다 — 점수는 담당자가 매깁니다.
+  </p>
+
+  <div class="tp-hero">
+    <div class="strip n3 h64">
+      <div class="frame"><img src="shots/t-05-mic.png" alt="마이크 확인 화면"></div>
+      <div class="frame"><img src="shots/t-15-reading-rec.png" alt="낱말을 읽으며 녹음하는 화면"></div>
+      <div class="frame"><img src="shots/t-24-done.png" alt="검사가 끝난 화면"></div>
+    </div>
+    <p class="tp-hero-cap">마이크 확인 → 소리 내어 읽기 → 검사 끝. 아이가 보는 화면입니다.</p>
+  </div>
+
+  <div class="tp-set">
+    <span class="tp-set-label">이 검사의 설명서는 셋입니다</span>
+    <ol>
+      <li><b>관리자용</b> <span class="w">— 학급 코드 발급 · 녹음 청취 · 채점</span></li>
+      <li class="on"><b>검사 진행자용</b> <span class="w">— 지금 보고 계신 문서</span></li>
+      <li><b>아동용</b> <span class="w">— 검사 전에 아이와 함께 읽는 두 쪽</span></li>
+    </ol>
+  </div>
+
+  <div class="tp-foot">
+    <span>검사 주소 <b class="mono">https://speech-survey.vercel.app</b></span>
+    <span class="r">2026년 8월 판</span>
+  </div>
+</section>
+
+
+<!-- ══════════════ 목차 ══════════════ -->
+<section class="page toc-page">
+  <h1>차례</h1>
+
+  <div class="toc">
+    <div class="row"><span class="n">1</span><span class="t">시작하기 전에 — 준비물과 자리</span></div>
+    <div class="row"><span class="n">2</span><span class="t">검사 시작하기</span></div>
+    <div class="row"><span class="n">3</span><span class="t">마이크 확인 — 가장 중요한 한 걸음</span></div>
+    <div class="row"><span class="n">4</span><span class="t">연습</span></div>
+    <div class="row"><span class="n">5</span><span class="t">검사 진행 — 화면 읽는 법</span></div>
+    <div class="row"><span class="n">6</span><span class="t">중간에 멈추거나 나가야 할 때</span></div>
+    <div class="row"><span class="n">7</span><span class="t">낱말 쓰기와 체크리스트 — 선생님이 입력합니다</span></div>
+    <div class="row"><span class="n">8</span><span class="t">검토하고 제출하기</span></div>
+    <div class="row"><span class="n">9</span><span class="t">이럴 때는 · 시작 전 점검표</span></div>
+  </div>
+
+  <h3 style="margin-top:11mm">한눈에 보는 검사 한 건</h3>
+  <div class="strip n4 h56">
+    <div><div class="frame"><img src="shots/t-01-code.png" alt="학급 코드 입력"></div>
+      <p class="cap"><span class="num">1</span>학급 코드를 넣고 아이를 고릅니다</p></div>
+    <div><div class="frame"><img src="shots/t-07-mic-ok.png" alt="마이크 확인 통과"></div>
+      <p class="cap"><span class="num">2</span>마이크 확인을 통과합니다</p></div>
+    <div><div class="frame"><img src="shots/t-16-reading-done.png" alt="낱말 읽기"></div>
+      <p class="cap"><span class="num">3</span>낱말과 문장을 읽고 녹음합니다</p></div>
+    <div><div class="frame"><img src="shots/t-22-review.png" alt="검토 화면"></div>
+      <p class="cap"><span class="num">4</span>검토하고 제출합니다</p></div>
+  </div>
+
+  <div class="box info" style="margin-top:9mm">
+    <span class="bt">아이 한 명에 15~20분</span>
+    <p>준비물은 <b>헤드셋 마이크가 연결된 컴퓨터</b>, 조용한 자리, 담당자에게 받은 <b>학급 코드</b>입니다.
+      그리고 <b>보호자 서면 동의서</b>를 받은 아이만 검사할 수 있습니다.</p>
+  </div>
+</section>
+
+
+<!-- ══════════════ 1 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">1</span>시작하기 전에</h2>
+  <p class="sec-lead">준비가 반입니다. <b>마이크와 조용한 자리</b> 이 둘만 갖추면 나머지는 화면이 안내합니다.</p>
+
+  <h3>일이 흘러가는 순서</h3>
+  <div class="flow">
+    <div class="step">
+      <span class="who">선생님</span><span class="what">학급 신청</span>
+      <span class="sub">학교·학년·반과 학생 명단을 올립니다</span>
+    </div>
+    <div class="arrow">›</div>
+    <div class="step">
+      <span class="who">담당자</span><span class="what">승인 · 코드 발송</span>
+      <span class="sub">6자리 학급 코드가 메일로 옵니다</span>
+    </div>
+    <div class="arrow">›</div>
+    <div class="step on">
+      <span class="who">선생님 — 나</span><span class="what">아이별로 검사</span>
+      <span class="sub">코드를 넣고 아이를 골라 15~20분씩</span>
+    </div>
+    <div class="arrow">›</div>
+    <div class="step">
+      <span class="who">담당자</span><span class="what">녹음 듣고 채점</span>
+      <span class="sub">점수는 담당자가 매깁니다</span>
+    </div>
+  </div>
+  <p class="small">파란 칸이 선생님이 하는 일입니다. <b>채점은 하지 않으셔도 됩니다</b> — 낱말 쓰기만 보고 표시해 주세요.</p>
+
+  <h3>세 가지를 미리 챙겨 주세요</h3>
+  <table>
+    <tr><th style="width:34mm">무엇</th><th>왜 · 어떻게</th></tr>
+    <tr><td><b>헤드셋 마이크</b></td>
+      <td>아이 목소리가 <b>녹음돼야</b> 검사가 성립합니다. 노트북 내장 마이크는 옆자리 소리까지 담겨
+        나중에 담당자가 아이 목소리를 구분하기 어렵습니다. <b>입 가까이 오는 헤드셋</b>이 가장 좋습니다.</td></tr>
+    <tr><td><b>조용한 자리</b></td>
+      <td>교실 뒤나 빈 교실. 아이가 소리 내어 읽는 것을 부담스러워하지 않을 자리면 좋습니다.</td></tr>
+    <tr><td><b>보호자 서면 동의서</b></td>
+      <td>가정통신문으로 받은 <b>보호자 서명이 있는 종이</b>. 검사 시작 화면에서 「동의서를 받았다」에
+        체크해야 시작할 수 있고, 체크한 시각이 기록으로 남습니다.</td></tr>
+  </table>
+
+  <div class="box danger">
+    <span class="bt">동의서를 받지 못한 아이는 검사하지 마세요</span>
+    <p>만 14세 미만 아동의 이름·생년월일·<b>음성 녹음</b>을 다루는 검사입니다. 보호자 서면 동의가
+      법적 근거이고, 화면의 체크는 <b>「그 종이를 받았다」는 선생님의 확인</b>입니다.
+      체크만 하고 종이가 없으면 근거가 없는 수집이 됩니다.</p>
+  </div>
+
+  <div class="box">
+    <span class="bt">학급 코드가 없거나 잃어버렸다면</span>
+    <p>코드는 <b>승인 메일에만</b> 들어 있습니다. 메일을 지웠다면 담당자에게 다시 요청하세요 —
+      화면에서 재발급받을 방법은 없습니다. 코드는 <b>담임 선생님만</b> 갖고 있어야 합니다.
+      코드를 아는 사람은 누구나 그 학급 아이들 명단(이름·성별·생년월일)을 볼 수 있습니다.</p>
+  </div>
+</section>
+
+
+<!-- ══════════════ 2 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">2</span>검사 시작하기</h2>
+  <p class="sec-lead">아이마다 이 네 걸음을 반복합니다. 한 학급을 연달아 검사하면
+    <b>코드는 기억되므로 두 번째 아이부터는 코드를 다시 넣지 않아도 됩니다.</b></p>
+
+  <div class="figcol">
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b>학급 코드를 넣고 <span class="key">확인</span></b>
+          <span>코드에는 헷갈리는 <code>0 · O · 1 · I · L</code>이 아예 쓰이지 않습니다.
+            그 글자로 보이면 잘못 읽은 것입니다.</span></li>
+        <li><b>명단에서 검사할 아이를 고릅니다</b>
+          <span>명단은 <b>펼쳐 두지 않고 드롭다운으로만</b> 보여 줍니다 — 교실 공용 화면에 다른 아이들
+            이름이 계속 떠 있지 않도록 한 것입니다. 고르고 나면 접어 주세요.
+            <span class="bg amber">검사함</span> 표시는 이미 검사한 번호라는 뜻이고, 그래도 고를 수 있습니다.</span></li>
+        <li><b>「보호자 서면 동의를 받았다」에 체크합니다</b>
+          <span>체크하지 않으면 <span class="key">확인</span>이 눌리지 않습니다.
+            아이가 바뀔 때마다 체크는 풀립니다 — <b>일부러 그렇게 만들었습니다.</b>
+            아이마다 동의서를 확인하셔야 합니다.</span></li>
+        <li><b>이름·생년월일을 눈으로 대조하고 시작합니다</b>
+          <span>확인 창의 생년월일은 <b>2019-03-12</b>처럼 읽기 쉬운 형태로 보여 줍니다.
+            출석부와 다르면 시작하지 말고 담당자에게 알려 주세요.</span></li>
+      </ol>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-01-code.png" alt="학급 코드 입력 화면">
+        <p class="cap">① 코드 6자리를 넣습니다.</p>
+      </div>
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-03-dropdown.png" alt="학생 명단 드롭다운">
+        <p class="cap">② 명단에서 아이를 고릅니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>시작 직전에 뜨는 두 가지 창</h3>
+  <div class="strip n2 h56">
+    <div>
+      <div class="frame"><img src="shots/t-04-confirm.png" alt="시작 전 확인 창"></div>
+      <p class="cap"><b>보통은 이 창입니다.</b> 학급·담임·아이 정보를 확인하고
+        <span class="key">맞아요, 시작하기</span>를 누릅니다.</p>
+    </div>
+    <div>
+      <div class="frame"><img src="shots/t-28-duplicate-warning.png" alt="이미 검사한 번호 경고"></div>
+      <p class="cap"><b>이미 검사한 번호</b>를 고르면 이 창이 뜹니다. 다시 검사해도
+        이전 기록은 지워지지 않고 회차로 따로 쌓입니다.</p>
+    </div>
+  </div>
+
+  <div class="box info">
+    <span class="bt">명단에 없는 아이라면</span>
+    <p>전학생이거나 동의서가 늦게 온 아이는 <span class="key">명단에 없는 학생이에요</span>를 누르고
+      <b>번호·이름·성별·생년월일</b>을 직접 넣습니다. 이때는 <b>오타가 그대로 검사 기록이 됩니다</b> —
+      천천히 확인하고 넣어 주세요. 잘못 눌렀으면 <span class="key">명단에서 고르기</span>로 돌아올 수 있습니다.</p>
+  </div>
+</section>
+
+
+<!-- ══════════════ 3 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">3</span>마이크 확인</h2>
+  <p class="sec-lead">이 화면을 대충 넘기면 <b>20분을 다 쓰고도 검사가 무효</b>가 됩니다.
+    가장 중요한 한 걸음입니다.</p>
+
+  <div class="figcol">
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b>아이에게 「안녕하세요」라고 말하게 합니다</b>
+          <span>버튼을 누르고 아이가 한마디 하면, 버튼을 다시 눌러 멈춥니다.</span></li>
+        <li><b>「마이크가 잘 인식됐어요」가 나오는지 봅니다</b>
+          <span>이 문구가 나와야 <span class="key">검사 시작</span> 버튼이 눌립니다.
+            <b>통과하지 않으면 검사를 시작할 수 없습니다</b> — 일부러 막아 둔 것입니다.</span></li>
+        <li><b>「목소리가 잘 안 들려요」가 나오면</b>
+          <span>마이크를 아이 입 쪽으로 옮기고, 조금 더 크게 말하게 한 뒤 <b>다시 눌러 확인</b>합니다.
+            성공한 뒤에도 다시 확인할 수 있습니다.</span></li>
+      </ol>
+
+      <div class="box danger">
+        <span class="bt">무음 녹음은 되돌릴 방법이 없습니다</span>
+        <p>녹음이 비어 있으면 담당자는 그 과제를 <b>오반응(0점)</b>으로 채점하게 됩니다.
+          아이를 다시 불러 처음부터 검사하는 것 말고는 방법이 없습니다.
+          그래서 이 화면이 있습니다 — <b>꼭 통과시키고 넘어가세요.</b></p>
+      </div>
+
+      <div class="box warn">
+        <span class="bt">「마이크를 쓸 수 없어요」가 나오면</span>
+        <p>브라우저가 마이크 권한을 막은 것입니다. 화면이 기기에 맞는 해제 방법을 알려 주니 그대로 따르고,
+          권한을 허용한 뒤 다시 시도하세요. 그래도 안 되면 <b>다른 브라우저(크롬·엣지·사파리 최신)</b>로
+          열어 보세요.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-05-mic.png" alt="마이크 확인 — 누르기 전">
+        <p class="cap">버튼을 누르기 전.</p>
+      </div>
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-07-mic-ok.png" alt="마이크 확인 통과">
+        <p class="cap"><b>「마이크가 잘 인식됐어요」</b>가 보이면 통과입니다.
+          이제 <span class="key">검사 시작</span>이 눌립니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════ 4 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">4</span>연습</h2>
+  <p class="sec-lead">연습은 <b>점수에 들어가지 않습니다.</b> 버튼을 누르고 읽고 멈추는 것을
+    아이가 한 번 해 보게 하는 단계입니다.</p>
+
+  <div class="figcol">
+    <div class="col">
+      <h4 style="margin-top:0">언제 건너뛰어도 됩니까</h4>
+      <table class="tight">
+        <tr><td style="width:28mm"><b>연습부터 하기</b></td>
+          <td>이 검사를 <b>처음</b> 하는 아이. 대부분 이쪽입니다.</td></tr>
+        <tr><td style="border:none"><b>연습 없이 시작</b></td>
+          <td style="border:none">같은 아이를 <b>다시</b> 검사할 때, 또는 앞 아이의 검사를 보고
+            방법을 이미 아는 경우.</td></tr>
+      </table>
+      <p class="small">연습 녹음은 <b>서버에 올라가지 않습니다.</b> 마음 편히 여러 번 시켜도 됩니다.
+        화면 위에 <span class="bg amber">연습</span> 띠가 붙어 있어 본 검사와 헷갈리지 않습니다.</p>
+
+      <div class="box ok">
+        <span class="bt">연습이 끝나면 화면이 알려 줍니다</span>
+        <p>「연습이 끝났어요 · 이제 진짜 검사를 시작해요」 화면이 한 번 나옵니다.
+          아이에게 <b>여기부터가 진짜라는 것</b>을 말해 주고 시작하세요.</p>
+      </div>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-08-practice-ask.png" alt="연습 실시 여부를 고르는 화면">
+        <p class="cap">마이크 확인을 통과하면 선생님에게 묻습니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>연습에서 아이에게 알려 줄 것 세 가지</h3>
+  <div class="figcol left">
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-10-practice-page.png" alt="연습 낱말 화면">
+        <p class="cap">연습 낱말은 세 개입니다.</p>
+      </div>
+    </div>
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b>버튼을 누르면 바로 녹음이 시작돼요</b>
+          <span>「셋, 둘, 하나」 같은 카운트다운은 없습니다. 누르는 순간부터입니다.</span></li>
+        <li><b>다 읽으면 버튼을 한 번 더 눌러요</b>
+          <span>같은 버튼이 멈춤 버튼이 됩니다.</span></li>
+        <li><b>힘들면 버튼을 눌러 언제든 멈춰도 돼요</b>
+          <span>그때까지 읽은 것은 저장됩니다. 아이에게 이 말을 꼭 해 주세요 —
+            부담을 크게 줄여 줍니다.</span></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════ 5 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">5</span>검사 진행 — 화면 읽는 법</h2>
+  <p class="sec-lead">한 화면에 나온 낱말이나 문장을 <b>아이가 소리 내어 다 읽으면</b> 다음으로 넘어갑니다.
+    1학년은 모두 8단계입니다.</p>
+
+  <div class="figcol">
+    <div class="col">
+      <div class="callouts" style="grid-template-columns:1fr; gap:2.6mm 0; margin-top:0">
+        <div class="c"><span class="num">1</span><span><b>진행률.</b> 지금 몇 번째 단계인지.
+          연습은 여기 들어가지 않습니다.</span></div>
+        <div class="c"><span class="num">2</span><span><b>자동 저장됨.</b> 녹음은 끝나는 즉시 저장됩니다.
+          저장 버튼은 없습니다.</span></div>
+        <div class="c"><span class="num">3</span><span><b>녹음 버튼.</b> 누르면 시작, 다시 누르면 끝.
+          아이가 누르게 해도 됩니다. 녹음 중에는 빨간색이 됩니다.</span></div>
+        <div class="c"><span class="num">4</span><span><b>주 버튼이 <span class="key">모르겠어요</span>로 보이면</b>
+          그 화면을 <b>녹음 없이</b> 넘기는 중이라는 뜻입니다.</span></div>
+        <div class="c"><span class="num">5</span><span><b><span class="key">일시정지</span>.</b> 화면을 덮어
+          아이가 실수로 누르는 것도 막습니다. <b>녹음 중에는 눌리지 않습니다.</b></span></div>
+        <div class="c"><span class="num">6</span><span><b><span class="key">저장하고 나가기</span>.</b>
+          여기까지 저장하고 나갑니다. <b>확인 창 없이 바로 나가니</b> 주의하세요.</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-14-reading-page.png" alt="낱말 읽기 화면 — 녹음 전">
+        <p class="cap">녹음 전. 주 버튼이 <span class="key">모르겠어요</span>로 보입니다.</p>
+      </div>
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-15-reading-rec.png" alt="녹음 중인 화면">
+        <p class="cap">녹음 중. 「읽는 중이에요」가 표시됩니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>제한 시간 — 30초와 40초</h3>
+  <table>
+    <tr><th style="width:40mm">과제</th><th>기준</th><th style="width:56mm">선생님이 할 일</th></tr>
+    <tr><td><b>낱말 읽기</b></td><td><b>30초</b> 안에 정확하게 읽은 낱말 수</td>
+      <td rowspan="2">시간을 재실 필요는 없습니다. 아이가 다 읽으면 버튼을 눌러 멈추면 됩니다 —
+        <b>기준 시간은 담당자가 녹음을 들으며 적용합니다.</b></td></tr>
+    <tr><td><b>문장 읽기</b></td><td><b>40초</b> 안에 정확하게 읽은 어절 수</td></tr>
+  </table>
+  <p class="small">녹음은 마지막 반응이 잘리지 않도록 기준 시간보다 조금 더 담깁니다.
+    그래서 30초를 넘겨 녹음돼도 문제가 아닙니다.</p>
+
+  <div class="box warn">
+    <span class="bt"><span class="key">모르겠어요</span>로 넘기면 그 과제는 0점이 됩니다</span>
+    <p>아이가 못 읽겠다고 하거나 응답을 거부하면 그대로 넘겨도 됩니다 — <b>그것도 유효한 관찰</b>입니다.
+      다만 녹음이 없으면 담당자 화면에 <span class="bg red">미녹음</span>으로 표시되고
+      <b>오반응(0점)으로 채점</b>됩니다.</p>
+    <p style="margin-top:2mm"><b>그래서 「읽기 싫어서 넘긴 것」과 「마이크가 안 돼서 빈 것」이 구별되지 않습니다.</b>
+      마이크 문제로 비었다면 그 아이는 <b>다시 검사</b>해 주세요.</p>
+  </div>
+
+  <div class="box">
+    <span class="bt">다시 읽히고 싶으면 그냥 다시 녹음하면 됩니다</span>
+    <p>아이가 중간에 막혔거나 잡음이 심했다면 <b>같은 화면에서 녹음 버튼을 다시</b> 누르세요.
+      마지막 녹음이 앞의 것을 대신합니다. 한 화면에서 <b>10번까지</b> 다시 녹음할 수 있습니다.</p>
+  </div>
+</section>
+
+
+<!-- ══════════════ 6 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">6</span>중간에 멈추거나 나가야 할 때</h2>
+  <p class="sec-lead">아이가 화장실에 가거나, 수업 시간이 끝나거나, 창이 닫혀도
+    <b>지금까지 한 것은 남습니다.</b></p>
+
+  <div class="strip n2 h64">
+    <div>
+      <div class="frame"><img src="shots/t-25-pause.png" alt="일시정지 화면"></div>
+      <p class="cap"><b><span class="key">일시정지</span></b> — 화면을 덮어 아이의 오터치까지 막습니다.
+        잠시 쉴 때 쓰세요. 녹음 중에는 눌리지 않습니다.</p>
+    </div>
+    <div>
+      <div class="frame"><img src="shots/t-26-resume.png" alt="이어서 하기 카드"></div>
+      <p class="cap"><b>다시 들어왔을 때</b> — <span class="key">저장하고 나가기</span>로 나갔거나
+        실수로 창을 닫았다면 이 카드가 뜹니다.</p>
+    </div>
+  </div>
+
+  <div class="box danger">
+    <span class="bt"><span class="key">새로 시작</span>은 되돌릴 수 없습니다</span>
+    <p><b>이어서 하기</b> 바로 옆에 있어 잘못 누르기 쉽습니다. 누르면 그 아이의 진행 상태가 지워져
+      <b>이 기기에서 그 검사를 이어갈 수 없습니다</b>(이미 올라간 녹음은 담당자에게 남지만,
+      아이는 처음부터 다시 검사해야 합니다). 확인 창이 한 번 뜨니 잘 읽고 누르세요.</p>
+  </div>
+
+  <h3>검사가 끝나지 않은 상태로 두어도 됩니까</h3>
+  <p>됩니다. 진행 상태는 그 컴퓨터의 브라우저에 저장돼 있어, 나중에 같은 컴퓨터·같은 브라우저로
+    들어오면 이어서 할 수 있습니다. 다만 <b>다른 컴퓨터로는 이어지지 않습니다.</b></p>
+
+  <div class="box warn">
+    <span class="bt">공용 컴퓨터라면 검사를 끝까지 마치고 나오세요</span>
+    <p>제출하지 않은 검사는 담당자 화면에 <span class="bg mute">진행 중</span>으로 남아 채점되지 않습니다.
+      한 아이를 시작했으면 <b>그 자리에서 제출까지</b> 마치는 것이 가장 안전합니다.</p>
+  </div>
+</section>
+
+
+<!-- ══════════════ 7 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">7</span>낱말 쓰기와 체크리스트</h2>
+  <p class="sec-lead">이 두 화면은 <b>아이가 아니라 선생님이 입력</b>합니다.
+    녹음이 없어서 선생님의 입력이 유일한 기록입니다.</p>
+
+  <div class="figcol">
+    <div class="col">
+      <h4 style="margin-top:0">낱말 쓰기 — 무엇을 「예」로 봅니까</h4>
+      <p><b>정확하게 쓴 낱말만 「예」</b>입니다. 맞춤법이 틀렸거나 글자가 빠졌으면 「아니오」입니다.
+        판단이 어려우면 아이가 쓴 종이를 남겨 두고 담당자에게 알려 주세요.</p>
+      <p><span class="key">모두 예</span>·<span class="key">모두 아니오</span>로 한 번에 채운 뒤
+        틀린 것만 바꾸면 빠릅니다.</p>
+
+      <div class="box danger">
+        <span class="bt">여기 입력은 나중에 고칠 수 없습니다</span>
+        <p>담당자 결과지에서 낱말 쓰기는 <b>읽기 전용</b>으로만 보입니다. 지금 잘못 넣으면
+          담당자도 고칠 수 없고, <b>검사 기록을 지우고 다시 검사</b>하는 수밖에 없습니다.
+          한 번 더 확인하고 넘어가세요.</p>
+      </div>
+
+      <p class="small">아이가 쓴 종이는 검사가 끝난 뒤 학교 지침에 따라 보관·폐기해 주세요.
+        이 시스템에는 <b>예/아니오만</b> 저장되고 아이의 필적은 올라가지 않습니다.</p>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-19-writing-filled.png" alt="낱말 쓰기 입력 화면">
+        <p class="cap">아이가 종이에 쓴 낱말을 보고 예 / 아니오를 고릅니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>검사자 체크리스트 — 마지막 단계</h3>
+  <div class="figcol left">
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-21-checklist-picked.png" alt="검사자 체크리스트">
+        <p class="cap">여러 영역을 함께 고를 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="col">
+      <p>검사하면서 눈에 띈 것이 있으면 표시해 주세요. <b>점수가 아니라 참고 정보</b>이며,
+        담당자가 결과를 볼 때 함께 읽습니다.</p>
+      <ul style="margin:0 0 3mm 0; padding-left:5mm; font-size:9.5pt; line-height:1.75; color:var(--soft)">
+        <li>해당 사항이 없으면 <b>「특이사항 없음」</b>을 고릅니다.</li>
+        <li>여러 영역을 동시에 고를 수 있습니다.</li>
+        <li>「특이사항 없음」과 다른 영역은 <b>같이 고를 수 없습니다.</b></li>
+      </ul>
+      <div class="box">
+        <span class="bt">확실하지 않으면 표시하지 않아도 됩니다</span>
+        <p>이 체크는 진단이 아닙니다. <b>「확인이 필요해 보인다」</b> 정도의 관찰만 남기면 충분하고,
+          비워 두어도 검사는 정상적으로 제출됩니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════ 8 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">8</span>검토하고 제출하기</h2>
+  <p class="sec-lead">마지막 단계에서 <span class="key">검토</span>를 누르면
+    <b>단계별로 무엇이 저장됐는지</b> 한눈에 보여 줍니다. 여기서 빠진 것을 되돌아가 채울 수 있습니다.</p>
+
+  <figure style="margin-top:0">
+    <img class="shot" src="shots/t-22-review.png" alt="검사 검토 화면">
+    <p class="cap">단계 번호를 누르면 그 화면으로 돌아갑니다. 되돌아가 다시 녹음한 뒤
+      <span class="key">검토로 돌아가기</span>를 누르면 이 화면으로 옵니다.</p>
+  </figure>
+
+  <div>
+    <div class="col">
+      <h4>제출하기 전에 이것만 보세요</h4>
+      <table>
+        <tr><th style="width:32mm">표시</th><th>뜻과 할 일</th></tr>
+        <tr><td><span class="bg blue">녹음 완료</span></td>
+          <td>그 단계의 녹음이 저장됐습니다. 그대로 두면 됩니다.</td></tr>
+        <tr><td><span class="bg mute">연습 (채점 안 함)</span></td>
+          <td>연습 단계입니다. 비어 있어도 괜찮습니다.</td></tr>
+        <tr><td><b>아무 표시도 없음</b></td>
+          <td>녹음이 <b>없는</b> 단계입니다. <b>번호를 눌러 돌아가 다시 녹음하세요.</b>
+            그대로 제출하면 0점으로 채점됩니다.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="figcol">
+    <div class="col">
+      <div class="box danger" style="margin-top:0">
+        <span class="bt">제출하면 더 이상 고칠 수 없습니다</span>
+        <p>제출한 검사에는 <b>녹음을 더 올릴 수도, 다시 제출할 수도 없습니다.</b>
+          기록이 나중에 바뀌지 않도록 잠그는 것입니다.</p>
+        <p style="margin-top:2mm">빠진 녹음을 발견했다면 <b>제출하기 전에</b> 검토 화면에서 채우세요.
+          이미 제출했다면 같은 아이를 <b>다시 검사</b>하면 됩니다(이전 기록은 남습니다).</p>
+      </div>
+      <h4>끝났습니다</h4>
+      <p><b>「검사가 끝났어요」</b>가 보이면 그 아이의 검사는 담당자에게 넘어갔습니다.
+        <span class="key">다음 학생 검사하기</span>를 누르면 시작 화면으로 돌아가고,
+        <b>학급 코드는 그대로 남아 있습니다</b> — 다음 아이를 바로 고르면 됩니다.</p>
+      <p class="small">이 버튼을 누르면 방금 아이의 진행 정보가 그 컴퓨터에서 지워집니다.
+        공용 컴퓨터에서는 <b>꼭 눌러 주세요.</b></p>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-23-submit-confirm.png" alt="제출 확인 창">
+        <p class="cap">제출 직전 한 번 더 묻습니다.</p>
+      </div>
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-24-done.png" alt="검사 종료 화면">
+        <p class="cap">이 화면이 나오면 끝입니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ══════════════ 9 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">9</span>이럴 때는</h2>
+
+  <div class="box info">
+    <span class="bt">막히면 담당자에게</span>
+    <p>코드를 못 받았거나, 녹음이 안 되거나, 잘못 제출했을 때는 담당자에게 알려 주세요.
+      <b>학교·학년·반과 아이 번호</b>를 함께 전해 주시면 바로 찾을 수 있습니다.</p>
+  </div>
+
+  <div class="qa" style="margin-top:6mm">
+    <div class="item">
+      <p class="q">코드를 넣었는데 「없는 코드」라고 나옵니다</p>
+      <p class="a">아직 담당자가 <b>승인하지 않은</b> 신청이거나, 코드가 삭제된 경우, 또는 오타입니다.
+        <code>0 · O · 1 · I · L</code>은 코드에 쓰이지 않으니 그 글자가 보이면 잘못 읽은 것입니다.
+        승인 메일의 코드를 그대로 복사해 넣어 보세요.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">마이크 확인이 계속 「목소리가 잘 안 들려요」입니다</p>
+      <p class="a">① 헤드셋이 제대로 꽂혔는지 ② 컴퓨터 소리 설정에서 <b>입력 장치가 헤드셋</b>인지
+        ③ 마이크가 입 쪽을 향하는지 봐 주세요. 그래도 안 되면 다른 헤드셋이나 다른 컴퓨터로 바꾸세요.
+        <b>통과하지 못하면 검사를 시작하지 마세요.</b></p>
+    </div>
+
+    <div class="item">
+      <p class="q">아이가 읽기를 거부합니다</p>
+      <p class="a">억지로 시키지 않아도 됩니다. <span class="key">모르겠어요</span>로 넘기거나,
+        <span class="key">저장하고 나가기</span>로 멈추고 다른 날 이어서 하세요.
+        거부도 유효한 관찰이며 그대로 기록됩니다.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">녹음 중에 아이가 딴 얘기를 했어요</p>
+      <p class="a">괜찮습니다. 그 화면에서 <b>녹음 버튼을 다시 눌러</b> 새로 녹음하면
+        마지막 것만 남습니다. 한 화면에서 10번까지 됩니다.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">화면이 꺼지거나 브라우저가 닫혔습니다</p>
+      <p class="a">같은 컴퓨터·같은 브라우저로 다시 들어오면 <b>이어서 하기</b>가 뜹니다.
+        그때까지 저장된 녹음은 남아 있습니다. <span class="key">새로 시작</span>은 누르지 마세요.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">같은 아이를 두 번 검사해도 됩니까</p>
+      <p class="a">됩니다. 이전 기록은 지워지지 않고 <b>회차로 따로</b> 쌓입니다.
+        마이크 문제로 녹음이 비었을 때는 다시 검사하는 것이 맞습니다.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">전학생이 왔습니다 / 동의서가 늦게 왔습니다</p>
+      <p class="a">명단 화면에서 <span class="key">명단에 없는 학생이에요</span>를 눌러 직접 넣으세요.
+        번호·이름·성별·생년월일을 <b>오타 없이</b> 넣어 주셔야 합니다.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">낱말 쓰기를 잘못 눌렀는데 이미 제출했습니다</p>
+      <p class="a">담당자도 고칠 수 없습니다. 담당자에게 알려 <b>그 기록을 지우고 다시 검사</b>하는 것이
+        유일한 방법입니다. 되도록 제출 전에 확인해 주세요.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">녹음이 외부로 나가나요</p>
+      <p class="a">나가지 않습니다. 녹음은 비공개 보관소에 저장되고, <b>검사를 확인하는 담당자만</b>
+        듣습니다. 음성 인식 서비스에 보내지 않습니다.</p>
+    </div>
+
+    <div class="item">
+      <p class="q">점수는 언제 나옵니까</p>
+      <p class="a">담당자가 녹음을 들으며 채점한 뒤 정리합니다. <b>선생님 화면에는 점수가 나오지 않습니다</b> —
+        결과 안내 시점은 담당자에게 확인해 주세요.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:8mm">시작 전 점검표</h3>
+  <div class="chk">
+    <div class="row"><span class="sq"></span><div>
+      <b>헤드셋 마이크가 연결돼 있는가</b>
+      <span>내장 마이크는 옆 소리까지 담깁니다.</span></div></div>
+    <div class="row"><span class="sq"></span><div>
+      <b>보호자 서면 동의서를 받았는가</b>
+      <span>받은 아이만 검사합니다. 화면 체크는 그 확인입니다.</span></div></div>
+    <div class="row"><span class="sq"></span><div>
+      <b>조용한 자리인가</b>
+      <span>아이가 소리 내어 읽는 것을 부담스러워하지 않을 자리.</span></div></div>
+    <div class="row"><span class="sq"></span><div>
+      <b>마이크 확인을 통과했는가</b>
+      <span>「마이크가 잘 인식됐어요」를 눈으로 확인하고 시작합니다.</span></div></div>
+    <div class="row"><span class="sq"></span><div>
+      <b>아이에게 「힘들면 멈춰도 된다」고 말했는가</b>
+      <span>녹음 버튼을 다시 누르면 멈춥니다.</span></div></div>
+  </div>
+</section>
+
+</body>
+</html>
