@@ -1,6 +1,6 @@
 // /api/admin/sessions/[id]/sheet.pdf — 공식 검사지 PDF 다운로드.
 // 담당자 배포 원본 검사지에 채점 결과만 얹어 내려준다(생성은 lib/pdf/stamp-sheet).
-// 파일명에 아동 이름이 들어가므로 middleware의 관리자 인증 뒤에서만 접근된다.
+// 파일명에 아동 이름이 들어가므로 proxy의 관리자 인증 뒤에서만 접근된다.
 import { NextResponse } from 'next/server'
 import { sessionDetail } from '@/lib/db'
 import { formForGrade } from '@/lib/forms'

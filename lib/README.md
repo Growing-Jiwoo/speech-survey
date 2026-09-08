@@ -28,7 +28,7 @@
 근거는 함수 docblock이 갖는다. **`submitSession`은 쓰기 답을 먼저 넣고 `submitted_at`을 마지막에 확정한다 — 순서를 되돌리면 중간 실패 시 재시도가 409로 막혀 쓰기 점수가 영구 유실된다**(쓰기는 검사 중 입력이 유일한 채점 경로다). `createSession`은 `idemKey`가 오면 **같은 키로 세션을 하나만 만든다** — insert를 먼저 던지고 unique 충돌(23505)을 "이미 만든 그 세션"으로 해석한다(먼저 조회하면 경쟁에서 둘 다 만든다). 이유 전문은 함수 docblock |
 | `env.ts` | 필수 환경변수 로더 — 미설정 시 즉시 throw(fail-fast) |
 | `request.ts` | 라우트 공용: `clientIp`(위조 불가 헤더 우선 규칙), `UUID_RE`, `jsonError`, `createRateLimiter`(best-effort 인메모리 IP 레이트리미터). 레이트리밋 상한은 라우트마다 위협 모델이 달라 값도 분리했다 — `PUBLIC_RATE_LIMIT`·`PUBLIC_RATE_WINDOW_MS`(`/api/sessions` 전용, 스팸 세션 행 생성 방어)와 `VERIFY_CODE_RATE_LIMIT`·`VERIFY_CODE_RATE_WINDOW_MS`(`/api/sessions/verify-code` 전용, 코드 열거 방어). **다만 둘 다 학교 건물 NAT·다중 PC 동시 검사라는 같은 현장 제약을 받는다** — 한 학급이 컴퓨터실에서 일제히 시작하면 아이 수만큼의 요청이 IP 하나로 몰린다. 상한을 조일 때는 "몇 명이 동시에 시작할 수 있어야 하는가"를 먼저 따질 것(구 값 20이 21번째 아이를 막았다 — 2026-08-15) |
-| `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(Edge middleware·Node 라우트 공용) |
+| `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(proxy·Node 라우트 공용) |
 | `audio-validate.ts` | 업로드 오디오 MIME allowlist + 매직바이트 스니핑(저장형 XSS 차단) |
 | `audio-ext.ts` | 저장 파일 확장자 결정(표기용 — 재생은 Content-Type 기준) |
 | `pdf/` | 공식 검사지 PDF 스탬핑 — 원본 PDF(`assets/forms/`)에 점수만 얹는다 |

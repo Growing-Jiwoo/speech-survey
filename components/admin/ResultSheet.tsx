@@ -311,6 +311,8 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
             setGateOpen(false)
             if (gate.reason === 'dirty') { void save(); return }
             // 결과지에서 채울 수 없는 과제(쓰기)만 남았으면 경고를 확인한 뒤 내려받는다.
+            // 페이지 이동이 아니라 PDF 다운로드다 — router.push로 바꾸면 파일이 아니라 라우트로 이동해 깨진다.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             if (gate.overridable) window.location.href = pdfHref
           }}
           onClose={() => setGateOpen(false)}>

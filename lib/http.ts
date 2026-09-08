@@ -1,6 +1,5 @@
 // lib/http.ts — 클라이언트 fetch 공용 헬퍼.
 // "요청 → JSON 파싱 → 실패 문구" 보일러플레이트와 네트워크 오류 카피를 한 곳으로 모은다.
-'use client'
 
 export const NETWORK_ERR_MSG = '연결에 문제가 생겼어요. 다시 시도해 주세요.'
 
