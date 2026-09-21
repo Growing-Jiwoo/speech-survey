@@ -182,10 +182,16 @@ export default function StartPage() {
       if (auto) return
       setErrors({ code: '6자리 학급 코드를 입력해 주세요.' }); focusFirstError({ code: '!' }); return
     }
-    setErrors({}); setFormErr(''); setBusy(true)
+    setErrors({}); setFormErr('')
+    // 자동 조회는 **화면을 잠그지 않는다.** busy는 전체 화면 로딩 오버레이를 띄우고 [확인]을
+    // 비활성화하는데(아래 LoadingOverlay), 검사자가 누르지도 않은 배경 조회 때문에 화면이
+    // 덮이면 ①시작 화면을 열 때마다 학교 망에서 오버레이가 깜빡이고 ②마침 다른 학급 코드로
+    // 고치려던 검사자가 그동안 아무것도 할 수 없다 — 바로 그 순간을 막으려고 codeTouched를
+    // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
+    if (!auto) setBusy(true)
     const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
       { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
-    setBusy(false)
+    if (!auto) setBusy(false)
     // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
     if (auto && codeTouched.current) return
     if (!r.ok) {
