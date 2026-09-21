@@ -14,12 +14,12 @@
 | `POST /api/sessions/submit` | 최종 제출. 낱말쓰기/체크리스트 형식 검증 → 토큰 검증 → 미제출 세션만 갱신(재제출 409) |
 | `POST /api/apply` | 교사 신청 접수. zod 검증(`applySchema`) + IP 레이트리밋(`APPLY_RATE_LIMIT`, verify-code와 별도로 낮게 잡음) → `pending` 학급 코드 + 명단 생성(unique 충돌 시 최대 5회 재시도) → 관리자에게 알림 메일(`ADMIN_NOTIFY_EMAIL`, 10분 합치기로 발송량 제한, 실패해도 신청 자체는 성공). **응답에 코드를 넣지 않는다** — 승인 메일이 유일한 코드 전달 경로여야 관리자 승인이 실제 관문이 된다 |
 
-## 관리자 라우트 (인증: middleware)
+## 관리자 라우트 (인증: proxy)
 
 | 라우트 | 역할 |
 |---|---|
 | `POST /api/admin/login` | argon2id 해시 검증 + DB 기반 레이트리밋 → HttpOnly 쿠키(8h). IP는 5회 실패 시 10분 하드 잠금, **전역은 30회부터 하드 잠금이 아니라 점증 지연**(상한 2초) — 전역 하드 잠금은 공격자가 실패를 쌓는 것만으로 정상 관리자를 봉쇄할 수 있어 폐기됐다 |
-| `POST /api/admin/logout` | 쿠키 즉시 만료(만료된 쿠키로도 호출 가능해야 하므로 middleware 예외) |
+| `POST /api/admin/logout` | 쿠키 즉시 만료(만료된 쿠키로도 호출 가능해야 하므로 proxy 예외) |
 | `GET /api/admin/sessions` | 목록(최대 5,000행 — 초과 시 서버 페이지네이션 도입 필요, 코드에 경고 로그) |
 | `GET /api/admin/sessions/[id]` | 결과지. 녹음은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출 |
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |

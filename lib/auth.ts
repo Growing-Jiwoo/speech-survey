@@ -49,7 +49,7 @@ export async function verifyToken(token: string, secret: string): Promise<boolea
   if (parts.length !== 3) return false
   const [exp, jti, sig] = parts
   if (!exp || !jti || !sig) return false
-  if (Number(exp) < Date.now()) return false
+  if (!(Number(exp) >= Date.now())) return false // NaN 포함 거부(verifySessionToken과 같은 규칙)
   return timingSafeEqualHex(await hmacHex(`${exp}.${jti}`, secret), sig)
 }
 

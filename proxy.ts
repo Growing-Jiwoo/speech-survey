@@ -1,3 +1,7 @@
+// proxy.ts — 요청 전처리(옛 middleware.ts). Next 16에서 middleware 컨벤션이 deprecated돼 이름만 옮겼다.
+// **/admin·/api/admin/* 의 유일한 인증 계층**이다 — 라우트에는 인증 코드가 없다(app/api/README.md).
+// 컨벤션이 빠지면 빌드는 성공하고 관리자 API가 무인증으로 열리므로(fail-open), Next 메이저를 올릴 때
+// 빌드 출력에 "ƒ Proxy"가 남는지 반드시 확인할 것.
 import { NextResponse, type NextRequest } from 'next/server'
 import { verifyToken, ADMIN_COOKIE } from '@/lib/auth'
 
@@ -29,10 +33,10 @@ function buildCsp(nonce: string | null): string {
   ].join('; ')
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // prod에서만 nonce 발급. Edge 런타임엔 Node Buffer가 없으므로 btoa로 base64 인코딩한다.
+  // prod에서만 nonce 발급. btoa는 Edge·Node 어디서든 있어 런타임을 가리지 않는다.
   const nonce = process.env.NODE_ENV === 'production' ? btoa(crypto.randomUUID()) : null
   const csp = buildCsp(nonce)
 
@@ -58,7 +62,7 @@ export async function middleware(req: NextRequest) {
   // admin 보호 구역: 시크릿 미설정 시 fail-open 금지(빈 키 서명 위조 차단).
   const secret = process.env.SESSION_SECRET
   const token = req.cookies.get(ADMIN_COOKIE)?.value ?? ''
-  const authed = secret && token && await verifyToken(token, secret)
+  const authed = secret && token && (await verifyToken(token, secret))
   if (authed) return pass()
   if (pathname.startsWith('/api/'))
     return withCsp(NextResponse.json({ error: '인증 필요' }, { status: 401 }))

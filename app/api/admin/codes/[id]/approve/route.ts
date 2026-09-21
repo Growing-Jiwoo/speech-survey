@@ -1,4 +1,4 @@
-// POST /api/admin/codes/[id]/approve — 신청 승인 + 교사에게 코드 안내 메일. 인증은 middleware.
+// POST /api/admin/codes/[id]/approve — 신청 승인 + 교사에게 코드 안내 메일. 인증은 proxy.
 //
 // 멱등: 이미 active면(already:true) 메일을 다시 시도하지 않는다. `already:true`는 "행이
 // active"라는 사실만 보장하고 "메일이 나갔다"는 사실은 보장하지 않는다(관리자 발급 코드는

@@ -1,7 +1,7 @@
 # app/api/admin/sessions/ — 관리자 세션 조회 · 채점 · 파기 · 인쇄
 
 관리자 화면이 쓰는 네 라우트. 검사가 끝난 뒤의 모든 동작(목록 훑기 → 결과지 열기 → 채점 저장 →
-검사지 PDF 인쇄 → 파기)이 여기를 지난다. 인증 코드는 없다 — `middleware.ts`가 `/api/admin/*`
+검사지 PDF 인쇄 → 파기)이 여기를 지난다. 인증 코드는 없다 — `proxy.ts`가 `/api/admin/*`
 전체를 보호한다.
 
 | 파일 | 역할 |
@@ -58,6 +58,6 @@
 ## PII
 
 응답 전체가 아동 실명·생년월일·학교·반·번호와 담임 연락처, 그리고 녹음 재생 URL이다.
-`sheet.pdf`는 파일명에까지 아동 이름이 들어가므로 middleware 인증 뒤에서만 접근돼야 한다.
+`sheet.pdf`는 파일명에까지 아동 이름이 들어가므로 proxy 인증 뒤에서만 접근돼야 한다.
 
 테스트: `tests/admin-routes.test.ts`, `tests/scores-route.test.ts`, `tests/stamp-sheet.test.ts`.

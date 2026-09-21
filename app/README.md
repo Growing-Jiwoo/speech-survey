@@ -86,7 +86,7 @@
 /admin/[id]  결과지 — 녹음 청취(서명 URL)·낱말쓰기·체크리스트·세션 삭제(PII 파기)
 ```
 
-인증은 `middleware.ts`가 `/admin`·`/api/admin/*` 전체를 보호한다(라우트는 인증 코드 없음).
+인증은 `proxy.ts`가 `/admin`·`/api/admin/*` 전체를 보호한다(라우트는 인증 코드 없음).
 
 ## 파일
 

@@ -14,7 +14,7 @@
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
 // 채로 시작한다(아동 정보는 절대 남기지 않는다 — lib/survey-state.ts 참고).
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -121,6 +121,16 @@ export default function StartPage() {
   // 파괴적 동작(검사 기록 삭제·코드 삭제·신청 반려)은 전부 확인 모달을 갖는다 —
   // 여기만 예외로 두지 않는다(리뷰 G-07).
   const [confirmRestart, setConfirmRestart] = useState(false)
+  /**
+   * 검사자가 코드 칸을 직접 건드렸는지. **자동 조회의 경합을 막는 유일한 장치다.**
+   * 기억된 코드 조회는 화면이 뜨자마자 나가는데, 학교 망에서 1~2초씩 걸린다. 그 사이
+   * 검사자가 다른 학급 코드로 고쳐 버리면 뒤늦게 도착한 **이전 학급 명단**이 화면을
+   * 덮어쓰고, 그대로 아이를 고르면 **다른 반 아이의 임상 기록**이 만들어진다.
+   * 응답을 적용하기 직전에 이 값을 보고, 검사자가 이미 손을 댔으면 버린다.
+   * (state가 아니라 ref인 이유: 이 값이 바뀌어도 다시 그릴 것이 없고, 조회를 시작한
+   *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
+   */
+  const codeTouched = useRef(false)
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
@@ -128,10 +138,15 @@ export default function StartPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s) setResume({ childName: s.childName, childNo: s.childNo })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
-    // 단계는 'code'에 그대로 둔다 — [확인]을 다시 눌러 명단을 새로 받아야 방금 끝낸 아동의
-    // 「검사함」 표시가 반영된다.
+    // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
+    // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
+    // 받기 위한 것이었다 — 자동 조회도 서버를 다시 부르므로 그 목적은 그대로 달성된다.
+    // 갇히지 않는다: 코드 칸은 모든 단계에서 화면에 남아 있고, 한 글자라도 고치면 아래
+    // onChange가 1단계로 되돌리며 명단·선택·동의 체크를 전부 비운다(다른 학급으로 전환).
     const last = loadClassCode()
-    if (last) setCode(last)
+    if (last) { setCode(last); void lookupCode(last) }
+    // 마운트 1회만 — lookupCode는 매 렌더 새로 만들어지므로 의존성에 넣으면 조회가 반복된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 단계가 바뀌면 방금 나타난 첫 칸으로 포커스를 옮긴다. 눌렀던 [확인]은 다음 단계에서
@@ -153,16 +168,34 @@ export default function StartPage() {
     ? `${String(year).slice(2)}${pad2(Number(month))}${pad2(Number(day))}` : ''
 
   /** 1단계 [확인] — 코드만 조회한다. 명단이 있으면 드롭다운으로, 비어 있으면(관리자 직접
-   *  발급 코드) 옛 입력 폼으로 넘어간다. */
-  async function lookupCode() {
-    if (!validClassCode(cleanCode)) {
+   *  발급 코드) 옛 입력 폼으로 넘어간다.
+   *
+   *  `remembered`는 기억된 코드로 **자동 조회**할 때만 넘어온다(마운트 effect). 그 경로는
+   *  검사자가 아무것도 누르지 않았으므로 **실패해도 화면에 오류를 내지 않는다** — 코드가
+   *  그 사이 삭제·반려됐을 때 화면을 열자마자 빨간 글씨가 뜨면, 자기가 하지도 않은 입력이
+   *  틀렸다는 말이 되어 더 혼란스럽다. 조용히 1단계에 머물고 검사자가 코드를 넣으면 된다.
+   *  (사용자 확정 2026-09-21 — 임상 규칙 아님, 표시 판단) */
+  async function lookupCode(remembered?: string) {
+    const target = remembered ?? cleanCode
+    const auto = remembered !== undefined
+    if (!validClassCode(target)) {
+      if (auto) return
       setErrors({ code: '6자리 학급 코드를 입력해 주세요.' }); focusFirstError({ code: '!' }); return
     }
-    setErrors({}); setFormErr(''); setBusy(true)
+    setErrors({}); setFormErr('')
+    // 자동 조회는 **화면을 잠그지 않는다.** busy는 전체 화면 로딩 오버레이를 띄우고 [확인]을
+    // 비활성화하는데(아래 LoadingOverlay), 검사자가 누르지도 않은 배경 조회 때문에 화면이
+    // 덮이면 ①시작 화면을 열 때마다 학교 망에서 오버레이가 깜빡이고 ②마침 다른 학급 코드로
+    // 고치려던 검사자가 그동안 아무것도 할 수 없다 — 바로 그 순간을 막으려고 codeTouched를
+    // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
+    if (!auto) setBusy(true)
     const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
-      { code: cleanCode }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
-    setBusy(false)
+      { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
+    if (!auto) setBusy(false)
+    // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
+    if (auto && codeTouched.current) return
     if (!r.ok) {
+      if (auto) return
       // 미승인(pending) 코드도 미존재와 같은 404다 — 사유를 구분하지 않는 것이 서버 방침이다.
       if (r.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
       else setFormErr(r.error)
@@ -311,6 +344,8 @@ export default function StartPage() {
             placeholder="ABC234" autoCapitalize="characters" spellCheck={false}
             aria-describedby={errors.code ? 'err-code' : undefined} aria-invalid={!!errors.code}
             onChange={e => {
+              // 자동 조회가 아직 날아오는 중일 수 있다 — 이 표시가 그 응답을 버리게 한다.
+              codeTouched.current = true
               setCode(e.target.value.toUpperCase())
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
               // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 서면 동의서를 받았다"는

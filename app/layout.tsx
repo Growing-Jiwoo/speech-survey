@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: '읽기 검사', description: '아동
 export const viewport: Viewport = { themeColor: '#F4F6FB', colorScheme: 'light' }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // middleware가 심은 요청별 nonce를 읽는다. headers()를 읽으면 렌더가 동적으로 전환되고,
+  // proxy가 심은 요청별 nonce를 읽는다. headers()를 읽으면 렌더가 동적으로 전환되고,
   // 그때 Next가 자기 스크립트 태그에 이 nonce를 자동 부여한다(strict-dynamic CSP와 맞물림).
   // 정적 프리렌더 상태에서는 nonce를 주입할 수 없어 CSP가 스크립트를 전부 차단하므로 필수 단계다.
   await headers()

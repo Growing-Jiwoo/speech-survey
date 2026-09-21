@@ -17,10 +17,18 @@ beforeEach(() => {
 describe('survey-state', () => {
   it('newState는 pageIdx=0, phase=mic로 시작한다', () => {
     const s = newState('sid-1', '홍길동', 3, 'tok', 1)
-    expect(s.v).toBe(8)
+    expect(s.v).toBe(9)
     expect(s.pageIdx).toBe(0)
     expect(s.phase).toBe('mic')
     expect(s.micDone).toBe(false)
+    // 모름 표시는 비어 있는 채로 시작한다 — undefined면 검토 화면의 includes가 터진다.
+    expect(s.skipped).toEqual([])
+  })
+
+  it('「모르겠어요」 표시는 save→load로 복원된다 (검토 화면이 미녹음과 구분하는 근거)', () => {
+    const s = newState('sid-1', '홍길동', 3, 'tok', 1)
+    saveState({ ...s, skipped: ['p_rw_nonsense', 'p_rs02'] })
+    expect(loadState()?.skipped).toEqual(['p_rw_nonsense', 'p_rs02'])
   })
 
   it('연습은 기본으로 실시한다 — 선택 화면에서 검사자가 끄기 전까지', () => {

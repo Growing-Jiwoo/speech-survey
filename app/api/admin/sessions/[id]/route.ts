@@ -1,4 +1,4 @@
-// /api/admin/sessions/[id] — 관리자 결과지 조회(GET)·세션 영구 삭제(DELETE). 인증은 middleware가 담당.
+// /api/admin/sessions/[id] — 관리자 결과지 조회(GET)·세션 영구 삭제(DELETE). 인증은 proxy가 담당.
 import { NextResponse } from 'next/server'
 import { deleteSession, sessionDetail, signedAudioUrl, updateSessionIdentity } from '@/lib/db'
 import { sessionEditSchema } from '@/lib/schema'

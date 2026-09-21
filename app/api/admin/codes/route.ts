@@ -1,4 +1,4 @@
-// /api/admin/codes — 학급 코드 발급(POST)·목록(GET). 인증은 middleware가 담당.
+// /api/admin/codes — 학급 코드 발급(POST)·목록(GET). 인증은 proxy가 담당.
 import { NextResponse } from 'next/server'
 import { insertClassCode, listClassCodes } from '@/lib/db'
 import { generateClassCode } from '@/lib/class-code'

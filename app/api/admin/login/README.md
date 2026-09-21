@@ -1,10 +1,10 @@
 # app/api/admin/login/ — 관리자 로그인
 
 `route.ts` 한 파일. 비밀번호를 argon2id 해시(`ADMIN_PASSWORD_HASH`)와 대조하고, 통과하면
-HMAC 관리자 토큰을 만들어 HttpOnly 쿠키로 심는다. 이 쿠키가 이후 `middleware.ts`가 검증하는
+HMAC 관리자 토큰을 만들어 HttpOnly 쿠키로 심는다. 이 쿠키가 이후 `proxy.ts`가 검증하는
 그 쿠키다 — 관리자 인증 사슬이 시작되는 유일한 지점이다.
 
-**이 라우트 자체는 인증 뒤에 있지 않다.** `middleware.ts`가 `/api/admin/login`을 예외로
+**이 라우트 자체는 인증 뒤에 있지 않다.** `proxy.ts`가 `/api/admin/login`을 예외로
 통과시킨다(인증을 받으러 오는 요청이므로). 그래서 무차별 대입 방어를 라우트가 직접 진다.
 
 ## 방어가 2단인 이유
