@@ -128,10 +128,15 @@ export default function StartPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s) setResume({ childName: s.childName, childNo: s.childNo })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
-    // 단계는 'code'에 그대로 둔다 — [확인]을 다시 눌러 명단을 새로 받아야 방금 끝낸 아동의
-    // 「검사함」 표시가 반영된다.
+    // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
+    // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
+    // 받기 위한 것이었다 — 자동 조회도 서버를 다시 부르므로 그 목적은 그대로 달성된다.
+    // 갇히지 않는다: 코드 칸은 모든 단계에서 화면에 남아 있고, 한 글자라도 고치면 아래
+    // onChange가 1단계로 되돌리며 명단·선택·동의 체크를 전부 비운다(다른 학급으로 전환).
     const last = loadClassCode()
-    if (last) setCode(last)
+    if (last) { setCode(last); void lookupCode(last) }
+    // 마운트 1회만 — lookupCode는 매 렌더 새로 만들어지므로 의존성에 넣으면 조회가 반복된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // 단계가 바뀌면 방금 나타난 첫 칸으로 포커스를 옮긴다. 눌렀던 [확인]은 다음 단계에서
@@ -153,16 +158,26 @@ export default function StartPage() {
     ? `${String(year).slice(2)}${pad2(Number(month))}${pad2(Number(day))}` : ''
 
   /** 1단계 [확인] — 코드만 조회한다. 명단이 있으면 드롭다운으로, 비어 있으면(관리자 직접
-   *  발급 코드) 옛 입력 폼으로 넘어간다. */
-  async function lookupCode() {
-    if (!validClassCode(cleanCode)) {
+   *  발급 코드) 옛 입력 폼으로 넘어간다.
+   *
+   *  `remembered`는 기억된 코드로 **자동 조회**할 때만 넘어온다(마운트 effect). 그 경로는
+   *  검사자가 아무것도 누르지 않았으므로 **실패해도 화면에 오류를 내지 않는다** — 코드가
+   *  그 사이 삭제·반려됐을 때 화면을 열자마자 빨간 글씨가 뜨면, 자기가 하지도 않은 입력이
+   *  틀렸다는 말이 되어 더 혼란스럽다. 조용히 1단계에 머물고 검사자가 코드를 넣으면 된다.
+   *  (사용자 확정 2026-09-21 — 임상 규칙 아님, 표시 판단) */
+  async function lookupCode(remembered?: string) {
+    const target = remembered ?? cleanCode
+    const auto = remembered !== undefined
+    if (!validClassCode(target)) {
+      if (auto) return
       setErrors({ code: '6자리 학급 코드를 입력해 주세요.' }); focusFirstError({ code: '!' }); return
     }
     setErrors({}); setFormErr(''); setBusy(true)
     const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
-      { code: cleanCode }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
+      { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) {
+      if (auto) return
       // 미승인(pending) 코드도 미존재와 같은 404다 — 사유를 구분하지 않는 것이 서버 방침이다.
       if (r.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
       else setFormErr(r.error)

@@ -110,7 +110,12 @@ function SurveyInner() {
   }, [])
 
   const markSaved = useCallback((code: string) => {
-    patch(prev => ({ recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 } }))
+    // 「모르겠어요」로 넘겼던 페이지에 돌아와 녹음했으면 그 표시를 거둔다 — 녹음이 있는데
+    // 검토 화면이 「모르겠어요」라고 말하면 안 된다(둘은 상호 배타다).
+    patch(prev => ({
+      recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
+      skipped: prev.skipped.filter(c => c !== code),
+    }))
     setPendingRetries(prev => {
       if (!(code in prev)) return prev
       const { [code]: _removed, ...rest } = prev
@@ -191,6 +196,10 @@ function SurveyInner() {
     // 연습 페이지에서는 곧바로 본 검사로 넘기지 않고 "연습이 끝났다"를 한 화면 보여준다
     // (연습과 본 검사의 경계가 화면에 없다는 피드백 — 2026-08-12).
     if (!fromReview && page.practice) { setPracticeEnd(true); return }
+    // [모르겠어요]로 넘긴 페이지를 기록한다 — 검토 화면이 「미녹음」과 구분해야 한다
+    // (담당자 확정 2026-09-21). 버튼 라벨을 정하는 `skipping`과 **같은 조건**을 쓴다:
+    // 화면이 「모르겠어요」라고 말한 그 누름만 기록해야 둘이 어긋나지 않는다.
+    if (skipping) patch(prev => ({ skipped: [...new Set([...prev.skipped, page.code])] }))
     goNext()
   }
 
@@ -212,6 +221,7 @@ function SurveyInner() {
   const canNext = !busy && canAdvance(f, page, st)
 
   // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
+  // (누르면 `tryNext`가 그 페이지를 `skipped`에 남겨 검토 화면이 미녹음과 구분한다 — 2026-09-21)
   // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용 —
   // 응답 거부·모름도 유효한 관찰이다). 담당자 확정(2026-08-07): 별도 버튼을 만들지 않고
   // 기존 건너뛰기 버튼의 라벨만 바꾼다 — 근거 docs/superpowers/plans/2026-08-07-survey-session-controls.md

@@ -43,9 +43,14 @@ export default function ReviewPage() {
   // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 쓰기 과제는 점수 미선택.
   // (체크리스트는 진행 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
   // 연습 페이지는 서버에 남기지 않으므로 완료 판정에서 제외한다.
+  // **[모르겠어요]로 넘긴 페이지도 제외한다**(담당자 확정 2026-09-21) — 검사자가 의도적으로
+  // 넘긴 것은 "아직 못 한 것"이 아니다. 모름 3개를 넘겼는데 "아직 3개가 완료되지 않았어요"가
+  // 뜨면 검사자는 돌아가서 뭘 해야 하는 줄 알고, 진짜 빠뜨린 문항과도 섞여 버린다.
   const f = itemsFor(formForGrade(state.grade))
   const pages = visiblePages(f, state)
-  const missingPages = pages.filter(p => isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0)).length
+  const skipped = (p: typeof pages[number]) => state.skipped.includes(p.code)
+  const missingPages = pages.filter(p =>
+    isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0) && !skipped(p)).length
   const missingWriting = pages
     .filter(p => p.section === f.writingSection)
     .flatMap(p => p.items)
@@ -66,8 +71,12 @@ export default function ReviewPage() {
             if (p.practice) {
               pill = <span className="text-right text-xs text-ink-mute">연습 (채점 안 함)</span>
             } else if (isRecordingPage(p)) {
-              const done = (state.recorded[p.code] ?? 0) > 0
-              pill = <StatusPill done={done} label={done ? '녹음 완료' : '미녹음'} />
+              // 세 갈래다 — 녹음 완료 / 모르겠어요 / 미녹음. 「모르겠어요」는 검사자가 의도적으로
+              // 넘긴 **관찰 결과**이지 빠뜨린 것이 아니므로 누락 색(rec)을 쓰지 않는다
+              // (담당자 확정 2026-09-21: 미녹음과 구분해 보여줄 것).
+              pill = (state.recorded[p.code] ?? 0) > 0 ? <StatusPill done label="녹음 완료" />
+                : skipped(p) ? <Badge tone="amber">모르겠어요</Badge>
+                  : <StatusPill done={false} label="미녹음" />
             } else if (p.section === f.writingSection) {
               const done = p.items.filter(i => state.writing[i.code] !== undefined).length
               pill = <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />

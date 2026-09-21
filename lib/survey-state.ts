@@ -6,8 +6,10 @@
 /** 저장 스키마 버전. 필드 구조가 바뀌면 올린다 — 구버전 상태는 로드하지 않고 새로 시작하게
  *  하여(배포 직후 진행 중이던 세션 한정) 미정의 동작을 막는다.
  *  v7: 현장 채점 `marks` 필드 제거 및 채점 페이지 제거로 `pageIdx` 재조정 — 담당자 확정(2026-08-13)
- *  v8: 이어하기 안내에 아동 번호를 쓰기 위해 `childNo` 추가 — 사용자 확정(2026-08-15) */
-const SCHEMA_V = 8
+ *  v8: 이어하기 안내에 아동 번호를 쓰기 위해 `childNo` 추가 — 사용자 확정(2026-08-15)
+ *  v9: 「모르겠어요」로 넘긴 페이지를 검토 화면이 미녹음과 구분하도록 `skipped` 추가 —
+ *      담당자 확정(2026-09-21) */
+const SCHEMA_V = 9
 
 export interface SurveyState {
   v: typeof SCHEMA_V
@@ -29,6 +31,18 @@ export interface SurveyState {
   /** 마이크 확인 → 연습 실시 여부 선택 → 페이지 진행 */
   phase: 'mic' | 'practiceAsk' | 'page'
   recorded: Record<string, number>   // pageCode → 저장된 시도 수
+  /**
+   * 검사자가 [모르겠어요]를 눌러 녹음 없이 넘긴 페이지 코드. 담당자 확정(2026-09-21) —
+   * 검토 화면이 「미녹음」과 구분해 보여줘야 한다는 요청이 근거다.
+   *
+   * **로컬에만 둔다(서버로 보내지 않는다).** 관리자 채점은 녹음 없는 페이지를 오반응으로
+   * 기본 채점하므로(`withUnrecordedDefaults`) 모름·미실시의 **점수는 어차피 같다.** 결과지에
+   * 둘을 나눠 찍을지는 담당자에게 묻지 않았고, 물어서 "나눠 달라"가 되면 그때 컬럼을 만들면
+   * 된다 — 지금 DB로 올리면 아무도 읽지 않는 필드가 임상 기록에 남는다.
+   *
+   * `recorded`와 상호 배타다: 넘긴 뒤 되돌아와 녹음하면 `markSaved`가 여기서 뺀다.
+   */
+  skipped: string[]
   /** 쓰기 과제 itemCode → 정확히 쓴 어절 수. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1,
    *  문장 쓰기(G2)는 0~2다 — 두 과제의 채점 규칙이 "어절당 1점"으로 같아 한 모양으로 담는다. */
   writing: Record<string, number>
@@ -47,7 +61,7 @@ export function newState(
     v: SCHEMA_V, sessionId, sessionToken, childName, childNo, grade,
     // practice의 기본값은 true다 — 선택 화면에서 검사자가 바꾸기 전까지는 연습을 실시한다.
     micDone: false, practice: true, pageIdx: 0, phase: 'mic',
-    recorded: {}, writing: {}, checklist: [], introsSeen: [],
+    recorded: {}, skipped: [], writing: {}, checklist: [], introsSeen: [],
   }
 }
 

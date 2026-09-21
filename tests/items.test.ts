@@ -45,10 +45,13 @@ describe('itemsFor — 양식별 문항', () => {
     expect(g2.writingItems.map(i => i.code)).toEqual(['sw01', 'sw02', 'sw03', 'sw04', 'sw05'])
   })
 
-  it('녹음 제한시간: 낱말 30초, 문장 40초, 그 외 0', () => {
+  // 낱말 30초·문장 40초(검사지 인쇄값)가 아니라 페이지당 20초다 — 담당자 확정(2026-09-21).
+  // 근거는 lib/forms/g1.ts의 limits 주석: 인쇄값은 한 화면에 다 제시할 때의 시간이고,
+  // 이 앱은 페이지를 쪼개므로 페이지당으로 재배분했다.
+  it('녹음 제한시간: 낱말 20초, 문장 20초, 그 외 0', () => {
     for (const f of [g1, g2]) f.items.forEach(i => {
-      if (i.section === 'word_reading') expect(i.maxSec).toBe(30)
-      else if (i.section === 'sentence_reading') expect(i.maxSec).toBe(40)
+      if (i.section === 'word_reading') expect(i.maxSec).toBe(20)
+      else if (i.section === 'sentence_reading') expect(i.maxSec).toBe(20)
       else expect(i.maxSec).toBe(0)
     })
   })
@@ -150,10 +153,10 @@ describe('pages (화면·녹음 단위)', () => {
     expect(g2.pageByCode.get('p_sw')!.items[0].text).toBe('집으로 와요')
   })
 
-  it('제한 시간(검사지 기준): 낱말 30초, 문장 40초, 비녹음 0초', () => {
-    expect(g1.pageByCode.get('p_rw_meaning')!.limitSec).toBe(30)
-    expect(g1.pageByCode.get('p_rw_nonsense')!.limitSec).toBe(30)
-    expect(g1.pageByCode.get('p_rs01')!.limitSec).toBe(40)
+  it('제한 시간(페이지당): 낱말 20초, 문장 20초, 비녹음 0초', () => {
+    expect(g1.pageByCode.get('p_rw_meaning')!.limitSec).toBe(20)
+    expect(g1.pageByCode.get('p_rw_nonsense')!.limitSec).toBe(20)
+    expect(g1.pageByCode.get('p_rs01')!.limitSec).toBe(20)
     expect(g1.pageByCode.get('p_ww')!.limitSec).toBe(0)
     expect(g1.pageByCode.get('p_cl')!.limitSec).toBe(0)
     expect(g2.pageByCode.get('p_sw')!.limitSec).toBe(0)
@@ -161,8 +164,8 @@ describe('pages (화면·녹음 단위)', () => {
 
   it('녹음 자동 종료 = 제한 + 여유(GRACE_SEC)', () => {
     expect(GRACE_SEC).toBe(5)
-    expect(maxRecSec(g1.pageByCode.get('p_rw_meaning')!)).toBe(35)
-    expect(maxRecSec(g1.pageByCode.get('p_rs01')!)).toBe(45)
+    expect(maxRecSec(g1.pageByCode.get('p_rw_meaning')!)).toBe(25)
+    expect(maxRecSec(g1.pageByCode.get('p_rs01')!)).toBe(25)
   })
 
   it('연습 페이지는 practice=true이고 본 문항과 낱말이 겹치지 않는다', () => {
