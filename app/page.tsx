@@ -14,7 +14,7 @@
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
 // 채로 시작한다(아동 정보는 절대 남기지 않는다 — lib/survey-state.ts 참고).
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -121,6 +121,16 @@ export default function StartPage() {
   // 파괴적 동작(검사 기록 삭제·코드 삭제·신청 반려)은 전부 확인 모달을 갖는다 —
   // 여기만 예외로 두지 않는다(리뷰 G-07).
   const [confirmRestart, setConfirmRestart] = useState(false)
+  /**
+   * 검사자가 코드 칸을 직접 건드렸는지. **자동 조회의 경합을 막는 유일한 장치다.**
+   * 기억된 코드 조회는 화면이 뜨자마자 나가는데, 학교 망에서 1~2초씩 걸린다. 그 사이
+   * 검사자가 다른 학급 코드로 고쳐 버리면 뒤늦게 도착한 **이전 학급 명단**이 화면을
+   * 덮어쓰고, 그대로 아이를 고르면 **다른 반 아이의 임상 기록**이 만들어진다.
+   * 응답을 적용하기 직전에 이 값을 보고, 검사자가 이미 손을 댔으면 버린다.
+   * (state가 아니라 ref인 이유: 이 값이 바뀌어도 다시 그릴 것이 없고, 조회를 시작한
+   *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
+   */
+  const codeTouched = useRef(false)
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
@@ -176,6 +186,8 @@ export default function StartPage() {
     const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
       { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
     setBusy(false)
+    // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
+    if (auto && codeTouched.current) return
     if (!r.ok) {
       if (auto) return
       // 미승인(pending) 코드도 미존재와 같은 404다 — 사유를 구분하지 않는 것이 서버 방침이다.
@@ -326,6 +338,8 @@ export default function StartPage() {
             placeholder="ABC234" autoCapitalize="characters" spellCheck={false}
             aria-describedby={errors.code ? 'err-code' : undefined} aria-invalid={!!errors.code}
             onChange={e => {
+              // 자동 조회가 아직 날아오는 중일 수 있다 — 이 표시가 그 응답을 버리게 한다.
+              codeTouched.current = true
               setCode(e.target.value.toUpperCase())
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
               // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 서면 동의서를 받았다"는
