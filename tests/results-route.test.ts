@@ -11,12 +11,33 @@ vi.mock('@/lib/mail', () => ({
   sendMail: vi.fn(),
 }))
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
+vi.mock('@/lib/pdf/stamp-sheet', () => ({
+  stampSheet: vi.fn(),
+}))
+vi.mock('pdf-lib', async () => {
+  // 실제 병합은 pdf-lib이 하고 여기서는 "세션 수만큼 페이지가 붙었는가"만 본다.
+  const pages: unknown[] = []
+  const doc = {
+    copyPages: vi.fn(async (_src: unknown, idx: number[]) => idx.map(i => ({ i }))),
+    addPage: vi.fn((p: unknown) => pages.push(p)),
+    getPageIndices: vi.fn(() => [0]),
+    save: vi.fn(async () => new Uint8Array([0x25, 0x50, 0x44, 0x46, pages.length])),
+  }
+  return {
+    PDFDocument: {
+      create: vi.fn(async () => { pages.length = 0; return doc }),
+      load: vi.fn(async () => doc),
+    },
+  }
+})
 
 import { POST as REQUEST } from '@/app/api/results/request/route'
 import { GET as LIST } from '@/app/api/results/[token]/route'
+import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
+import * as pdf from '@/lib/pdf/stamp-sheet'
 
 const CID = '755316e7-fe7c-43f9-a5c5-5c2d39da59d7'
 const CODE_ROW = {
@@ -184,5 +205,74 @@ describe('GET /api/results/[token]', () => {
     const res = await listReq(await createResultsToken(CID, 'test-secret'))
     expect(res.status).toBe(500)
     expect((await res.json()).error).not.toMatch(/relation/)
+  })
+})
+
+describe('GET /api/results/[token]/sheets.pdf', () => {
+  const sheetsReq = (token: string, qs = '') =>
+    SHEETS(new Request(`http://x/api/results/${token}/sheets.pdf${qs}`), { params: Promise.resolve({ token }) })
+  const scored = (id: string, child_no: number, started_at: string) => ({
+    id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: ['none'],
+    started_at, submitted_at: started_at,
+    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+  })
+  const ROWS = [
+    scored('a1', 1, '2026-09-21T01:00:00.000Z'),
+    scored('a2', 1, '2026-09-22T01:00:00.000Z'),   // 1번의 재검사(최신)
+    scored('b1', 3, '2026-09-22T02:00:00.000Z'),
+    { ...scored('c1', 5, '2026-09-22T03:00:00.000Z'), submitted_at: null },   // 미제출
+  ]
+  beforeEach(() => {
+    vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
+    vi.mocked(db.classResults).mockResolvedValue(ROWS)
+    vi.mocked(pdf.stampSheet).mockResolvedValue(new Uint8Array([1]))
+  })
+  it('ids 없음 → 채점 완료 전부, 아이당 최신 1장, 번호순. 파일명 「1-2_결과지_전체_날짜.pdf」', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'))
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/pdf')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_결과지_전체_\d{4}-\d{2}-\d{2}\.pdf/)
+    // a2(1번 최신)·b1(3번) 두 장 — a1(옛 차수)·c1(미제출)은 빠진다
+    const stamped = vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.child_name)
+    expect(stamped).toEqual(['아이1', '아이3'])
+    expect(vi.mocked(pdf.stampSheet).mock.calls[0][0].session).toMatchObject({ started_at: '2026-09-22T01:00:00.000Z' })
+  })
+  it('ids로 고르면 그 세션만 — 옛 차수도 고를 수 있다. 여럿이면 「N명」', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,b1')
+    expect(res.status).toBe(200)
+    expect(vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.started_at))
+      .toEqual(['2026-09-21T01:00:00.000Z', '2026-09-22T02:00:00.000Z'])
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_결과지_2명_')
+  })
+  it('한 장이면 관리자 규약 파일명 + 재검사가 있으면 차수', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1')
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('01_아이1_1차_2026-09-21.pdf')
+  })
+  it('[REGRESSION] 다른 학급 세션 id를 끼워 넣으면 403 — 토큰 하나로 다른 반을 열 수 없다', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,zz-other-class')
+    expect(res.status).toBe(403)
+    expect(pdf.stampSheet).not.toHaveBeenCalled()
+  })
+  it('채점 완료가 아닌 세션(미제출)을 고르면 400', async () => {
+    expect((await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=c1')).status).toBe(400)
+  })
+  it('채점 완료 세션이 하나도 없으면 400', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([ROWS[3]])
+    expect((await sheetsReq(await createResultsToken(CID, 'test-secret'))).status).toBe(400)
+  })
+  it('토큰 불량 401 · 코드 삭제 404', async () => {
+    expect((await sheetsReq('bad')).status).toBe(401)
+    vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
+    expect((await sheetsReq(await createResultsToken(CID, 'test-secret'))).status).toBe(404)
+  })
+  it('stampSheet 입력은 관리자 PDF와 같다 — 제출된 세션은 미녹음 X·0점이 채워진다', async () => {
+    await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=b1')
+    const input = vi.mocked(pdf.stampSheet).mock.calls[0][0]
+    expect(input.form.id).toBe('KODYS-G1')
+    expect(input.marks.rw01).toBe(false)
+    expect(input.sentences.rs01).toBe(0)
+    expect(input.session).toMatchObject({ school_name: '대구가창초등학교', grade: 1, class_no: 2, child_name: '아이3',
+      birth_ymd: '190312', checklist: ['none'] })   // 관리자 PDF와 같은 문서 — 머리글·체크리스트도 찍힌다
   })
 })
