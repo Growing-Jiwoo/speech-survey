@@ -238,7 +238,7 @@ export function ResultsView({ token }: { token: string }) {
                           )}
                         </td>
                         <td className="px-2 py-2 tabular-nums">{label ? <span className="text-ink-mute">{label}</span> : c.childNo}</td>
-                        <td className="px-2 py-2 font-medium">{label ? '' : `${c.name} (${c.gender})`}</td>
+                        <td className="whitespace-nowrap px-2 py-2 font-medium">{label ? '' : `${c.name} (${c.gender})`}</td>
                         {TASKS.map(t => (
                           <td key={t.key} className="whitespace-nowrap px-2 py-2 tabular-nums">
                             <ScoreCell s={s} task={t.key} max={taskMax[t.key]} />
@@ -313,22 +313,27 @@ export function ResultsView({ token }: { token: string }) {
         confirmLabel={`${pickList.length}장 내려받기`}
         onConfirm={() => void download(confirmMode === 'all' ? 'all' : 'picked')}
         onClose={() => setConfirmMode(null)}>
+        {/* 두 문장을 한 문단에 붙이면 「만드는 데 몇 / 초 걸려요」처럼 어정쩡하게 감긴다.
+            한 줄에 한 가지만 말한다 — 위는 무엇을 받는지, 아래는 얼마나 걸리는지. */}
         <p className="mt-3 text-sm text-ink-soft">
-          아래 <b>{pickList.length}명</b>의 결과지가 <b>한 파일</b>로 만들어져요. 만드는 데 몇 초 걸려요.
+          아래 <b>{pickList.length}명</b>의 결과지가 <b>한 파일</b>로 만들어져요.
         </p>
-        {/* 인원이 많으면 목록이 길어진다 — 모달 안에서만 스크롤하고 배경은 잠긴 채로 둔다. */}
-        <ul className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px]">
+        <p className="mt-1 text-[12.5px] text-ink-mute">만드는 데 몇 초 걸려요.</p>
+        {/* 한 학급이 40명까지 간다 — 한 줄에 하나씩 쌓으면 스크롤만 길어져 누구를 받는지 안 보인다.
+            좁은 화면은 2열, 넓으면 3열로 접어 한 화면에 최대한 담는다. 모달 안에서만 스크롤한다. */}
+        <ul className="mt-3 grid max-h-64 grid-cols-2 gap-x-3 overflow-y-auto rounded-xl border border-line
+          bg-well px-3.5 py-2.5 text-[13px] sm:grid-cols-3">
           {pickList.map((r, i) => (
-            <li key={`${r.childNo}-${i}`} className="flex items-center gap-2 py-1 text-ink-soft">
-              <span className="w-7 shrink-0 text-right tabular-nums text-ink-mute">{r.childNo}</span>
-              <span className="font-medium text-ink">{r.name}</span>
-              {r.attempt && <span className="text-[12px] text-ink-mute">{r.attempt}</span>}
+            <li key={`${r.childNo}-${i}`} className="flex items-baseline gap-1.5 py-1">
+              <span className="w-6 shrink-0 text-right tabular-nums text-ink-mute">{r.childNo}</span>
+              <span className="truncate font-medium text-ink">{r.name}</span>
+              {r.attempt && <span className="shrink-0 text-[11.5px] text-ink-mute">{r.attempt}</span>}
             </li>
           ))}
         </ul>
         {confirmMode === 'all' && summary && summary.scored < summary.tested && (
           <p className="mt-3 text-[12.5px] leading-relaxed text-ink-mute">
-            채점이 끝나지 않은 검사는 빠져요. 채점이 진행되면 새로고침한 뒤 다시 받아 주세요.
+            채점이 끝나지 않은 검사는 빠져요.
           </p>
         )}
       </ConfirmDialog>
