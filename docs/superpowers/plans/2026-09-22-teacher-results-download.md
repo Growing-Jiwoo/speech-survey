@@ -627,11 +627,11 @@ export interface ResultsChild {
 export function maskEmail(email: string): string {
   const at = email.indexOf('@')
   const local = email.slice(0, at)
-  const domain = email.slice(at + 1)
-  const dot = domain.lastIndexOf('.')
-  const host = dot >= 0 ? domain.slice(0, dot) : domain
-  const tld = dot >= 0 ? domain.slice(dot) : ''
-  return `${local.slice(0, 1)}***@${host.slice(0, 3)}***${tld}`
+  // 라벨로 쪼갠다 — lastIndexOf('.')로 자르면 다단계 TLD에서 `a@b.co.kr` → `a***@b.c***.kr`처럼
+  // 호스트 일부가 새어 나온다(구현 중 발견, 2026-09-22).
+  const labels = email.slice(at + 1).split('.')
+  const tld = labels.length > 1 ? `.${labels[labels.length - 1]}` : ''
+  return `${local.slice(0, 1)}***@${labels[0].slice(0, 3)}***${tld}`
 }
 
 /**
