@@ -144,11 +144,17 @@ const classCodeFields = z.object({
   teacherEmail: optionalEmail,
 })
 
-/** POST /api/admin/codes 바디 — 학급 코드 발급 폼. */
-export const classCodeCreateSchema = classCodeFields
-  .refine(d => d.teacherPhone !== '' || d.teacherEmail !== '',
-    { path: ['teacherPhone'], message: '전화번호나 이메일 중 하나는 입력해 주세요.' })
+/** POST /api/admin/codes 바디 — 학급 코드 발급 폼.
+ *  이메일 **필수**(사용자 확정 2026-09-22): 교사 결과지 링크가 `teacher_email`로만 가므로 이메일
+ *  없는 학급은 결과를 받을 방법이 없다. 종전 「전화·이메일 둘 중 하나」는 코드를 전화로 불러 주던
+ *  시절의 규칙이다. 전화는 여전히 선택. DB 제약(phone or email)은 그대로 둔다 — 앱이 더 엄격하면 된다. */
+export const classCodeCreateSchema = classCodeFields.extend({ teacherEmail: requiredEmail })
 export type ClassCodeCreateInput = z.infer<typeof classCodeCreateSchema>
+
+/** PATCH /api/admin/codes/[id] 바디 — 담임 이메일 수정. **이 한 필드만** 받는다: 학급 정보를 여기서
+ *  바꾸면 세션에 복사된 임상 기록과 어긋난다(sessionEditSchema가 화이트리스트인 것과 같은 이유). */
+export const classCodeEmailSchema = z.object({ teacherEmail: requiredEmail })
+export type ClassCodeEmailInput = z.infer<typeof classCodeEmailSchema>
 
 /** 신청 명단 한 줄 — sessions의 같은 컬럼과 동일 규칙(제약이 어긋나면 복사가 실패한다). */
 export const rosterChildSchema = z.object({
@@ -174,3 +180,7 @@ export type ApplyInput = z.infer<typeof applySchema>
 /** POST /api/sessions/verify-code 바디. childNo가 없으면 시작 화면이 드롭다운용 명단을
  *  요청하는 것이고, 있으면 "명단에 없는 학생" 폴백이 그 번호 하나의 중복 검사 상태를 묻는 것이다. */
 export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema.optional() })
+
+/** POST /api/results/request 바디 — 교사 결과지 링크 요청. 코드만 받는다. 이메일은 받지 않는다 —
+ *  요청자가 주소를 정할 수 있으면 코드가 곧 결과지 열쇠가 된다(스펙 2026-09-22 「왜 매직링크인가」). */
+export const resultsRequestSchema = z.object({ code: classCodeSchema })

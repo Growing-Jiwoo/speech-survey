@@ -48,9 +48,10 @@ export function CodeIssuer() {
     if (!school) { setErr('학교를 선택해 주세요.'); return }
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('담임교사명은 한글이나 영어로만 쓸 수 있어요.'); return }
-    if (!cleanPhone && !cleanEmail) { setErr('전화번호나 이메일 중 하나는 입력해 주세요.'); return }
+    // 이메일 필수(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 이 주소로만 간다.
+    if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크가 이 주소로 발송돼요.'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
-    if (cleanEmail && !validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
+    if (!validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
 
     setErr(''); setBusy(true)
     const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count' | 'roster_count'> }>('/api/admin/codes', {
@@ -132,7 +133,8 @@ export function CodeIssuer() {
               onChange={e => setEmail(e.target.value)} className={inputCls} />
           </div>
         </div>
-        <p className="mt-1.5 text-[12px] text-ink-mute">전화번호와 이메일 중 하나만 입력해도 괜찮아요. 하이픈(-)은 저장할 때 자동으로 빠져요.</p>
+        {/* 이메일 필수 안내(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 teacher_email로만 간다. */}
+        <p className="mt-1.5 text-[12px] text-ink-mute">담임 이메일은 결과지 링크를 받을 주소라 필수예요. 전화번호는 몰라도 괜찮아요. 하이픈(-)은 저장할 때 자동으로 빠져요.</p>
         {err && <p role="alert" className="mt-3 text-sm text-rec-deep">{err}</p>}
         <button type="button" onClick={() => void issue()} disabled={busy}
           className="mt-4 rounded-lg bg-blue px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-40">

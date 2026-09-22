@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   sessionCreateSchema, sessionCreateDirectSchema, sessionCreateFromRosterSchema,
   phoneSchema, classCodeSchema, childNoSchema, classCodeCreateSchema,
+  classCodeEmailSchema, resultsRequestSchema,
   applySchema, rosterChildSchema,
 } from '@/lib/schema'
 import { z } from 'zod'
@@ -82,29 +83,29 @@ describe('childNoSchema — 아동 번호 1~99', () => {
   })
 })
 
-describe('classCodeCreateSchema — 학급 코드 발급 폼', () => {
+describe('classCodeCreateSchema — 학급 코드 발급 폼(이메일 필수, 사용자 확정 2026-09-22)', () => {
   const VALID_CODE_FORM = {
     region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
     grade: 1, classNo: 2, teacherName: '김담임',
-    teacherPhone: '010-1234-5678', teacherEmail: '',
+    teacherPhone: '010-1234-5678', teacherEmail: 't@school.kr',
   }
-  it('유효 입력 통과 + 전화 하이픈 제거', () => {
-    const d = classCodeCreateSchema.parse(VALID_CODE_FORM)
+  it('유효 입력 통과 + 전화 하이픈 제거 + 이메일 trim', () => {
+    const d = classCodeCreateSchema.parse({ ...VALID_CODE_FORM, teacherEmail: '  t@school.kr ' })
     expect(d.teacherPhone).toBe('01012345678')
+    expect(d.teacherEmail).toBe('t@school.kr')
   })
-  it('전화·이메일 둘 다 비면 거부', () => {
+  it('[REGRESSION] 이메일이 비면 거부 — 결과지 링크가 이 주소로만 가므로 전화만으로는 발급할 수 없다', () => {
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherEmail: '' }).success).toBe(false)
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '', teacherEmail: '' }).success).toBe(false)
   })
-  it('이메일만 입력해도 통과', () => {
-    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '', teacherEmail: 't@school.kr' }).success).toBe(true)
+  it('전화는 선택 — 비어도 통과', () => {
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '' }).success).toBe(true)
   })
   it('전화 형식이 틀리면 거부', () => {
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '12345' }).success).toBe(false)
   })
-
-  // classNo/grade/optionalEmail은 sessionCreateSchema에서 **빠지면서**(학급 정보를 서버가
-  // 코드에서 복사하도록 바뀜) 유일한 zod 레벨
-  // 테스트가 없어졌다 — classCodeCreateSchema를 통해 여전히 살아 있는 코드이므로 여기서 보강한다.
+  // classNo/grade는 `sessionCreateSchema`에서 빠지면서(학급 정보를 서버가 코드에서 복사하도록
+  // 바뀜) zod 레벨 테스트가 여기밖에 안 남았다 — 여전히 살아 있는 코드라 여기서 보강한다.
   it('classNo: 0(단일학급·반 없음)은 통과, 범위 밖은 거부', () => {
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, classNo: 0 }).success).toBe(true)
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, classNo: -1 }).success).toBe(false)
@@ -117,7 +118,30 @@ describe('classCodeCreateSchema — 학급 코드 발급 폼', () => {
     expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, grade: 7 }).success).toBe(false)
   })
   it('teacherEmail 형식이 틀리면 거부', () => {
-    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherPhone: '', teacherEmail: 'not-an-email' }).success).toBe(false)
+    expect(classCodeCreateSchema.safeParse({ ...VALID_CODE_FORM, teacherEmail: 'not-an-email' }).success).toBe(false)
+  })
+})
+
+describe('classCodeEmailSchema — 관리자 이메일 수정 바디', () => {
+  it('이메일 하나만 받고 trim한다', () => {
+    expect(classCodeEmailSchema.parse({ teacherEmail: ' a@b.kr ' })).toEqual({ teacherEmail: 'a@b.kr' })
+  })
+  it('형식이 틀리거나 비면 거부', () => {
+    expect(classCodeEmailSchema.safeParse({ teacherEmail: '' }).success).toBe(false)
+    expect(classCodeEmailSchema.safeParse({ teacherEmail: 'nope' }).success).toBe(false)
+  })
+  it('[REGRESSION] 다른 필드는 걷어낸다 — 학급 정보 변경 경로가 되면 안 된다', () => {
+    const d = classCodeEmailSchema.parse({ teacherEmail: 'a@b.kr', grade: 6, schoolName: '위조' })
+    expect(d).toEqual({ teacherEmail: 'a@b.kr' })
+  })
+})
+
+describe('resultsRequestSchema — 결과지 링크 요청', () => {
+  it('코드만 받고 대문자 정규화', () => {
+    expect(resultsRequestSchema.parse({ code: ' test24 ' })).toEqual({ code: 'TEST24' })
+  })
+  it('형식 밖 코드는 거부', () => {
+    expect(resultsRequestSchema.safeParse({ code: 'TEST2' }).success).toBe(false)
   })
 })
 

@@ -31,7 +31,7 @@ const ROW = {
 }
 const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
-  grade: 1, classNo: 2, teacherName: '김담임', teacherPhone: '010-1234-5678', teacherEmail: '',
+  grade: 1, classNo: 2, teacherName: '김담임', teacherPhone: '010-1234-5678', teacherEmail: 't@school.kr',
 }
 const req = (body: unknown) => new Request('http://x/api/admin/codes', {
   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -70,7 +70,7 @@ describe('POST /api/admin/codes', () => {
     expect(db.insertClassCode).toHaveBeenCalledTimes(5)
   })
   it('검증 실패 400 + 내부 문구 비노출', async () => {
-    const res = await POST(req({ ...VALID, teacherPhone: '', teacherEmail: '' }))
+    const res = await POST(req({ ...VALID, teacherEmail: '' }))
     expect(res.status).toBe(400)
     expect(db.insertClassCode).not.toHaveBeenCalled()
   })
