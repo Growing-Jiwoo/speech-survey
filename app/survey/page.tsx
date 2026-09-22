@@ -3,7 +3,7 @@
 // components/survey/*가 담당하고, 이 페이지는 진행 상태(현재 페이지·답 캐시)의 로드/저장과
 // 페이지 간 이동만 제어한다. 진행 위치는 localStorage에 저장돼 새로고침·탭 닫힘 후에도 재개된다.
 'use client'
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
@@ -36,8 +36,14 @@ function SurveyInner() {
   const [uploading, setUploading] = useState(0)
   // 연습 종료 안내 화면(연습 페이지에서 [다음]을 누른 직후 한 번). 페이지를 옮기면 초기화된다.
   const [practiceEnd, setPracticeEnd] = useState(false)
-  // 검사자가 직접 누르는 일시정지(화면을 덮어 아동의 오터치도 막는다). 녹음 중에는 잠근다.
+  // 검사자가 직접 누르는 일시정지(화면을 덮어 아동의 오터치도 막는다).
+  // **녹음 중에도 누를 수 있다** — 담당자 확정(2026-09-21): 신청 화면 안내가 「학생이
+  // 힘들어하면 일시정지 버튼을 눌러 언제든 멈출 수 있습니다」라고 말한다. 종전에는
+  // `disabled={busy}`로 잠가 두어, 아이가 힘들어하는 바로 그 순간(대개 녹음 중)에
+  // 안내가 가리키는 버튼이 눌리지 않았다.
   const [paused, setPaused] = useState(false)
+  // 녹음을 멈출 손잡이(ReadingPage가 녹음 중에만 채운다) — 아래 pause()가 쓴다.
+  const stopRecording = useRef<(() => void) | null>(null)
   // 일시정지 오버레이도 다이얼로그이므로 ConfirmDialog와 같은 포커스 트랩을 쓴다
   // (초기 포커스·Tab 순환·Esc로 재개·해제 시 포커스 복귀).
   const pauseRef = useFocusTrap(paused, () => setPaused(false))
@@ -98,6 +104,17 @@ function SurveyInner() {
       document.removeEventListener('visibilitychange', onVisible)
       void sentinel?.release().catch(() => {})
     }
+  }, [])
+
+  /**
+   * 일시정지 — 녹음 중이면 **먼저 끊는다.** 그냥 덮기만 하면 오버레이 뒤에서 녹음이 계속
+   * 돌아 아이가 그만둔 뒤의 침묵까지 그 시도에 담기고, 제한 시간에 도달해 그대로 저장된다.
+   * 끊으면 그때까지 읽은 소리는 평소처럼 저장된다(녹음 버튼으로 멈출 때와 같은 규칙) —
+   * 이어서 할 때 검사자가 다시 녹음하면 새 시도로 쌓인다.
+   */
+  const pause = useCallback(() => {
+    stopRecording.current?.()
+    setPaused(true)
   }, [])
 
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
@@ -249,7 +266,10 @@ function SurveyInner() {
           {/* 검사자용 조작 — 아동의 큰 [이전/다음] 버튼과 떨어뜨려 헤더에 작게 둔다.
               녹음 중에는 눌리지 않게 잠근다(그 시도의 소리가 유실되므로). */}
           <div className="flex flex-none gap-1.5">
-            <button type="button" onClick={() => setPaused(true)} disabled={busy}
+            {/* 녹음 중에도 눌린다(위 paused 주석) — 누르면 pause()가 녹음을 먼저 끊는다.
+                옆의 [저장하고 나가기]는 그대로 잠근다: 그건 멈추는 것이 아니라 화면을 떠나는
+                것이라, 녹음 중 이탈로 그 시도의 소리를 잃는 사고를 계속 막아야 한다. */}
+            <button type="button" onClick={pause}
               className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-[12px] font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
               일시정지
             </button>
@@ -304,7 +324,7 @@ function SurveyInner() {
               {page.role === 'child' && isRecordingPage(page) && (
                 <ReadingPage key={page.code} page={page}
                   attemptCount={st.recorded[page.code] ?? 0} onRecordingChange={setBusy}
-                  onRecorded={handleRecorded} />
+                  onRecorded={handleRecorded} stopRef={stopRecording} />
               )}
 
               <RetryBanner form={f} codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
