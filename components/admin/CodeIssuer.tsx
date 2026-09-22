@@ -35,6 +35,24 @@ export function CodeIssuer() {
   const [toDelete, setToDelete] = useState<ClassCodeItem | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [delErr, setDelErr] = useState('')
+  // 담임 이메일 인라인 수정 — 결과지 링크가 이 주소로만 가므로 오타를 고칠 길이 있어야 한다.
+  // 오류 복구 경로라 "관리자 개입 없음" 원칙의 예외(스펙 2026-09-22 §이메일 안전망).
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editErr, setEditErr] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+
+  async function saveEmail(c: ClassCodeItem) {
+    const v = editEmail.trim()
+    if (!validEmail(v)) { setEditErr('이메일 형식을 확인해 주세요.'); return }
+    setEditBusy(true); setEditErr('')
+    const r = await requestJson<{ code: ClassCodeItem }>(`/api/admin/codes/${c.id}`,
+      { method: 'PATCH', body: { teacherEmail: v } }, '수정에 실패했어요. 다시 시도해 주세요.')
+    setEditBusy(false)
+    if (!r.ok) { setEditErr(r.error); return }
+    setEditId(null)
+    await queryClient.invalidateQueries({ queryKey: adminKeys.codes })
+  }
 
   // 대기(pending)와 발급(active)은 다른 섹션이 맡는다 — 아래 표는 active만 그린다.
   const active = (codes ?? []).filter(c => c.status === 'active')
@@ -48,9 +66,10 @@ export function CodeIssuer() {
     if (!school) { setErr('학교를 선택해 주세요.'); return }
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('담임교사명은 한글이나 영어로만 쓸 수 있어요.'); return }
-    if (!cleanPhone && !cleanEmail) { setErr('전화번호나 이메일 중 하나는 입력해 주세요.'); return }
+    // 이메일 필수(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 이 주소로만 간다.
+    if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크가 이 주소로 발송돼요.'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
-    if (cleanEmail && !validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
+    if (!validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
 
     setErr(''); setBusy(true)
     const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count' | 'roster_count'> }>('/api/admin/codes', {
@@ -122,7 +141,7 @@ export function CodeIssuer() {
           onChange={e => setTeacherName(e.target.value)} className={inputCls} />
         <div className="flex gap-2.5">
           <div className="flex-1">
-            <label className={labelCls} htmlFor="cc-phone">담임 전화번호</label>
+            <label className={labelCls} htmlFor="cc-phone">담임 전화번호 (선택)</label>
             <input id="cc-phone" value={phone} maxLength={60} inputMode="tel" placeholder="01012345678"
               onChange={e => setPhone(e.target.value)} className={inputCls} />
           </div>
@@ -132,7 +151,8 @@ export function CodeIssuer() {
               onChange={e => setEmail(e.target.value)} className={inputCls} />
           </div>
         </div>
-        <p className="mt-1.5 text-[12px] text-ink-mute">전화번호와 이메일 중 하나만 입력해도 괜찮아요. 하이픈(-)은 저장할 때 자동으로 빠져요.</p>
+        {/* 이메일 필수 안내(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 teacher_email로만 간다. */}
+        <p className="mt-1.5 text-[12px] text-ink-mute">담임 이메일은 결과지 링크를 받을 주소라 필수예요. 전화번호는 몰라도 괜찮아요. 하이픈(-)은 저장할 때 자동으로 빠져요.</p>
         {err && <p role="alert" className="mt-3 text-sm text-rec-deep">{err}</p>}
         <button type="button" onClick={() => void issue()} disabled={busy}
           className="mt-4 rounded-lg bg-blue px-5 py-2.5 text-sm font-bold text-white transition disabled:opacity-40">
@@ -189,7 +209,31 @@ export function CodeIssuer() {
                   <td className="whitespace-nowrap px-4">{gradeClassLabel(c.grade, c.class_no)}</td>
                   <td className="whitespace-nowrap px-4">{c.teacher_name}</td>
                   <td className="whitespace-nowrap px-4 text-ink-soft">
-                    {[c.teacher_phone, c.teacher_email].filter(Boolean).join(' · ') || '—'}
+                    {editId === c.id ? (
+                      <span className="flex items-center gap-1.5">
+                        <input value={editEmail} onChange={e => setEditEmail(e.target.value)} inputMode="email"
+                          aria-label="담임 이메일" aria-invalid={!!editErr}
+                          className="h-8 w-56 rounded-lg border-[1.5px] border-line bg-white px-2 text-[13px] outline-none focus:border-blue" />
+                        <button type="button" onClick={() => void saveEmail(c)} disabled={editBusy}
+                          className="rounded-lg bg-blue px-2.5 py-1 text-xs font-bold text-white disabled:opacity-40">
+                          {editBusy ? '저장 중…' : '저장'}
+                        </button>
+                        <button type="button" onClick={() => setEditId(null)} disabled={editBusy}
+                          className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1 text-xs font-bold text-ink-soft">
+                          취소
+                        </button>
+                        {editErr && <span role="alert" className="text-xs text-rec-deep">{editErr}</span>}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span>{[c.teacher_phone, c.teacher_email].filter(Boolean).join(' · ') || '—'}</span>
+                        {/* 이메일 없는 옛 코드(필수화 전 발급)도 여기서 채운다 — 채우기 전엔 그 학급이 결과지를 받을 수 없다 */}
+                        <button type="button" onClick={() => { setEditId(c.id); setEditEmail(c.teacher_email ?? ''); setEditErr('') }}
+                          className="text-[11.5px] font-bold text-blue underline underline-offset-2">
+                          {c.teacher_email ? '수정' : '이메일 등록'}
+                        </button>
+                      </span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-4 text-ink-soft">
                     {new Date(c.created_at).toLocaleDateString('ko-KR')}

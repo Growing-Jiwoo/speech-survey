@@ -76,7 +76,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  approveClassCode, childTestState, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
   type ClassCodeRow,
 } from '@/lib/db'
 
@@ -707,5 +707,37 @@ describe('updateSessionIdentity', () => {
     await updateSessionIdentity(SID, NEXT)
     for (const col of ['grade', 'class_no', 'school_name', 'class_code_id', 'teacher_name'])
       expect(lastUpdate()).not.toHaveProperty(col)
+  })
+})
+
+describe('findClassCodeById · classResults · updateClassCodeEmail (교사 결과지)', () => {
+  const CID = '755316e7-fe7c-43f9-a5c5-5c2d39da59d7'
+  it('findClassCodeById는 없으면 null(.maybeSingle 관례)', async () => {
+    enqueue('class_codes', { data: null, error: null })
+    expect(await findClassCodeById(CID)).toBeNull()
+  })
+  it('classResults는 학급 세션을 관계 select로 한 번에 읽고 started_at 오름차순으로 정렬한다', async () => {
+    enqueue('sessions', { data: [{ id: 's1' }], error: null })
+    const rows = await classResults(CID)
+    expect(rows).toEqual([{ id: 's1' }])
+    const sel = (selectCallsByTable.get('sessions') ?? [])[0] as string[]
+    expect(sel[0]).toContain('birth_ymd, checklist')   // PDF 머리글·체크리스트를 찍어야 관리자 PDF와 같은 문서다
+    expect(sel[0]).toContain('recordings(item_code)')
+    expect(sel[0]).toContain('reading_marks(item_code, correct)')
+    expect(sel[0]).toContain('sentence_scores(item_code, words)')
+    expect(sel[0]).toContain('writing_answers(item_code, can_write)')
+    expect(eqCallsByTable.get('sessions')).toEqual([['class_code_id', CID]])
+    expect(orderCallsByTable.get('sessions')).toEqual([['started_at']])
+  })
+  it('updateClassCodeEmail은 teacher_email 한 컬럼만 갱신하고 갱신된 행을 돌려준다', async () => {
+    enqueue('class_codes', { data: { id: CID, teacher_email: 'new@school.kr' }, error: null })
+    const row = await updateClassCodeEmail(CID, 'new@school.kr')
+    expect(row?.teacher_email).toBe('new@school.kr')
+    expect(updateCallsByTable.get('class_codes')).toEqual([{ teacher_email: 'new@school.kr' }])
+    expect(eqCallsByTable.get('class_codes')).toEqual([['id', CID]])
+  })
+  it('updateClassCodeEmail은 행이 없으면 null', async () => {
+    enqueue('class_codes', { data: null, error: null })
+    expect(await updateClassCodeEmail(CID, 'x@y.kr')).toBeNull()
   })
 })

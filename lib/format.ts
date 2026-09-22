@@ -63,6 +63,16 @@ export function sheetDateLabel(iso: string): string {
 }
 
 /**
+ * 승인 안내의 「결과지 받는 방법」 — 3채널(approvedMail HTML · approvalNoticeText 평문 · 관리자
+ * [안내 문구 복사])이 **이 배열 하나**를 쓴다. 한쪽에만 문구가 살아나면 채널에 따라 안내가 갈리므로
+ * `tests/mail.test.ts`가 두 채널 모두 담는지 대조한다. 사용자 확정 2026-09-22.
+ */
+export const RESULTS_GUIDE_LINES = [
+  '검사가 끝나고 채점이 완료되면, 검사 주소에서 학급 코드를 입력한 뒤 [결과지 받기]를 누르세요.',
+  '이 메일 주소로 결과지 링크가 옵니다.',
+] as const
+
+/**
  * 승인 안내 문구(평문) — 관리자가 [안내 문구 복사]로 교사에게 직접 전달하는 예비 경로.
  * 메일이 실패했거나 발송 여부를 알 수 없을 때(`already:true`) 교사가 코드를 받는 **유일한** 길이다.
  *
@@ -88,6 +98,9 @@ export function approvalNoticeText(v: {
     '',
     '검사 주소로 들어가 학급 코드를 입력하시면 등록하신 학생 명단이 나옵니다.',
     '검사할 학생을 고르고 이름·생년월일을 확인한 뒤 시작해 주세요.',
+    '',
+    '결과지 받는 방법',
+    ...RESULTS_GUIDE_LINES.map(l => `- ${l}`),
     '',
     '학급 코드는 이 안내로만 전달되니 보관해 주세요.',
   ].join('\n')

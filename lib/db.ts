@@ -459,6 +459,49 @@ export async function findClassCode(code: string): Promise<ClassCodeRow | null> 
   return (data as unknown as ClassCodeRow) ?? null
 }
 
+/** id로 코드 행 조회 — 결과지 토큰이 담는 주체가 id다. 없으면 null(.maybeSingle 관례). */
+export async function findClassCodeById(id: string): Promise<ClassCodeRow | null> {
+  const { data, error } = await sb().from('class_codes')
+    .select(CLASS_CODE_COLS).eq('id', id).maybeSingle()
+  fail(error)
+  return (data as unknown as ClassCodeRow) ?? null
+}
+
+/** 교사 결과지용 세션 행 — `lib/results.ts`의 `ResultsSessionRow`와 모양을 맞춘다. */
+export type ClassResultsRow = Pick<SessionRow,
+  'id' | 'child_no' | 'child_name' | 'gender' | 'grade' | 'birth_ymd' | 'checklist' | 'started_at' | 'submitted_at'> & {
+  recordings: { item_code: string }[]
+  reading_marks: { item_code: string; correct: boolean }[]
+  sentence_scores: { item_code: string; words: number }[]
+  writing_answers: { item_code: string; can_write: boolean }[]
+}
+
+/**
+ * 한 학급의 세션 전부 + 채점 행을 관계 select로 **한 번에**. 교사 결과지 목록·PDF가 쓴다.
+ * started_at 오름차순 — 재검사 차수(1차·2차…)가 이 순서에서 나온다(lib/results.ts).
+ * 세션당 4번 따로 읽으면 25명 반에서 100회가 된다.
+ */
+export async function classResults(classCodeId: string): Promise<ClassResultsRow[]> {
+  const { data, error } = await sb().from('sessions')
+    .select('id, child_no, child_name, gender, grade, birth_ymd, checklist, started_at, submitted_at, '
+      + 'recordings(item_code), reading_marks(item_code, correct), '
+      + 'sentence_scores(item_code, words), writing_answers(item_code, can_write)')
+    .eq('class_code_id', classCodeId)
+    .order('started_at')
+  fail(error)
+  return (data ?? []) as unknown as ClassResultsRow[]
+}
+
+/** 담임 이메일 수정 — 잘못 등록된 주소를 관리자가 바로잡는 유일한 경로(결과지 링크가 이 주소로만
+ *  간다). 이 한 컬럼만 받는다: 학급 정보를 바꾸는 것은 임상 기록(세션에 복사된 값)과 어긋나게 한다. */
+export async function updateClassCodeEmail(id: string, teacherEmail: string): Promise<ClassCodeRow | null> {
+  const { data, error } = await sb().from('class_codes')
+    .update({ teacher_email: teacherEmail }).eq('id', id)
+    .select(CLASS_CODE_COLS).maybeSingle()
+  fail(error)
+  return (data as unknown as ClassCodeRow) ?? null
+}
+
 /** 같은 학급·같은 아동 번호의 기존 검사 상태 — 중복 검사 경고용.
  *  제출본이 하나라도 있으면 'submitted', 미제출만 있으면 'inProgress', 없으면 null.
  *  ⚠️ 번호 목록을 만들지 않는다 — 물어본 번호 하나에 대해서만 답한다(스펙 "중복 검사 경고"). */

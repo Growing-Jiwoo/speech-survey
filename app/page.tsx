@@ -13,6 +13,9 @@
 //
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
 // 채로 시작한다(아동 정보는 절대 남기지 않는다 — lib/survey-state.ts 참고).
+//
+// 학급 배너의 [결과지 받기 →]는 교사용이다(스펙 2026-09-22 teacher-results-download). 등록된 담임
+// 메일로 학급 결과 링크를 보낼 뿐 이 화면에서 결과가 열리지 않는다 — 아동 앞 공용 PC라 그래야 한다.
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -23,7 +26,7 @@ import { Select } from '@/components/Select'
 import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
-import { postJson } from '@/lib/http'
+import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
 
@@ -93,6 +96,10 @@ export default function StartPage() {
   const [code, setCode] = useState('')
   // 코드 조회 결과 — 명단 모드 머리글과 확인 모달이 쓴다
   const [cls, setCls] = useState<ClassInfo | null>(null)
+  /** `cls`가 **어느 코드로** 조회된 것인지. 직접 입력 모드는 코드를 고쳐도 단계를 되돌리지
+   *  않으므로(아래 onChange 주석), 이것이 없으면 옛 학급 배너가 새 코드 위에 남는다 —
+   *  표시된 학급과 [결과지 받기 →]가 실제로 보내는 코드가 갈린다. */
+  const [clsCode, setClsCode] = useState('')
   const [roster, setRoster] = useState<RosterChild[]>([])
   const [pick, setPick] = useState('') // 드롭다운에서 고른 아동 번호(Select 계약이 문자열)
   const [childNo, setChildNo] = useState('')
@@ -104,7 +111,7 @@ export default function StartPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
-  // 법정대리인 서면 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
+  // 법정대리인 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
   const [consent, setConsent] = useState(false)
   // 값이 있으면 확인 모달이 열려 있다
   const [confirm, setConfirm] = useState<Confirmed | null>(null)
@@ -131,6 +138,47 @@ export default function StartPage() {
    *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
    */
   const codeTouched = useRef(false)
+
+  // ── 결과지 받기(교사) — 담임 메일로 학급 결과 링크. 사용자 확정 2026-09-22(담당자 회신 아님).
+  // 이 버튼은 아동 앞 PC에 있다. 하는 일은 **등록된 메일함으로 링크를 보내는 것**뿐이라 아동이 눌러도
+  // 결과는 아동 손에 오지 않는다. 이메일은 입력·수정할 수 없다 — 요청자가 주소를 정하면 코드가 곧 열쇠다.
+  const [resultsMsg, setResultsMsg] = useState('')
+  const [resultsErr, setResultsErr] = useState('')
+  const [resultsBusy, setResultsBusy] = useState(false)
+  // 남은 쿨다운(초). 서버가 429로 준 값 또는 성공 뒤 60에서 시작해 1초씩 준다.
+  const [cooldown, setCooldown] = useState(0)
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
+  async function requestResults() {
+    setResultsBusy(true); setResultsErr('')
+    try {
+      // postJson(requestJson)은 실패 바디를 버리는데 429의 retryAfterSec가 필요해 여기서만 fetch를 직접 쓴다.
+      const res = await fetch('/api/results/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cleanCode }),
+      })
+      const j = await res.json().catch(() => ({})) as
+        { sent?: boolean; maskedEmail?: string; scoredCount?: number; error?: string; retryAfterSec?: number }
+      if (res.status === 429 && typeof j.retryAfterSec === 'number') {
+        // 다른 기기에서 방금 요청했거나 연타 — 에러가 아니라 안내다.
+        setResultsMsg('방금 링크를 보냈어요. 메일함을 확인해 주세요.')
+        setCooldown(j.retryAfterSec)
+      } else if (!res.ok) {
+        setResultsErr(j.error ?? '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')
+      } else {
+        setResultsMsg(`${j.maskedEmail} 로 결과지 링크를 보냈어요. 메일함을 확인해 주세요.`
+          + (j.scoredCount === 0 ? ' 아직 채점된 학생이 없어요. 채점이 끝나면 링크에서 새로고침해 주세요.' : ''))
+        setCooldown(60)
+      }
+    } catch {
+      setResultsErr(NETWORK_ERR_MSG)
+    } finally {
+      setResultsBusy(false)
+    }
+  }
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
@@ -202,6 +250,7 @@ export default function StartPage() {
       return
     }
     setCls(r.data)
+    setClsCode(target)
     setRoster(r.data.roster)
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
@@ -287,6 +336,20 @@ export default function StartPage() {
     : step === 'roster' ? !!(pick && consent)
       : !!filled
 
+  /** 배너 오른쪽 텍스트 버튼. 쿨다운 중엔 「보냈어요 · N초 후 다시」로 비활성. */
+  const resultsButton = (
+    <button type="button" onClick={() => void requestResults()} disabled={resultsBusy || cooldown > 0}
+      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2 disabled:no-underline disabled:opacity-60">
+      {resultsBusy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : '결과지 받기 →'}
+    </button>
+  )
+  /** 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색. */
+  const resultsNotice = resultsErr
+    ? <p role="alert" className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">{resultsErr}</p>
+    : resultsMsg
+      ? <p aria-live="polite" className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">{resultsMsg}</p>
+      : null
+
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
       <div className="flex items-center gap-2">
@@ -348,12 +411,16 @@ export default function StartPage() {
               codeTouched.current = true
               setCode(e.target.value.toUpperCase())
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
-              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 서면 동의서를 받았다"는
+              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 법정대리인 동의를 받았다"는
               // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
+              // 결과지 안내는 **단계와 무관하게** 비운다 — 「d***@exa***.com 로 보냈어요」는 고치기
+              // 전 코드의 학급 것이라, 남겨 두면 다른 학급 주소를 보며 메일함을 찾게 된다.
+              // 쿨다운도 코드마다 따로다(서버가 코드 키로 센다).
+              setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
-                setStep('code'); setCls(null); setRoster([]); setPick(''); setConsent(false)
+                setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
@@ -365,9 +432,16 @@ export default function StartPage() {
             {/* 코드가 가리키는 학급을 밝혀 직접 입력 폼과 한눈에 구분되게 한다. 담임 이름·연락처는
                 일부러 넣지 않는다 — 이 화면은 아동이 보고 있고, 학급 확인에는 학교·학년·반·인원이면
                 충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
-            <p className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
-              {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명
-            </p>
+            {/* 「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게
+                (사용자 확정 2026-09-22 ①). 오른쪽 [결과지 받기 →]는 위 requestResults 주석 참고. */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
+              <span>
+                {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명 ·
+                검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
+              </span>
+              {resultsButton}
+            </div>
+            {resultsNotice}
             <label className={labelCls} htmlFor="pick">검사할 학생</label>
             {/* 명단은 눌러야 펼쳐지는 드롭다운으로 둔다 — 교실 공용 기기 화면이라 목록을 펼쳐
                 두면 지금 검사하지 않는 아이들의 이름까지 계속 노출된다.
@@ -395,6 +469,16 @@ export default function StartPage() {
 
         {step === 'direct' && (
           <>
+            {/* 코드를 고치는 중이면 감춘다 — 직접 입력 모드는 단계를 되돌리지 않아 `cls`가 옛 학급인
+                채로 남는다. 그 배너 옆 [결과지 받기 →]는 **입력된 코드**로 보내므로, 남겨 두면
+                화면이 가리키는 학급과 실제 동작 대상이 갈린다. */}
+            {cls && clsCode === cleanCode && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
+                <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
+                {resultsButton}
+              </div>
+            )}
+            {resultsNotice}
             <div className="flex gap-2.5">
               <div className="flex-1">
                 <label className={labelCls} htmlFor="childNo">아동 번호</label>
@@ -457,7 +541,7 @@ export default function StartPage() {
           </>
         )}
 
-        {/* 개인정보 수집·이용 고지 + 법정대리인 서면 동의 확인 체크 — 문구의 단일 소스는 lib/consent.ts.
+        {/* 개인정보 수집·이용 고지 + 법정대리인 동의 확인 체크 — 문구의 단일 소스는 lib/consent.ts.
             코드만 입력하는 첫 단계에서는 감춘다 — 아동 개인정보를 아직 하나도 다루지 않는 화면에
             동의 고지를 띄우면 무엇에 동의하는지가 흐려지고, 코드 오타로 못 넘어가는 사이에
             체크가 켜져 있게 된다. */}
@@ -472,9 +556,16 @@ export default function StartPage() {
                 </div>
               ))}
             </dl>
+            {/* 둘째 줄은 담당자 문장을 그대로 빌려왔지만 **적용 화면은 사용자 확정(2026-09-22)이다
+                — 담당자 회신이 아니다.** 담당자가 2026-09-21에 「검사 실시 전, 학교의 개인정보 처리
+                방침 및 절차에 따라 법정대리인의 동의를 받아주세요」로 고치라고 한 것은 신청 화면
+                (/apply)의 동의 체크 3번이고, 이 시작 화면 안내는 언급하지 않았다. 바로 아래 체크박스
+                (GUARDIAN_CONSENT_LABEL)에서 「서면」을 뺀 것과 같은 이유로 함께 고쳤다 — 체크박스는
+                수단을 안 따지는데 그 위 안내만 「서면 동의서를 회수」라고 하면 서로 어긋난다.
+                되돌리거나 문구를 다시 손볼 때는 담당자에게 확인할 것. */}
             <p className="mt-2 text-[12px] leading-relaxed text-ink-mute">
               만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.<br />
-              학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
+              학교의 개인정보 처리 방침·절차에 따라 법정대리인의 동의를 먼저 받은 뒤 검사를 시작해 주세요.
             </p>
             <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
               <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}

@@ -10,7 +10,7 @@ import type { ReactNode } from 'react'
 
 export function TaskSection({ title, hint, children }: {
   title: string
-  /** 채점 기준 한 줄 (예: '30초 동안 정확하게 읽은 낱말 수') */
+  /** 채점 기준 한 줄 (예: '20초 동안 정확하게 읽은 낱말 수' — 값은 양식의 `limits`에서 온다) */
   hint?: string
   children: ReactNode
 }) {
