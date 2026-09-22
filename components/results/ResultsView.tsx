@@ -3,7 +3,7 @@
 // 매 요청 DB에서 오므로 새로고침이 곧 최신 상태다.
 // 판정 표기는 관리자 화면과 같은 Pass/Fail(사용자 확정 2026-09-22). 채점 완료(scored)만 체크·다운로드.
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/Badge'
@@ -53,6 +53,23 @@ function VerdictPill({ v }: { v: 'pass' | 'fail' | null }) {
  * 임상적 오독이므로 관리자 결과지(components/admin/ResultSheet.tsx)와 같이 「채점 전」으로 그린다.
  * 뜻은 표 아래 범례가 설명한다.
  */
+/**
+ * 체크박스. `indeterminate`는 HTML 속성이 아니라 **DOM 프로퍼티**라 JSX로 못 준다 — ref로 세운다.
+ * 아이 행(상위)이 「일부 차수만 골랐다」를 막대 모양으로 보여 주는 데 쓴다.
+ */
+function Check({ checked, indeterminate = false, disabled, label, onChange }: {
+  checked: boolean; indeterminate?: boolean; disabled?: boolean; label: string
+  onChange: (on: boolean) => void
+}) {
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate }, [indeterminate])
+  return (
+    <input ref={ref} type="checkbox" aria-label={label} checked={checked} disabled={disabled}
+      onChange={e => onChange(e.target.checked)}
+      className="h-4 w-4 accent-[var(--color-blue)] disabled:opacity-40" />
+  )
+}
+
 function ScoreCell({ s, task, max }: { s: ResultsSession | null; task: TaskKey; max: number }) {
   if (!s?.scores) return <span className="text-ink-mute">-</span>
   if (s.complete?.[task] === false) return <Badge tone="mute" size="sm">채점 전</Badge>
@@ -131,6 +148,14 @@ export function ResultsView({ token }: { token: string }) {
 
   function toggle(id: string, on: boolean) {
     setPicked(prev => { const n = new Set(prev); if (on) n.add(id); else n.delete(id); return n })
+  }
+
+  /** 아이 행(상위) 체크박스 — 그 아이의 **채점 완료 차수 전부**를 한 번에 켜고 끈다.
+   *  종전에는 이 칸이 「최신 차수 하나」의 체크박스였다. 펼치면 같은 검사에 체크박스가 둘이 되고,
+   *  2차만 고르면 이름 행은 꺼진 채라 상위처럼 보이는 칸이 거짓말을 했다(사용자 지적 2026-09-22). */
+  function toggleChild(c: ResultsChild, on: boolean) {
+    const ids = c.sessions.filter(x => x.status === 'scored').map(x => x.id)
+    setPicked(prev => { const n = new Set(prev); for (const id of ids) { if (on) n.add(id); else n.delete(id) } return n })
   }
 
   if (err) return (
@@ -218,15 +243,26 @@ export function ResultsView({ token }: { token: string }) {
                     const latest = latestSession(c)
                     const retests = c.sessions.length > 1
                     const expanded = open.has(c.childNo)
+                    // 아이 행 체크박스가 대표하는 것들 — 받을 수 있는(채점 완료) 차수 전부.
+                    const scoredIds = c.sessions.filter(x => x.status === 'scored').map(x => x.id)
+                    const pickedCountOfChild = scoredIds.filter(id => picked.has(id)).length
                     const row = (s: ResultsSession | null, label: string | null, key: string) => (
                       <tr key={key} className={`border-t border-line/60 ${label ? 'bg-well/60 text-[13px]' : ''}`}>
                         <td className="px-2 py-2">
-                          {s && (
-                            <input type="checkbox" aria-label={`${c.childNo}번 ${c.name}${label ? ' ' + label : ''} 선택`}
-                              checked={picked.has(s.id)} disabled={s.status !== 'scored'}
-                              onChange={e => toggle(s.id, e.target.checked)}
-                              className="h-4 w-4 accent-[var(--color-blue)] disabled:opacity-40" />
-                          )}
+                          {/* 아이 행은 **그 아이 전체**를, 차수 행은 그 차수 하나를 맡는다.
+                              일부 차수만 골랐으면 아이 행은 막대(indeterminate)로 「일부 선택」을 알린다. */}
+                          {label === null
+                            ? scoredIds.length > 0 && (
+                              <Check label={`${c.childNo}번 ${c.name} 전체 선택`}
+                                checked={pickedCountOfChild === scoredIds.length}
+                                indeterminate={pickedCountOfChild > 0 && pickedCountOfChild < scoredIds.length}
+                                onChange={on => toggleChild(c, on)} />
+                            )
+                            : s && (
+                              <Check label={`${c.childNo}번 ${c.name} ${label} 선택`}
+                                checked={picked.has(s.id)} disabled={s.status !== 'scored'}
+                                onChange={on => toggle(s.id, on)} />
+                            )}
                         </td>
                         <td className="whitespace-nowrap px-2 py-2 tabular-nums">
                           {/* 차수는 어느 검사인지 가르는 값이라 회색 글자로는 눈에 안 띈다 — 배지로 세운다. */}
