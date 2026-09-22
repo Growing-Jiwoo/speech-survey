@@ -107,3 +107,22 @@ export function saveClassCode(code: string): void {
 export function loadClassCode(): string | null {
   try { return localStorage.getItem(CODE_KEY) } catch { return null }
 }
+
+/** 마이크 확인 통과 시각 — **기기 키**(학급 코드 키와 같은 성격, clearState가 지우지 않는다).
+ *  같은 PC·같은 헤드셋으로 25명을 연달아 검사할 때 아이마다 "안녕하세요"를 시키지 않기 위한 것
+ *  (사용자 확정 2026-09-22 ②, 담당자 회신 아님). 안전망은 이미 있다 — 첫 녹음이 작으면 「목소리가
+ *  잘 안 담긴 것 같아요」가 뜬다. 마이크 확인은 검사지에 없는 운영 절차라 담당자 확정 없이 바꿀 수
+ *  있는 영역으로 본다. **아동 정보가 아니다** — 시각 하나만 담는다. */
+const MIC_OK_KEY = 'kodys-survey:micOkAt'
+
+export function saveMicOk(): void {
+  try { localStorage.setItem(MIC_OK_KEY, String(Date.now())) } catch { /* noop */ }
+}
+
+/** maxAgeMs 안에 통과한 기록이 있으면 true. 값이 없거나 손상됐으면 false(= 확인을 시킨다). */
+export function recentMicOk(maxAgeMs: number): boolean {
+  try {
+    const at = Number(localStorage.getItem(MIC_OK_KEY))
+    return Number.isFinite(at) && at > 0 && Date.now() - at < maxAgeMs
+  } catch { return false }
+}

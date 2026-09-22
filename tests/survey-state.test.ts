@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { newState, saveState, loadState, clearState, saveClassCode, loadClassCode } from '@/lib/survey-state'
+import { newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk } from '@/lib/survey-state'
 
 // node 환경에는 localStorage가 없으므로 Map 기반 스텁을 주입한다.
 beforeEach(() => {
@@ -178,5 +178,29 @@ describe('학급 코드 기억 (연속 검사 — 스펙 2026-08-13)', () => {
       if (key === 'kodys-survey:classCode') { sawCodeKey = true; expect(value).toBe('K7M2P9') }
     }
     expect(sawCodeKey).toBe(true)
+  })
+})
+
+describe('마이크 확인 기억 (같은 기기 연속 검사 — 사용자 확정 2026-09-22 ②)', () => {
+  it('저장 직후 10분 안이면 true', () => {
+    saveMicOk()
+    expect(recentMicOk(10 * 60_000)).toBe(true)
+  })
+  it('기록이 없으면 false', () => {
+    expect(recentMicOk(10 * 60_000)).toBe(false)
+  })
+  it('기한이 지나면 false', () => {
+    localStorage.setItem('kodys-survey:micOkAt', String(Date.now() - 11 * 60_000))
+    expect(recentMicOk(10 * 60_000)).toBe(false)
+  })
+  it('손상된 값은 false', () => {
+    localStorage.setItem('kodys-survey:micOkAt', 'garbage')
+    expect(recentMicOk(10 * 60_000)).toBe(false)
+  })
+  it('[REGRESSION] clearState는 마이크 기록을 지우지 않는다 — 기기 키(학급 코드와 같은 성격)', () => {
+    saveState(newState('sid', '이하늘', 9, 'tok', 1))
+    saveMicOk()
+    clearState()
+    expect(recentMicOk(10 * 60_000)).toBe(true)
   })
 })

@@ -4,21 +4,35 @@
 // 다시 불러야 한다 — 이 화면의 존재 이유가 그것이다.
 // 실패는 종류별(권한 거부/미지원/그 외)로 갈라 플랫폼에 맞는 권한 해제 경로를 안내한다.
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
 import { CHILD_NOTICE } from '@/lib/consent'
 import { micPermissionHint } from '@/lib/platform'
+import { recentMicOk, saveMicOk } from '@/lib/survey-state'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 import { Blip } from '@/components/Blip'
 
 const MAX_SEC = 20
+/** 이 시간 안에 같은 기기에서 통과했으면 건너뛰기를 제안한다(사용자 확정 2026-09-22). */
+const MIC_OK_MAX_AGE_MS = 10 * 60_000
 
 export function MicCheck({ onOk }: { onOk: () => void }) {
   const [micOk, setMicOk] = useState<'none' | 'ok' | 'quiet'>('none')
   const [micErr, setMicErr] = useState<RecorderErrorKind | null>(null)
-  const recorder = useRecorder(MAX_SEC, (r: Recording) => setMicOk(r.peak > MIC_MIN_PEAK ? 'ok' : 'quiet'))
+  const recorder = useRecorder(MAX_SEC, (r: Recording) => {
+    const ok = r.peak > MIC_MIN_PEAK
+    setMicOk(ok ? 'ok' : 'quiet')
+    if (ok) saveMicOk()
+  })
+  const [skippable, setSkippable] = useState(false)
+  useEffect(() => {
+    // localStorage는 서버 프리렌더에 없으므로 마운트 후 1회 읽는다 — 첫 렌더에서 읽으면
+    // 서버 HTML과 어긋나 하이드레이션이 깨진다. app/review/page.tsx와 같은 의도된 패턴.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSkippable(recentMicOk(MIC_OK_MAX_AGE_MS))
+  }, [])
 
   async function start() {
     setMicOk('none') // 자리 이동·기기 변경 후 재확인 허용(성공 뒤에도 다시 눌러 확인 가능)
@@ -80,6 +94,14 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
             문구가 `\n`으로 두 문장을 나눠 오므로 pre-line으로 그 줄바꿈을 살린다(lib/consent.ts). */}
         <p className="mb-3 whitespace-pre-line text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
+        {/* 같은 기기에서 10분 안에 통과했으면 건너뛸 수 있다 — 25명 연속 검사에서 아이당 15초.
+            보조 동작이라 주 버튼 아래 작은 링크로. 통과 뒤에는 의미가 없어 감춘다. */}
+        {skippable && micOk !== 'ok' && (
+          <button type="button" onClick={onOk}
+            className="mt-3 w-full py-2 text-[13px] font-bold text-blue underline underline-offset-2">
+            방금 확인했어요 — 건너뛰기
+          </button>
+        )}
       </div>
     </main>
   )
