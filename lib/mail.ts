@@ -132,13 +132,9 @@ export function applyNoticeMail(v: {
  *  교사가 **보관하는 유일한 물건**이므로 검사를 시작할 수 있는 정보가 다 있어야 한다.
  *  코드 재발급 경로가 없어(관리자에게 문의하는 수밖에) 보관을 명시적으로 부탁한다.
  *
- *  ⚠️ TODO(문의처 — 나중에 넣기로 함, 2026-08-22): 본문이 "담당자에게 문의하셔야 합니다"라고만
- *  말하고 **어디로 문의할지는 적혀 있지 않다.** 메일을 지운 교사가 갈 곳이 없다.
- *  운영 주체가 창구(메일 또는 전화)를 정하면 **세 곳을 함께** 채울 것 — 값이 갈리면
- *  채널마다 다른 곳으로 안내한다:
- *    1) 이 함수의 보관 안내 문단
- *    2) lib/format.ts의 approvalNoticeText(관리자가 카톡·문자로 붙이는 평문)
- *    3) docs/consent/guardian-consent-form.md의 `[담당자 소속·성명·연락처]`(보호자용) */
+ *  문의처는 「담당자에게 문의」까지만 적는다(사용자 확정 2026-09-22) — 연락처 값을 앱에 두지
+ *  않는다. 교사는 코드를 전달받은 경로(담당자)를 이미 알고 있다. 이 방침은 approvalNoticeText
+ *  (lib/format.ts)·결과 링크 메일(resultsLinkMail)·결과 페이지 만료 화면이 함께 따른다. */
 export function approvedMail(v: {
   teacherName: string; schoolName: string; grade: number; classNo: number
   code: string; surveyUrl: string
