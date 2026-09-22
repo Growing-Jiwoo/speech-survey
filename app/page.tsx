@@ -96,6 +96,10 @@ export default function StartPage() {
   const [code, setCode] = useState('')
   // 코드 조회 결과 — 명단 모드 머리글과 확인 모달이 쓴다
   const [cls, setCls] = useState<ClassInfo | null>(null)
+  /** `cls`가 **어느 코드로** 조회된 것인지. 직접 입력 모드는 코드를 고쳐도 단계를 되돌리지
+   *  않으므로(아래 onChange 주석), 이것이 없으면 옛 학급 배너가 새 코드 위에 남는다 —
+   *  표시된 학급과 [결과지 받기 →]가 실제로 보내는 코드가 갈린다. */
+  const [clsCode, setClsCode] = useState('')
   const [roster, setRoster] = useState<RosterChild[]>([])
   const [pick, setPick] = useState('') // 드롭다운에서 고른 아동 번호(Select 계약이 문자열)
   const [childNo, setChildNo] = useState('')
@@ -246,6 +250,7 @@ export default function StartPage() {
       return
     }
     setCls(r.data)
+    setClsCode(target)
     setRoster(r.data.roster)
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
@@ -415,7 +420,7 @@ export default function StartPage() {
               // 쿨다운도 코드마다 따로다(서버가 코드 키로 센다).
               setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
-                setStep('code'); setCls(null); setRoster([]); setPick(''); setConsent(false)
+                setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
@@ -464,7 +469,10 @@ export default function StartPage() {
 
         {step === 'direct' && (
           <>
-            {cls && (
+            {/* 코드를 고치는 중이면 감춘다 — 직접 입력 모드는 단계를 되돌리지 않아 `cls`가 옛 학급인
+                채로 남는다. 그 배너 옆 [결과지 받기 →]는 **입력된 코드**로 보내므로, 남겨 두면
+                화면이 가리키는 학급과 실제 동작 대상이 갈린다. */}
+            {cls && clsCode === cleanCode && (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
                 <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
                 {resultsButton}

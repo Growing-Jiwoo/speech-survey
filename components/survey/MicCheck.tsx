@@ -95,8 +95,12 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         <p className="mb-3 whitespace-pre-line text-center text-xs leading-relaxed text-ink-mute">{CHILD_NOTICE}</p>
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
         {/* 같은 기기에서 10분 안에 통과했으면 건너뛸 수 있다 — 25명 연속 검사에서 아이당 15초.
-            보조 동작이라 주 버튼 아래 작은 링크로. 통과 뒤에는 의미가 없어 감춘다. */}
-        {skippable && micOk !== 'ok' && (
+            보조 동작이라 주 버튼 아래 작은 링크로.
+            **아직 녹음해 보지 않았을 때(`none`)만** 내준다. 통과(`ok`) 뒤에는 의미가 없고,
+            `quiet`에서 내주면 이 화면의 존재 이유가 무너진다 — 「목소리가 잘 안 들려요」가 뜬
+            바로 그 순간에 건너뛰기를 누르면, 무음 녹음을 검사가 다 끝난 뒤에야 발견하게 된다
+            (파일 상단 주석). 기기가 멀쩡해도 이 아이의 목소리가 안 담긴 것은 별개의 문제다. */}
+        {skippable && micOk === 'none' && (
           <button type="button" onClick={onOk}
             className="mt-3 w-full py-2 text-[13px] font-bold text-blue underline underline-offset-2">
             방금 확인했어요 — 건너뛰기
