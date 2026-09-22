@@ -13,6 +13,8 @@ vi.mock('@/lib/mail', () => ({
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 
 import { POST as REQUEST } from '@/app/api/results/request/route'
+import { GET as LIST } from '@/app/api/results/[token]/route'
+import { createResultsToken } from '@/lib/auth'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
 
@@ -120,5 +122,67 @@ describe('POST /api/results/request', () => {
     }])
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
+  })
+})
+
+describe('GET /api/results/[token]', () => {
+  const listReq = (token: string) => LIST(new Request(`http://x/api/results/${token}`), { params: Promise.resolve({ token }) })
+  const SESSION = {
+    id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+    started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
+    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+  }
+  beforeEach(() => {
+    vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
+    vi.mocked(db.listRoster).mockResolvedValue([
+      { child_no: 1, child_name: '김가나', gender: '여', birth_ymd: '190312' },
+      { child_no: 2, child_name: '김가나', gender: '남', birth_ymd: '190527' },
+    ])
+    vi.mocked(db.classResults).mockResolvedValue([SESSION])
+  })
+  it('유효 토큰 → 학급 머리글·만점·아이별 행. 명단만 있는 아이는 sessions 빈 배열', async () => {
+    const res = await listReq(await createResultsToken(CID, 'test-secret'))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.cls).toEqual({ schoolName: '대구가창초등학교', grade: 1, classNo: 2, teacherName: '김서연' })
+    expect(json.taskMax).toEqual({ wordReading: 14, sentenceReading: 36, writing: 10 })
+    expect(typeof json.provisional).toBe('boolean')
+    expect(json.children).toHaveLength(2)
+    const [tested, untested] = json.children
+    expect(tested.childNo).toBe(1)
+    expect(tested.sessions[0]).toMatchObject({ id: 's1', attemptNo: 1, status: 'scored',
+      scores: { wordReading: 0, sentenceReading: 0, writing: 0 } })
+    expect(untested).toMatchObject({ childNo: 2, sessions: [] })
+    expect(db.findClassCodeById).toHaveBeenCalledWith(CID)
+    expect(db.classResults).toHaveBeenCalledWith(CID)
+  })
+  it('[REGRESSION] 응답에 생년월일·전화·내부 경로가 실리지 않는다', async () => {
+    const text = await (await listReq(await createResultsToken(CID, 'test-secret'))).text()
+    expect(text).not.toContain('190312')
+    expect(text).not.toContain('birth')
+    expect(text).not.toContain('audio_path')
+  })
+  it('[REGRESSION] 전부 미녹음인 세션은 verdict가 null이고 complete.writing이 false다 — 치르지도 않은 쓰기의 0점으로 아동을 낙제시키지 않는다(A안, 사용자 확정 2026-09-22)', async () => {
+    const res = await listReq(await createResultsToken(CID, 'test-secret'))
+    const json = await res.json()
+    const session = json.children[0].sessions[0]
+    expect(session.verdict).toBeNull()
+    expect(session.complete.writing).toBe(false)
+  })
+  it('만료·변조·형식 오류는 전부 401 한 가지', async () => {
+    expect((await listReq(await createResultsToken(CID, 'test-secret', -1))).status).toBe(401)
+    expect((await listReq('garbage')).status).toBe(401)
+    expect((await listReq(await createResultsToken(CID, 'other-secret'))).status).toBe(401)
+    expect(db.classResults).not.toHaveBeenCalled()
+  })
+  it('코드 행이 삭제됐으면 404', async () => {
+    vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
+    expect((await listReq(await createResultsToken(CID, 'test-secret'))).status).toBe(404)
+  })
+  it('DB 장애는 500 + 내부 문구 비노출', async () => {
+    vi.mocked(db.classResults).mockRejectedValueOnce(new Error('relation missing'))
+    const res = await listReq(await createResultsToken(CID, 'test-secret'))
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/relation/)
   })
 })
