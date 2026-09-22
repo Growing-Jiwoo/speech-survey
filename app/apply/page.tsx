@@ -83,19 +83,22 @@ export default function ApplyPage() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col p-6 pt-10">
+      {/* 검사명은 정식 명칭으로 — 담당자 확정(2026-09-21). 「읽기 검사」만으로는 어떤 검사인지
+          특정되지 않아, 교사가 받은 안내 공문·검사지(KODYS)와 이 화면을 대조할 근거가 없었다.
+          좁은 폭에서 영문 풀네임이 줄바꿈되므로 약어와 풀네임을 별도 줄로 둔다. */}
       <div className="flex items-center gap-2 self-center">
         <Blip variant="logo" className="h-8 w-8" />
-        <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
+        <span className="text-sm font-bold text-ink-soft">
+          KODYS <span className="font-normal text-ink-mute">(Korean Dyslexia Screening Test)</span>
+        </span>
       </div>
-      <h1 className="mt-10 self-center text-2xl font-bold">읽기 선별검사 신청</h1>
-      {/* 종전 리드는 "학급 정보와 명단을 남겨 주시면…"뿐이라 **무슨 검사인지 한 줄도 없었다.**
-          이 화면에 처음 들어온 교사가 가장 먼저 알아야 하는 것을 먼저 말한다. */}
+      <h1 className="mt-10 self-center text-2xl font-bold">선별검사 신청</h1>
+      {/* 검사 설명 한 줄은 뺀다 — 담당자 확정(2026-09-21). 승인 메일이 검사 안내를 담기로 해
+          이 화면은 **무엇을 입력해야 하는지**만 말한다(안내 4줄은 아래 「검사 안내 및 동의」에
+          그대로 있다 — 「위 검사 안내를 확인했습니다」 체크가 가리키는 실체이므로 지우면 안 된다). */}
       <p className="mt-3 self-center text-center text-sm leading-relaxed text-ink-soft">
-        아이가 낱말과 문장을 소리 내어 읽는 과정을 녹음해<br />
-        읽기 발달을 조기에 확인하는 검사예요.
-      </p>
-      <p className="mt-2.5 self-center text-center text-[13px] leading-relaxed text-ink-mute">
-        학급 명단을 남겨 주시면 담당자가 확인한 뒤<br />학급 코드를 메일로 보내드려요.
+        아래 정보란을 기입해주시면 담당자가 확인한 뒤<br />
+        학급 코드 및 실시방법을 메일로 보내드려요.
       </p>
 
       {/* 자동완성은 끈다 — app/page.tsx와 같은 이유(개인 기기에서 남의 칸에 제안되는 것 방지) */}

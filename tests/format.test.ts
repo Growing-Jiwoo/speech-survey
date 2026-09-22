@@ -105,15 +105,19 @@ describe('approvalNoticeText', () => {
 describe('신청 화면 안내·동의 문구(lib/consent)', () => {
   it('[REGRESSION] 검사 안내가 소요 시간·준비물·녹음 취급·중단 가능을 말한다', () => {
     const all = SURVEY_NOTICE.join(' ')
-    expect(all).toContain('15~20분')
+    expect(all).toContain('약 5분')
     expect(all).toContain('헤드셋 마이크')
     expect(all).toContain('녹음')
-    expect(all).toContain('멈출 수 있어요')
+    expect(all).toContain('멈출 수 있습니다')
+    // 담당자 확정(2026-09-21) — 읽기 자체가 어려운 학생의 경로까지 안내에 넣기로 했다.
+    expect(all).toContain('모르겠어요')
   })
 
   it('[REGRESSION] 동의 3개 중 하나는 보호자 서면 동의 조건이다', () => {
     expect(APPLY_CHECKS).toHaveLength(3)
-    expect(APPLY_CHECKS.some(c => c.label.includes('보호자 서면 동의'))).toBe(true)
+    // 문구는 「보호자 서면 동의」→「법정대리인의 동의」로 바뀌었다(담당자 확정 2026-09-21).
+    // 수단(서면·전자)은 학교가 정하므로 못 박지 않고, **법정대리인 동의**라는 요건만 핀한다.
+    expect(APPLY_CHECKS.some(c => c.label.includes('법정대리인의 동의'))).toBe(true)
   })
 
   it('[REGRESSION] 개인정보 동의는 주체를 밝힌다 — 「선생님의」가 없으면 학생 명단 동의로 읽힌다', () => {
