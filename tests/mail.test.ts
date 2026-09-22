@@ -1,7 +1,7 @@
 // 메일 발송 — Resend HTTP API를 fetch로 부르므로 fetch를 스텁해 경계에서 검증한다.
 // 특히 MAIL_TO_OVERRIDE는 "실수로 진짜 교사에게 나가는 것"을 막는 안전장치라 회귀 핀을 둔다.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { approvedMail, applyNoticeMail, escapeHtml, sendMail } from '@/lib/mail'
+import { approvedMail, applyNoticeMail, resultsLinkMail, escapeHtml, sendMail } from '@/lib/mail'
 import { approvalNoticeText } from '@/lib/format'
 
 const okResponse = (id = 'msg_1') =>
@@ -124,7 +124,7 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
     const html = approvedMail(v).html
     const text = approvalNoticeText(v)
-    for (const s of [v.teacherName, v.schoolName, '1-3', v.code, v.surveyUrl]) {
+    for (const s of [v.teacherName, v.schoolName, '1-3', v.code, v.surveyUrl, '결과지 받기']) {
       expect(html).toContain(s)
       expect(text).toContain(s)
     }
@@ -145,5 +145,41 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test' }
     expect(approvedMail(v).html).toContain('2학년 단일학급')
     expect(approvalNoticeText(v)).toContain('2학년 단일학급')
+  })
+
+  it('두 채널 모두 「결과지 받는 방법」을 담는다 — 검사 주소에서 코드 입력 후 [결과지 받기], 이 메일로 링크', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
+      expect(out).toContain('결과지 받는 방법')
+      expect(out).toContain('[결과지 받기]')
+      expect(out).toContain('이 메일 주소로')
+    }
+  })
+})
+
+describe('resultsLinkMail — 교사 결과지 링크', () => {
+  const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, resultsUrl: 'https://x.test/results/abc.123.def' }
+  it('제목·본문에 학급이 들어가고 링크가 href와 본문에 있다', () => {
+    const m = resultsLinkMail(v)
+    expect(m.subject).toContain('예시초 1-3')
+    expect(m.subject).toContain('결과지')
+    expect(m.html).toContain('김담임')
+    expect(m.html).toContain(`href="${v.resultsUrl}"`)
+  })
+  it('유효기간 14일과 재요청 경로, 「담당자에게 문의」를 말한다', () => {
+    const html = resultsLinkMail(v).html
+    expect(html).toContain('14일')
+    expect(html).toContain('[결과지 받기]')
+    expect(html).toContain('담당자에게 문의')
+  })
+  it('[REGRESSION] resultsUrl에 큰따옴표가 있어도 href 속성을 벗어나지 못한다', () => {
+    const html = resultsLinkMail({ ...v, resultsUrl: 'https://x.test/"><script>1</script>' }).html
+    expect(html).not.toContain('"><script>')
+    expect(html).toContain('&quot;&gt;&lt;script&gt;')
+  })
+  it('[REGRESSION] 학교명·교사명을 이스케이프한다', () => {
+    const html = resultsLinkMail({ ...v, teacherName: '<b>x</b>', schoolName: '"초"' }).html
+    expect(html).not.toContain('<b>x</b>')
+    expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 })

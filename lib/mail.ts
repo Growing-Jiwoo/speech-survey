@@ -5,7 +5,7 @@
 //  ① 새 신청 알림 → 관리자        ② 승인·학급 코드 안내 → 교사
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
-import { gradeClassLabel } from './format'
+import { RESULTS_GUIDE_LINES, gradeClassLabel } from './format'
 
 const ENDPOINT = 'https://api.resend.com/emails'
 
@@ -167,10 +167,39 @@ export function approvedMail(v: {
         '이름·생년월일을 확인하고 검사를 시작합니다.',
       ])}
 
+      ${H('결과지 받는 방법')}
+      ${UL([...RESULTS_GUIDE_LINES])}
 
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
         <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고,<br>
         다시 받으려면 담당자에게 문의하셔야 합니다.</p>`),
+  }
+}
+
+/** ③ 교사가 [결과지 받기]를 눌렀을 때 — 학급 결과 페이지 링크(14일).
+ *  이메일은 `class_codes.teacher_email`로만 간다(호출부가 채운다). 문의처는 「담당자에게 문의」까지
+ *  (사용자 확정 2026-09-22). */
+export function resultsLinkMail(v: {
+  teacherName: string; schoolName: string; grade: number; classNo: number; resultsUrl: string
+}): Mail {
+  const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
+  return {
+    to: '',
+    subject: `[읽기 선별검사] ${where} 결과지`,
+    html: WRAP(`
+      <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
+      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 검사 결과지를 받으실 수 있어요.</p>
+      <p style="margin:0"><a href="${escapeHtml(v.resultsUrl)}"
+        style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
+        display:inline-block;font-weight:700;font-size:14px">결과지 보기</a></p>
+      <p style="margin:14px 0 0;font-size:13px;color:${C.mute};word-break:break-all">
+        버튼이 열리지 않으면 이 주소를 복사해 주세요:<br>
+        <a href="${escapeHtml(v.resultsUrl)}" style="color:${C.blue}">${escapeHtml(v.resultsUrl)}</a></p>
+      <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
+        border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
+        이 링크는 <b>14일</b> 동안 유효해요. 지나면 검사 주소에서 [결과지 받기]를 다시 눌러 주세요.<br>
+        채점이 진행되면 같은 링크를 새로고침하면 반영돼요.<br>
+        링크가 열리지 않으면 담당자에게 문의해 주세요.</p>`),
   }
 }
