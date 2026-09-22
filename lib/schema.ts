@@ -84,7 +84,7 @@ export const sessionCreateDirectSchema = z.object({
   name: cleaned.pipe(nameSchema),
   gender: genderSchema,
   birthYmd: birthYmdSchema,
-  // 만 14세 미만 아동 — 법정대리인 서면 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
+  // 만 14세 미만 아동 — 법정대리인 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
   guardianConsent: z.literal(true),
 })
 

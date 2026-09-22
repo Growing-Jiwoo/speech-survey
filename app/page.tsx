@@ -104,7 +104,7 @@ export default function StartPage() {
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
-  // 법정대리인 서면 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
+  // 법정대리인 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
   const [consent, setConsent] = useState(false)
   // 값이 있으면 확인 모달이 열려 있다
   const [confirm, setConfirm] = useState<Confirmed | null>(null)
@@ -457,7 +457,7 @@ export default function StartPage() {
           </>
         )}
 
-        {/* 개인정보 수집·이용 고지 + 법정대리인 서면 동의 확인 체크 — 문구의 단일 소스는 lib/consent.ts.
+        {/* 개인정보 수집·이용 고지 + 법정대리인 동의 확인 체크 — 문구의 단일 소스는 lib/consent.ts.
             코드만 입력하는 첫 단계에서는 감춘다 — 아동 개인정보를 아직 하나도 다루지 않는 화면에
             동의 고지를 띄우면 무엇에 동의하는지가 흐려지고, 코드 오타로 못 넘어가는 사이에
             체크가 켜져 있게 된다. */}
