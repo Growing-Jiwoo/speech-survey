@@ -8,6 +8,8 @@ import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import { Badge } from '@/components/Badge'
 import { Blip } from '@/components/Blip'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Spinner } from '@/components/Spinner'
 // 폴더만 admin일 뿐 범용 컴포넌트다(관리자 전용 데이터를 알지 않는다).
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
@@ -77,6 +79,9 @@ export function ResultsView({ token }: { token: string }) {
   const [pickedOverride, setPicked] = useState<Set<string> | null>(null)
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [downloading, setDownloading] = useState<'all' | 'picked' | null>(null)
+  /** 확인 모달에 띄울 다운로드 종류. 버튼은 이것만 세우고, 실제 요청은 모달의 [내려받기]가 낸다 —
+   *  25장 병합은 서버가 몇 초를 쓰는 일이라, 잘못 눌린 클릭 하나로 시작되면 안 된다(사용자 확정 2026-09-22). */
+  const [confirmMode, setConfirmMode] = useState<'all' | 'picked' | null>(null)
   const [dlErr, setDlErr] = useState('')
 
   const err = error ? (error.status === 401 ? 'expired' : error.status === 404 ? 'gone' : 'other') : null
@@ -94,7 +99,24 @@ export function ResultsView({ token }: { token: string }) {
 
   const summary = useMemo(() => (data ? summarize(data.children) : null), [data])
 
+  /** 확인 모달이 보여 줄 「이 검사들을 받습니다」 명단. 화면이 고른 것과 서버가 담을 것이
+   *  같은 기준이어야 하므로(전체=아이당 받을 수 있는 것 중 최신), 여기서도 `latestScored`를 쓴다. */
+  const pickList = useMemo(() => {
+    const rows: { childNo: number; name: string; attempt: string | null }[] = []
+    for (const c of data?.children ?? []) {
+      for (const s of c.sessions) {
+        const inAll = confirmMode === 'all' && latestScored(c)?.id === s.id
+        const inPicked = confirmMode === 'picked' && picked.has(s.id)
+        if (inAll || inPicked) {
+          rows.push({ childNo: c.childNo, name: c.name, attempt: c.sessions.length > 1 ? `${s.attemptNo}차` : null })
+        }
+      }
+    }
+    return rows
+  }, [data, confirmMode, picked])
+
   async function download(mode: 'all' | 'picked') {
+    setConfirmMode(null)
     setDownloading(mode); setDlErr('')
     const qs = mode === 'picked' ? `?ids=${[...picked].join(',')}` : ''
     try {
@@ -172,14 +194,15 @@ export function ResultsView({ token }: { token: string }) {
               아직 채점된 학생이 없어요. 채점이 끝나면 이 페이지를 새로고침해 주세요.
             </p>
           )}
+          {/* 버튼은 확인 모달만 연다 — 눌렀다고 곧바로 받아지지 않는다(아래 ConfirmDialog). */}
           <div className="mt-5 flex flex-wrap gap-2.5">
-            <button type="button" onClick={() => void download('all')} disabled={summary.scored === 0 || downloading !== null}
+            <button type="button" onClick={() => setConfirmMode('all')} disabled={summary.scored === 0 || downloading !== null}
               className="btn-primary h-[46px] min-w-[12rem] flex-1">
-              {downloading === 'all' ? `잠시 걸려요 · ${summary.scored}명` : `전체 PDF (${summary.scored}명)`}
+              전체 PDF ({summary.scored}명)
             </button>
-            <button type="button" onClick={() => void download('picked')} disabled={pickedCount === 0 || downloading !== null}
+            <button type="button" onClick={() => setConfirmMode('picked')} disabled={pickedCount === 0 || downloading !== null}
               className="btn-ghost h-[46px] min-w-[12rem] flex-1">
-              {downloading === 'picked' ? `잠시 걸려요 · ${pickedCount}장` : `선택한 ${pickedCount}장 PDF`}
+              선택한 {pickedCount}장 PDF
             </button>
           </div>
           {dlErr && <p role="alert" className="mt-2 text-sm text-rec-deep">{dlErr}</p>}
@@ -281,6 +304,38 @@ export function ResultsView({ token }: { token: string }) {
           </p>
         </>
       )}
+
+      {/* 받을 사람을 눈으로 확인하고 한 번 더 누르게 한다 — 25장 병합은 서버가 몇 초를 쓰는 일이고,
+          잘못 눌린 클릭 하나로 반 전체가 내려받아지면 안 된다(사용자 확정 2026-09-22, 담당자 회신 아님). */}
+      <ConfirmDialog
+        open={confirmMode !== null}
+        title={confirmMode === 'all' ? '전체 결과지를 내려받을까요?' : '선택한 결과지를 내려받을까요?'}
+        confirmLabel={`${pickList.length}장 내려받기`}
+        onConfirm={() => void download(confirmMode === 'all' ? 'all' : 'picked')}
+        onClose={() => setConfirmMode(null)}>
+        <p className="mt-3 text-sm text-ink-soft">
+          아래 <b>{pickList.length}명</b>의 결과지가 <b>한 파일</b>로 만들어져요. 만드는 데 몇 초 걸려요.
+        </p>
+        {/* 인원이 많으면 목록이 길어진다 — 모달 안에서만 스크롤하고 배경은 잠긴 채로 둔다. */}
+        <ul className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px]">
+          {pickList.map((r, i) => (
+            <li key={`${r.childNo}-${i}`} className="flex items-center gap-2 py-1 text-ink-soft">
+              <span className="w-7 shrink-0 text-right tabular-nums text-ink-mute">{r.childNo}</span>
+              <span className="font-medium text-ink">{r.name}</span>
+              {r.attempt && <span className="text-[12px] text-ink-mute">{r.attempt}</span>}
+            </li>
+          ))}
+        </ul>
+        {confirmMode === 'all' && summary && summary.scored < summary.tested && (
+          <p className="mt-3 text-[12.5px] leading-relaxed text-ink-mute">
+            채점이 끝나지 않은 검사는 빠져요. 채점이 진행되면 새로고침한 뒤 다시 받아 주세요.
+          </p>
+        )}
+      </ConfirmDialog>
+
+      {/* 다운로드 중에는 화면 전체를 덮는다 — 버튼 글자만 바꾸면 눌린 줄 모르고 다시 누른다
+          (다른 화면과 같은 공용 오버레이). */}
+      <LoadingOverlay show={downloading !== null} />
     </main>
   )
 }
