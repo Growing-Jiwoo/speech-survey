@@ -348,7 +348,7 @@ export default function StartPage() {
               codeTouched.current = true
               setCode(e.target.value.toUpperCase())
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
-              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 서면 동의서를 받았다"는
+              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 법정대리인 동의를 받았다"는
               // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
@@ -474,7 +474,7 @@ export default function StartPage() {
             </dl>
             <p className="mt-2 text-[12px] leading-relaxed text-ink-mute">
               만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.<br />
-              학교에서 배부한 서면 동의서를 먼저 회수한 뒤 검사를 시작해 주세요.
+              학교의 개인정보 처리 방침·절차에 따라 법정대리인의 동의를 먼저 받은 뒤 검사를 시작해 주세요.
             </p>
             <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
               <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
