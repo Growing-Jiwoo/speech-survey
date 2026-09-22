@@ -1707,7 +1707,9 @@ import { buildChildren, latestSession, scoreInputFor, sheetsFileName } from '@/l
 import { jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
-// 25장 스탬핑 + 병합은 수 초 걸린다. Vercel Pro에서 유효(Hobby는 상한이 낮아 무시된다).
+// 프로덕션은 Vercel **무료(Hobby) 플랜**이다 — 함수 제한시간 기본 10초. maxDuration 상한이 플랜마다
+// 달라 이 값에 기대지 않는다: 아래에서 stampSheet를 **병렬**로 돌려 작업 자체를 짧게 만든다.
+// (stampSheet는 매 호출 원본 PDF·폰트를 읽고 임베드해 100~300ms — 순서대로 25장이면 10초에 빠듯하다.)
 export const maxDuration = 60
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -1740,15 +1742,18 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     }
     if (picked.length === 0) return jsonError('내려받을 수 있는 결과지가 없습니다. 채점이 끝나면 다시 시도해 주세요.', 400)
 
-    const merged = await PDFDocument.create()
-    for (const r of picked) {
+    // 스탬핑은 **병렬**(I/O 바운드 — 원본 PDF·폰트 읽기), 병합만 순서대로(페이지 순서 = 번호순 보장).
+    const stamped = await Promise.all(picked.map(r => {
       const { form, input } = scoreInputFor(r)
-      const bytes = await stampSheet({
+      return stampSheet({
         form, ...input,
         // 관리자 PDF와 **같은 문서**여야 한다 — 생년월일·체크리스트도 그대로 찍는다.
         session: { school_name: row.school_name, grade: r.grade, class_no: row.class_no, child_name: r.child_name,
           birth_ymd: r.birth_ymd, started_at: r.started_at, checklist: r.checklist },
       })
+    }))
+    const merged = await PDFDocument.create()
+    for (const bytes of stamped) {
       const one = await PDFDocument.load(bytes)
       for (const p of await merged.copyPages(one, one.getPageIndices())) merged.addPage(p)
     }
@@ -1772,10 +1777,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
 }
 ```
 
-- [ ] **Step 4: 통과 확인**
+- [ ] **Step 4: 통과 확인 + 실측**
 
 Run: `npx vitest run tests/results-route.test.ts && npm run typecheck`
 Expected: PASS
+
+로컬에서 시간을 재 둔다(무료 플랜 10초 기준 판단 근거):
+```bash
+# 데모 학급(TEST24, 8명)의 토큰을 Task 6 라우트로 받은 뒤
+time curl -s -o /dev/null "http://localhost:3000/api/results/<token>/sheets.pdf"
+```
+8장 기준 시간 × 3 ≈ 25장 예상치. **5초를 넘으면** 프로덕션 배포 뒤 Vercel 함수 로그의 Duration을 한 번 더 확인하고, 그래도 빠듯하면 화면에서 [전체 PDF]를 10장 단위로 나눠 받게 하는 후속 작업을 연다(이 PR 범위 밖).
 
 - [ ] **Step 5: 커밋**
 
