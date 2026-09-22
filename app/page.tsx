@@ -410,9 +410,12 @@ export default function StartPage() {
               // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
+              // 결과지 안내는 **단계와 무관하게** 비운다 — 「d***@exa***.com 로 보냈어요」는 고치기
+              // 전 코드의 학급 것이라, 남겨 두면 다른 학급 주소를 보며 메일함을 찾게 된다.
+              // 쿨다운도 코드마다 따로다(서버가 코드 키로 센다).
+              setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
                 setStep('code'); setCls(null); setRoster([]); setPick(''); setConsent(false)
-                setResultsMsg(''); setResultsErr(''); setCooldown(0)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
