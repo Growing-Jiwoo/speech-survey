@@ -1,7 +1,8 @@
 # components/ — UI 컴포넌트
 
 루트에는 화면을 가리지 않는 **공용 컴포넌트**, 하위 폴더에 도메인별 컴포넌트를 둔다
-(`survey/` 참여자 검사 화면, `admin/` 관리자 화면, `apply/` 교사 신청 화면). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
+(`survey/` 참여자 검사 화면, `admin/` 관리자 화면, `apply/` 교사 신청 화면, `results/` 교사 결과지
+화면). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
 데이터 로딩은 `hooks/`.
 
 ## 공용
@@ -28,6 +29,7 @@
 | `survey/` | 참여자(아동) 검사 화면 — [survey/README.md](survey/README.md) |
 | `admin/` | 관리자(채점자) 화면 — [admin/README.md](admin/README.md) |
 | `apply/` | 교사 신청 화면(`/apply`) — [apply/README.md](apply/README.md). `RosterEditor.tsx`(명단 업로드·고정 4칸 표) 하나뿐 |
+| `results/` | 교사 결과지 화면(`/results/[token]`) — [results/README.md](results/README.md). `ResultsView.tsx` 하나뿐 |
 
 ## 스타일 관례
 
