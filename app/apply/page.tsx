@@ -24,6 +24,9 @@ export default function ApplyPage() {
   const [teacherName, setTeacherName] = useState('')
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
+  // 이메일 확인칸 — 오타는 승인 메일이 안 와서 코드를 못 받는 시점에 걸리지만, 그때는 이미 담당자 손을
+  // 타야 한다. 입력 순간에 잡는 게 싸다(사용자 확정 2026-09-22). 서버 스키마는 그대로(클라이언트만).
+  const [emailConfirm, setEmailConfirm] = useState('')
   // 명단 유효성은 RosterEditor가 전부 소유한다 — 확정 명단일 때만 배열이 온다.
   const [roster, setRoster] = useState<RosterChild[] | null>(null)
   const [checks, setChecks] = useState([false, false, false])
@@ -34,9 +37,10 @@ export default function ApplyPage() {
   const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
   const cleanPhone = phone.trim()
   const cleanEmail = email.trim()
+  const cleanEmailConfirm = emailConfirm.trim()
   const allChecked = checks.every(Boolean)
   const filled = school !== null && classNo !== '' && cleanTeacher !== ''
-    && cleanEmail !== '' && roster !== null && allChecked
+    && cleanEmail !== '' && cleanEmailConfirm !== '' && roster !== null && allChecked
 
   /** [신청하기] — 서버 스키마(applySchema)와 같은 규칙으로 선검증한 뒤 접수한다.
    *  성공 분기에서는 busy를 풀지 않는다(app/page.tsx의 begin()과 같은 이유) — 접수 완료
@@ -47,6 +51,7 @@ export default function ApplyPage() {
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('선생님 성함은 한글이나 영어로만 쓸 수 있어요.'); return }
     if (!validEmail(cleanEmail)) { setErr('이메일 형식을 확인해 주세요. (예: name@example.com)'); return }
+    if (cleanEmail !== cleanEmailConfirm) { setErr('이메일이 서로 달라요. 다시 확인해 주세요.'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
     if (!roster) { setErr('학급 명단을 확인해 주세요.'); return }
     if (!allChecked) { setErr('검사 안내를 읽고 동의 항목 3개에 모두 체크해 주세요.'); return }
@@ -133,6 +138,14 @@ export default function ApplyPage() {
           <input id="ap-email" value={email} maxLength={60} type="email" inputMode="email"
             spellCheck={false} placeholder="name@example.com"
             onChange={e => setEmail(e.target.value)} className={inputCls} />
+          <label className={labelCls} htmlFor="ap-email2">이메일 확인</label>
+          <input id="ap-email2" value={emailConfirm} maxLength={60} type="email" inputMode="email"
+            spellCheck={false} placeholder="같은 주소를 한 번 더"
+            aria-invalid={cleanEmailConfirm !== '' && cleanEmailConfirm !== cleanEmail}
+            onChange={e => setEmailConfirm(e.target.value)} className={inputCls} />
+          {cleanEmailConfirm !== '' && cleanEmailConfirm !== cleanEmail && (
+            <p role="alert" className="mt-1.5 text-[12px] text-rec-deep">이메일이 서로 달라요.</p>
+          )}
           <p className="mt-1.5 text-[12px] leading-relaxed text-ink-mute">
             {/* 종전 둘째 줄("메일을 받을 수 있는 주소를 적어 주세요")은 동어반복이었다 —
                 실질 정보는 "이 주소로만"과 "학교 메일이 아니어도 된다"다.
