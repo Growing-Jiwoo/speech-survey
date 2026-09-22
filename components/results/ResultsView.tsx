@@ -75,8 +75,10 @@ export function ResultsView({ token }: { token: string }) {
     retry: false,
     staleTime: 0,  // 채점 진행을 보러 새로고침하는 화면이다 — 캐시로 옛 상태를 보여주지 않는다.
   })
-  /** 사용자가 체크를 건드리기 전에는 null — 그때까지는 아래 `defaultPicked`를 쓴다. */
-  const [pickedOverride, setPicked] = useState<Set<string> | null>(null)
+  /** 체크한 검사들. **처음에는 비어 있다** — 아무것도 고르지 않았는데 버튼이 「선택한 2장」이라고
+   *  말하면 교사는 자기가 고른 적 없는 것을 고른 줄 안다(사용자 지적 2026-09-22).
+   *  반 전체를 받는 길은 [전체 PDF 다운로드]가 따로 맡는다. */
+  const [picked, setPicked] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<Set<number>>(new Set())
   const [downloading, setDownloading] = useState<'all' | 'picked' | null>(null)
   /** 확인 모달에 띄울 다운로드 종류. 버튼은 이것만 세우고, 실제 요청은 모달의 [내려받기]가 낸다 —
@@ -85,17 +87,6 @@ export function ResultsView({ token }: { token: string }) {
   const [dlErr, setDlErr] = useState('')
 
   const err = error ? (error.status === 401 ? 'expired' : error.status === 404 ? 'gone' : 'other') : null
-
-  // 기본 체크 = 아이당 **받을 수 있는 것 중 최신** 세션([전체 PDF]가 담는 것과 같은 기준).
-  // 최신 세션 기준으로 두면 재검사를 시작했다 중단한 아이가 기본 선택에서 빠져, 버튼이 세는
-  // 장수와 체크된 장수가 어긋난다(전수 점검 2026-09-22). 효과로 심지 않고 파생값으로 둔다.
-  const defaultPicked = useMemo(() => new Set(
-    (data?.children ?? [])
-      .map(latestScored)
-      .filter((s): s is ResultsSession => s !== null)
-      .map(s => s.id),
-  ), [data])
-  const picked = pickedOverride ?? defaultPicked
 
   const summary = useMemo(() => (data ? summarize(data.children) : null), [data])
 
@@ -139,7 +130,7 @@ export function ResultsView({ token }: { token: string }) {
   }
 
   function toggle(id: string, on: boolean) {
-    setPicked(prev => { const n = new Set(prev ?? defaultPicked); if (on) n.add(id); else n.delete(id); return n })
+    setPicked(prev => { const n = new Set(prev); if (on) n.add(id); else n.delete(id); return n })
   }
 
   if (err) return (
@@ -198,11 +189,11 @@ export function ResultsView({ token }: { token: string }) {
           <div className="mt-5 flex flex-wrap gap-2.5">
             <button type="button" onClick={() => setConfirmMode('all')} disabled={summary.scored === 0 || downloading !== null}
               className="btn-primary h-[46px] min-w-[12rem] flex-1">
-              전체 PDF ({summary.scored}명)
+              전체 PDF 다운로드 ({summary.scored}명)
             </button>
             <button type="button" onClick={() => setConfirmMode('picked')} disabled={pickedCount === 0 || downloading !== null}
               className="btn-ghost h-[46px] min-w-[12rem] flex-1">
-              선택한 {pickedCount}장 PDF
+              {pickedCount === 0 ? '선택한 검사 다운로드' : `선택한 ${pickedCount}장 다운로드`}
             </button>
           </div>
           {dlErr && <p role="alert" className="mt-2 text-sm text-rec-deep">{dlErr}</p>}
@@ -237,7 +228,10 @@ export function ResultsView({ token }: { token: string }) {
                               className="h-4 w-4 accent-[var(--color-blue)] disabled:opacity-40" />
                           )}
                         </td>
-                        <td className="px-2 py-2 tabular-nums">{label ? <span className="text-ink-mute">{label}</span> : c.childNo}</td>
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">
+                          {/* 차수는 어느 검사인지 가르는 값이라 회색 글자로는 눈에 안 띈다 — 배지로 세운다. */}
+                          {label ? <Badge tone="blue" size="sm">{label}</Badge> : c.childNo}
+                        </td>
                         <td className="whitespace-nowrap px-2 py-2 font-medium">{label ? '' : `${c.name} (${c.gender})`}</td>
                         {TASKS.map(t => (
                           <td key={t.key} className="whitespace-nowrap px-2 py-2 tabular-nums">
@@ -327,7 +321,7 @@ export function ResultsView({ token }: { token: string }) {
             <li key={`${r.childNo}-${i}`} className="flex items-baseline gap-1.5 py-1">
               <span className="w-6 shrink-0 text-right tabular-nums text-ink-mute">{r.childNo}</span>
               <span className="truncate font-medium text-ink">{r.name}</span>
-              {r.attempt && <span className="shrink-0 text-[11.5px] text-ink-mute">{r.attempt}</span>}
+              {r.attempt && <Badge tone="blue" size="sm" className="shrink-0">{r.attempt}</Badge>}
             </li>
           ))}
         </ul>
