@@ -113,7 +113,7 @@ describe('신청 화면 안내·동의 문구(lib/consent)', () => {
     expect(all).toContain('모르겠어요')
   })
 
-  it('[REGRESSION] 동의 3개 중 하나는 보호자 서면 동의 조건이다', () => {
+  it('[REGRESSION] 동의 3개 중 하나는 법정대리인 동의 조건이다', () => {
     expect(APPLY_CHECKS).toHaveLength(3)
     // 문구는 「보호자 서면 동의」→「법정대리인의 동의」로 바뀌었다(담당자 확정 2026-09-21).
     // 수단(서면·전자)은 학교가 정하므로 못 박지 않고, **법정대리인 동의**라는 요건만 핀한다.
@@ -124,7 +124,7 @@ describe('신청 화면 안내·동의 문구(lib/consent)', () => {
     expect(APPLY_CHECKS[0].label).toContain('선생님의')
   })
 
-  it('[REGRESSION] 보관 기간은 서면 동의서와 같은 상수를 쓴다', () => {
+  it('[REGRESSION] 보관 기간은 고지 문구와 같은 상수를 쓴다', () => {
     expect(APPLY_CHECKS[0].note).toContain(RETENTION_LABEL)
   })
 

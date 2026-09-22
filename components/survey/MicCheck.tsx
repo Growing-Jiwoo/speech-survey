@@ -26,6 +26,9 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
     setMicOk(ok ? 'ok' : 'quiet')
     if (ok) saveMicOk()
   })
+  /** 이 화면에서 한 번이라도 녹음을 눌렀는가. `micOk`는 재녹음 때 'none'으로 되돌아가므로
+   *  그 값만으로는 「아직 시도하지 않았다」를 구분할 수 없다(건너뛰기 조건에 쓴다). */
+  const [tried, setTried] = useState(false)
   const [skippable, setSkippable] = useState(false)
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 1회 읽는다 — 첫 렌더에서 읽으면
@@ -36,6 +39,7 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
 
   async function start() {
     setMicOk('none') // 자리 이동·기기 변경 후 재확인 허용(성공 뒤에도 다시 눌러 확인 가능)
+    setTried(true)   // 한 번 시도했으면 건너뛰기는 끝 — 아래 건너뛰기 링크 주석 참고
     try { await recorder.start(); setMicErr(null) }
     catch (e) { setMicErr(classifyRecorderError(e)) }
   }
@@ -96,11 +100,13 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
         <button onClick={onOk} disabled={micOk !== 'ok'} className="cta disabled:opacity-40">검사 시작</button>
         {/* 같은 기기에서 10분 안에 통과했으면 건너뛸 수 있다 — 25명 연속 검사에서 아이당 15초.
             보조 동작이라 주 버튼 아래 작은 링크로.
-            **아직 녹음해 보지 않았을 때(`none`)만** 내준다. 통과(`ok`) 뒤에는 의미가 없고,
+            **이 화면에서 한 번도 녹음해 보지 않았을 때만** 내준다. 통과(`ok`) 뒤에는 의미가 없고,
             `quiet`에서 내주면 이 화면의 존재 이유가 무너진다 — 「목소리가 잘 안 들려요」가 뜬
             바로 그 순간에 건너뛰기를 누르면, 무음 녹음을 검사가 다 끝난 뒤에야 발견하게 된다
-            (파일 상단 주석). 기기가 멀쩡해도 이 아이의 목소리가 안 담긴 것은 별개의 문제다. */}
-        {skippable && micOk === 'none' && (
+            (파일 상단 주석). 기기가 멀쩡해도 이 아이의 목소리가 안 담긴 것은 별개의 문제다.
+            조건이 `micOk`가 아니라 `tried`인 이유: 재녹음을 누르면 `start()`가 `micOk`를
+            'none'으로 되돌려, 「다시 한번 해 주세요」를 따르는 그 20초 동안 링크가 되살아난다. */}
+        {skippable && !tried && (
           <button type="button" onClick={onOk}
             className="mt-3 w-full py-2 text-[13px] font-bold text-blue underline underline-offset-2">
             방금 확인했어요 — 건너뛰기
