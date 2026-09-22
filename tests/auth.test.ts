@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { createToken, verifyToken, sha256Hex, createSessionToken, verifySessionToken } from '@/lib/auth'
+import { createToken, verifyToken, sha256Hex, createSessionToken, verifySessionToken,
+  createResultsToken, verifyResultsToken, RESULTS_TTL_MS } from '@/lib/auth'
 
 const SECRET = 'test-secret'
 
@@ -63,5 +64,39 @@ describe('세션 스코프 토큰', () => {
 describe('관리자 토큰 jti', () => {
   it('매 발급마다 토큰이 달라 유일', async () => {
     expect(await createToken(SECRET, 60_000)).not.toBe(await createToken(SECRET, 60_000))
+  })
+})
+
+describe('학급 스코프 토큰(결과지 링크)', () => {
+  const CID = '755316e7-fe7c-43f9-a5c5-5c2d39da59d7'
+  it('발급한 토큰은 검증 통과하고 classCodeId를 돌려준다', async () => {
+    const t = await createResultsToken(CID, SECRET)
+    expect(await verifyResultsToken(t, SECRET)).toBe(CID)
+  })
+  it('기본 만료는 14일이다 — 채점 대기 기간을 감안한 값(사용자 확정 2026-09-22)', () => {
+    expect(RESULTS_TTL_MS).toBe(14 * 24 * 3600_000)
+  })
+  it('만료된 토큰은 null', async () => {
+    const t = await createResultsToken(CID, SECRET, -1)
+    expect(await verifyResultsToken(t, SECRET)).toBeNull()
+  })
+  it('다른 시크릿이면 null', async () => {
+    const t = await createResultsToken(CID, SECRET)
+    expect(await verifyResultsToken(t, 'other')).toBeNull()
+  })
+  it('[REGRESSION] 주체(classCodeId)를 바꾸면 서명이 어긋나 null — 토큰 하나로 다른 학급을 열 수 없다', async () => {
+    const t = await createResultsToken(CID, SECRET)
+    const [, exp, sig] = t.split('.')
+    expect(await verifyResultsToken(`99999999-9999-4999-8999-999999999999.${exp}.${sig}`, SECRET)).toBeNull()
+  })
+  it('만료(exp) 필드를 늘려도 null', async () => {
+    const t = await createResultsToken(CID, SECRET, 60_000)
+    const [cid, , sig] = t.split('.')
+    expect(await verifyResultsToken(`${cid}.9999999999999.${sig}`, SECRET)).toBeNull()
+  })
+  it('형식이 아니면 null — 빈 문자열·점 개수 불일치·비UUID 주체', async () => {
+    expect(await verifyResultsToken('', SECRET)).toBeNull()
+    expect(await verifyResultsToken('a.b', SECRET)).toBeNull()
+    expect(await verifyResultsToken('not-a-uuid.123.abc', SECRET)).toBeNull()
   })
 })
