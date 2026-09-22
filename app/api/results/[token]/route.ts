@@ -25,6 +25,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     ])
     if (!row) return jsonError('학급을 찾을 수 없습니다.', 404)
     const form = formForGrade(row.grade)
+    // 아동 실명·점수·판정이 담긴 응답이다 — 중간 캐시·뒤로가기 복원에 남기지 않는다
+    // (PDF 라우트와 같은 방침). 새로고침이 곧 최신 상태여야 한다는 이 라우트의 약속도 이것이 지킨다.
     return NextResponse.json({
       cls: { schoolName: row.school_name, grade: row.grade, classNo: row.class_no, teacherName: row.teacher_name },
       provisional: PROVISIONAL_CRITERIA,
@@ -33,7 +35,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
         roster.map(r => ({ child_no: r.child_no, child_name: r.child_name, gender: r.gender })),
         rows,
       ),
-    })
+    }, { headers: { 'cache-control': 'no-store' } })
   } catch (e) {
     console.error('[results/:token] 조회 실패', e)
     return jsonError('결과를 불러오지 못했습니다.', 500)

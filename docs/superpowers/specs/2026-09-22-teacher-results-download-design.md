@@ -265,6 +265,9 @@ DB는 `lib/db.ts`에 `classResults(classCodeId)` 하나를 추가한다 — 코�
 ## PDF API — `GET /api/results/[token]/sheets.pdf?ids=a,b,c`
 
 - `ids` 없음 → 채점 완료 세션 전부, **아이당 최신 1장**, 번호 오름차순.
+  - 구현 정정(전수 점검 2026-09-22): 「최신 1장」은 *최신 세션*이 아니라 **받을 수 있는 것 중 최신**이다
+    (`lib/results.ts`의 `latestScored`). 재검사를 시작했다가 중단하면 최신 세션이 미제출이 되는데,
+    그 아이를 통째로 빼면 채점이 끝난 앞 차수 결과지를 영영 받을 수 없었다.
 - `ids` 있음 → 그 세션들만. **모든 id가 이 토큰의 학급(`class_code_id`) 소속인지 검증**, 하나라도
   아니면 403. 채점 완료가 아닌 세션은 400(화면이 체크를 잠그므로 정상 경로에선 오지 않는다).
 - 세션마다 `stampSheet`(관리자 PDF 라우트와 같은 입력 조립) → `pdf-lib` `PDFDocument.create()`에

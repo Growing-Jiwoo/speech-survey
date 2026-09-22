@@ -131,6 +131,20 @@ export function latestSession(c: ResultsChild): ResultsSession | null {
   return c.sessions.length > 0 ? c.sessions[c.sessions.length - 1] : null
 }
 
+/**
+ * 그 아이의 **가장 최근 채점 완료 세션**. 없으면 null.
+ *
+ * 결과지로 내보낼 수 있는 한 장이 이것이다 — 「아이당 최신 1장」이 뜻하는 것은 *최신 세션*이
+ * 아니라 *받을 수 있는 것 중 최신*이다. 재검사를 시작했다가 중단하면 최신 세션은 미제출이 되는데,
+ * 그 아이를 통째로 빼면 **채점이 끝난 1차 결과지를 영영 못 받는다**(전수 점검 2026-09-22에서 발견).
+ * 판정 표시(`childVerdict`)는 이것과 달리 **최신 세션만** 본다 — 채점 중인 재검사가 옛 판정을
+ * 가리지 않게 하려는 별개의 규칙이다.
+ */
+export function latestScored(c: ResultsChild): ResultsSession | null {
+  for (let i = c.sessions.length - 1; i >= 0; i--) if (c.sessions[i].status === 'scored') return c.sessions[i]
+  return null
+}
+
 /** 접힌 행의 판정 = 최신 세션이 scored일 때만 그 판정. 채점 중인 재검사가 옛 판정을 가리지 않는다. */
 export function childVerdict(c: ResultsChild): Verdict | null {
   const s = latestSession(c)
@@ -178,7 +192,10 @@ export function summarize(children: ResultsChild[]): ResultsSummary {
     const l = latestSession(c)
     if (!l) { s.untested++; continue }
     s.tested++
-    if (l.status === 'scored') { s.scored++; if (l.verdict === 'fail') s.fail++ }
+    // 「채점 완료」는 **받을 수 있는 결과지가 있는 아이** 수다(= 다운로드 버튼이 세는 것과 같은 기준).
+    // 최신 세션이 중단된 재검사여도 채점이 끝난 앞 차수가 있으면 그 아이는 결과지를 받을 수 있다.
+    // 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다).
+    if (latestScored(c)) { s.scored++; if (l.verdict === 'fail') s.fail++ }
     else if (l.status === 'scoring') s.scoring++
     else s.unsubmitted++
   }

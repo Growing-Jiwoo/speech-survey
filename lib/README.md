@@ -15,7 +15,7 @@
 | `class-code.ts` | `generateClassCode()` — 학급 코드 생성(서버 전용, `node:crypto`의 `randomInt`). 알파벳·길이는 `schema.ts`를 import — 여기서 다시 적지 않는다 |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
 | `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름과 번호를 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것. 마이크 확인 통과 시각(`saveMicOk`/`recentMicOk`)은 학급 코드와 같은 **기기 키**라 `clearState`가 지우지 않는다 — 같은 PC·헤드셋으로 한 학급을 연달아 검사할 때 아이마다 마이크 확인을 시키지 않기 위한 것이고(사용자 확정 2026-09-22), 담는 값이 시각 하나뿐이라 아동 정보가 아니다 |
-| `results.ts` | 교사 결과지 표의 순수 로직(DB·HTTP를 모른다) — 상태 판정·명단∪세션 병합·정렬·요약·파일명. 채점은 **관리자 결과지와 같은 함수 사슬**을 쓴다(`scoreInputFrom → withUnrecordedDefaults → scoreSession → sheetPdfGate`) — 여기서 규칙을 새로 만들지 않는다. 쓰기가 채점 전이면 `verdict`를 **보류(null)**하고 `complete`로 그 사실을 넘긴다 — 미채점 0점으로 아동을 낙제시키지 않기 위함이다(사용자 확정 2026-09-22 「관리자와 동일」 A안. 담당자 회신이 아니다) |
+| `results.ts` | 교사 결과지 표의 순수 로직(DB·HTTP를 모른다) — 상태 판정·명단∪세션 병합·정렬·요약·파일명. 채점은 **관리자 결과지와 같은 함수 사슬**을 쓴다(`scoreInputFrom → withUnrecordedDefaults → scoreSession → sheetPdfGate`) — 여기서 규칙을 새로 만들지 않는다. 쓰기가 채점 전이면 `verdict`를 **보류(null)**하고 `complete`로 그 사실을 넘긴다 — 미채점 0점으로 아동을 낙제시키지 않기 위함이다(사용자 확정 2026-09-22 「관리자와 동일」 A안. 담당자 회신이 아니다) `latestScored`(아이당 **받을 수 있는 것 중 최신** 세션)는 `latestSession`과 다르다 — 판정 표시는 최신 세션만 보지만(채점 중인 재검사가 옛 판정을 가리지 않게), 다운로드와 「채점 완료」 집계는 `latestScored`를 쓴다(중단된 재검사가 앞 차수 결과지를 가리면 안 된다. 전수 점검 2026-09-22). |
 | `adminStats.ts` | 관리자 목록의 KPI·학교별 집계·필터/정렬·URL(searchParams) 직렬화. KST 일자 키(`kstDateKey`) 기준 "오늘" 판정 |
 
 ## 서버 전용 (클라이언트 컴포넌트에서 import 금지)

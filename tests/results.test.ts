@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   maskEmail, evaluateSession, scoreInputFor, buildChildren, latestSession, childVerdict,
-  summarize, sheetsFileName, type ResultsSessionRow,
+  summarize, sheetsFileName, latestScored, type ResultsSessionRow,
 } from '@/lib/results'
 
 /** G1 세션 행 골격. 채점 행은 테스트마다 채운다. */
@@ -152,6 +152,30 @@ describe('latestSession · childVerdict', () => {
   })
 })
 
+describe('latestScored — 받을 수 있는 것 중 최신 (전수 점검 2026-09-22)', () => {
+  it('[REGRESSION] 최신이 중단된 재검사여도 채점이 끝난 앞 차수를 돌려준다 — 그 아이를 통째로 빼면 결과지를 영영 못 받는다', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(latestSession(c)?.id).toBe('a2')
+    expect(latestScored(c)?.id).toBe('a1')
+    // 판정 표시는 여전히 최신 세션만 본다 — 채점 중인 재검사가 옛 판정을 가리지 않는다(별개 규칙)
+    expect(childVerdict(c)).toBeNull()
+  })
+  it('채점 완료가 하나도 없으면 null', () => {
+    const [c] = buildChildren([], [row({ id: 's', child_no: 1, submitted_at: null })])
+    expect(latestScored(c)).toBeNull()
+  })
+  it('채점 완료가 여럿이면 마지막 것', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', ...READ_SCORED, ...WRITE_SCORED }),
+    ])
+    expect(latestScored(c)?.id).toBe('a2')
+  })
+})
+
 describe('summarize — 상단 한 줄', () => {
   it('검사·채점 완료·Fail·채점 중·미제출·미실시를 센다', () => {
     const c = buildChildren(
@@ -164,6 +188,14 @@ describe('summarize — 상단 한 줄', () => {
           recordings: [{ item_code: 'p_rw_meaning' }] }),
       ])
     expect(summarize(c)).toEqual({ tested: 4, scored: 2, fail: 1, scoring: 1, unsubmitted: 1, untested: 1 })
+  })
+  it('[REGRESSION] 중단된 재검사가 있어도 「채점 완료」로 센다 — 버튼이 내려받는 것과 같은 기준', () => {
+    const c = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    // 칸은 겹치지 않는다 — 이 아이는 「채점 완료」에만 센다(미제출로 두 번 세지 않는다)
+    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 0, scoring: 0, unsubmitted: 0, untested: 0 })
   })
 })
 

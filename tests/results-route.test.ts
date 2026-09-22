@@ -177,6 +177,10 @@ describe('GET /api/results/[token]', () => {
     expect(db.findClassCodeById).toHaveBeenCalledWith(CID)
     expect(db.classResults).toHaveBeenCalledWith(CID)
   })
+  it('[REGRESSION] 아동 정보가 담긴 응답을 캐시에 남기지 않는다(no-store)', async () => {
+    const res = await listReq(await createResultsToken(CID, 'test-secret'))
+    expect(res.headers.get('cache-control')).toBe('no-store')
+  })
   it('[REGRESSION] 응답에 생년월일·전화·내부 경로가 실리지 않는다', async () => {
     const text = await (await listReq(await createResultsToken(CID, 'test-secret'))).text()
     expect(text).not.toContain('190312')
@@ -265,6 +269,32 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect((await sheetsReq('bad')).status).toBe(401)
     vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
     expect((await sheetsReq(await createResultsToken(CID, 'test-secret'))).status).toBe(404)
+  })
+  // 아래 넷은 전수 점검(2026-09-22)에서 나온 것들이다.
+  it('[REGRESSION] 최신이 중단된 재검사인 아이도 전체에 포함된다 — 채점된 앞 차수를 내보낸다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([
+      scored('r1', 2, '2026-09-21T01:00:00.000Z'),
+      { ...scored('r2', 2, '2026-09-22T01:00:00.000Z'), submitted_at: null },
+    ])
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'))
+    expect(res.status).toBe(200)
+    expect(vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.started_at)).toEqual(['2026-09-21T01:00:00.000Z'])
+  })
+  it('[REGRESSION] `?ids=`(빈 값)은 「아무도 고르지 않음」이다 — 전체로 해석해 반 전체를 내보내지 않는다', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=')
+    expect(res.status).toBe(400)
+    expect(pdf.stampSheet).not.toHaveBeenCalled()
+  })
+  it('[REGRESSION] ids를 여러 번 실어도 전부 받는다 — 첫 값만 쓰면 나머지 아이가 조용히 빠진다', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1&ids=b1')
+    expect(res.status).toBe(200)
+    expect(vi.mocked(pdf.stampSheet).mock.calls).toHaveLength(2)
+  })
+  it('장수 상한을 넘으면 400 — 유효 토큰 하나로 함수 제한시간을 넘기지 못하게', async () => {
+    const many = Array.from({ length: 61 }, () => 'a1').join(',')
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${many}`)
+    expect(res.status).toBe(400)
+    expect(pdf.stampSheet).not.toHaveBeenCalled()
   })
   it('stampSheet 입력은 관리자 PDF와 같다 — 제출된 세션은 미녹음 X·0점이 채워진다', async () => {
     await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=b1')

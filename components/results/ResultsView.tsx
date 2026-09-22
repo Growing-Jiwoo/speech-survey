@@ -13,7 +13,7 @@ import { Spinner } from '@/components/Spinner'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
-import { latestSession, summarize, type ResultsChild, type ResultsSession } from '@/lib/results'
+import { latestScored, latestSession, summarize, type ResultsChild, type ResultsSession } from '@/lib/results'
 import type { TaskKey } from '@/lib/scoring'
 
 interface Payload {
@@ -81,11 +81,13 @@ export function ResultsView({ token }: { token: string }) {
 
   const err = error ? (error.status === 401 ? 'expired' : error.status === 404 ? 'gone' : 'other') : null
 
-  // 기본 체크 = 채점 완료된 아이의 최신 세션. 효과로 심지 않고 파생값으로 둔다.
+  // 기본 체크 = 아이당 **받을 수 있는 것 중 최신** 세션([전체 PDF]가 담는 것과 같은 기준).
+  // 최신 세션 기준으로 두면 재검사를 시작했다 중단한 아이가 기본 선택에서 빠져, 버튼이 세는
+  // 장수와 체크된 장수가 어긋난다(전수 점검 2026-09-22). 효과로 심지 않고 파생값으로 둔다.
   const defaultPicked = useMemo(() => new Set(
     (data?.children ?? [])
-      .map(latestSession)
-      .filter((s): s is ResultsSession => s?.status === 'scored')
+      .map(latestScored)
+      .filter((s): s is ResultsSession => s !== null)
       .map(s => s.id),
   ), [data])
   const picked = pickedOverride ?? defaultPicked

@@ -10,7 +10,7 @@ import { classResults, findClassCodeById, type ClassResultsRow } from '@/lib/db'
 import { env } from '@/lib/env'
 import { kstDateKey } from '@/lib/adminStats'
 import { stampSheet } from '@/lib/pdf/stamp-sheet'
-import { buildChildren, latestSession, scoreInputFor, sheetsFileName } from '@/lib/results'
+import { buildChildren, latestScored, scoreInputFor, sheetsFileName } from '@/lib/results'
 import { jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -18,6 +18,9 @@ export const dynamic = 'force-dynamic'
 // 달라 이 값에 기대지 않는다: 아래에서 stampSheet를 **병렬**로 돌려 작업 자체를 짧게 만든다.
 // (stampSheet는 매 호출 원본 PDF·폰트를 읽고 임베드해 100~300ms — 순서대로 25장이면 10초에 빠듯하다.)
 export const maxDuration = 60
+
+/** 한 번에 병합할 수 있는 결과지 장수 상한 — 학급 정원보다 넉넉하다. */
+const MAX_SHEETS = 60
 
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
@@ -35,11 +38,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       meta.set(s.id, { childNo: c.childNo, name: c.name, attemptNo: s.attemptNo, attemptCount: c.sessions.length,
         startedDate: kstDateKey(new Date(s.startedAt)), status: s.status })
 
-    const idsParam = new URL(req.url).searchParams.get('ids')
-    const all = !idsParam
+    // `ids`를 여러 번 실어 보내도 하나로 합친다 — get()만 쓰면 첫 값만 받아 **나머지 아이가 조용히
+    // 빠진다**(전수 점검 2026-09-22). 값이 아예 없는 것과 빈 값은 다르게 본다: `?ids=`는 「아무도
+    // 고르지 않음」이지 「전체」가 아니다 — 같게 보면 선택 0명인 요청이 반 전체를 내려받는다.
+    const params = new URL(req.url).searchParams
+    const idsParam = params.has('ids') ? params.getAll('ids').join(',') : null
+    const all = idsParam === null
     let picked: ClassResultsRow[]
     if (all) {
-      picked = children.map(latestSession).filter(s => s?.status === 'scored').map(s => byId.get(s!.id)!)
+      // 아이당 **받을 수 있는 것 중 최신** 한 장(lib/results의 latestScored 주석) — 최신 세션이
+      // 중단된 재검사인 아이를 통째로 빼지 않는다.
+      picked = children.map(latestScored).filter(s => s !== null).map(s => byId.get(s.id)!)
     } else {
       const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
       // 학급 소속 검증 — 이 토큰이 여는 학급의 세션이 아니면 하나라도 거부한다.
@@ -47,7 +56,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       if (ids.some(id => meta.get(id)!.status !== 'scored')) return jsonError('채점이 끝나지 않은 검사가 있습니다.', 400)
       picked = ids.map(id => byId.get(id)!)
     }
-    if (picked.length === 0) return jsonError('내려받을 수 있는 결과지가 없습니다. 채점이 끝나면 다시 시도해 주세요.', 400)
+    if (picked.length === 0)
+      return jsonError(all
+        ? '내려받을 수 있는 결과지가 없습니다. 채점이 끝나면 다시 시도해 주세요.'
+        : '선택한 검사가 없습니다.', 400)
+    // 한 학급이 이 수를 넘길 일은 없다(학급 정원). 상한이 없으면 유효 토큰 하나로 수백 장을
+    // 요청해 함수 제한시간을 넘길 수 있다 — 장당 약 50ms라 190장쯤에서 10초에 닿는다.
+    if (picked.length > MAX_SHEETS)
+      return jsonError(`한 번에 ${MAX_SHEETS}장까지 받을 수 있어요. 나눠서 받아 주세요.`, 400)
 
     // 스탬핑은 **병렬**(I/O 바운드 — 원본 PDF·폰트 읽기), 병합만 순서대로(페이지 순서 = 번호순 보장).
     const stamped = await Promise.all(picked.map(r => {
