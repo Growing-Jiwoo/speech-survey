@@ -4,6 +4,7 @@ vi.mock('@/lib/db', () => ({
   insertClassCode: vi.fn(),
   listClassCodes: vi.fn().mockResolvedValue([]),
   deleteClassCode: vi.fn().mockResolvedValue('ok'),
+  updateClassCodeEmail: vi.fn(),
   approveClassCode: vi.fn(),
   listRoster: vi.fn().mockResolvedValue([]),
 }))
@@ -15,7 +16,7 @@ vi.mock('@/lib/mail', () => ({
 }))
 
 import { GET, POST } from '@/app/api/admin/codes/route'
-import { DELETE } from '@/app/api/admin/codes/[id]/route'
+import { DELETE, PATCH } from '@/app/api/admin/codes/[id]/route'
 import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
 import { GET as ROSTER } from '@/app/api/admin/codes/[id]/roster/route'
 import * as db from '@/lib/db'
@@ -232,5 +233,29 @@ describe('GET /api/admin/codes/[id]/roster', () => {
     expect(res.status).toBe(502)
     expect(json.error).not.toMatch(/relation/)
     expect(json.error).not.toMatch(/김아동/)
+  })
+})
+
+describe('PATCH /api/admin/codes/[id] — 담임 이메일 수정', () => {
+  const patchReq = (id: string, body: unknown) => PATCH(new Request(`http://x/api/admin/codes/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }), delParams(id))
+  it('유효한 이메일이면 갱신된 행을 돌려준다(trim 적용)', async () => {
+    vi.mocked(db.updateClassCodeEmail).mockResolvedValueOnce({ ...ROW, teacher_email: 'new@school.kr' })
+    const res = await patchReq(ROW.id, { teacherEmail: ' new@school.kr ' })
+    expect(res.status).toBe(200)
+    expect((await res.json()).code.teacher_email).toBe('new@school.kr')
+    expect(db.updateClassCodeEmail).toHaveBeenCalledWith(ROW.id, 'new@school.kr')
+  })
+  it('[REGRESSION] 이메일 외 필드는 무시된다 — 학급 정보 변경 경로가 아니다', async () => {
+    vi.mocked(db.updateClassCodeEmail).mockResolvedValueOnce(ROW)
+    await patchReq(ROW.id, { teacherEmail: 'a@b.kr', grade: 6, schoolName: '위조' })
+    expect(db.updateClassCodeEmail).toHaveBeenCalledWith(ROW.id, 'a@b.kr')
+  })
+  it('형식 오류 400 · 잘못된 id 400 · 없는 행 404', async () => {
+    expect((await patchReq(ROW.id, { teacherEmail: 'nope' })).status).toBe(400)
+    expect((await patchReq('not-uuid', { teacherEmail: 'a@b.kr' })).status).toBe(400)
+    vi.mocked(db.updateClassCodeEmail).mockResolvedValueOnce(null)
+    expect((await patchReq(ROW.id, { teacherEmail: 'a@b.kr' })).status).toBe(404)
   })
 })
