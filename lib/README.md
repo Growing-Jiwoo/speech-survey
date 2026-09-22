@@ -15,6 +15,7 @@
 | `class-code.ts` | `generateClassCode()` — 학급 코드 생성(서버 전용, `node:crypto`의 `randomInt`). 알파벳·길이는 `schema.ts`를 import — 여기서 다시 적지 않는다 |
 | `validate.ts` | `schema.ts`를 감싼 클라이언트 폼용 boolean 타입가드 파사드 |
 | `survey-state.ts` | 참여자 진행 상태의 localStorage 저장/복원. 스키마 버전(`v`)으로 구버전 상태를 폐기한다. **아동 이름과 번호를 저장한다**(진행 화면·이어하기 안내용) — 공용 기기에 흔적이 남지 않도록 제출 완료·새 검사 시작·종료 화면에서 반드시 `clearState`로 파기할 것 |
+| `results.ts` | 교사 결과지 표의 순수 로직(DB·HTTP를 모른다) — 상태 판정·명단∪세션 병합·정렬·요약·파일명. 채점은 **관리자 결과지와 같은 함수 사슬**을 쓴다(`scoreInputFrom → withUnrecordedDefaults → scoreSession → sheetPdfGate`) — 여기서 규칙을 새로 만들지 않는다. 쓰기가 채점 전이면 `verdict`를 **보류(null)**하고 `complete`로 그 사실을 넘긴다 — 미채점 0점으로 아동을 낙제시키지 않기 위함이다(사용자 확정 2026-09-22 「관리자와 동일」 A안. 담당자 회신이 아니다) |
 | `adminStats.ts` | 관리자 목록의 KPI·학교별 집계·필터/정렬·URL(searchParams) 직렬화. KST 일자 키(`kstDateKey`) 기준 "오늘" 판정 |
 
 ## 서버 전용 (클라이언트 컴포넌트에서 import 금지)
@@ -28,7 +29,7 @@
 근거는 함수 docblock이 갖는다. **`submitSession`은 쓰기 답을 먼저 넣고 `submitted_at`을 마지막에 확정한다 — 순서를 되돌리면 중간 실패 시 재시도가 409로 막혀 쓰기 점수가 영구 유실된다**(쓰기는 검사 중 입력이 유일한 채점 경로다). `createSession`은 `idemKey`가 오면 **같은 키로 세션을 하나만 만든다** — insert를 먼저 던지고 unique 충돌(23505)을 "이미 만든 그 세션"으로 해석한다(먼저 조회하면 경쟁에서 둘 다 만든다). 이유 전문은 함수 docblock |
 | `env.ts` | 필수 환경변수 로더 — 미설정 시 즉시 throw(fail-fast) |
 | `request.ts` | 라우트 공용: `clientIp`(위조 불가 헤더 우선 규칙), `UUID_RE`, `jsonError`, `createRateLimiter`(best-effort 인메모리 IP 레이트리미터). 레이트리밋 상한은 라우트마다 위협 모델이 달라 값도 분리했다 — `PUBLIC_RATE_LIMIT`·`PUBLIC_RATE_WINDOW_MS`(`/api/sessions` 전용, 스팸 세션 행 생성 방어)와 `VERIFY_CODE_RATE_LIMIT`·`VERIFY_CODE_RATE_WINDOW_MS`(`/api/sessions/verify-code` 전용, 코드 열거 방어). **다만 둘 다 학교 건물 NAT·다중 PC 동시 검사라는 같은 현장 제약을 받는다** — 한 학급이 컴퓨터실에서 일제히 시작하면 아이 수만큼의 요청이 IP 하나로 몰린다. 상한을 조일 때는 "몇 명이 동시에 시작할 수 있어야 하는가"를 먼저 따질 것(구 값 20이 21번째 아이를 막았다 — 2026-08-15) |
-| `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프) 발급/검증 + 상수시간 비교. Web Crypto만 사용(proxy·Node 라우트 공용) |
+| `auth.ts` | HMAC 토큰(관리자 쿠키·세션 스코프·**학급 스코프**(교사 결과지 링크, 14일)) 발급/검증 + 상수시간 비교. Web Crypto만 사용(proxy·Node 라우트 공용) |
 | `audio-validate.ts` | 업로드 오디오 MIME allowlist + 매직바이트 스니핑(저장형 XSS 차단) |
 | `audio-ext.ts` | 저장 파일 확장자 결정(표기용 — 재생은 Content-Type 기준) |
 | `pdf/` | 공식 검사지 PDF 스탬핑 — 원본 PDF(`assets/forms/`)에 점수만 얹는다 |

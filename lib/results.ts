@@ -6,7 +6,7 @@ import { formForGrade, type SurveyForm } from './forms'
 import { itemsFor } from './items'
 import { pad2 } from './format'
 import {
-  scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
+  TASK_KEYS, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
   type ScoreInput, type TaskKey, type Verdict,
 } from './scoring'
 
@@ -47,10 +47,27 @@ export interface ResultsSession {
   startedAt: string
   submittedAt: string | null
   status: SessionStatus
-  /** scored일 때만 */
+  /** scored일 때만. **채점되지 않은 과제도 0이 들어간다** — 그 0은 「0점을 받았다」가 아니므로
+   *  `complete`가 false인 과제의 숫자는 화면에 그대로 찍으면 안 된다(아래 complete 주석). */
   scores: Record<TaskKey, number> | null
-  /** scored일 때만. 세 과제 중 하나라도 fail이면 fail */
+  /** scored일 때만, 그리고 **세 과제가 모두 채점됐을 때만.** 하나라도 채점 전이면 null —
+   *  치르지도 않은 과제의 0점으로 아동을 낙제시키지 않는다(아래 complete 주석). */
   verdict: Verdict | null
+  /**
+   * 과제별 채점 완료 여부(`scoreSession`의 `complete` 그대로). scored일 때만 채워진다.
+   *
+   * A안(사용자 확정 2026-09-22)으로 **쓰기가 채점되지 않아도 scored가 된다** — 쓰기는 검사 중
+   * 검사자가 넣는 값이라 관리자가 나중에 채울 수 없고, 요구하면 그 아이 결과지가 영영 안 나간다.
+   * 그 대가로 `scores.writing`에 0이 들어오는데, **그 0은 「0점을 받았다」가 아니다.**
+   * lib/scoring.ts의 `complete` 주석이 경계하는 그대로다 — "아직 채점 전인 과제까지 0점 Fail로
+   * 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은
+   * 칸을 비운다." 관리자 결과지가 이미 그렇게 하므로 교사 화면도 같아야 한다 — 두 화면이 같은
+   * 아이를 다르게 말하면 안 된다(사용자 확정 2026-09-22: 「관리자와 동일」 A안).
+   *
+   * 그래서 화면은 `complete[k] === false`인 과제를 **점수 대신 「채점 전」**으로 그리고,
+   * `verdict`가 null이면 판정 칸을 비운다.
+   */
+  complete: Record<TaskKey, boolean> | null
 }
 
 export interface ResultsChild {
@@ -87,19 +104,26 @@ export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: 
   return { form, input: withUnrecordedDefaults(f, raw, c => recorded.has(c)) }
 }
 
-export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'status' | 'scores' | 'verdict'> {
-  if (!r.submitted_at) return { status: 'unsubmitted', scores: null, verdict: null }
+export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete'> {
+  if (!r.submitted_at) return { status: 'unsubmitted', scores: null, verdict: null, complete: null }
   const { form, input } = scoreInputFor(r)
   const result = scoreSession(form, input)
   // 관리자 PDF와 같은 게이트 — 읽기 두 과제가 남으면 막고, 쓰기만 남으면(overridable) 통과.
   const gate = sheetPdfGate(result, false)
-  if (gate !== null && !gate.overridable) return { status: 'scoring', scores: null, verdict: null }
-  const verdict: Verdict = (['wordReading', 'sentenceReading', 'writing'] as TaskKey[])
-    .every(k => result.verdict[k] === 'pass') ? 'pass' : 'fail'
+  if (gate !== null && !gate.overridable)
+    return { status: 'scoring', scores: null, verdict: null, complete: null }
+  // **모든 과제가 채점됐을 때만 판정한다**(사용자 확정 2026-09-22 A안 — 관리자 화면과 동일).
+  // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
+  // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
+  const allScored = TASK_KEYS.every(k => result.complete[k])
+  const verdict: Verdict | null = allScored
+    ? (TASK_KEYS.every(k => result.verdict[k] === 'pass') ? 'pass' : 'fail')
+    : null
   return {
     status: 'scored',
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },
     verdict,
+    complete: result.complete,
   }
 }
 

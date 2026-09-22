@@ -21,6 +21,12 @@ const READ_SCORED = {
 const WRITE_SCORED = {
   writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: i < 8 })),
 }
+/** 세 과제 모두 채점됐고 쓰기가 기준 미달 = 판정이 실제로 나오는 Fail. A안에서 Fail은
+ *  **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는 쓰기까지 채워야 한다. */
+const ALL_SCORED_FAIL = {
+  ...READ_SCORED,
+  writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })),
+}
 
 describe('maskEmail — 시작 화면에 주소를 통째로 내지 않는다', () => {
   it('로컬 첫 글자 + *** @ 도메인 앞 3글자 + *** . TLD', () => {
@@ -36,7 +42,7 @@ describe('maskEmail — 시작 화면에 주소를 통째로 내지 않는다', 
 describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 같은 기준, 사용자 확정 A안)', () => {
   it('미제출은 unsubmitted, 점수·판정 없음', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, submitted_at: null, ...READ_SCORED }))
-    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null })
+    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null, complete: null })
   })
   it('제출됐지만 낱말 채점이 비면 scoring', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, sentence_scores: READ_SCORED.sentence_scores,
@@ -49,11 +55,26 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.status).toBe('scored')
     expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 36, writing: 0 })
   })
+  // 이 0은 「0점을 받았다」가 아니라 「아직 채점 전」이다. 관리자 결과지가 채점 전 과제의 판정을
+  // 감추는 것과 같아야 한다 — 두 화면이 같은 아이를 다르게 말하면 안 된다(사용자 확정 2026-09-22 A안).
+  it('[REGRESSION] 쓰기가 채점 전이면 판정을 보류한다 — 미채점 0점으로 아동을 낙제시키지 않는다', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED }))
+    expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
+    expect(r.verdict).toBeNull()
+  })
+  it('세 과제가 모두 채점되면 complete가 전부 true이고 판정이 나온다', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
+    expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: true })
+    expect(r.verdict).toBe('pass')
+  })
   it('[REGRESSION] 녹음 없는 페이지는 X·0점으로 채워져 채점 완료로 본다(사용자 확정 2026-08-12) — 채점 행이 하나도 없어도 녹음이 없으면 scored', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, recordings: [] }))
     expect(r.status).toBe('scored')
     expect(r.scores).toEqual({ wordReading: 0, sentenceReading: 0, writing: 0 })
-    expect(r.verdict).toBe('fail')
+    // 미녹음 기본값은 **녹음 페이지(읽기)에만** 적용된다 — 쓰기는 녹음이 없어 기본값이 없다.
+    // 그래서 아무것도 안 한 세션도 쓰기는 채점 전이고, A안에 따라 판정을 보류한다.
+    expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
+    expect(r.verdict).toBeNull()
   })
   it('판정: 세 과제 모두 pass여야 pass, 하나라도 fail이면 fail (G1 임시 기준 9/23/6)', () => {
     const pass = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
@@ -109,7 +130,7 @@ describe('buildChildren — 명단 ∪ 세션, 아이당 한 줄', () => {
   it('정렬: 최신 세션이 Fail인 아이가 먼저, 그 안에서 번호순', () => {
     const c = buildChildren(roster, [
       row({ id: 'p', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }),   // pass
-      row({ id: 'f', child_no: 5, recordings: [] }),                     // fail(전부 미녹음)
+      row({ id: 'f', child_no: 5, ...ALL_SCORED_FAIL }),                 // fail
     ])
     expect(c.map(x => x.childNo)).toEqual([5, 1, 2])
   })
@@ -137,7 +158,7 @@ describe('summarize — 상단 한 줄', () => {
       [{ child_no: 1, child_name: 'a', gender: '여' }, { child_no: 2, child_name: 'b', gender: '남' }, { child_no: 3, child_name: 'c', gender: '남' }],
       [
         row({ id: 's1', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }),          // scored pass
-        row({ id: 's2', child_no: 2, recordings: [] }),                             // scored fail
+        row({ id: 's2', child_no: 2, ...ALL_SCORED_FAIL }),                         // scored fail
         row({ id: 's4', child_no: 4, submitted_at: null }),                         // unsubmitted (명단 밖)
         row({ id: 's5', child_no: 5, sentence_scores: READ_SCORED.sentence_scores,  // scoring
           recordings: [{ item_code: 'p_rw_meaning' }] }),
