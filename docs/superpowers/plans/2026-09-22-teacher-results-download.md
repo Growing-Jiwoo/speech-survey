@@ -38,6 +38,7 @@
 | `app/page.tsx` | 배너에 `검사 완료 N명` + [결과지 받기 →] + 카운트다운 | 수정 |
 | `components/survey/MicCheck.tsx` | 10분 내 통과 시 건너뛰기 버튼 | 수정 |
 | `components/admin/CodeIssuer.tsx` | 이메일 필수 · 목록 행 인라인 이메일 수정 | 수정 |
+| `components/admin/sheet/PageAudio.tsx` | 재녹음 기본 재생을 마지막 차수로 | 수정 |
 | `app/apply/page.tsx` | 이메일 확인칸 | 수정 |
 | `tests/results.test.ts` | `lib/results.ts` | 신규 |
 | `tests/results-route.test.ts` | 세 라우트 | 신규 |
@@ -2783,9 +2784,71 @@ gh auth switch --user ipf-jiwookim
 
 ---
 
+### Task 15: 관리자 결과지 — 재녹음 기본 재생을 **마지막 차수**로
+
+**Files:**
+- Modify: `components/admin/sheet/PageAudio.tsx`, `components/admin/sheet/README.md`
+- 화면은 렌더 테스트 없음 — 수동 확인.
+
+일시정지가 녹음 중에도 눌리게 되면서(PR #68) 잘린 1차 녹음이 흔해졌다. 기본이 1차면 채점자가 칩을 안
+누르는 순간 잘린 소리를 듣고 채점한다. **사용자 확정(2026-09-22)** — 표시 기본값이라 개발 판단으로
+정했고, 담당자 회신이 아님을 주석에 밝힌다(채점자는 여전히 아무 차수든 들을 수 있다).
+
+- [ ] **Step 1: `PageAudio.tsx`**
+
+원문:
+```tsx
+  const [idx, setIdx] = useState(0)
+```
+수정:
+```tsx
+  // 기본 재생은 **마지막 차수**(사용자 확정 2026-09-22 — 담당자 회신 아님, 표시 기본값).
+  // 일시정지가 녹음 중에도 눌리게 된 뒤(PR #68) 잘린 1차가 흔해졌다 — 1차를 기본으로 두면 채점자가
+  // 칩을 안 누른 채 잘린 소리로 채점한다. "아직 고르지 않음"을 null로 두어 attempts가 나중에 늘어도
+  // 최신을 가리키게 한다. 채점자가 고른 뒤에는 그 선택을 유지한다.
+  const [idx, setIdx] = useState<number | null>(null)
+```
+원문:
+```tsx
+  const cur = attempts[Math.min(idx, attempts.length - 1)]
+```
+수정:
+```tsx
+  const curIdx = idx === null ? attempts.length - 1 : Math.min(idx, attempts.length - 1)
+  const cur = attempts[curIdx]
+```
+칩의 원문 두 곳 `aria-pressed={i === idx}` · `i === idx ? 'border-blue …'`의 `idx`를 `curIdx`로 바꾼다.
+
+- [ ] **Step 2: `components/admin/sheet/README.md`**
+
+원문:
+```
+| `PageAudio.tsx` | 페이지 녹음 재생 — 시도 전환·미녹음·제한시간 초과 배지 | 없음 |
+```
+수정:
+```
+| `PageAudio.tsx` | 페이지 녹음 재생 — 시도 전환(기본은 **마지막 차수**, 사용자 확정 2026-09-22 — 일시정지가 녹음 중에도 눌리게 된 뒤 잘린 1차가 흔해져서)·미녹음·제한시간 초과 배지 | 없음 |
+```
+
+- [ ] **Step 3: 검증 · 커밋**
+
+```bash
+npm run typecheck && npm run lint && npm run build
+```
+수동: 재검사 5회 세션(테스트 DB `5362dbc6…`, 오시우 8번)의 관리자 결과지 → `5차` 칩이 파랗게 선택돼 있고 `1차`를 누르면 바뀌는지.
+
+```bash
+git add components/admin/sheet/PageAudio.tsx components/admin/sheet/README.md
+git commit -m "fix(admin): 재녹음 기본 재생을 마지막 차수로 — 잘린 1차를 기본으로 듣지 않게
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+```
+
+---
+
 ## Self-Review 기록
 
-**Spec coverage** — 스펙 절 → Task: 진입 배너(10) · 승인 메일 3채널(5) · 인증 토큰(1) · 요청 API(6) · 결과 링크 메일(5) · 결과 페이지(9)·명단∪세션·재검사·상태 4갈래·판정·점수·정렬·요약·만료 화면(2·7·9) · 목록 API(7) · PDF API(8) · 이메일 안전망 3건(4·11·12) · 사용성 ①(10) ②(13) ④(9) ⑥(1·7) ⑧(6·9·10) · 문서 정리(0) · README(14). 누락 없음.
+**Spec coverage** — 스펙 절 → Task: 진입 배너(10) · 승인 메일 3채널(5) · 인증 토큰(1) · 요청 API(6) · 결과 링크 메일(5) · 결과 페이지(9)·명단∪세션·재검사·상태 4갈래·판정·점수·정렬·요약·만료 화면(2·7·9) · 목록 API(7) · PDF API(8) · 이메일 안전망 3건(4·11·12) · 사용성 ①(10) ②(13) ④(9) ⑥(1·7) ⑧(6·9·10) · 문서 정리(0) · README(14) · 재녹음 기본 재생(15, 사용자 확정). 누락 없음.
 
 **Type consistency** — `ResultsSessionRow`(lib/results) ↔ `ClassResultsRow`(lib/db): 필드 동일(`birth_ymd`·`checklist` 포함). `createResultsToken(classCodeId, secret, ttl?)`·`verifyResultsToken(token, secret) → string|null` 전 Task 동일. `sheetsFileName` 인자 `{grade, classNo, date, all, picked[]}` Task 2·8 동일. `resultsLinkMail({teacherName, schoolName, grade, classNo, resultsUrl})` Task 5·6 동일. `classCodeEmailSchema`·`resultsRequestSchema` Task 4·6·11 동일. `saveMicOk()`/`recentMicOk(ms)` Task 13 내부 동일.
 
