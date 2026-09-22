@@ -13,6 +13,9 @@
 //
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
 // 채로 시작한다(아동 정보는 절대 남기지 않는다 — lib/survey-state.ts 참고).
+//
+// 학급 배너의 [결과지 받기 →]는 교사용이다(스펙 2026-09-22 teacher-results-download). 등록된 담임
+// 메일로 학급 결과 링크를 보낼 뿐 이 화면에서 결과가 열리지 않는다 — 아동 앞 공용 PC라 그래야 한다.
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -23,7 +26,7 @@ import { Select } from '@/components/Select'
 import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
-import { postJson } from '@/lib/http'
+import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
 
@@ -131,6 +134,47 @@ export default function StartPage() {
    *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
    */
   const codeTouched = useRef(false)
+
+  // ── 결과지 받기(교사) — 담임 메일로 학급 결과 링크. 사용자 확정 2026-09-22(담당자 회신 아님).
+  // 이 버튼은 아동 앞 PC에 있다. 하는 일은 **등록된 메일함으로 링크를 보내는 것**뿐이라 아동이 눌러도
+  // 결과는 아동 손에 오지 않는다. 이메일은 입력·수정할 수 없다 — 요청자가 주소를 정하면 코드가 곧 열쇠다.
+  const [resultsMsg, setResultsMsg] = useState('')
+  const [resultsErr, setResultsErr] = useState('')
+  const [resultsBusy, setResultsBusy] = useState(false)
+  // 남은 쿨다운(초). 서버가 429로 준 값 또는 성공 뒤 60에서 시작해 1초씩 준다.
+  const [cooldown, setCooldown] = useState(0)
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
+
+  async function requestResults() {
+    setResultsBusy(true); setResultsErr('')
+    try {
+      // postJson(requestJson)은 실패 바디를 버리는데 429의 retryAfterSec가 필요해 여기서만 fetch를 직접 쓴다.
+      const res = await fetch('/api/results/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cleanCode }),
+      })
+      const j = await res.json().catch(() => ({})) as
+        { sent?: boolean; maskedEmail?: string; scoredCount?: number; error?: string; retryAfterSec?: number }
+      if (res.status === 429 && typeof j.retryAfterSec === 'number') {
+        // 다른 기기에서 방금 요청했거나 연타 — 에러가 아니라 안내다.
+        setResultsMsg('방금 링크를 보냈어요. 메일함을 확인해 주세요.')
+        setCooldown(j.retryAfterSec)
+      } else if (!res.ok) {
+        setResultsErr(j.error ?? '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')
+      } else {
+        setResultsMsg(`${j.maskedEmail} 로 결과지 링크를 보냈어요. 메일함을 확인해 주세요.`
+          + (j.scoredCount === 0 ? ' 아직 채점된 학생이 없어요. 채점이 끝나면 링크에서 새로고침해 주세요.' : ''))
+        setCooldown(60)
+      }
+    } catch {
+      setResultsErr(NETWORK_ERR_MSG)
+    } finally {
+      setResultsBusy(false)
+    }
+  }
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
@@ -287,6 +331,20 @@ export default function StartPage() {
     : step === 'roster' ? !!(pick && consent)
       : !!filled
 
+  /** 배너 오른쪽 텍스트 버튼. 쿨다운 중엔 「보냈어요 · N초 후 다시」로 비활성. */
+  const resultsButton = (
+    <button type="button" onClick={() => void requestResults()} disabled={resultsBusy || cooldown > 0}
+      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2 disabled:no-underline disabled:opacity-60">
+      {resultsBusy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : '결과지 받기 →'}
+    </button>
+  )
+  /** 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색. */
+  const resultsNotice = resultsErr
+    ? <p role="alert" className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">{resultsErr}</p>
+    : resultsMsg
+      ? <p aria-live="polite" className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">{resultsMsg}</p>
+      : null
+
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
       <div className="flex items-center gap-2">
@@ -354,6 +412,7 @@ export default function StartPage() {
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
               if (step === 'roster') {
                 setStep('code'); setCls(null); setRoster([]); setPick(''); setConsent(false)
+                setResultsMsg(''); setResultsErr(''); setCooldown(0)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
@@ -365,9 +424,16 @@ export default function StartPage() {
             {/* 코드가 가리키는 학급을 밝혀 직접 입력 폼과 한눈에 구분되게 한다. 담임 이름·연락처는
                 일부러 넣지 않는다 — 이 화면은 아동이 보고 있고, 학급 확인에는 학교·학년·반·인원이면
                 충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
-            <p className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
-              {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명
-            </p>
+            {/* 「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게
+                (사용자 확정 2026-09-22 ①). 오른쪽 [결과지 받기 →]는 위 requestResults 주석 참고. */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
+              <span>
+                {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명 ·
+                검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
+              </span>
+              {resultsButton}
+            </div>
+            {resultsNotice}
             <label className={labelCls} htmlFor="pick">검사할 학생</label>
             {/* 명단은 눌러야 펼쳐지는 드롭다운으로 둔다 — 교실 공용 기기 화면이라 목록을 펼쳐
                 두면 지금 검사하지 않는 아이들의 이름까지 계속 노출된다.
@@ -395,6 +461,13 @@ export default function StartPage() {
 
         {step === 'direct' && (
           <>
+            {cls && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
+                <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
+                {resultsButton}
+              </div>
+            )}
+            {resultsNotice}
             <div className="flex gap-2.5">
               <div className="flex-1">
                 <label className={labelCls} htmlFor="childNo">아동 번호</label>
