@@ -14,7 +14,7 @@ import { micPermissionHint } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 
-export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange }: {
+export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange, stopRef }: {
   page: SurveyPage
   /** 이 페이지에서 이미 완료된 녹음 수(상위 진행 상태) */
   attemptCount: number
@@ -22,6 +22,16 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange 
   onRecorded: (rec: Recording) => void
   /** 녹음 중 여부를 부모에 알려 [다음] 버튼을 잠근다 */
   onRecordingChange?: (busy: boolean) => void
+  /**
+   * 녹음을 밖에서 멈출 손잡이 — 녹음 중일 때만 채워지고, 아니면 `null`이다.
+   * 진행 화면 헤더의 [일시정지]가 쓴다: 오버레이로 화면을 덮기 **전에** 녹음을 끊어야
+   * 아이가 그만둔 뒤의 침묵이 그 시도에 담기지 않는다(멈추지 않으면 제한 시간까지
+   * 계속 녹음되다가 자동 저장된다). 멈추면 그때까지 읽은 소리는 평소처럼 저장된다 —
+   * 아이가 녹음 버튼을 다시 눌러 멈출 때와 같은 규칙이다.
+   * 담당자 확정(2026-09-21): 신청 화면 안내가 「일시정지 버튼을 눌러 언제든 멈출 수
+   * 있습니다」라고 말하므로, 녹음 중에도 실제로 멈출 수 있어야 한다.
+   */
+  stopRef?: React.RefObject<(() => void) | null>
 }) {
   // 마지막 녹음의 소리 크기 판정 — 목소리가 담기지 않았으면 다시 하도록 권한다.
   const [lowVolume, setLowVolume] = useState(false)
@@ -41,6 +51,13 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange 
     onRecordingChange?.(recording)
     return () => onRecordingChange?.(false)
   }, [recording, onRecordingChange])
+
+  // 녹음 중에만 손잡이를 내준다 — 녹음이 아닐 때 부모가 부르면 아무 일도 없어야 한다.
+  useEffect(() => {
+    if (!stopRef) return
+    stopRef.current = recording ? recorder.stop : null
+    return () => { stopRef.current = null }
+  }, [stopRef, recording, recorder.stop])
 
   async function begin() {
     setMicErr(null)
