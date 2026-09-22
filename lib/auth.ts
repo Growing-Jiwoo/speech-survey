@@ -74,7 +74,10 @@ export async function verifySessionToken(sessionId: string, token: string, secre
  *  두고 새로고침만으로 채점 진행을 따라가게 하려면 2주는 필요하다(사용자 확정 2026-09-22). */
 export const RESULTS_TTL_MS = 14 * 24 * 3600_000
 
-/** UUID v4 모양 — 주체 자리에 임의 문자열이 오는 것을 형식에서 거른다(서명 검증 전 1차 방어). */
+/** UUID v4 모양 — 주체 자리에 임의 문자열이 오는 것을 형식에서 거른다(서명 검증 전 1차 방어).
+ *  lib/request.ts의 `UUID_RE`와 같은 모양이지만 **일부러 따로 둔다** — 이 파일은 proxy(엣지)가
+ *  import하므로 Web Crypto 외의 의존성을 들이지 않는다(request.ts는 next/server를 끌고 온다).
+ *  한쪽을 조이면 다른 쪽도 함께 볼 것. */
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**

@@ -99,4 +99,25 @@ describe('학급 스코프 토큰(결과지 링크)', () => {
     expect(await verifyResultsToken('a.b', SECRET)).toBeNull()
     expect(await verifyResultsToken('not-a-uuid.123.abc', SECRET)).toBeNull()
   })
+  // 지금 이것이 막히는 이유는 **형식이 우연히 다르기 때문**이다(관리자 토큰은 첫 칸이 숫자라
+  // UUID_LIKE에 걸리고, 세션 토큰은 칸이 둘이라 개수에서 걸린다) — 도메인 구분자를 둔 것이
+  // 아니다. 세 형식 중 하나가 바뀌면 조용히 뚫릴 수 있어 핀으로 고정한다.
+  it('[REGRESSION] 다른 용도의 토큰은 학급 토큰으로 통하지 않는다 — 관리자·세션 토큰 교차 사용 차단', async () => {
+    expect(await verifyResultsToken(await createToken(SECRET, 60_000), SECRET)).toBeNull()
+    expect(await verifyResultsToken(await createSessionToken(CID, SECRET), SECRET)).toBeNull()
+    // 반대 방향 — 학급 토큰이 관리자 쿠키·세션 토큰으로 통하지 않는다
+    const t = await createResultsToken(CID, SECRET)
+    expect(await verifyToken(t, SECRET)).toBe(false)
+    expect(await verifySessionToken(CID, t, SECRET)).toBe(false)
+  })
+  it('칸이 넷 이상이면 null — 점을 끼워 넣어 경계를 옮길 수 없다', async () => {
+    const t = await createResultsToken(CID, SECRET)
+    expect(await verifyResultsToken(t + '.x', SECRET)).toBeNull()
+  })
+  it('만료 시각과 같은 순간까지는 유효하다(>= 경계)', async () => {
+    const t = await createResultsToken(CID, SECRET, 50)
+    expect(await verifyResultsToken(t, SECRET)).toBe(CID)
+    await new Promise(r => setTimeout(r, 60))
+    expect(await verifyResultsToken(t, SECRET)).toBeNull()
+  })
 })
