@@ -59,7 +59,8 @@
     <div class="row"><span class="n">6</span><span class="t">중간에 멈추거나 나가야 할 때</span></div>
     <div class="row"><span class="n">7</span><span class="t">낱말 쓰기와 체크리스트 — 선생님이 입력합니다</span></div>
     <div class="row"><span class="n">8</span><span class="t">검토하고 제출하기</span></div>
-    <div class="row"><span class="n">9</span><span class="t">이럴 때는 · 시작 전 점검표</span></div>
+    <div class="row"><span class="n">9</span><span class="t">검사 결과지 받기 — 선생님이 직접</span></div>
+    <div class="row"><span class="n">10</span><span class="t">이럴 때는 · 시작 전 점검표</span></div>
   </div>
 
   <h3 style="margin-top:11mm">한눈에 보는 검사 한 건</h3>
@@ -218,6 +219,12 @@
         <li><b>「목소리가 잘 안 들려요」가 나오면</b>
           <span>마이크를 아이 입 쪽으로 옮기고, 조금 더 크게 말하게 한 뒤 <b>다시 눌러 확인</b>합니다.
             성공한 뒤에도 다시 확인할 수 있습니다.</span></li>
+        <li><b>같은 컴퓨터로 이어서 검사할 때는 건너뛸 수 있습니다</b>
+          <span>10분 안에 이 컴퓨터에서 확인을 통과했다면
+            <span class="key">방금 확인했어요 — 건너뛰기</span>가 버튼 아래에 나옵니다.
+            한 반을 연달아 검사할 때 아이마다 「안녕하세요」를 시키지 않아도 됩니다.
+            <b>한 번이라도 녹음해 본 뒤에는 나오지 않습니다</b> — 그 아이의 목소리가 안 담긴 것은
+            기기가 멀쩡한 것과 별개이기 때문입니다.</span></li>
       </ol>
 
       <div class="box danger">
@@ -526,7 +533,86 @@
 
 <!-- ══════════════ 9 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">9</span>이럴 때는</h2>
+  <h2 class="sec"><span class="chip">9</span>검사 결과지 받기 — 선생님이 직접</h2>
+  <p class="sec-lead">채점이 끝난 아이의 <b>공식 검사지 PDF</b>를 선생님이 직접 내려받습니다.
+    담당자에게 따로 요청하지 않아도 됩니다.</p>
+
+  <div class="figcol">
+    <div class="col">
+      <h4>받는 순서</h4>
+      <table>
+        <tr><th style="width:10mm">1</th>
+          <td>검사 주소에서 <b>학급 코드</b>를 넣고 <span class="key">확인</span>을 누릅니다.</td></tr>
+        <tr><th>2</th>
+          <td>학급 이름이 뜬 띠의 오른쪽 <span class="key">결과지 받기 →</span>를 누릅니다.</td></tr>
+        <tr><th>3</th>
+          <td><b>신청할 때 적은 메일 주소</b>로 링크가 옵니다. 그 링크를 선생님 기기에서 엽니다.</td></tr>
+        <tr><th>4</th>
+          <td>아이 목록에서 받을 검사를 고르고 <span class="key">다운로드</span>를 누릅니다.</td></tr>
+      </table>
+
+      <div class="box warn">
+        <span class="bt">메일 주소는 이 화면에서 바꿀 수 없습니다</span>
+        <p>링크는 <b>등록된 주소로만</b> 갑니다. 검사용 컴퓨터는 아이도 쓰는 자리라,
+          누구나 주소를 적어 결과를 받아 갈 수 있으면 안 되기 때문입니다.</p>
+        <p style="margin-top:2mm">주소가 잘못됐다면 담당자에게 알려 주세요. 담당자가 고쳐 줍니다.</p>
+      </div>
+
+      <p class="small">같은 코드로는 <b>1분에 한 번</b>만 보낼 수 있습니다. 버튼이 잠겨 있으면 메일함을 먼저 확인해 주세요.
+        링크는 <b>14일</b> 동안 쓸 수 있고, 지나면 같은 방법으로 다시 받으면 됩니다.</p>
+    </div>
+    <div class="col">
+      <div class="shot-wrap">
+        <img class="shot" src="shots/t-25-results-banner.png" alt="시작 화면의 결과지 받기 버튼">
+        <p class="cap">학급 띠 오른쪽에 있습니다. 아이 앞에서 눌러도 결과는
+          <b>선생님 메일함으로만</b> 갑니다.</p>
+      </div>
+    </div>
+  </div>
+
+  <figure>
+    <img class="shot" src="shots/t-26-results-page.png" alt="교사 결과지 화면">
+    <p class="cap">메일 링크로 열리는 화면입니다. 한 줄이 아이 한 명이고, 재검사가 있으면
+      <span class="key">▸ 재검사 N회</span>로 차수를 펼칠 수 있습니다.</p>
+  </figure>
+
+  <h4>화면 읽는 법</h4>
+  <table>
+    <tr><th style="width:32mm">표시</th><th>뜻</th></tr>
+    <tr><td><span class="bg blue">채점 완료</span></td>
+      <td>담당자의 채점이 끝났습니다. <b>이 검사만 내려받을 수 있습니다.</b></td></tr>
+    <tr><td><span class="bg amber">채점 중</span></td>
+      <td>제출은 됐고 채점이 남았습니다. 끝나면 이 페이지를 새로고침하세요.</td></tr>
+    <tr><td><span class="bg rec">미제출</span></td>
+      <td>검사 도중에 끝난 기록입니다. 그 아이는 <b>다시 검사</b>해야 합니다.</td></tr>
+    <tr><td><span class="bg mute">미실시</span></td>
+      <td>명단에는 있지만 아직 검사하지 않은 아이입니다.</td></tr>
+    <tr><td><span class="bg mute">채점 전</span></td>
+      <td>그 과제가 아직 채점되지 않았다는 뜻입니다. <b>0점이 아닙니다.</b></td></tr>
+  </table>
+
+  <h4>내려받는 두 가지 방법</h4>
+  <table>
+    <tr><th style="width:44mm">버튼</th><th>받는 것</th></tr>
+    <tr><td><span class="key">전체 PDF 다운로드</span></td>
+      <td>채점이 끝난 아이 <b>전부</b>를 한 파일로. 재검사가 있으면 <b>가장 최근에 채점된 것</b>이 들어갑니다.</td></tr>
+    <tr><td><span class="key">선택한 N장 다운로드</span></td>
+      <td>왼쪽 네모를 체크한 것만. <b>처음에는 아무것도 골라져 있지 않습니다.</b></td></tr>
+  </table>
+  <p class="small">아이 이름 줄의 네모를 누르면 그 아이의 <b>모든 차수</b>가 한 번에 켜집니다.
+    일부 차수만 골랐을 때는 그 네모가 <b>막대 모양</b>이 되어 「일부만 골랐다」를 알려 줍니다.</p>
+
+  <figure>
+    <img class="shot" src="shots/t-27-results-confirm.png" alt="다운로드 확인 창">
+    <p class="cap">누르면 바로 받아지지 않습니다 — 누구의 결과지를 받는지 <b>명단으로 한 번 더</b> 보여 준 뒤
+      시작합니다. 만드는 데 몇 초 걸리고, 그동안 화면이 잠깁니다.</p>
+  </figure>
+</section>
+
+
+<!-- ══════════════ 10 ══════════════ -->
+<section class="page">
+  <h2 class="sec"><span class="chip">10</span>이럴 때는</h2>
 
   <div class="box info">
     <span class="bt">막히면 담당자에게</span>
