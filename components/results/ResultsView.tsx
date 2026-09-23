@@ -258,9 +258,12 @@ export function ResultsView({ token }: { token: string }) {
                                 indeterminate={pickedCountOfChild > 0 && pickedCountOfChild < scoredIds.length}
                                 onChange={on => toggleChild(c, on)} />
                             )
-                            : s && (
+                            // 차수 행도 아이 행과 같은 규칙 — 받을 수 없는 차수는 잠긴 상자 대신 칸을 비운다.
+                            // 「상자가 있으면 받을 수 있다」 하나로 읽히게(사용자 확정 2026-09-23). 왜 못 받는지는
+                            // 같은 줄의 상태 배지가 말한다.
+                            : s?.status === 'scored' && (
                               <Check label={`${c.childNo}번 ${c.name} ${label} 선택`}
-                                checked={picked.has(s.id)} disabled={s.status !== 'scored'}
+                                checked={picked.has(s.id)}
                                 onChange={on => toggle(s.id, on)} />
                             )}
                         </td>
