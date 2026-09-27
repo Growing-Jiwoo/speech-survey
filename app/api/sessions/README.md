@@ -4,7 +4,7 @@
 HMAC 토큰(24시간)** 을 발급한다. 이후 참여자의 모든 쓰기(녹음 업로드·최종 제출)는 이 토큰을
 동봉해야 하므로, 참여자 인증 사슬이 시작되는 지점이다.
 
-하위 폴더는 각자 README를 둔다 — [submit/](submit/README.md)(최종 제출),
+하위 폴더는 각자 README를 둔다 — [form/](form/README.md)(진행 중 세션의 검사지), [submit/](submit/README.md)(최종 제출),
 [verify-code/](verify-code/README.md)(시작 전 학급 코드 확인).
 
 ## 설계 의도 · 제약
@@ -31,7 +31,8 @@ HMAC 토큰(24시간)** 을 발급한다. 이후 참여자의 모든 쓰기(녹�
   `verify-code`(Task 12)와 같은 이유로, 승인 여부를 구분해 알려주면 코드 열거에 정보가 샌다.
 - **응답의 `grade`가 검사지를 정한다.** 세션의 학년이 곧 양식(`formForGrade`)이고, 양식이
   문항·배점·인쇄 좌표를 전부 결정한다. 클라이언트가 학년을 스스로 고르지 않고 서버 응답을
-  쓰는 이유다.
+  쓰는 이유다. 양식 자체도 화면이 만들지 않고 [form/](form/README.md)에서 받는다(문항을 공개 JS에
+  싣지 않으려고).
 - **법정대리인 동의 확인은 zod 스키마가 게이트다.** `lib/schema.ts`의
   `guardianConsent: z.literal(true)` 때문에 체크하지 않은 요청은 라우트 본문에 닿기 전에 400으로
   떨어진다. 확인 시각(`guardian_consented_at`)은 클라이언트 값이 아니라 `lib/db.ts`가 서버

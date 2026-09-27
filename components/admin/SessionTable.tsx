@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { filtersToQuery, retestOrdinals, sessionProgress, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
@@ -127,7 +127,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         meta: { sortKey: 'progress', thClassName: 'whitespace-nowrap px-3', tdClassName: 'px-4' },
         cell: ({ row }) => {
           // 분모는 행마다 다르다 — 그 아동의 학년 검사지 문항 수다.
-          const p = sessionProgress(row.original)
+          const p = row.original.progress
           return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
         },
       }),
@@ -143,7 +143,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         id: 'status', header: '상태',
         meta: { thClassName: 'whitespace-nowrap px-4 pr-5', tdClassName: 'whitespace-nowrap px-4 pr-5' },
         cell: ({ row }) => {
-          const p = sessionProgress(row.original)
+          const p = row.original.progress
           return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
         },
       }),

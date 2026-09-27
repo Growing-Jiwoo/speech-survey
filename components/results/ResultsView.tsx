@@ -15,7 +15,7 @@ import { Spinner } from '@/components/Spinner'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
-import { latestScored, latestSession, summarize, type ResultsChild, type ResultsSession } from '@/lib/results'
+import { latestScored, latestSession, summarize, type ResultsChild, type ResultsSession } from '@/lib/results-view'
 import type { TaskKey } from '@/lib/scoring'
 
 interface Payload {

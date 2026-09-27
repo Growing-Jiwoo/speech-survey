@@ -12,7 +12,7 @@
 // (한글과 한자가 섞인 청크는 한글이 들어 있으므로 남긴다.)
 //
 // 실행: node scripts/vendor-fonts.mjs
-// 결과: public/fonts/**.woff2 와 app/fonts.css 를 덮어쓴다.
+// 결과: public/fonts/**.woff2 · 폰트별 OFL.txt · app/fonts.css 를 덮어쓴다.
 //
 // 폰트를 바꾸거나 웨이트를 조정하려면 아래 FAMILIES만 고치고 다시 실행하면 된다.
 // 파일명에 구글 버전(v39 등)이 들어가므로, 재실행으로 파일이 바뀌면 이름도 바뀌어
@@ -26,9 +26,15 @@ const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
 
 /** app/layout.tsx·globals.css가 기대하는 CSS 변수와 짝을 이룬다. */
 const FAMILIES = [
-  { name: 'Noto Sans KR', slug: 'noto-sans-kr', weights: [400, 500, 700] },
-  { name: 'Lexend', slug: 'lexend', weights: [400, 500, 600] },
+  { name: 'Noto Sans KR', slug: 'noto-sans-kr', weights: [400, 500, 700], ofl: 'notosanskr' },
+  { name: 'Lexend', slug: 'lexend', weights: [400, 500, 600], ofl: 'lexend' },
 ]
+
+/** 폰트마다 라이선스 문서를 함께 둔다 — OFL은 폰트 파일을 배포할 때 라이선스 문서를 같이 두는 것을
+ *  조건으로 붙인다. 이 사이트는 woff2를 방문자 브라우저로 직접 내려보내므로(= 배포) 이 조건이 걸린다.
+ *  아래 rm이 폴더를 통째로 지우므로, 재벤더링 때마다 google/fonts 저장소의 원문을 다시 받는다.
+ *  `ofl`은 그 저장소의 디렉터리 이름이다. */
+const oflUrl = dir => `https://raw.githubusercontent.com/google/fonts/main/ofl/${dir}/OFL.txt`
 
 const ROOT = path.join(import.meta.dirname, '..')
 const OUT_DIR = path.join(ROOT, 'public', 'fonts')
@@ -73,12 +79,16 @@ async function main() {
   const blocks = []
   let kept = 0, skipped = 0, bytes = 0
 
-  for (const { name, slug, weights } of FAMILIES) {
+  for (const { name, slug, weights, ofl } of FAMILIES) {
     const faces = parseFaces(await fetchCss(name, weights)).filter(f => {
       if (isCjkOnly(parseRanges(f.range))) { skipped++; return false }
       return true
     })
     await mkdir(path.join(OUT_DIR, slug), { recursive: true })
+    // 라이선스 문서를 못 받으면 폰트만 배포되는 상태가 되므로 여기서 멈춘다(FAMILIES 위 주석).
+    const lic = await fetch(oflUrl(ofl))
+    if (!lic.ok) throw new Error(`${name} OFL.txt를 받지 못했다 (${lic.status}) — ${oflUrl(ofl)}`)
+    await writeFile(path.join(OUT_DIR, slug, 'OFL.txt'), await lic.text())
 
     // 같은 웨이트 안에서 순번을 매겨 파일명을 안정적으로 만든다.
     const seq = {}

@@ -6,7 +6,7 @@
 'use client'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
-import { formForGrade } from '@/lib/forms'
+import type { SurveyForm } from '@/lib/forms'
 import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
 import { contactLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -27,9 +27,11 @@ import type { SessionRow } from '@/lib/db'
  *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
 const AUTOSAVE_DELAY_MS = 1500
 
-export function ResultSheet({ sessionId, session, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
+export function ResultSheet({ sessionId, session, form, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
   sessionId: string
   session: SessionRow
+  /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
+  form: SurveyForm
   /** 쓰기 과제는 검사 중 수집돼 여기서 다시 채점하지 않는다. 값은 정확히 쓴 어절 수. */
   writing: Partial<Record<string, number>>
   initialMarks: Partial<Record<string, boolean>>
@@ -73,7 +75,6 @@ export function ResultSheet({ sessionId, session, writing, initialMarks, initial
     return () => ro.disconnect()
   }, [])
 
-  const form = formForGrade(session.grade)
   const f = itemsFor(form)
   const { taskMax, readMax, writeMax, passMark } = scoringFor(form)
   const r = scoreSession(form, { marks, sentences, writing })

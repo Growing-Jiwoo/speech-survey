@@ -9,13 +9,14 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
-import { formForGrade } from '@/lib/forms'
+import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { canAdvance, visiblePages } from '@/lib/survey-flow'
 import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { Blip } from '@/components/Blip'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ChecklistItem } from '@/components/survey/ChecklistItem'
+import { FormStatus } from '@/components/survey/FormStatus'
 import { MicCheck } from '@/components/survey/MicCheck'
 import { PracticeAsk } from '@/components/survey/PracticeAsk'
 import { PracticeEnd } from '@/components/survey/PracticeEnd'
@@ -58,25 +59,42 @@ function SurveyInner() {
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
-    // ?p=N 딥링크(검토 화면에서 페이지 클릭): 해당 페이지로 이동한 상태로 복원하고 즉시 저장한다.
-    const p = Number(params.get('p'))
-    const total = visiblePages(itemsFor(formForGrade(s.grade)), s).length
-    const jumped = Number.isInteger(p) && p >= 1 && p <= total
-      ? { ...s, pageIdx: p - 1, phase: 'page' as const }
-      : s
-    if (jumped !== s) {
-      saveState(jumped)
-      // p는 1회만 소비하고 URL에서 제거한다(from은 유지) — 이후 페이지를 이동한 뒤 새로고침해도
-      // stale p가 저장된 위치를 덮어쓰지 않도록.
-      const sp = new URLSearchParams(params.toString())
-      sp.delete('p')
-      router.replace(sp.toString() ? `/survey?${sp}` : '/survey', { scroll: false })
-    }
     // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
     // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSt(jumped)
-  }, [router, params])
+    setSt(s)
+  }, [router])
+
+  // 검사지는 서버가 세션 토큰을 확인하고 내려준다(문항을 공개 JS에 싣지 않으려고 — hooks/useSurveyForm).
+  // 마이크 확인 화면은 양식이 필요 없어 그동안 받아 두므로, 첫 검사에서는 기다림이 보이지 않는다.
+  const formQ = useSurveyForm(st)
+  const form = formQ.data
+
+  // ?p=N 딥링크(검토 화면에서 페이지 클릭): 해당 페이지로 이동한 상태로 복원하고 즉시 저장한다.
+  // 범위 검사에 페이지 수가 필요하므로 양식을 받은 뒤에 처리하고, 마운트당 한 번만 소비한다
+  // (URL에서 p가 지워지기 전에 다시 돌면 같은 이동을 거듭 저장한다).
+  const deepLinked = useRef(false)
+  useEffect(() => {
+    if (!form || deepLinked.current) return
+    deepLinked.current = true
+    if (!params.has('p')) return
+    const p = Number(params.get('p'))
+    // 양식 도착에 맞춰 1회 적용하는 복원이다(마운트 복원과 같은 패턴).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSt(prev => {
+      if (!prev) return prev
+      const total = visiblePages(itemsFor(form), prev).length
+      if (!(Number.isInteger(p) && p >= 1 && p <= total)) return prev
+      const jumped = { ...prev, pageIdx: p - 1, phase: 'page' as const }
+      saveState(jumped)
+      return jumped
+    })
+    // p는 URL에서 제거한다(from은 유지) — 이후 페이지를 이동한 뒤 새로고침해도
+    // stale p가 저장된 위치를 덮어쓰지 않도록.
+    const sp = new URLSearchParams(params.toString())
+    sp.delete('p')
+    router.replace(sp.toString() ? `/survey?${sp}` : '/survey', { scroll: false })
+  }, [form, params, router])
 
   // 녹음 중·업로드 중 새로고침·탭 닫기 실수 방지(해당 시도의 소리가 유실되므로 확인창을 띄운다).
   // 낙관적 완료 표시 뒤에도 업로드는 남아 있으므로 uploading까지 본다.
@@ -167,8 +185,9 @@ function SurveyInner() {
   if (st.phase === 'mic')
     return <MicCheck onOk={() => patch({ micDone: true, phase: 'practiceAsk' })} />
 
-  // 학년이 검사지(양식)를 정하고, 양식이 문항·페이지를 정한다.
-  const f = itemsFor(formForGrade(st.grade))
+  // 학년이 검사지(양식)를 정하고, 양식이 문항·페이지를 정한다. 양식은 서버에서 온다(위 useSurveyForm).
+  if (!form) return <FormStatus error={formQ.error} onRetry={() => void formQ.refetch()} />
+  const f = itemsFor(form)
 
   if (st.phase === 'practiceAsk')
     return <PracticeAsk onChoose={practice => patch({ practice, phase: 'page', pageIdx: 0 })} />

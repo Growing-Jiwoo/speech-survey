@@ -1,4 +1,5 @@
 import type { RosterChild } from './roster'
+import { sessionProgress, type SessionProgress } from './session-progress'
 import { sb } from './supabase'
 
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
@@ -588,6 +589,8 @@ export type SessionListRow = SessionRow & {
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
   sentence_scores: { item_code: string; words: number }[]
+  /** 진행률 — listSessions가 서버에서 계산해 싣는다(화면이 lib/forms를 import하지 않도록) */
+  progress: SessionProgress
 }
 
 const MAX_LIST_ROWS = 5000
@@ -598,10 +601,10 @@ export async function listSessions(): Promise<SessionListRow[]> {
     .order('started_at', { ascending: false })
     .limit(MAX_LIST_ROWS)
   fail(error)
-  const rows = (data ?? []) as unknown as SessionListRow[]
+  const rows = (data ?? []) as unknown as Omit<SessionListRow, 'progress'>[]
   if (rows.length >= MAX_LIST_ROWS)
     console.warn(`[listSessions] 상한(${MAX_LIST_ROWS}) 도달 — 서버 페이지네이션 도입 검토 필요`)
-  return rows
+  return rows.map(r => ({ ...r, progress: sessionProgress(r) }))
 }
 
 export interface MarkRow { item_code: string; correct: boolean }

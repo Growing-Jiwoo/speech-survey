@@ -12,7 +12,8 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
 import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
-import { formForGrade } from '@/lib/forms'
+import { useSurveyForm } from '@/hooks/useSurveyForm'
+import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
 import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
 
@@ -37,7 +38,11 @@ export default function ReviewPage() {
     setSt(s)
   }, [router])
 
+  // 검사지는 서버가 내려준다(hooks/useSurveyForm) — 검사 화면에서 이미 받았으면 캐시로 즉시 뜬다.
+  const formQ = useSurveyForm(st)
+
   if (!st) return null
+  if (!formQ.data) return <FormStatus error={formQ.error} onRetry={() => void formQ.refetch()} />
   const state = st
 
   // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 쓰기 과제는 점수 미선택.
@@ -46,7 +51,7 @@ export default function ReviewPage() {
   // **[모르겠어요]로 넘긴 페이지도 제외한다**(담당자 확정 2026-09-21) — 검사자가 의도적으로
   // 넘긴 것은 "아직 못 한 것"이 아니다. 모름 3개를 넘겼는데 "아직 3개가 완료되지 않았어요"가
   // 뜨면 검사자는 돌아가서 뭘 해야 하는 줄 알고, 진짜 빠뜨린 문항과도 섞여 버린다.
-  const f = itemsFor(formForGrade(state.grade))
+  const f = itemsFor(formQ.data)
   const pages = visiblePages(f, state)
   const skipped = (p: typeof pages[number]) => state.skipped.includes(p.code)
   const missingPages = pages.filter(p =>
