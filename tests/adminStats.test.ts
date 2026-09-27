@@ -1,18 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import type { SessionListRow } from '@/lib/db'
 import {
-  sessionProgress, computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
+  computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
+import { sessionProgress } from '@/lib/session-progress'
 
 const RECORDING_CODES = itemsFor(formForGrade(1)).recordingPages.map(p => p.code)
 const G1_WRITE = itemsFor(formForGrade(1)).writingItems.map(i => i.code)
 
 /** 테스트 픽스처 */
+/** 진행률(`progress`)은 listSessions처럼 행에서 계산해 채운다 — 넘기지 않으면 over로 바꾼 녹음·쓰기가 반영된다. */
 export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
-  return {
+  const row = {
     id: 'id-' + Math.random().toString(36).slice(2),
     class_code_id: '11111111-1111-1111-1111-111111111111', child_no: 3,
     school_region: '서울', school_id: 'sch-1', school_name: '가나초등학교',
@@ -26,6 +28,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }
+  return { ...row, progress: over.progress ?? sessionProgress(row) }
 }
 
 describe('sessionProgress', () => {

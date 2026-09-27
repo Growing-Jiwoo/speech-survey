@@ -21,7 +21,8 @@ export interface SurveyState {
    *  서버 세션 행이 원본이며 여기 사본을 둔다. */
   childNo: number
   /** 학년 — 어떤 검사지(양식)로 진행할지 고르는 값. 서버 세션 행이 원본이며 여기 사본을 둔다.
-   *  formForGrade(grade)가 문항·페이지를 결정한다. */
+   *  양식(문항·페이지)은 이 값으로 고르지 않고 서버가 내려준다(hooks/useSurveyForm) —
+   *  화면이 lib/forms를 import하면 문항이 공개 JS에 실리기 때문이다. */
   grade: number
   micDone: boolean
   /** 연습 낱말을 실시하는지 — 마이크 확인 뒤 검사자가 고른다(같은 아동의 반복 검사에서

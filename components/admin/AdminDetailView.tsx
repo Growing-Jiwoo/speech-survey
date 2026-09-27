@@ -7,7 +7,6 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
-import { formForGrade } from '@/lib/forms'
 import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
@@ -98,8 +97,8 @@ export function AdminDetailView() {
   )
 
   const { session: s } = data
-  // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다.
-  const f = itemsFor(formForGrade(s.grade))
+  // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다. 양식은 상세 API가 싣는다.
+  const f = itemsFor(data.form)
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
   // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 검사지 PDF 라우트도 같은 함수를
   // 거치므로, 채점자가 [채점 저장]을 누르기 전에도 화면과 인쇄물의 값이 같다.
@@ -141,7 +140,7 @@ export function AdminDetailView() {
         {/* overflow-hidden이면 조상이 스크롤 컨테이너가 되어 내부 sticky(그룹 플레이어 바)가
             무력화된다 — clip은 같은 모서리 클리핑을 주되 스크롤 컨테이너를 만들지 않는다. */}
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-          <ResultSheet key={id} sessionId={id} session={s} writing={input.writing}
+          <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
             onDirtyChange={setDirty}
             initialMarks={input.marks}
             initialSentences={input.sentences}

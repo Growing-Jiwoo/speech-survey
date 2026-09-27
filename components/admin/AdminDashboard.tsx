@@ -45,7 +45,7 @@ export function AdminDashboard() {
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
-  // 진행률 분모는 행마다 다르다(학년별 검사지) — sessionProgress가 행에서 직접 구한다.
+  // 진행률 분모는 행마다 다르다(학년별 검사지) — 서버가 행마다 계산해 싣는다(`progress`, lib/session-progress).
   const rows = useMemo(
     () => sortSessions(filterSessions(list, filters, todayKey), sort),
     [list, filters, sort, todayKey],
