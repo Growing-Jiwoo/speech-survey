@@ -63,4 +63,4 @@
 응답 전체가 아동 실명·생년월일·학교·반·번호와 담임 연락처, 그리고 녹음 재생 URL이다.
 `sheet.pdf`는 파일명에까지 아동 이름이 들어가므로 proxy 인증 뒤에서만 접근돼야 한다.
 
-테스트: `tests/admin-routes.test.ts`, `tests/scores-route.test.ts`, `tests/stamp-sheet.test.ts`.
+테스트: `tests/admin-routes.test.ts`, `tests/scores-route.test.ts`, `tests/report.test.ts`.

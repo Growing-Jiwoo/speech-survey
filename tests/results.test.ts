@@ -76,6 +76,7 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
     expect(r.verdict).toBeNull()
   })
+  // 담당자 확정(2026-09-28) 「3개 중에 1개 이상이 fail이면 최종결과가 fail」 — lib/scoring의 finalVerdict.
   it('판정: 세 과제 모두 pass여야 pass, 하나라도 fail이면 fail (G1 임시 기준 9/23/6)', () => {
     const pass = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
     expect(pass.verdict).toBe('pass')

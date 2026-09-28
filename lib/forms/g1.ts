@@ -9,7 +9,6 @@
 // 바로잡았다(2026-08-10). 무의미 낱말은 뜻이 없어 오타가 눈에 띄지 않으니 특히 주의할 것.
 // 대조는 tests/forms.test.ts의 SHEET_G1이 글자 단위로 자동 검증한다.
 import type { SurveyForm } from './index'
-import { G1_LAYOUT } from './g1-layout'
 
 export const G1: SurveyForm = {
   id: 'KODYS-G1',
@@ -44,5 +43,10 @@ export const G1: SurveyForm = {
   // 현재 숫자는 만점의 약 65%로 잡은 개발 판단이다(사용자 확정 2026-08-11 "임시로 일단
   // 해두고 나중에 바꾼다"). 기준표가 오면 이 숫자만 바꾸면 되고 채점된 세션도 다시 계산된다.
   passMark: { wordReading: 9, sentenceReading: 23, writing: 6 },
-  layout: G1_LAYOUT,
+  // KODYS_G1_결과보고서_양식.docx(담당자 배포 2026-09-28) 실측값. 남색 계열.
+  report: {
+    accent: '16335A', accentTint: 'CFE0F0',
+    observationHeader: '관찰 내용 (참고용)', notePeriod: true,
+    interpretationLine: 1.15, gapAfterInterpretation: 2,
+  },
 }

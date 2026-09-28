@@ -3,7 +3,7 @@
 // 두 라우트는 각자 자기 동작만 고정해 왔다. 그래서 한쪽의 입력 출처가 바뀌어도 양쪽 테스트가
 // 모두 초록으로 남고, 같은 아이의 같은 검사에 서로 다른 공식 검사지 두 장이 생긴다 —
 // 그 사실은 종이가 학교로 나간 뒤에야 드러난다. 이 파일이 그 한 가지만 본다:
-// **같은 검사를 두 경로로 뽑으면 `stampSheet`에 넘어가는 값이 같은가.**
+// **같은 검사를 두 경로로 뽑으면 `renderReport`에 넘어가는 값이 같은가.**
 //
 // 지금 코드는 통과한다. 고칠 것을 찾는 테스트가 아니라 앞으로 갈리는 순간 알려 주는 테스트다.
 // 오늘 알려진 유일한 취약점은 학교명·반이다 — 교사 쪽은 학급 코드 행에서, 관리자 쪽은 검사에
@@ -15,7 +15,7 @@ vi.mock('@/lib/db', () => ({
   classResults: vi.fn(),
   sessionDetail: vi.fn(),
 }))
-vi.mock('@/lib/pdf/stamp-sheet', () => ({ stampSheet: vi.fn() }))
+vi.mock('@/lib/pdf/report', () => ({ renderReport: vi.fn() }))
 // 교사 라우트만 pdf-lib으로 병합한다 — 스탬핑을 모킹했으므로 병합도 흉내만 낸다.
 vi.mock('pdf-lib', () => {
   const doc = {
@@ -32,8 +32,8 @@ import { GET as teacherSheets } from '@/app/api/results/[token]/sheets.pdf/route
 import { GET as adminSheet } from '@/app/api/admin/sessions/[id]/sheet.pdf/route'
 import { createResultsToken } from '@/lib/auth'
 import * as db from '@/lib/db'
-import * as pdf from '@/lib/pdf/stamp-sheet'
-import type { StampInput } from '@/lib/pdf/stamp-sheet'
+import * as pdf from '@/lib/pdf/report'
+import type { ReportInput } from '@/lib/pdf/report'
 
 const CID = '755316e7-fe7c-43f9-a5c5-5c2d39da59d7'
 const SID = '9a1b2c3d-4e5f-4a6b-8c7d-1e2f3a4b5c6d'
@@ -80,24 +80,24 @@ function sessionRow(over: Partial<Record<string, unknown>> = {}) {
 }
 
 /**
- * `stampSheet`가 실제로 인쇄에 쓰는 값만 뽑는다. 두 라우트가 넘기는 객체는 모양이 다르다 —
- * 관리자는 세션 행을 통째로 넘기고(안 쓰는 컬럼까지 들어 있다) 교사는 필요한 7개만 조립한다.
- * 그래서 객체를 통으로 비교하지 않고 **StampInput이 선언한 값**만 비교한다.
+ * `renderReport`가 실제로 인쇄에 쓰는 값만 뽑는다. 두 라우트가 넘기는 객체는 모양이 다르다 —
+ * 관리자는 세션 행을 통째로 넘기고(안 쓰는 컬럼까지 들어 있다) 교사는 필요한 9개만 조립한다.
+ * 그래서 객체를 통으로 비교하지 않고 **ReportInput이 선언한 값**만 비교한다.
  */
-function stamped(call: StampInput) {
+function stamped(call: ReportInput) {
   const s = call.session
   return {
     formId: call.form.id,
     marks: call.marks, sentences: call.sentences, writing: call.writing,
     session: {
-      school_name: s.school_name, grade: s.grade, class_no: s.class_no,
-      child_name: s.child_name, birth_ymd: s.birth_ymd,
+      school_region: s.school_region, school_id: s.school_id, school_name: s.school_name,
+      grade: s.grade, gender: s.gender, child_name: s.child_name, birth_ymd: s.birth_ymd,
       started_at: s.started_at, checklist: s.checklist,
     },
   }
 }
 
-/** 두 경로를 한 번씩 태우고 각자 `stampSheet`에 넘긴 값을 돌려준다. */
+/** 두 경로를 한 번씩 태우고 각자 `renderReport`에 넘긴 값을 돌려준다. */
 async function bothRoutes(session = sessionRow(), codeRow: Record<string, unknown> = CODE_ROW) {
   vi.mocked(db.findClassCodeById).mockResolvedValue(codeRow as never)
   vi.mocked(db.classResults).mockResolvedValue([{
@@ -109,7 +109,7 @@ async function bothRoutes(session = sessionRow(), codeRow: Record<string, unknow
   vi.mocked(db.sessionDetail).mockResolvedValue({
     session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES,
   } as never)
-  vi.mocked(pdf.stampSheet).mockResolvedValue(new Uint8Array([1]))
+  vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
 
   const token = await createResultsToken(CID, 'test-secret')
   const t = await teacherSheets(
@@ -119,14 +119,14 @@ async function bothRoutes(session = sessionRow(), codeRow: Record<string, unknow
     new Request(`http://x/api/admin/sessions/${session.id}/sheet.pdf`),
     { params: Promise.resolve({ id: session.id }) })
 
-  const calls = vi.mocked(pdf.stampSheet).mock.calls
+  const calls = vi.mocked(pdf.renderReport).mock.calls
   return { teacherStatus: t.status, adminStatus: a.status, teacher: calls[0][0], admin: calls[1][0] }
 }
 
 describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('[REGRESSION] 같은 검사를 두 경로로 뽑으면 stampSheet 입력이 같다 — 같은 아이의 공식 문서는 하나여야 한다', async () => {
+  it('[REGRESSION] 같은 검사를 두 경로로 뽑으면 renderReport 입력이 같다 — 같은 아이의 공식 문서는 하나여야 한다', async () => {
     const { teacherStatus, adminStatus, teacher, admin } = await bothRoutes()
     expect(teacherStatus).toBe(200)
     expect(adminStatus).toBe(200)
@@ -158,21 +158,21 @@ describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', ()
     vi.mocked(db.sessionDetail).mockResolvedValue({
       session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES,
     } as never)
-    vi.mocked(pdf.stampSheet).mockResolvedValue(new Uint8Array([1]))
+    vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
 
     const token = await createResultsToken(CID, 'test-secret')
     const t = await teacherSheets(
       new Request(`http://x/api/results/${token}/sheets.pdf?ids=${session.id}`),
       { params: Promise.resolve({ token }) })
     expect(t.status).toBe(400)
-    expect(pdf.stampSheet).not.toHaveBeenCalled()
+    expect(pdf.renderReport).not.toHaveBeenCalled()
 
     const a = await adminSheet(
       new Request(`http://x/api/admin/sessions/${session.id}/sheet.pdf`),
       { params: Promise.resolve({ id: session.id }) })
     expect(a.status).toBe(200)
     // 관리자 쪽은 기본값을 걸지 않는다 — 아직 안 한 것이지 오반응이 아니다
-    expect(vi.mocked(pdf.stampSheet).mock.calls[0][0].marks.rw08).toBeUndefined()
+    expect(vi.mocked(pdf.renderReport).mock.calls[0][0].marks.rw08).toBeUndefined()
   })
 
   // 학년은 **양식을 고르는 값**이라 출처가 갈리면 만점과 문항 배열이 통째로 달라진다.

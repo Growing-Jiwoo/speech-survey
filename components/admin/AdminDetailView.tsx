@@ -100,7 +100,7 @@ export function AdminDetailView() {
   // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다. 양식은 상세 API가 싣는다.
   const f = itemsFor(data.form)
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
-  // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 검사지 PDF 라우트도 같은 함수를
+  // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 결과보고서 PDF 라우트도 같은 함수를
   // 거치므로, 채점자가 [채점 저장]을 누르기 전에도 화면과 인쇄물의 값이 같다.
   // **제출된 세션에만** 적용한다: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라
   // "아직 안 했다"이므로, 그것까지 0점으로 채우면 검사 중인 아동이 0점으로 보인다.
@@ -125,7 +125,7 @@ export function AdminDetailView() {
           <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {expected.write}</b></span>
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
           {/* 수정된 세션은 원래 값을 함께 보여준다 — 잘못 고쳤을 때 되돌릴 근거가 된다.
-              ⚠️ 검사지 PDF에는 이 표시가 없다(양식은 절대 기준) — 인쇄물만 보면 알 수 없다. */}
+              ⚠️ 결과보고서 PDF에는 이 표시가 없다(담당자 양식 그대로) — 인쇄물만 보면 알 수 없다. */}
           {s.original_identity && (
             <Badge tone="mute" size="lg">
               정보 수정됨 · 원래 {s.original_identity.child_no}번 {s.original_identity.child_name}

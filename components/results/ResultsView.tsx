@@ -312,7 +312,7 @@ export function ResultsView({ token }: { token: string }) {
                 {
                   badge: <Badge tone="mute">채점 전</Badge>,
                   desc: <>아직 채점하지 않은 과제입니다. <b className="text-rec-deep">0점이 아닙니다</b> —
-                    검사지 PDF에도 점수 칸이 비어 나갑니다.</>,
+                    결과보고서 PDF에도 판정 칸이 비어 나갑니다.</>,
                 },
                 {
                   badge: (
@@ -321,7 +321,7 @@ export function ResultsView({ token }: { token: string }) {
                     </span>
                   ),
                   desc: <>과제별 기준 점수에 따른 판정입니다. <b>세 과제가 모두 채점돼야</b> 나오며,
-                    <b> 공식 검사지 PDF에는 찍히지 않습니다.</b></>,
+                    결과보고서 PDF의 결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 하나라도 Fail이면 Fail입니다.</>,
                 },
                 ...(provisional ? [{
                   badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,

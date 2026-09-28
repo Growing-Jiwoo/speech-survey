@@ -1,10 +1,30 @@
 // lib/forms/index.ts — 학년별 검사지 정의 레지스트리.
 // 검사지(종이)가 학년마다 다르므로, 문항·배점·머리글을 양식 데이터로 두고
 // 검사 진행·채점·결과지·인쇄가 모두 이 정의로부터 만들어진다.
-// 새 학년 = 양식 파일(g*.ts) + 좌표(g*-layout.ts) + 원본 PDF 추가 + FORMS 등록.
+// 새 학년 = 양식 파일(g*.ts) + 원본 검사지 PDF(assets/forms, 문항 대조용) 추가 + FORMS 등록.
 import { G1 } from './g1'
 import { G2 } from './g2'
-import type { SheetLayout } from './layout'
+
+/**
+ * 결과보고서 PDF에서 **학년마다 다른 것**. 담당자가 배포한 `KODYS_G1/G2_결과보고서_양식.docx`
+ * (2026-09-28)를 1:1로 옮긴 값이라, 두 양식 사이의 서식 불일치(줄 간격·빈 줄 수·문장 부호)도
+ * 그대로 데이터로 둔다 — 정답본과 다르게 "정리"하지 말 것(사용자 확정 2026-09-28).
+ * 공통 서식은 lib/pdf/report.ts가 갖는다.
+ */
+export interface ReportStyle {
+  /** 머리글 띠·소제목 색 (hex) */
+  accent: string
+  /** 머리글 부제 색 (hex) */
+  accentTint: string
+  /** 체크리스트 셋째 열 머리글 */
+  observationHeader: string
+  /** 체크리스트 안내문 끝의 마침표 유무 */
+  notePeriod: boolean
+  /** 결과 해석 문단의 줄 간격 배수 (Word `line=276 auto` = 1.15) */
+  interpretationLine: number
+  /** 결과 해석 표와 체크리스트 표 사이의 빈 문단 수 */
+  gapAfterInterpretation: number
+}
 
 /**
  * 쓰기 과제. **학년마다 과제의 종류 자체가 다르다.**
@@ -40,8 +60,8 @@ export interface SurveyForm {
    * `PROVISIONAL_CRITERIA`가 true인 동안 화면·인쇄물에 "임시 기준 · 확정 전"이 붙는다.
    */
   passMark: { wordReading: number; sentenceReading: number; writing: number }
-  /** 공식 검사지 PDF 출력용 좌표 */
-  layout: SheetLayout
+  /** 결과보고서 PDF에서 학년마다 다른 서식 */
+  report: ReportStyle
 }
 
 export const FORMS: SurveyForm[] = [G1, G2]

@@ -250,7 +250,7 @@ const crc32 = (b: Buffer) => {
 
 // 고정 타임스탬프(1980-01-01) — 같은 입력이면 같은 바이트가 나와야 한다. 시각을 넣으면
 // 만들 때마다 파일이 달라져 커밋에 잡음이 끼고 재현 확인도 못 한다
-// (lib/pdf/stamp-sheet.ts가 updateMetadata:false로 같은 것을 지킨다).
+// (lib/pdf/report.ts가 생성 시각을 검사 시각으로 고정해 같은 것을 지킨다).
 const DOS_TIME = 0, DOS_DATE = 33
 
 const local: Buffer[] = []
