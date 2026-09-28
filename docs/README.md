@@ -8,7 +8,7 @@
 
 설계 문서가 아닌 것도 있다. 이것은 **스냅샷이 아니라 현행 문서**라 코드가 바뀌면 함께 고친다.
 
-- `manuals/` — 사용 설명서 3종(관리자·검사 진행자·아동)과 그 원본. [manuals/README.md](manuals/README.md)
+- `manuals/` — 사용 설명서 2종(관리자·선생님)과 그 원본. [manuals/README.md](manuals/README.md)
 - `qa/` — 배포 전 E2E 체크리스트. 기능이 바뀌면 케이스도 함께 고친다.
   [2026-09-22-teacher-results-e2e.md](qa/2026-09-22-teacher-results-e2e.md) — 교사 결과지와 그것이 건드린 기존 기능
 
