@@ -54,7 +54,7 @@
     <div class="row"><span class="n">5</span><span class="t">검사지 PDF — 공식 출력물</span></div>
     <div class="row"><span class="n">6</span><span class="t">개인정보 — 꼭 지켜야 할 것</span></div>
     <div class="row"><span class="n">7</span><span class="t">이럴 때는</span></div>
-    <div class="row"><span class="n">8</span><span class="t">인수인계 — 넘겨받을 것 · 아직 정하지 않은 것</span></div>
+    <div class="row"><span class="n">8</span><span class="t">관리와 정기 작업</span></div>
   </div>
 
   <div class="figcol left" style="margin-top:11mm">
@@ -758,53 +758,8 @@
 
 <!-- ══════════════ 8 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">8</span>인수인계</h2>
-  <p class="sec-lead">이 서비스를 계속 운영하려면 아래 계정이 필요하고,
-    <b>아직 정해지지 않은 것 네 가지</b>는 운영을 시작하기 전에 결정해야 합니다.</p>
-
-  <h3>넘겨받아야 할 계정</h3>
-  <table>
-    <tr><th style="width:30mm">무엇</th><th>왜 필요합니까</th><th style="width:40mm">없으면</th></tr>
-    <tr><td><b>GitHub</b><br><span class="small">소스 코드</span></td>
-      <td>코드가 들어 있는 곳. 여기에 올린 변경이 자동으로 배포됩니다.</td>
-      <td>기능을 고칠 수 없습니다.</td></tr>
-    <tr><td><b>Vercel</b><br><span class="small">서비스 배포</span></td>
-      <td>웹사이트가 실제로 돌아가는 곳. 주소·환경설정·배포 이력이 여기 있습니다.</td>
-      <td>주소를 바꾸거나 설정을 고칠 수 없습니다.</td></tr>
-    <tr><td><b>Supabase</b><br><span class="small">데이터·녹음 저장</span></td>
-      <td>아이 정보·점수·녹음 파일이 실제로 저장된 곳. 일괄 파기 SQL도 여기서 실행합니다.</td>
-      <td><b>데이터를 파기할 수 없습니다.</b> 개인정보 의무 위반이 될 수 있습니다.</td></tr>
-    <tr><td><b>Resend</b><br><span class="small">메일 발송</span></td>
-      <td>승인 메일, 신청 알림, 결과지 링크 메일을 보내는 곳.</td>
-      <td>코드를 손으로 전달해야 하고(<span class="key">안내 문구 복사</span>), 선생님이 결과지를 직접 받을 수 없습니다.</td></tr>
-  </table>
-
-  <div class="box danger">
-    <span class="bt">운영을 시작하기 전에 결정해야 할 네 가지</span>
-    <p>모두 <b>개발이 아니라 운영 주체의 판단</b>이 필요한 항목입니다. 정해지면 개발자에게 전달하면
-      코드에 반영됩니다.</p>
-    <table style="margin:3mm 0 0">
-      <tr><th style="width:34mm">항목</th><th>지금 상태와 결정할 것</th></tr>
-      <tr><td><b>① Pass 기준</b></td>
-        <td><b>기준표가 아직 정해지지 않았습니다.</b> 지금은 만점의 약 65%를 임시로 씁니다.
-          기준표를 개발자에게 전달하면 숫자만 바꾸면 되고, 이미 채점한 검사도 다시 계산됩니다.</td></tr>
-      <tr><td><b>② 보존 기한</b></td>
-        <td>지금 보호자에게 고지하는 문구는 <b>「수집·이용 목적 달성 시(검사 및 결과 확인 완료 후) 지체 없이 파기」</b>라는 일반 원칙입니다.
-          <b>구체적인 기한</b>(예: 결과 통보 후 6개월)을 정하면 화면 고지(<code>RETENTION_LABEL</code>)와
-          학교가 쓰는 동의 문구를 함께 바꾸고, 그 기한이 지난 기록을 자동으로 지우도록 만들 수 있습니다.</td></tr>
-      <tr><td><b>③ 3~6학년 검사지</b></td>
-        <td>지금 있는 검사지는 1·2학년뿐입니다. 3~6학년으로 검사하면 1학년 양식으로 진행됩니다(5장).
-          해당 학년 검사지 PDF를 개발자에게 전달해 주세요.</td></tr>
-      <tr><td style="border:none"><b>④ 도메인과<br>발신 메일</b></td>
-        <td style="border:none">도메인을 인증하기 전에는 승인 메일이 선생님에게 <b>가지 않을 수 있습니다.</b>
-          시험 운영 중에는 모든 메일을 관리자에게 돌려 두는 설정을 쓰는데
-          <b>도메인을 산 뒤 그 설정을 반드시 꺼야</b> 합니다. 남아 있으면 선생님 메일이 전부
-          관리자에게 오고 선생님은 코드를 받지 못합니다. 전환 절차는 개발 문서에 정리돼 있습니다.
-          <br><b>정식 도메인을 사면 접속 주소도 함께 바뀝니다.</b> 지금 쓰는
-          <code>speech-survey.vercel.app</code>은 임시 주소이므로, 그때 이 설명서의 주소(표지·1장 로그인·2장 신청 화면)도
-          함께 고쳐야 합니다.</td></tr>
-    </table>
-  </div>
+  <h2 class="sec"><span class="chip">8</span>관리와 정기 작업</h2>
+  <p class="sec-lead">비밀번호 교체와 주기적으로 챙길 일입니다.</p>
 
   <h3>관리자 비밀번호를 바꾸려면</h3>
   <p>화면에서 바꿀 수 없습니다. 개발자에게 새 비밀번호 설정을 요청하세요. 비밀번호 값 자체는 코드나 문서
