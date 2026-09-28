@@ -1,8 +1,9 @@
 // lib/mail.ts — 메일 발송 단일 창구(서버 전용 — 클라이언트에서 import 금지).
 // 발송은 Resend HTTP API에 POST 한 번이라 SDK를 넣지 않는다(의존성·번들 증가 없음).
 //
-// 이 앱이 보내는 메일은 두 종류뿐이다:
+// 이 앱이 보내는 메일은 세 종류다:
 //  ① 새 신청 알림 → 관리자        ② 승인·학급 코드 안내 → 교사
+//  ③ 결과지 링크 → 교사(학급 코드에 등록된 주소로만)
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
 import { RESULTS_GUIDE_LINES, gradeClassLabel } from './format'
