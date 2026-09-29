@@ -38,8 +38,9 @@ export const G2: SurveyForm = {
   limits: { wordSec: 20, sentenceSec: 20 },
   // ⚠️ 담당자 확인 대기 — 확정 아님. G1과 같은 기준표를 받아야 한다.
   // **G1의 비율을 그대로 옮긴 것 자체가 개발 판단이다**(사용자 확정 2026-08-11) —
-  // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다. 문장 읽기 만점이 36→35라 23→22.
-  passMark: { wordReading: 9, sentenceReading: 22, writing: 6 },
+  // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다.
+  // 문장 읽기유창성(어절/초)의 1.0도 G1과 같은 임시값이다(사용자 확정 2026-09-29, g1.ts 주석).
+  passMark: { wordReading: 9, sentenceReading: 1.0, writing: 6 },
   // KODYS_G2_결과보고서_양식.docx(담당자 배포 2026-09-28) 실측값. 초록 계열.
   // G1과 다른 곳(머리글 문구·마침표·줄 간격·빈 줄 수)은 담당자 파일이 실제로 그렇다 — 맞추지 말 것.
   report: {

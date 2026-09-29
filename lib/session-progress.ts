@@ -15,7 +15,7 @@ type ProgressInput = Pick<SessionListRow, 'grade' | 'recordings' | 'writing_answ
 function writingOf(
   f: FormItems, s: Pick<ProgressInput, 'writing_answers' | 'sentence_scores'>,
 ): Partial<Record<string, number>> {
-  return scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, writing: s.writing_answers }).writing
+  return scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, times: [], writing: s.writing_answers }).writing
 }
 
 /** 세션 1건의 진행률 — 재녹음(같은 item_code 복수 attempt)은 1문항으로 센다.

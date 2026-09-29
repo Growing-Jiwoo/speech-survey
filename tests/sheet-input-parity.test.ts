@@ -59,6 +59,8 @@ const SENTENCES = [
   { item_code: 'rs01', words: 7 }, { item_code: 'rs02', words: 5 },
   { item_code: 'rs03', words: 8 }, { item_code: 'rs04', words: 11 },
 ]
+/** 녹음이 있는 문장(rs01)만 채점자가 시간을 넣었다 — 나머지 셋은 미녹음 기본값(제한 시간)이 걸린다. */
+const TIMES = [{ item_code: 'rs01', seconds: 4.5 }]
 const WRITING = Array.from({ length: 10 }, (_, i) => ({
   item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: i < 6,
 }))
@@ -88,7 +90,7 @@ function printed(call: ReportInput) {
   const s = call.session
   return {
     formId: call.form.id,
-    marks: call.marks, sentences: call.sentences, writing: call.writing,
+    marks: call.marks, sentences: call.sentences, times: call.times, writing: call.writing,
     session: {
       school_region: s.school_region, school_id: s.school_id, school_name: s.school_name,
       grade: s.grade, gender: s.gender, child_name: s.child_name, birth_ymd: s.birth_ymd,
@@ -104,10 +106,10 @@ async function bothRoutes(session = sessionRow(), codeRow: Record<string, unknow
     id: session.id, child_no: session.child_no, child_name: session.child_name,
     gender: session.gender, grade: session.grade, birth_ymd: session.birth_ymd,
     checklist: session.checklist, started_at: session.started_at, submitted_at: session.submitted_at,
-    recordings: RECORDINGS, reading_marks: MARKS, sentence_scores: SENTENCES, writing_answers: WRITING,
+    recordings: RECORDINGS, reading_marks: MARKS, sentence_scores: SENTENCES, sentence_times: TIMES, writing_answers: WRITING,
   }] as never)
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES,
+    session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES, times: TIMES,
   } as never)
   vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
 
@@ -141,6 +143,9 @@ describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', ()
     // 녹음이 있는 페이지는 저장된 값 그대로
     expect(teacher.marks.rw01).toBe(true)
     expect(admin.marks.rw01).toBe(true)
+    // 문장의 읽은 시간도 같다 — 녹음 없는 문장은 제한 시간, 있는 문장은 채점자가 넣은 값
+    expect(teacher.times).toEqual({ rs01: 4.5, rs02: 20, rs03: 20, rs04: 20 })
+    expect(admin.times).toEqual(teacher.times)
   })
 
   // 두 경로가 **다르게 동작하는 유일한 지점**이고, 그것이 의도다: 관리자는 진행 중인 검사도
@@ -153,10 +158,10 @@ describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', ()
       id: session.id, child_no: session.child_no, child_name: session.child_name,
       gender: session.gender, grade: session.grade, birth_ymd: session.birth_ymd,
       checklist: session.checklist, started_at: session.started_at, submitted_at: null,
-      recordings: RECORDINGS, reading_marks: MARKS, sentence_scores: SENTENCES, writing_answers: WRITING,
+      recordings: RECORDINGS, reading_marks: MARKS, sentence_scores: SENTENCES, sentence_times: TIMES, writing_answers: WRITING,
     }] as never)
     vi.mocked(db.sessionDetail).mockResolvedValue({
-      session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES,
+      session, recordings: RECORDINGS, writing: WRITING, marks: MARKS, sentences: SENTENCES, times: TIMES,
     } as never)
     vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
 

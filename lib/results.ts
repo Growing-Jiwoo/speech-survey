@@ -31,6 +31,7 @@ export interface ResultsSessionRow {
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_scores: { item_code: string; words: number }[]
+  sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
 }
 
@@ -57,7 +58,9 @@ export function maskEmail(email: string): string {
 export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: ScoreInput } {
   const form = formForGrade(r.grade)
   const f = itemsFor(form)
-  const raw = scoreInputFrom(f, { marks: r.reading_marks, sentences: r.sentence_scores, writing: r.writing_answers })
+  const raw = scoreInputFrom(f, {
+    marks: r.reading_marks, sentences: r.sentence_scores, times: r.sentence_times, writing: r.writing_answers,
+  })
   if (!r.submitted_at) return { form, input: raw }
   const recorded = new Set(r.recordings.map(x => x.item_code))
   return { form, input: withUnrecordedDefaults(f, raw, c => recorded.has(c)) }

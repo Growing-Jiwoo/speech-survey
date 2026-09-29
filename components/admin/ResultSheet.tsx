@@ -7,7 +7,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
-import { PROVISIONAL_CRITERIA, scoreSession, scoringFor, sheetPdfGate, type TaskKey } from '@/lib/scoring'
+import {
+  FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreSession, scoringFor,
+  sheetPdfGate, type TaskKey,
+} from '@/lib/scoring'
 import { contactLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
@@ -27,7 +30,10 @@ import type { SessionRow } from '@/lib/db'
  *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
 const AUTOSAVE_DELAY_MS = 1500
 
-export function ResultSheet({ sessionId, session, form, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange }: {
+export function ResultSheet({
+  sessionId, session, form, writing, initialMarks, initialSentences, initialTimes, timeDefaults,
+  attemptsOf, onAudioError, onDirtyChange,
+}: {
   sessionId: string
   session: SessionRow
   /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
@@ -37,6 +43,10 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
   initialMarks: Partial<Record<string, boolean>>
   /** 문장 읽기유창성 점수만 (문장 쓰기는 writing으로 들어온다) */
   initialSentences: Partial<Record<string, number>>
+  /** 문장 읽기유창성의 읽은 시간 — **채점자가 저장한 값만**(미녹음 기본값은 아래 timeDefaults) */
+  initialTimes: Partial<Record<string, number>>
+  /** 녹음 없는 문장의 읽은 시간 기본값(제한 시간). 계산과 입력 칸 안내에만 쓰고 저장하지 않는다 */
+  timeDefaults: Partial<Record<string, number>>
   /** 페이지 코드 → 녹음 시도들 */
   attemptsOf: (pageCode: string) => Attempt[]
   onAudioError: () => void
@@ -45,9 +55,11 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
 }) {
   const [marks, setMarks] = useState(initialMarks)
   const [sentences, setSentences] = useState(initialSentences)
+  const [times, setTimes] = useState(initialTimes)
   // 저장에 성공한 값 — 화면 상태와 비교해 "저장 안 한 변경"을 판단한다
   const [savedMarks, setSavedMarks] = useState(initialMarks)
   const [savedSentences, setSavedSentences] = useState(initialSentences)
+  const [savedTimes, setSavedTimes] = useState(initialTimes)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
@@ -76,14 +88,16 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
   }, [])
 
   const f = itemsFor(form)
-  const { taskMax, readMax, writeMax, passMark } = scoringFor(form)
-  const r = scoreSession(form, { marks, sentences, writing })
+  const { taskMax, sentenceWordsMax, readMax, writeMax, passMark } = scoringFor(form)
+  // 계산은 기본값 위에 채점자가 넣은 값을 얹어서 한다(결과보고서 PDF 라우트의 withUnrecordedDefaults와 같은 값).
+  const r = scoreSession(form, { marks, sentences, times: { ...timeDefaults, ...times }, writing })
   const writingLabel = SECTION_LABEL[f.writingSection]
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
   // 상위가 막을 수 있도록 알린다. 저장된 값과 비교해 판단한다 — 되돌리면 다시 깨끗해진다.
   const dirty = JSON.stringify(marks) !== JSON.stringify(savedMarks)
     || JSON.stringify(sentences) !== JSON.stringify(savedSentences)
+    || JSON.stringify(times) !== JSON.stringify(savedTimes)
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
   // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
   // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
@@ -102,11 +116,11 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
     if (!auto) setMsg('')
     // requestJson은 init으로 { method?, body? }만 받고, body가 있으면 Content-Type과 직렬화를 스스로 한다.
     const res = await requestJson(`/api/admin/sessions/${sessionId}/scores`,
-      { method: 'PUT', body: { marks, sentences } },
+      { method: 'PUT', body: { marks, sentences, times } },
       '채점 저장에 실패했어요. 다시 시도해 주세요.')
     setSaving(false)
     if (res.ok) {
-      setSavedMarks(marks); setSavedSentences(sentences); setAutoFailed(false)
+      setSavedMarks(marks); setSavedSentences(sentences); setSavedTimes(times); setAutoFailed(false)
       // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
       // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다.
       setMsg(auto ? '자동 저장됨' : '저장했어요.')
@@ -114,7 +128,7 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
       setMsg(res.error)
       if (auto) setAutoFailed(true)
     }
-  }, [marks, sentences, sessionId])
+  }, [marks, sentences, times, sessionId])
 
   /**
    * 자동 저장 — dirty가 생기면 잠시 뒤 스스로 저장한다.
@@ -127,7 +141,7 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
    *
    * 채점은 제출 여부와 무관하게 언제든 다시 고칠 수 있으므로(saveScores docblock) 중간
    * 상태가 저장돼도 해가 없다. 저장 의미는 explicit save와 완전히 같다 — 화면에 보이는
-   * 그대로를 보내고, 문장 점수는 "보낸 것이 전부"로 취급된다.
+   * 그대로를 보내고, 문장 점수·읽은 시간은 "보낸 것이 전부"로 취급된다.
    *
    * [채점 저장] 버튼은 그대로 둔다: 자동 저장이 실패했을 때 다시 시도하는 손잡이이고,
    * 결과보고서 PDF 관문 모달도 그 동작을 호출한다.
@@ -161,6 +175,15 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
     setMsg(''); setAutoFailed(false)
     setSentences(s => {
       const next = { ...s }
+      if (v === undefined) delete next[code]
+      else next[code] = v
+      return next
+    })
+  }
+  const setTime = (code: string, v: number | undefined) => {
+    setMsg(''); setAutoFailed(false)
+    setTimes(t => {
+      const next = { ...t }
       if (v === undefined) delete next[code]
       else next[code] = v
       return next
@@ -235,12 +258,20 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
           verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
       </TaskSection>
 
+      {/* 문장마다 읽은 시간(초)과 정확 어절을 넣고, 총점은 어절 합 ÷ 시간 합(담당자 확정 2026-09-29,
+          lib/scoring `CountTaskKey` 주석). 시간은 녹음을 듣고 채점자가 판단해 넣는다. */}
       <TaskSection title={SECTION_LABEL.sentence_reading}
-        hint={`${form.limits.sentenceSec}초 동안 정확하게 읽은 어절 수`}>
+        hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간">
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
+          times={times} timeDefaults={timeDefaults} onTimeChange={setTime} maxSec={readSecMax(form)}
           attemptsFor={code => attemptsOf(`p_${code}`)}
           limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
-        <Subtotal total={{ label: '총점', value: r.sentenceReading, max: taskMax.sentenceReading }}
+        <Subtotal
+          cells={[
+            { label: '정확 어절', value: r.sentenceWords, max: sentenceWordsMax },
+            { label: '읽은 시간', value: readSecLabel(r.sentenceSec), unit: '초' },
+          ]}
+          total={{ label: '총점', value: fluencyLabel(r.sentenceReading), unit: FLUENCY_UNIT }}
           verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
       </TaskSection>
 
@@ -347,8 +378,11 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
             badge: <Badge tone="rec">미녹음</Badge>,
             // 미녹음 기본 채점은 사용자 확정(2026-08-12)이다. 출처는 여기(주석)에만 둔다 —
             // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
+            // 문장의 시간 기본값(제한 시간)은 담당자 확인 대기 중인 임시값이다(lib/scoring
+            // unrecordedTimeDefaults) — 화면에는 출처 없이 규칙만 쓴다(위와 같은 이유).
             desc: <>녹음이 올라오지 않은 과제입니다. 읽은 반응이 없으므로 <b>오반응(X · 0점)으로
-              기본 채점</b>되어 화면·결과보고서 PDF에 그대로 나갑니다.
+              기본 채점</b>되어 화면·결과보고서 PDF에 그대로 나갑니다. 문장 읽기유창성은 그 문장의
+              읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산합니다(시간 칸에 흐리게 보입니다).
               녹음을 들어보고 고치면 저장한 값이 기본값을 대신합니다.</>,
           },
           {
@@ -364,13 +398,16 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
             badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
             desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시입니다 —
               낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
-              문장 읽기유창성 {passMark.sentenceReading} / {taskMax.sentenceReading} ·
+              문장 읽기유창성 {fluencyLabel(passMark.sentenceReading)} {FLUENCY_UNIT} ·
               {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
               기준표를 받으면 숫자만 교체되며 이미 채점한 검사도 저장된 점수로 다시 계산됩니다.</>,
           }] : []),
         ]}
-        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초, 문장 읽기유창성은 {form.limits.sentenceSec}초 내
-          정확 반응 수. 녹음은 마지막 반응이 잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다.</>}
+        // 「기준 시간 이후 반응은 채점하지 않는다」는 낱말 해독에만 남긴다 — 문장은 20초를 넘겨 읽었을 때
+        // 어디까지 셀지 담당자가 듣고 판단한다(lib/scoring readSecMax 주석). 앱이 규칙을 대신 말하지 않는다.
+        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초 내 정확 반응 수 — 녹음은 마지막 반응이
+          잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다. 문장 읽기유창성은 정확하게 읽은
+          어절 수의 합을 읽은 시간(초)의 합으로 나눈 값({FLUENCY_UNIT})입니다.</>}
       />
     </section>
   )

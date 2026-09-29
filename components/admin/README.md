@@ -40,7 +40,7 @@ DB 테이블·코드 식별자는 `sessions`·`SessionRow`이지만 **화면 문
 | `sheet/Subtotal.tsx` | 검사지의 소계 행(의미/무의미/총점). 미완료면 숫자 대신 `—` |
 | `sheet/WordScoreRows.tsx` | 낱말 해독 채점 — 그룹(의미/무의미)별 **sticky 플레이어 바** + 낱말 행 리스트. 스크롤해도 지금 듣는 그룹의 플레이어가 화면 위에 붙어 "들으면서 찍기"가 된다. 바가 **자기 높이를 실측해 `--sheet-top-bar`로 넘긴다** — 키보드로 O/X를 오갈 때 포커스한 버튼이 이 바에 덮이지 않도록 `globals.css`가 그 값을 `scroll-margin`으로 쓴다(E2E 2026-08-20 항목 5.18). 상수로 박지 않는 이유는 `SessionTable`의 `toolbarH`와 같다 |
 | `sheet/WritingChips.tsx` | 낱말 쓰기(G1) 검사 중 기록 — 읽기 전용이라 행 대신 낱말+O/X 칩 흐름 |
-| `sheet/SentenceRows.tsx` | 문장 읽기유창성 행 — 문장·점수 입력·플레이어(자기 줄)를 한 카드에 |
+| `sheet/SentenceRows.tsx` | 문장 읽기유창성 행 — 문장·읽은 시간·어절 입력·플레이어(자기 줄)를 한 카드에. 총점은 어절/초(`lib/scoring`) |
 | `sheet/SentenceWriteRows.tsx` | 문장 쓰기(G2) 행 — 검사 중 기록(읽기 전용). 검사지처럼 어절을 나눠 보여 준다 |
 | `sheet/PageAudio.tsx` | 섹션에 인라인으로 붙는 페이지 녹음 — 시도 전환·미녹음·제한시간 초과 표시 |
 | `CodeIssuer.tsx` | `/admin/codes` 오케스트레이션 — 학급 코드 발급(학교·학년·반·담임·연락처) + 목록. 목록은 `status`로 갈라 **대기(pending)는 `PendingApplications`가, 발급(active)만 이 파일의 표가** 그린다. 세션 0건인 코드만 삭제 버튼(FK restrict가 최종 방어)이고, 삭제 확인 모달은 두 섹션이 공유한다(pending 삭제 = 반려이므로 명단까지 지워진다고 문구에 밝힌다). 데이터는 `useClassCodesQuery`(react-query), 필터·탭이 없어 URL searchParams는 쓰지 않는다. 삭제 성공 뒤에는 `setQueryData`로 그 행을 캐시에서 먼저 빼고 나서 invalidate한다 — 재조회를 기다리면 지운 행이 남아 있어 다시 누를 수 있었다. 연락처 칸의 [수정]/[이메일 등록]은 그 행에서 바로 담임 이메일만 고치는 인라인 편집(`PATCH /api/admin/codes/[id]`)이다 — 결과지 링크가 `teacher_email`로만 가므로 오타가 있으면 그 학급은 결과지를 못 받고, 이메일 필수화(2026-09-22) 전에 발급된 코드는 아예 비어 있다. 학급 정보는 여기서 못 바꾼다(세션에 복사된 임상 기록과 어긋난다) |

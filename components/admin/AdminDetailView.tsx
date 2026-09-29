@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
-import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
+import { scoreInputFrom, unrecordedTimeDefaults, withUnrecordedDefaults } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -105,9 +105,13 @@ export function AdminDetailView() {
   // **제출된 세션에만** 적용한다: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라
   // "아직 안 했다"이므로, 그것까지 0점으로 채우면 검사 중인 아동이 0점으로 보인다.
   const rawInput = scoreInputFrom(f, data)
+  const hasRecording = (code: string) => byItem.has(code)
   const input = s.submitted_at
-    ? withUnrecordedDefaults(f, rawInput, code => byItem.has(code))
+    ? withUnrecordedDefaults(f, rawInput, hasRecording)
     : rawInput
+  // 읽은 시간만은 기본값을 채점 상태에 넣지 않는다 — 넣으면 다음 저장 때 임시값(제한 시간)이 DB에
+  // 굳는다(lib/scoring unrecordedTimeDefaults 주석). 결과지는 이것을 계산과 입력 칸 안내에만 쓴다.
+  const timeDefaults = s.submitted_at ? unrecordedTimeDefaults(f, hasRecording) : {}
   const writtenCount = f.writingItems.filter(i => input.writing[i.code] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
   const expected = f.totals
@@ -144,6 +148,8 @@ export function AdminDetailView() {
             onDirtyChange={setDirty}
             initialMarks={input.marks}
             initialSentences={input.sentences}
+            initialTimes={rawInput.times}
+            timeDefaults={timeDefaults}
             attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>

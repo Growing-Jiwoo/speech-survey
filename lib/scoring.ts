@@ -1,7 +1,7 @@
 // lib/scoring.ts — 검사지 채점 규칙(배점·합산·Pass/Fail). 순수 함수만 둔다.
 // 화면·저장 API·인쇄가 모두 이 파일 하나로 점수를 계산해, 표시되는 값과 저장되는 값이 어긋나지 않게 한다.
 // 배점은 학년별 검사지(lib/forms)에서 나온다 — 숫자를 여기 적어 두지 않는다.
-import { itemsFor, type FormItems, type SurveyItem } from './items'
+import { GRACE_SEC, itemsFor, type FormItems, type SurveyItem } from './items'
 import type { SurveyForm } from './forms'
 
 /**
@@ -9,7 +9,8 @@ import type { SurveyForm } from './forms'
  * — 문항이 바뀌면 배점이 자동으로 따라간다.
  *
  * 세 과제가 모두 같은 규칙이다:
- * · 문장 읽기유창성 — "정확하게 읽은 어절 수" (G1 7·7·8·14 / G2 7·8·9·11)
+ * · 문장 읽기유창성 — 문장별 "정확하게 읽은 어절 수"의 상한 (G1 7·7·8·14 / G2 7·8·9·11).
+ *   과제 총점은 어절 수가 아니라 어절/초다(`fluencyOf`).
  * · 낱말 쓰기(G1)   — "정확하게 쓴 낱말은 1점" → 낱말 하나가 곧 한 어절이라 문항 만점 1
  * · 문장 쓰기(G2)   — "정확하게 쓴 어절은 1점" → 두 어절 문장이라 문항 만점 2
  */
@@ -47,13 +48,73 @@ export function finalVerdict(v: Record<TaskKey, Verdict>): Verdict {
   return TASK_KEYS.filter(k => v[k] === 'fail').length >= 2 ? 'fail' : 'pass'
 }
 
+/**
+ * 문장 읽기유창성 총점 = **정확하게 읽은 어절 수의 합 ÷ 읽은 시간(초)의 합** (어절/초).
+ *
+ * 담당자 확정(2026-09-29) — 원문 「총점은 (정확하게 읽은 어절 수 / 읽은 총 시간) 이 되어야 할 것 같아」,
+ * 예시 「문장 4개 읽는데 총 10초가 걸렸고, 정확하게 읽은 어절이 20개면 (20/10)=2점」. 시간은 관리자가
+ * 녹음을 듣고 문장마다 직접 넣는다 — 녹음 길이(recordings.duration_sec)로 채우지 않는다(원문 「녹음된 초를
+ * 넣기에는 정확하지가 않을 것 같아서」). 검사지 인쇄 문구(「정확하게 읽은 어절 수로 채점」, 총점 /36)와
+ * 다른 것은 의도된 것이다(CLAUDE.md 2절).
+ *
+ * 개수형 과제와 달리 **만점이 없다.** 그래서 `taskMax`에 이 과제가 없고, 정확 어절의 만점은
+ * `sentenceWordsMax`가 따로 갖는다 — 「2.12 / 36」처럼 척도가 섞여 찍히는 것을 타입으로 막는다.
+ */
+export type CountTaskKey = Exclude<TaskKey, 'sentenceReading'>
+
+/**
+ * ⚠️ 담당자 확인 대기 — 확정 아님. 소수 몇째 자리까지 보일지 담당자에게 물었다(2026-09-29).
+ * 둘째 자리 반올림은 개발 판단이다(사용자 확정 2026-09-29). **판정도 반올림한 값으로 한다** —
+ * 화면에 「1.00」이 찍혔는데 기준 1.00에서 Fail이 나오는 모순을 막는다.
+ */
+export const FLUENCY_DECIMALS = 2
+export const FLUENCY_UNIT = '어절/초'
+export const fluencyLabel = (v: number): string => v.toFixed(FLUENCY_DECIMALS)
+
+/** 어절 ÷ 시간. 시간은 0.1초 단위 정수(tenths)로 받는다 — 초를 소수로 더하면 17.000000000000004 같은
+ *  부동소수 오차가 생겨 반올림 경계에서 한 자리가 뒤집힐 수 있다. 시간이 0이면 0. */
+function fluencyOf(words: number, tenths: number): number {
+  if (tenths <= 0) return 0
+  const scale = 10 ** FLUENCY_DECIMALS
+  return Math.round((words * 10 * scale) / tenths) / scale
+}
+
+/**
+ * 읽은 시간 입력의 상한(초) = 문장 녹음의 최대 길이(제한 시간 + 여유, `maxRecSec`와 같다).
+ * **채점 규칙이 아니라 오타 방지용이다** — 20초를 넘겨 읽었을 때 어디까지 셀지는 담당자가 녹음을 듣고
+ * 판단하므로 앱이 제한 시간을 강제하지 않는다(사용자 확정 2026-09-29, 담당자 원문 「내가 그냥 듣고
+ * 입력하면 돼」). 녹음이 이보다 길 수 없으니 넘는 값은 잘못 친 것이다.
+ */
+export const readSecMax = (form: SurveyForm): number => form.limits.sentenceSec + GRACE_SEC
+
+/** 저장할 수 있는 읽은 시간인지 — 0초 초과 · 상한 이하 · 0.1초 단위. 저장 라우트와 입력 칸이 같이 쓴다. */
+export function isValidReadSec(v: unknown, max: number): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= max
+    && Math.abs(v * 10 - Math.round(v * 10)) < 1e-9
+}
+
+/** 입력 칸 글자 → 초. 빈 칸은 `undefined`(입력 없음), 형식·범위를 벗어나면 `null`(잘못 친 값). */
+export function parseReadSec(raw: string, max: number): number | undefined | null {
+  const t = raw.trim()
+  if (t === '') return undefined
+  if (!/^(\d+\.?\d?|\.\d)$/.test(t)) return null
+  const v = Number(t)
+  return isValidReadSec(v, max) ? Math.round(v * 10) / 10 : null
+}
+
+/** 초 표기 — 정수는 그대로(17), 아니면 소수 한 자리(17.5). */
+export const readSecLabel = (v: number): string => (Number.isInteger(v) ? String(v) : v.toFixed(1))
+
 export interface FormScoring {
-  /** 과제별 만점(검사지) */
-  taskMax: Record<TaskKey, number>
+  /** 개수형 과제의 만점(검사지). 문장 읽기유창성은 비율이라 없다(`CountTaskKey` 주석) */
+  taskMax: Record<CountTaskKey, number>
+  /** 문장 읽기유창성의 정확 어절 만점(G1 36 / G2 35) — 소계 「정확 어절 __ / 36」 */
+  sentenceWordsMax: number
   /** 낱말 해독의 의미/무의미 소계 만점 — 결과지가 '/ 7'을 이 값으로 찍는다 */
   readMax: { meaning: number; nonsense: number }
   /** 낱말 쓰기(G1)의 의미/무의미 소계 만점. 문장 쓰기 양식에서는 0이다. */
   writeMax: { meaning: number; nonsense: number }
+  /** 과제별 Pass 기준 — 개수형은 점수, 문장 읽기유창성은 어절/초 */
   passMark: Record<TaskKey, number>
 }
 
@@ -68,9 +129,9 @@ export function scoringFor(form: SurveyForm): FormScoring {
   const built: FormScoring = {
     taskMax: {
       wordReading: f.readItems.length,
-      sentenceReading: sum(f.sentenceItems),
       writing: sum(f.writingItems),
     },
+    sentenceWordsMax: sum(f.sentenceItems),
     readMax: { meaning: f.meaningReadCodes.length, nonsense: f.nonsenseReadCodes.length },
     writeMax: { meaning: maxOf(f.meaningWriteCodes), nonsense: maxOf(f.nonsenseWriteCodes) },
     passMark: form.passMark,
@@ -82,8 +143,10 @@ export function scoringFor(form: SurveyForm): FormScoring {
 export interface ScoreInput {
   /** 낱말 해독 itemCode(rw..) → 정반응 여부 */
   marks: Partial<Record<string, boolean>>
-  /** 문장 읽기유창성 itemCode(rs..) → 제한 시간 내 정확히 읽은 어절 수 */
+  /** 문장 읽기유창성 itemCode(rs..) → 정확히 읽은 어절 수 */
   sentences: Partial<Record<string, number>>
+  /** 문장 읽기유창성 itemCode(rs..) → 읽은 시간(초, 0.1초 단위). 관리자가 녹음을 듣고 넣는다 */
+  times: Partial<Record<string, number>>
   /** 쓰기 과제 itemCode(ww../sw..) → 정확히 쓴 어절 수 (검사 중 수집) */
   writing: Partial<Record<string, number>>
 }
@@ -92,7 +155,12 @@ export interface ScoreResult {
   wordMeaning: number
   wordNonsense: number
   wordReading: number
+  /** 문장 읽기유창성 총점 — 어절/초, `FLUENCY_DECIMALS` 자리 반올림. 판정도 이 값으로 한다 */
   sentenceReading: number
+  /** 문장 읽기유창성의 정확 어절 합(총점의 분자) */
+  sentenceWords: number
+  /** 문장 읽기유창성의 읽은 시간 합(초, 0.1초 단위 — 총점의 분모) */
+  sentenceSec: number
   /** 낱말 쓰기(G1)의 의미/무의미 소계. 문장 쓰기 양식에서는 0이다. */
   writeMeaning: number
   writeNonsense: number
@@ -124,7 +192,7 @@ export interface PdfGate {
  * 학교로 나가는 공식 문서라 채점이 끝나기 전에 실수로 내려받는 것을 막는다
  * (사용자 확정 2026-08-12: 버튼 비활성화가 아니라 눌렀을 때 이유를 모달로 알린다).
  *
- * **채점자가 이 화면에서 채울 수 있는 것만 막는다** — 미저장·낱말 O/X·문장 어절 수.
+ * **채점자가 이 화면에서 채울 수 있는 것만 막는다** — 미저장·낱말 O/X·문장 어절 수·읽은 시간.
  * 쓰기 과제는 검사 중 수집분이라 결과지에서 고칠 수 없으므로 경고만 하고 통과시킨다
  * (그렇지 않으면 아동이 쓰기를 건너뛴 세션의 결과지가 영구히 나갈 수 없다).
  */
@@ -144,11 +212,12 @@ export function sheetPdfGate(r: ScoreResult, dirty: boolean): PdfGate | null {
  * (boolean), 문장 쓰기는 `sentence_scores.words`(정수)다. 그 사실을 아는 곳을 여기 하나로
  * 모아, 결과지 화면과 인쇄 라우트가 같은 방식으로 읽게 한다.
  * `sentence_scores`에는 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있으므로
- * 양식의 문항 코드로 갈라 담는다.
+ * 양식의 문항 코드로 갈라 담는다. 문장 읽기의 읽은 시간은 `sentence_times`에 따로 있다.
  */
 export function scoreInputFrom(f: FormItems, rows: {
   marks: { item_code: string; correct: boolean }[]
   sentences: { item_code: string; words: number }[]
+  times: { item_code: string; seconds: number }[]
   writing: { item_code: string; can_write: boolean }[]
 }): ScoreInput {
   const writingCodes = new Set(f.writingItems.map(i => i.code))
@@ -157,6 +226,10 @@ export function scoreInputFrom(f: FormItems, rows: {
     marks: Object.fromEntries(rows.marks.map(m => [m.item_code, m.correct])),
     sentences: Object.fromEntries(
       rows.sentences.filter(s => readingCodes.has(s.item_code)).map(s => [s.item_code, s.words]),
+    ),
+    // numeric 열이라 방어적으로 숫자로 맞춘다(문자열로 와도 합산이 문자열 이어 붙이기가 되지 않게).
+    times: Object.fromEntries(
+      rows.times.filter(t => readingCodes.has(t.item_code)).map(t => [t.item_code, Number(t.seconds)]),
     ),
     // 양쪽 다 양식의 문항 코드로 거른다 — 학년이 바뀐 세션에 남은 옛 코드가 진행률에
     // "응답 있음"으로 세어지지 않도록.
@@ -184,6 +257,8 @@ export function scoreInputFrom(f: FormItems, rows: {
  *
  * 화면(관리자 결과지)과 결과보고서 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
  * 저장 버튼을 누르기 전까지 두 출력이 어긋난다.
+ *
+ * 문장의 읽은 시간 기본값은 `unrecordedTimeDefaults`가 정한다(규칙과 근거는 그 주석).
  */
 export function withUnrecordedDefaults(
   f: FormItems, input: ScoreInput, hasRecording: (pageCode: string) => boolean,
@@ -197,7 +272,31 @@ export function withUnrecordedDefaults(
       for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
     }
   }
-  return { ...input, marks, sentences }
+  const times = { ...unrecordedTimeDefaults(f, hasRecording), ...input.times }
+  return { ...input, marks, sentences, times }
+}
+
+/**
+ * 녹음이 없는 문장의 읽은 시간 기본값 = **그 문장의 제한 시간**(20초) — 「주어진 시간 동안 0어절」.
+ *
+ * ⚠️ 담당자 확인 대기 — 확정 아님. 물을 것: 녹음 없는 문장(「모르겠어요」·업로드 실패)을 제한 시간으로
+ * 계산할지, 계산에서 뺄지. 제한 시간으로 두는 것은 사용자 확정(2026-09-29)이다. 빼면 총점이 비율이라
+ * 못 읽은 문장이 점수를 깎지 않는다 — 1번만 5초에 7어절 읽고 나머지를 넘긴 아이가 7÷5 = 1.40으로,
+ * 4문장을 30초에 다 읽은 아이(36÷30 = 1.20)보다 높아진다. 제한 시간으로 치면 7÷65 = 0.11.
+ * 어절 0점 기본값(검사지 「제한시간 내 읽지 못한 어절은 0점」)과 같은 생각이다.
+ *
+ * **이 값은 저장하지 않는다** — 관리자 결과지는 입력 칸의 placeholder로만 보여 주고 저장 요청에 싣지
+ * 않는다. 임시값을 저장해 두면 담당자가 다른 규칙을 정했을 때 저장된 20초와 채점자가 직접 적은 20초를
+ * 구분할 수 없다. 어절 0점 기본값은 그런 불확실성이 없어 종전대로 둔다.
+ */
+export function unrecordedTimeDefaults(
+  f: FormItems, hasRecording: (pageCode: string) => boolean,
+): Partial<Record<string, number>> {
+  const out: Partial<Record<string, number>> = {}
+  for (const p of f.recordingPages)
+    if (p.section === 'sentence_reading' && !hasRecording(p.code))
+      for (const i of p.items) out[i.code] = p.limitSec
+  return out
 }
 
 const countTrue = (codes: string[], m: Partial<Record<string, boolean>>) =>
@@ -225,14 +324,24 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const wordMeaning = countTrue(f.meaningReadCodes, s.marks)
   const wordNonsense = countTrue(f.nonsenseReadCodes, s.marks)
   const wordReading = wordMeaning + wordNonsense
-  const sentenceReading = f.sentenceItems.reduce(
-    (n, i) => n + clampWords(f, i.code, s.sentences[i.code]), 0)
+  const sentenceCodes = f.sentenceItems.map(i => i.code)
+  const sentenceWords = sentenceCodes.reduce((n, c) => n + clampWords(f, c, s.sentences[c]), 0)
+  // 0초·음수·NaN은 입력이 없는 것으로 본다 — 저장 라우트가 이미 거르지만, 분모에 0이 섞이면
+  // 「시간이 있다」로 세어져 채점 완료가 되고 총점이 부풀기 때문에 여기서도 막는다.
+  const tenthsOf = (code: string): number | null => {
+    const v = s.times[code]
+    return v !== undefined && Number.isFinite(v) && v > 0 ? Math.round(v * 10) : null
+  }
+  const sentenceTenths = sentenceCodes.reduce((n, c) => n + (tenthsOf(c) ?? 0), 0)
+  const sentenceReading = fluencyOf(sentenceWords, sentenceTenths)
   const writeMeaning = total(f.meaningWriteCodes)
   const writeNonsense = total(f.nonsenseWriteCodes)
   const writing = total(f.writingItems.map(i => i.code))
   const at = (v: number, key: TaskKey): Verdict => (v >= passMark[key] ? 'pass' : 'fail')
   return {
-    wordMeaning, wordNonsense, wordReading, sentenceReading, writeMeaning, writeNonsense, writing,
+    wordMeaning, wordNonsense, wordReading,
+    sentenceReading, sentenceWords, sentenceSec: sentenceTenths / 10,
+    writeMeaning, writeNonsense, writing,
     verdict: {
       wordReading: at(wordReading, 'wordReading'),
       sentenceReading: at(sentenceReading, 'sentenceReading'),
@@ -240,7 +349,8 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
     },
     complete: {
       wordReading: allAnswered(f.readItems.map(i => i.code), s.marks),
-      sentenceReading: allAnswered(f.sentenceItems.map(i => i.code), s.sentences),
+      // 어절과 시간이 **네 문장 모두** 있어야 총점이 나온다 — 한 문장이라도 비면 분모·분자가 어긋난다.
+      sentenceReading: allAnswered(sentenceCodes, s.sentences) && sentenceCodes.every(c => tenthsOf(c) !== null),
       writing: allAnswered(f.writingItems.map(i => i.code), s.writing),
     },
   }

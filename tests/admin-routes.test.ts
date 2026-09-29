@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.listSessions).mockResolvedValue([])
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [],
+    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
 })
@@ -54,6 +54,7 @@ describe('GET /api/admin/sessions/[id]', () => {
       ],
       writing: [{ item_code: 'ww01', can_write: true }],
       marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+      times: [{ item_code: 'rs01', seconds: 4.5 }],
     })
     vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
 
@@ -69,6 +70,7 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(body.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(body.marks).toEqual([{ item_code: 'rw01', correct: true }])
     expect(body.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
+    expect(body.times).toEqual([{ item_code: 'rs01', seconds: 4.5 }])
   })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))
@@ -86,7 +88,7 @@ describe('GET /api/admin/sessions/[id]', () => {
   // sheet.pdf의 `if (!session)` 가드는 도달조차 못 했다.
   it('[REGRESSION] 없는 세션은 404 — 장애(500)와 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
     })
     const res = await DETAIL(req(), ctx(SID))
     expect(res.status).toBe(404)
@@ -123,13 +125,14 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
     marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+    times: [{ item_code: 'rs01', seconds: 4.5 }],
   })
 
   // 이 라우트의 `if (!session)` 가드는 sessionDetail이 `.single()`이던 동안 도달조차 못 했다
   // (행 0개에 throw → catch → 500). maybeSingle로 바꾼 뒤 가드가 실제로 동작하는지 고정한다.
   it('[REGRESSION] 없는 세션은 404 — 삭제된 세션과 장애를 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
     })
     const res = await SHEET(req(), ctx(SID))
     expect(res.status).toBe(404)

@@ -16,18 +16,20 @@ import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { latestScored, latestSession, summarize, type ResultsChild, type ResultsSession } from '@/lib/results-view'
-import type { TaskKey } from '@/lib/scoring'
+import { FLUENCY_UNIT, fluencyLabel, type CountTaskKey, type TaskKey } from '@/lib/scoring'
 
 interface Payload {
   cls: { schoolName: string; grade: number; classNo: number; teacherName: string }
   provisional: boolean
-  taskMax: Record<TaskKey, number>
+  /** 개수형 과제의 만점. 문장 읽기는 비율(어절/초)이라 만점이 없다 */
+  taskMax: Record<CountTaskKey, number>
   children: ResultsChild[]
 }
 
 const TASKS: { key: TaskKey; label: string }[] = [
   { key: 'wordReading', label: '낱말 해독' },
-  { key: 'sentenceReading', label: '문장 읽기' },
+  // 칸에는 숫자만 찍으므로(「2.12」) 단위는 머리글이 말한다.
+  { key: 'sentenceReading', label: `문장 읽기(${FLUENCY_UNIT})` },
   { key: 'writing', label: '쓰기' },
 ]
 
@@ -70,10 +72,12 @@ function Check({ checked, indeterminate = false, disabled, label, onChange }: {
   )
 }
 
-function ScoreCell({ s, task, max }: { s: ResultsSession | null; task: TaskKey; max: number }) {
+function ScoreCell({ s, task, taskMax }: { s: ResultsSession | null; task: TaskKey; taskMax: Payload['taskMax'] }) {
   if (!s?.scores) return <span className="text-ink-mute">-</span>
   if (s.complete?.[task] === false) return <Badge tone="mute" size="sm">채점 전</Badge>
-  return <>{s.scores[task]}/{max}</>
+  // 문장 읽기는 만점이 없는 비율이다 — 「2.12/36」처럼 척도를 섞어 찍지 않는다(lib/scoring CountTaskKey).
+  if (task === 'sentenceReading') return <>{fluencyLabel(s.scores[task])}</>
+  return <>{s.scores[task]}/{taskMax[task]}</>
 }
 
 /** 상태 코드로 실패를 나눈다 — 401(만료·변조)은 재시도해 봐야 소용없고 404는 학급이 사라진 것. */
@@ -274,7 +278,7 @@ export function ResultsView({ token }: { token: string }) {
                         <td className="whitespace-nowrap px-2 py-2 font-medium">{label ? '' : `${c.name} (${c.gender})`}</td>
                         {TASKS.map(t => (
                           <td key={t.key} className="whitespace-nowrap px-2 py-2 tabular-nums">
-                            <ScoreCell s={s} task={t.key} max={taskMax[t.key]} />
+                            <ScoreCell s={s} task={t.key} taskMax={taskMax} />
                           </td>
                         ))}
                         <td className="px-2 py-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
