@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 import { sessionDetail } from '@/lib/db'
 import { formForGrade } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
-import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
+import { scoreInputFrom, withUnrecordedFixed } from '@/lib/scoring'
 import { renderReport } from '@/lib/pdf/report'
 import { kstDateKey } from '@/lib/adminStats'
 import { pad2 } from '@/lib/format'
@@ -32,7 +32,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const bytes = await renderReport({
       form,
       session,
-      ...(session.submitted_at ? withUnrecordedDefaults(f, input, c => recorded.has(c)) : input),
+      ...(session.submitted_at ? withUnrecordedFixed(f, input, c => recorded.has(c)) : input),
     })
 
     // 보고서에 찍히는 검사일과 같은 KST 기준 — UTC로 자르면 아침 검사가 하루 전으로 어긋난다.

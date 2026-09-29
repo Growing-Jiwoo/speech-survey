@@ -12,12 +12,15 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { SurveyItem } from '@/lib/items'
 
-export function WordScoreRows({ audio, items, marks, onMark }: {
+export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
   /** sticky 바에 앉는 플레이어(그룹 라벨 포함 — PageAudio) */
   audio: ReactNode
   items: SurveyItem[]
   marks: Partial<Record<string, boolean>>
   onMark: (code: string, v: boolean) => void
+  /** 녹음이 없는 그룹 — X로 고정하고 누를 수 없게 한다. 들을 녹음이 없어 채점자가 판단할 것이 없다
+   *  (lib/scoring withUnrecordedFixed). 플레이어 자리의 「미녹음」 배지가 잠긴 이유를 알린다. */
+  locked?: boolean
 }) {
   // sticky 바 높이를 실측해 아래 O/X 버튼의 scroll-margin으로 넘긴다.
   // 왜 실측인가: 키보드로 O/X를 거슬러 올라가면(Shift+Tab) 브라우저는 "화면 안에 있다"고
@@ -54,17 +57,18 @@ export function WordScoreRows({ audio, items, marks, onMark }: {
           멀어지는 것도 막는다(행 폭이 좁을수록 낱말↔버튼 시선 이동이 짧다) */}
       <ul className="grid gap-x-10 px-4 py-3 sm:grid-cols-2">
         {items.map(item => {
-          const v = marks[item.code]
+          const v = locked ? false : marks[item.code]
           return (
             <li key={item.code}
               className="flex items-center justify-between gap-3 rounded-xl px-2 py-1.5">
               <span className="font-read min-w-0 truncate text-[20px]">{item.text}</span>
               <div className="flex flex-none gap-1.5">
                 {([['O', true], ['X', false]] as const).map(([label, want]) => (
-                  <button key={label} type="button" aria-pressed={v === want}
+                  <button key={label} type="button" aria-pressed={v === want} disabled={locked}
                     aria-label={`${item.text} ${want ? '정반응' : '오반응'}`}
+                    title={locked ? '녹음이 없어 오반응(X)으로 계산해요' : undefined}
                     onClick={() => onMark(item.code, want)}
-                    className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition ${
+                    className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold transition disabled:cursor-not-allowed disabled:opacity-45 ${
                       v === want
                         ? want ? 'border-mint bg-mint/10 text-mint' : 'border-rec bg-rec/10 text-rec-deep'
                         : 'border-line bg-well text-ink-mute'}`}>

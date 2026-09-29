@@ -3,6 +3,7 @@
 // 채점 입력은 둘이다 — 읽은 시간(초)과 정확 어절 수. 시간 칸은 담당자가 짚은 자리(문장과 어절 칸 사이)에
 // 둔다(담당자 확정 2026-09-29 「초를 쓸 수 있는 란을 내가 체크한 곳에」). 총점 계산은 lib/scoring이 한다.
 // 플레이어는 문장 바로 밑(같은 칸)에 둔다 — 시간·배속과 뭉치던 밀집(실사용 피드백)을 풀고, 입력 칸 높이와 무관하게 붙는다.
+// 녹음 없는 문장은 입력 칸 대신 계산에 쓰는 값(제한 시간 · 0어절)을 같은 자리에 고정해 보여 준다(lib/scoring withUnrecordedFixed).
 'use client'
 import { useState } from 'react'
 import { itemMaxWords, parseReadSec } from '@/lib/scoring'
@@ -10,15 +11,15 @@ import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
 export function SentenceRows({
-  items, sentences, onChange, times, timeDefaults, onTimeChange, maxSec, attemptsFor, limitSec, onAudioError,
+  items, sentences, onChange, times, locked, onTimeChange, maxSec, attemptsFor, limitSec, onAudioError,
 }: {
   items: SurveyItem[]
   sentences: Partial<Record<string, number>>
   onChange: (code: string, v: number | undefined) => void
   /** 채점자가 넣은 읽은 시간(초) */
   times: Partial<Record<string, number>>
-  /** 녹음 없는 문장의 시간 기본값 — 칸에 흐린 글자로만 보인다(저장하지 않는다) */
-  timeDefaults: Partial<Record<string, number>>
+  /** 잠긴(녹음 없는) 문항 코드 — 제한 시간 · 0어절로 고정된다 */
+  locked: ReadonlySet<string>
   onTimeChange: (code: string, v: number | undefined) => void
   /** 읽은 시간 입력 상한(초) — 오타 방지용(lib/scoring readSecMax) */
   maxSec: number
@@ -51,9 +52,19 @@ export function SentenceRows({
               </div>
               {/* 입력 묶음은 행의 세로 가운데 — 위에 붙이면 문장·플레이어 두 줄 옆에서 떠 보인다.
                   「/ N」 칸 폭을 고정해 「/ 14」인 줄만 묶음이 왼쪽으로 밀리지 않게 한다. */}
+              {locked.has(item.code) ? (
+                // 입력 칸과 같은 크기의 점선 상자 — 행마다 값의 자리가 같아 세로로 훑어 읽힌다
+                <div className="ml-auto flex flex-none items-center gap-1.5 self-center"
+                  title={`녹음이 없어 ${limitSec}초 · 0어절로 계산해요`}>
+                  <FixedCell label={`${i + 1}번 문장 읽은 시간(초), 녹음 없음`} value={limitSec} />
+                  <span className="mr-3 text-[13px] text-ink-mute">초</span>
+                  <FixedCell label={`${i + 1}번 문장 정확 어절 수, 녹음 없음`} value={0} />
+                  <span className="w-7 text-[13px] text-ink-mute">/ {max}</span>
+                </div>
+              ) : (
               <div className="ml-auto flex flex-none items-center gap-1.5 self-center">
                 <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec}
-                  value={times[item.code]} fallback={timeDefaults[item.code]}
+                  value={times[item.code]}
                   onChange={v => onTimeChange(item.code, v)} />
                 <span className="mr-3 text-[13px] text-ink-mute">초</span>
                 <input type="number" min={0} max={max} inputMode="numeric"
@@ -69,11 +80,22 @@ export function SentenceRows({
                   className="h-11 w-16 rounded-lg border-[1.5px] border-line bg-well px-2 text-center text-base tabular-nums outline-none focus:border-blue" />
                 <span className="w-7 text-[13px] text-ink-mute">/ {max}</span>
               </div>
+              )}
             </div>
           </div>
         )
       })}
     </div>
+  )
+}
+
+/** 잠긴 칸 — 계산에 들어가는 값을 보여 주기만 한다(입력이 아님을 점선·흐린 글자로 드러낸다) */
+function FixedCell({ label, value }: { label: string; value: number }) {
+  return (
+    <span role="img" aria-label={`${label} ${value}`}
+      className="flex h-11 w-16 items-center justify-center rounded-lg border-[1.5px] border-dashed border-line text-base tabular-nums text-ink-mute">
+      {value}
+    </span>
   )
 }
 
@@ -86,12 +108,10 @@ export function SentenceRows({
  *
  * 형식·범위를 벗어난 글자는 붉은 테두리로 드러나고, 그동안 그 문장의 시간은 「없음」으로 올라간다 —
  * 잘못 친 값으로 조용히 계산하지 않고 채점 완료를 막는다(다른 칸의 자동 저장은 막지 않는다).
- * 녹음 없는 문장은 계산에 쓰는 기본값(제한 시간)을 흐린 글자로 보여 준다 — 채점자가 넣은 값과 구분된다.
  */
-function SecondsInput({ label, value, fallback, max, onChange }: {
+function SecondsInput({ label, value, max, onChange }: {
   label: string
   value: number | undefined
-  fallback: number | undefined
   max: number
   onChange: (v: number | undefined) => void
 }) {
@@ -102,16 +122,14 @@ function SecondsInput({ label, value, fallback, max, onChange }: {
     <input type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
       aria-label={label} aria-invalid={invalid || undefined}
       value={text}
-      placeholder={fallback === undefined ? undefined : String(fallback)}
-      title={invalid ? `0.1초 단위로 ${max}초까지 적을 수 있어요`
-        : fallback !== undefined && text === '' ? `녹음이 없어 ${fallback}초로 계산해요` : undefined}
+      title={invalid ? `0.1초 단위로 ${max}초까지 적을 수 있어요` : undefined}
       onChange={e => {
         const t = e.target.value
         setText(t)
         const v = parseReadSec(t, max)
         onChange(v === null ? undefined : v)
       }}
-      className={`h-11 w-16 rounded-lg border-[1.5px] bg-well px-2 text-center text-base tabular-nums outline-none placeholder:text-ink-mute/50 ${
+      className={`h-11 w-16 rounded-lg border-[1.5px] bg-well px-2 text-center text-base tabular-nums outline-none ${
         invalid ? 'border-rec focus:border-rec-deep' : 'border-line focus:border-blue'}`} />
   )
 }

@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
-import { scoreInputFrom, unrecordedTimeDefaults, withUnrecordedDefaults } from '@/lib/scoring'
+import { scoreInputFrom } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -100,18 +100,9 @@ export function AdminDetailView() {
   // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다. 양식은 상세 API가 싣는다.
   const f = itemsFor(data.form)
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
-  // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 결과보고서 PDF 라우트도 같은 함수를
-  // 거치므로, 채점자가 [채점 저장]을 누르기 전에도 화면과 인쇄물의 값이 같다.
-  // **제출된 세션에만** 적용한다: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라
-  // "아직 안 했다"이므로, 그것까지 0점으로 채우면 검사 중인 아동이 0점으로 보인다.
-  const rawInput = scoreInputFrom(f, data)
-  const hasRecording = (code: string) => byItem.has(code)
-  const input = s.submitted_at
-    ? withUnrecordedDefaults(f, rawInput, hasRecording)
-    : rawInput
-  // 읽은 시간만은 기본값을 채점 상태에 넣지 않는다 — 넣으면 다음 저장 때 임시값(제한 시간)이 DB에
-  // 굳는다(lib/scoring unrecordedTimeDefaults 주석). 결과지는 이것을 계산과 입력 칸 안내에만 쓴다.
-  const timeDefaults = s.submitted_at ? unrecordedTimeDefaults(f, hasRecording) : {}
+  // 미녹음 문항의 고정(X·0어절·제한 시간)은 결과지가 한다 — 잠글 칸을 아는 곳이 거기라서다
+  // (결과보고서 PDF 라우트·교사 결과지도 같은 lib/scoring withUnrecordedFixed를 거친다).
+  const input = scoreInputFrom(f, data)
   const writtenCount = f.writingItems.filter(i => input.writing[i.code] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
   const expected = f.totals
@@ -148,9 +139,8 @@ export function AdminDetailView() {
             onDirtyChange={setDirty}
             initialMarks={input.marks}
             initialSentences={input.sentences}
-            initialTimes={rawInput.times}
+            initialTimes={input.times}
             incomplete={missingCount > 0}
-            timeDefaults={timeDefaults}
             attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>

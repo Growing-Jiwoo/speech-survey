@@ -176,7 +176,7 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     expect(res.headers.get('content-disposition')).not.toContain('2026-08-06')
   })
   // 항목 8·9 — 녹음이 없는 과제를 채점자가 손으로 X 찍어 저장하기 전까지 검사지 점수 칸이
-  // 통째로 비어 나갔다. 라우트가 화면과 같은 기본값(withUnrecordedDefaults)을 적용한다.
+  // 통째로 비어 나갔다. 라우트가 화면과 같은 고정값(withUnrecordedFixed)을 적용한다.
   it('미녹음 페이지는 오반응(X·0점)으로 채워 찍는다 — 녹음이 다 있는 세션과 출력이 다르다', async () => {
     const d = detail('2026-08-07T06:25:08.000Z', '2026-08-07T07:00:00.000Z')
     vi.mocked(db.sessionDetail).mockResolvedValueOnce(d)

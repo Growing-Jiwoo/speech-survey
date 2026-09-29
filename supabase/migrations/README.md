@@ -36,8 +36,8 @@ SQL Editor에서 위→아래로 한 번에 실행한다.**
 - **`sentence_scores`에는 두 종류의 점수가 섞인다** — 문장 읽기유창성(`rs..`, 관리자 채점)과
   문장 쓰기(`sw..`, G2에서 검사 중 수집). 모양이 같아 테이블을 공유하며, 그 대가로 관리자 채점
   저장이 삭제 범위를 `rs..`로 한정해야 한다(`lib/db.ts`의 `saveScores`). 문장 읽기의 **읽은 시간**은
-  이 테이블이 아니라 `sentence_times`(005)에 있다 — 녹음 없는 문장의 기본 시간(제한 시간)은 저장하지 않고
-  채점할 때 파생한다(`lib/scoring.ts`의 `unrecordedTimeDefaults`).
+  이 테이블이 아니라 `sentence_times`(005)에 있다 — 녹음 없는 문장의 시간(제한 시간 고정)은 저장하지 않고
+  채점할 때 파생한다(`lib/scoring.ts`의 `unrecordedTimes`).
 - **`login_attempts`가 DB에 있는 이유**는 서버리스 때문이다 — 인메모리 카운터는 인스턴스마다
   초기화돼 무차별 대입 방어 구실을 못 한다. `record_login_failure`를 SQL 함수로 둔 것도
   read-then-write 경쟁조건을 없애기 위해서고, 잠금 만료 후 첫 실패에서 카운트를 1로 리셋하는

@@ -245,54 +245,47 @@ export function scoreInputFrom(f: FormItems, rows: {
 }
 
 /**
- * 녹음이 없는 페이지의 문항을 **오반응(X)·0점**으로 채운 채점 입력을 만든다
- * (사용자 확정 2026-08-12: "미녹음 한 거는 기본적으로 X하거나 0점이 default로 입력되게").
- * 검사지 명문: "제한시간 내 읽지 못한 낱말은 0점으로 채점합니다" — 미녹음도 같은 취급.
+ * 녹음이 없는 페이지의 문항을 **오반응(X)·0점**으로 **고정한** 채점 입력을 만든다.
+ * 검사지 명문: "제한시간 내 읽지 못한 낱말은 0점으로 채점합니다" — 미녹음도 같은 취급(사용자 확정 2026-08-12).
  *
  * 아동이 읽지 않고 넘긴 페이지(「모르겠어요」)는 정반응이 있을 수 없는데, 채점자가 X를
  * 하나하나 찍어 주지 않으면 그 과제가 영원히 "채점 전"으로 남아 결과지·결과보고서 PDF의 점수
  * 칸이 통째로 비어 나갔다(사용자 보고 항목 9).
  *
- * **저장된 채점이 언제나 우선한다** — 채점자가 녹음 없이 O를 준 판단을 덮지 않는다.
+ * **저장된 채점이 있어도 덮는다**(사용자 확정 2026-09-29 — 담당자 회신이 아니다). 예전에는 채점자 값이
+ * 기본값을 이겼는데, 녹음이 없으니 채점자가 들을 것이 없어 그 값은 근거 없는 추측일 수밖에 없다.
+ * 제출된 검사는 업로드가 잠겨 녹음이 나중에 생기지도 않는다. 그래서 관리자 결과지는 미녹음 행의 입력을
+ * 잠그고, 계산도 DB에 남은 예전 값을 보지 않는다 — 잠근 화면과 인쇄물이 다른 점수를 내지 않게.
  *
- * 화면(관리자 결과지)과 결과보고서 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
- * 저장 버튼을 누르기 전까지 두 출력이 어긋난다.
+ * 화면(관리자 결과지)·결과보고서 PDF·교사 결과지가 같은 함수를 거쳐 같은 값을 쓴다.
  *
- * 문장의 읽은 시간 기본값은 `unrecordedTimeDefaults`가 정한다(규칙과 근거는 그 주석).
+ * 문장의 읽은 시간은 `unrecordedTimes`가 정한다(규칙과 근거는 그 주석).
  */
-export function withUnrecordedDefaults(
+export function withUnrecordedFixed(
   f: FormItems, input: ScoreInput, hasRecording: (pageCode: string) => boolean,
 ): ScoreInput {
   const marks = { ...input.marks }
   const sentences = { ...input.sentences }
   for (const p of f.recordingPages.filter(p => !hasRecording(p.code))) {
-    if (p.section === 'word_reading') {
-      for (const i of p.items) if (marks[i.code] === undefined) marks[i.code] = false
-    } else {
-      for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
-    }
+    if (p.section === 'word_reading') for (const i of p.items) marks[i.code] = false
+    else for (const i of p.items) sentences[i.code] = 0
   }
-  // 위 둘과 같이 「비어 있을 때만」 채운다 — spread로 합치면 값이 undefined인 키가 기본값을 지운다.
-  const times = { ...input.times }
-  for (const [code, sec] of Object.entries(unrecordedTimeDefaults(f, hasRecording)))
-    if (times[code] === undefined) times[code] = sec
-  return { ...input, marks, sentences, times }
+  return { ...input, marks, sentences, times: { ...input.times, ...unrecordedTimes(f, hasRecording) } }
 }
 
 /**
- * 녹음이 없는 문장의 읽은 시간 기본값 = **그 문장의 제한 시간**(20초) — 「주어진 시간 동안 0어절」.
+ * 녹음이 없는 문장의 읽은 시간 = **그 문장의 제한 시간**(20초) — 「주어진 시간 동안 0어절」.
  *
  * 담당자 확정(2026-09-29) — 원문 「20초로 치고 0어절로 계산하면 될 듯」. 「모르겠어요」·업로드 실패를
  * 가리지 않는다(서버는 둘을 구분하지 않는다). 계산에서 빼지 않는 이유: 빼면 총점이 비율이라
  * 못 읽은 문장이 점수를 깎지 않는다 — 1번만 5초에 7어절 읽고 나머지를 넘긴 아이가 7÷5 = 1.40으로,
  * 4문장을 30초에 다 읽은 아이(36÷30 = 1.20)보다 높아진다. 제한 시간으로 치면 7÷65 = 0.11.
- * 어절 0점 기본값(검사지 「제한시간 내 읽지 못한 어절은 0점」)과 같은 생각이다.
+ * 어절 0점(검사지 「제한시간 내 읽지 못한 어절은 0점」)과 같은 생각이다.
  *
- * **이 값은 저장하지 않고 채점할 때마다 파생한다** — 관리자 결과지는 입력 칸의 placeholder로만 보여 주고
- * 저장 요청에 싣지 않는다. 확인 대기 중에 임시값이 DB에 굳지 않게 하려고 이렇게 만들었고, 확정 뒤에도
- * 바꿀 이유가 없다: 제출된 검사는 업로드가 잠겨 녹음이 새로 생기지 않으므로 파생값이 달라지지 않는다.
+ * **이 값은 저장하지 않고 채점할 때마다 파생한다** — 관리자 결과지는 잠긴 칸에 보여 주기만 하고
+ * 저장 요청에 싣지 않는다. 제출된 검사는 업로드가 잠겨 녹음이 새로 생기지 않으므로 파생값이 달라지지 않는다.
  */
-export function unrecordedTimeDefaults(
+export function unrecordedTimes(
   f: FormItems, hasRecording: (pageCode: string) => boolean,
 ): Partial<Record<string, number>> {
   const out: Partial<Record<string, number>> = {}
@@ -300,6 +293,13 @@ export function unrecordedTimeDefaults(
     if (p.section === 'sentence_reading' && !hasRecording(p.code))
       for (const i of p.items) out[i.code] = p.limitSec
   return out
+}
+
+/** 녹음이 없는 페이지의 문항 코드 — 관리자 결과지가 잠글 칸이다. 저장 요청에서도 뺀다(보낼 판단이 없다). */
+export function unrecordedItemCodes(
+  f: FormItems, hasRecording: (pageCode: string) => boolean,
+): Set<string> {
+  return new Set(f.recordingPages.filter(p => !hasRecording(p.code)).flatMap(p => p.items.map(i => i.code)))
 }
 
 const countTrue = (codes: string[], m: Partial<Record<string, boolean>>) =>

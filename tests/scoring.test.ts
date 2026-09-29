@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   PROVISIONAL_CRITERIA, fluencyLabel, isValidReadSec, itemMaxWords, parseReadSec, readSecLabel, readSecMax,
-  scoreInputFrom, scoreSession, scoringFor, sheetPdfGate, unrecordedTimeDefaults, withUnrecordedDefaults,
+  scoreInputFrom, scoreSession, scoringFor, sheetPdfGate, unrecordedItemCodes, unrecordedTimes, withUnrecordedFixed,
   type ScoreInput,
 } from '@/lib/scoring'
 import { itemsFor } from '@/lib/items'
@@ -316,12 +316,12 @@ describe('sheetPdfGate — 채점이 끝나기 전에는 공식 PDF를 내려받
   })
 })
 
-describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기본 채점 (항목 8)', () => {
+describe('withUnrecordedFixed — 미녹음은 오반응(X·0점)으로 고정 채점 (항목 8)', () => {
   const none = () => false
   const all = () => true
 
   it('문장 페이지가 미녹음이면 어절 0점과 읽은 시간 = 제한 시간(20초)이 채워진다', () => {
-    const out = withUnrecordedDefaults(g1, empty, code => code !== 'p_rs02')
+    const out = withUnrecordedFixed(g1, empty, code => code !== 'p_rs02')
     expect(out.sentences.rs02).toBe(0)
     expect(out.times.rs02).toBe(20)
     expect(out.sentences.rs01).toBeUndefined()
@@ -330,32 +330,38 @@ describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기�
 
   it('무의미 낱말 페이지가 미녹음이면 그 7문항이 X로 채워진다', () => {
     const marks = Object.fromEntries(g1.meaningReadCodes.map(c => [c, true]))
-    const out = withUnrecordedDefaults(g1, { ...empty, marks }, code => code !== 'p_rw_nonsense')
+    const out = withUnrecordedFixed(g1, { ...empty, marks }, code => code !== 'p_rw_nonsense')
     expect(g1.nonsenseReadCodes.every(c => out.marks[c] === false)).toBe(true)
     // 이제 낱말 해독이 "채점 완료"가 되어 결과보고서 PDF의 해독 판정 칸이 채워진다
     expect(scoreSession(G1, out).complete.wordReading).toBe(true)
     expect(scoreSession(G1, out).wordReading).toBe(7)
   })
 
-  it('저장된 채점이 있으면 덮지 않는다 (채점자의 판단이 기본값보다 우선)', () => {
+  it('[REGRESSION] 저장된 채점이 있어도 덮는다 — 들을 녹음이 없어 그 값은 근거가 없다(사용자 확정 2026-09-29)', () => {
     const input: ScoreInput = { marks: { rw08: true }, sentences: { rs01: 5 }, times: { rs01: 3.5 }, writing: {} }
-    const out = withUnrecordedDefaults(g1, input, none)
-    expect(out.marks.rw08).toBe(true)
-    expect(out.sentences.rs01).toBe(5)
-    expect(out.times.rs01).toBe(3.5)
+    const out = withUnrecordedFixed(g1, input, none)
+    expect(out.marks.rw08).toBe(false)
+    expect(out.sentences.rs01).toBe(0)
+    expect(out.times.rs01).toBe(20)
+  })
+
+  it('녹음이 있는 페이지의 저장값은 그대로 둔다', () => {
+    const input: ScoreInput = { marks: { rw01: true }, sentences: { rs01: 5 }, times: { rs01: 3.5 }, writing: {} }
+    const out = withUnrecordedFixed(g1, input, code => code === 'p_rw_meaning' || code === 'p_rs01')
+    expect([out.marks.rw01, out.sentences.rs01, out.times.rs01]).toEqual([true, 5, 3.5])
   })
 
   it('값이 undefined인 키가 있어도 시간 기본값을 채운다 (비어 있는 것과 같다)', () => {
-    const out = withUnrecordedDefaults(g1, { ...empty, times: { rs02: undefined } }, code => code !== 'p_rs02')
+    const out = withUnrecordedFixed(g1, { ...empty, times: { rs02: undefined } }, code => code !== 'p_rs02')
     expect(out.times.rs02).toBe(20)
   })
 
   it('녹음이 다 있으면 아무것도 채우지 않는다', () => {
-    expect(withUnrecordedDefaults(g1, empty, all)).toEqual(empty)
+    expect(withUnrecordedFixed(g1, empty, all)).toEqual(empty)
   })
 
   it('[REGRESSION] 의미 낱말 첫 3개가 X로 채워져도 무의미·문장까지 전부 기본채점한다 (중단 규칙 폐기)', () => {
-    const out = withUnrecordedDefaults(g1, empty, none)
+    const out = withUnrecordedFixed(g1, empty, none)
     expect(Object.keys(out.marks)).toHaveLength(14)          // 의미 7 + 무의미 7 전부 X
     expect(Object.values(out.marks).every(v => v === false)).toBe(true)
     expect(Object.keys(out.sentences)).toHaveLength(4)       // 문장 4개 전부 0
@@ -363,7 +369,7 @@ describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기�
   })
 
   it('쓰기 과제는 손대지 않는다 (녹음이 없는 과제라 미녹음 판정 대상이 아니다)', () => {
-    expect(withUnrecordedDefaults(g1, empty, none).writing).toEqual({})
+    expect(withUnrecordedFixed(g1, empty, none).writing).toEqual({})
   })
 })
 
@@ -403,7 +409,7 @@ describe('문장 읽기유창성 — 정확 어절 합 ÷ 읽은 시간 합 (담
   it('[REGRESSION] 녹음 없는 문장은 제한 시간을 분모에 더한다 — 1문장만 읽고 넘긴 아이가 유창해 보이지 않게', () => {
     // 1번만 5초에 7어절 읽고 2~4번은 「모르겠어요」(녹음 없음): 7 ÷ (5 + 20×3) = 0.107… → 0.11.
     // 계산에서 빼면 7 ÷ 5 = 1.40으로 4문장을 30초에 다 읽은 아이(1.20)보다 높아진다(lib/scoring 주석).
-    const input = withUnrecordedDefaults(g1, { ...empty, sentences: { rs01: 7 }, times: { rs01: 5 } },
+    const input = withUnrecordedFixed(g1, { ...empty, sentences: { rs01: 7 }, times: { rs01: 5 } },
       code => code === 'p_rs01')
     const r = scoreSession(G1, input)
     expect(r.sentenceReading).toBe(0.11)
@@ -426,10 +432,18 @@ describe('문장 읽기유창성 — 정확 어절 합 ÷ 읽은 시간 합 (담
   })
 })
 
-describe('unrecordedTimeDefaults — 녹음 없는 문장의 읽은 시간 기본값', () => {
-  it('녹음 없는 문장 페이지만, 그 페이지의 제한 시간으로 — 낱말 페이지는 대상이 아니다', () => {
-    expect(unrecordedTimeDefaults(g1, code => code !== 'p_rs03' && code !== 'p_rw_meaning')).toEqual({ rs03: 20 })
-    expect(unrecordedTimeDefaults(g1, () => true)).toEqual({})
+describe('unrecordedTimes · unrecordedItemCodes — 녹음 없는 문항', () => {
+  it('읽은 시간은 녹음 없는 문장 페이지만, 그 페이지의 제한 시간으로 — 낱말 페이지는 대상이 아니다', () => {
+    expect(unrecordedTimes(g1, code => code !== 'p_rs03' && code !== 'p_rw_meaning')).toEqual({ rs03: 20 })
+    expect(unrecordedTimes(g1, () => true)).toEqual({})
+  })
+  it('잠글 문항 코드 — 낱말 그룹은 7문항 통째로, 문장은 그 한 문장', () => {
+    const codes = unrecordedItemCodes(g1, code => code !== 'p_rs03' && code !== 'p_rw_meaning')
+    expect([...codes].sort()).toEqual([...g1.meaningReadCodes, 'rs03'].sort())
+    expect(unrecordedItemCodes(g1, () => true).size).toBe(0)
+  })
+  it('쓰기 문항은 녹음 페이지가 아니라 잠그지 않는다', () => {
+    expect([...unrecordedItemCodes(g1, () => false)].some(c => c.startsWith('ww'))).toBe(false)
   })
 })
 
@@ -505,7 +519,7 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
     const r = scoreSession(G2, { ...empty, sentences: { rs01: 7, rs02: 8, rs03: 9, rs04: 11 },
       times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5 } })
     expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([35, 20, 1.75])
-    expect(withUnrecordedDefaults(g2, empty, () => false).times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
+    expect(withUnrecordedFixed(g2, empty, () => false).times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
   })
 
   it('만점을 넘는 어절은 나누기 전에 잘라낸다 — 오입력이 비율을 부풀리지 않는다', () => {
@@ -520,9 +534,9 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
     expect(r.sentenceSec).toBe(17)
   })
 
-  it('녹음 없는 문장이라도 채점자가 시간을 넣으면 그 값이 기본값(20초)을 이긴다', () => {
-    const out = withUnrecordedDefaults(g1, { ...empty, times: { rs02: 7.5 } }, () => false)
-    expect(out.times).toEqual({ rs01: 20, rs02: 7.5, rs03: 20, rs04: 20 })
+  it('녹음 없는 문장은 채점자가 넣은 시간이 있어도 제한 시간(20초)으로 고정된다', () => {
+    const out = withUnrecordedFixed(g1, { ...empty, times: { rs02: 7.5 } }, () => false)
+    expect(out.times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
   })
 
   it('가장 느린 경우 — 네 문장 모두 녹음 상한(25초)에 만점이면 36 ÷ 100 = 0.36', () => {

@@ -9,7 +9,7 @@ import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
 import {
   FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreSession, scoringFor,
-  sheetPdfGate, type TaskKey,
+  sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -30,9 +30,10 @@ import type { SessionRow } from '@/lib/db'
 /** 자동 저장 디바운스(ms). 채점자가 O/X를 연달아 찍는 속도보다 길고, 화면을 떠나기 전에
  *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
 const AUTOSAVE_DELAY_MS = 1500
+const NO_CODES: ReadonlySet<string> = new Set()
 
 export function ResultSheet({
-  sessionId, session, form, writing, initialMarks, initialSentences, initialTimes, timeDefaults,
+  sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
   incomplete, attemptsOf, onAudioError, onDirtyChange,
 }: {
   sessionId: string
@@ -46,23 +47,30 @@ export function ResultSheet({
   initialMarks: Partial<Record<string, boolean>>
   /** 문장 읽기유창성 점수만 (문장 쓰기는 writing으로 들어온다) */
   initialSentences: Partial<Record<string, number>>
-  /** 문장 읽기유창성의 읽은 시간 — **채점자가 저장한 값만**(미녹음 기본값은 아래 timeDefaults) */
+  /** 문장 읽기유창성의 읽은 시간 — 채점자가 저장한 값 */
   initialTimes: Partial<Record<string, number>>
-  /** 녹음 없는 문장의 읽은 시간 기본값(제한 시간). 계산과 입력 칸 안내에만 쓰고 저장하지 않는다 */
-  timeDefaults: Partial<Record<string, number>>
   /** 페이지 코드 → 녹음 시도들 */
   attemptsOf: (pageCode: string) => Attempt[]
   onAudioError: () => void
   /** 저장하지 않은 채점이 있는지 — 상위가 아동 이동·이탈을 막는 데 쓴다 */
   onDirtyChange?: (dirty: boolean) => void
 }) {
-  const [marks, setMarks] = useState(initialMarks)
-  const [sentences, setSentences] = useState(initialSentences)
-  const [times, setTimes] = useState(initialTimes)
+  const f = itemsFor(form)
+  // 미녹음 문항은 잠근다 — 들을 녹음이 없어 채점자가 판단할 것이 없다(lib/scoring withUnrecordedFixed).
+  // **제출된 검사만**: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라 "아직 안 했다"이다.
+  const hasRecording = (pageCode: string) => attemptsOf(pageCode).length > 0
+  const locked = session.submitted_at ? unrecordedItemCodes(f, hasRecording) : NO_CODES
+  // 잠긴 문항의 예전 저장값(잠그기 전에 넣은 값)은 채점 상태에 싣지 않는다 — 계산은 어차피 보지 않고,
+  // 다음 저장 요청에서 빠지므로 문장 점수·시간은 그때 DB에서도 지워진다. 여는 것만으로 저장되지는 않는다.
+  const unlocked = <T,>(m: Partial<Record<string, T>>) =>
+    Object.fromEntries(Object.entries(m).filter(([c]) => !locked.has(c))) as Partial<Record<string, T>>
+  const [marks, setMarks] = useState(() => unlocked(initialMarks))
+  const [sentences, setSentences] = useState(() => unlocked(initialSentences))
+  const [times, setTimes] = useState(() => unlocked(initialTimes))
   // 저장에 성공한 값 — 화면 상태와 비교해 "저장 안 한 변경"을 판단한다
-  const [savedMarks, setSavedMarks] = useState(initialMarks)
-  const [savedSentences, setSavedSentences] = useState(initialSentences)
-  const [savedTimes, setSavedTimes] = useState(initialTimes)
+  const [savedMarks, setSavedMarks] = useState(marks)
+  const [savedSentences, setSavedSentences] = useState(sentences)
+  const [savedTimes, setSavedTimes] = useState(times)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
@@ -90,10 +98,10 @@ export function ResultSheet({
     return () => ro.disconnect()
   }, [])
 
-  const f = itemsFor(form)
   const { taskMax, sentenceWordsMax, readMax, writeMax, passMark } = scoringFor(form)
-  // 계산은 기본값 위에 채점자가 넣은 값을 얹어서 한다(결과보고서 PDF 라우트의 withUnrecordedDefaults와 같은 값).
-  const r = scoreSession(form, { marks, sentences, times: { ...timeDefaults, ...times }, writing })
+  // 결과보고서 PDF 라우트·교사 결과지와 같은 함수로 미녹음을 고정한 뒤 계산한다 — 저장 전에도 화면과 인쇄물이 같다.
+  const entered = { marks, sentences, times, writing }
+  const r = scoreSession(form, session.submitted_at ? withUnrecordedFixed(f, entered, hasRecording) : entered)
   const writingLabel = SECTION_LABEL[f.writingSection]
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
@@ -194,6 +202,8 @@ export function ResultSheet({
   }
 
   const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
+  // 낱말은 그룹(의미/무의미) 하나가 녹음 한 페이지라 그룹 단위로 잠긴다
+  const groupLocked = (kind: 'meaning' | 'nonsense') => readItemsOf(kind).some(i => locked.has(i.code))
 
   return (
     <section className="result-sheet"
@@ -244,10 +254,10 @@ export function ResultSheet({
       {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
       <TaskSection title={SECTION_LABEL.word_reading}
         hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
-        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark}
+        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
           audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
-        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark}
+        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
           audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
         <Subtotal
@@ -260,11 +270,11 @@ export function ResultSheet({
       </TaskSection>
 
       {/* 문장마다 읽은 시간(초)과 정확 어절을 넣고, 총점은 어절 합 ÷ 시간 합(담당자 확정 2026-09-29,
-          lib/scoring `CountTaskKey` 주석). 시간은 녹음을 듣고 채점자가 판단해 넣는다. */}
+          lib/scoring `CountTaskKey` 주석). 시간은 녹음을 듣고 채점자가 판단해 넣는다 — 녹음 없는 문장은 잠긴다. */}
       <TaskSection title={SECTION_LABEL.sentence_reading}
         hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간">
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
-          times={times} timeDefaults={timeDefaults} onTimeChange={setTime} maxSec={readSecMax(form)}
+          times={times} locked={locked} onTimeChange={setTime} maxSec={readSecMax(form)}
           attemptsFor={code => attemptsOf(`p_${code}`)}
           limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
         <Subtotal
@@ -377,14 +387,11 @@ export function ResultSheet({
           },
           {
             badge: <Badge tone="rec">미녹음</Badge>,
-            // 미녹음 기본 채점은 사용자 확정(2026-08-12)이다. 출처는 여기(주석)에만 둔다 —
+            // 미녹음 채점은 사용자 확정(2026-08-12 기본 채점 → 2026-09-29 고정)이다. 출처는 여기(주석)에만 둔다 —
             // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
-            // 문장의 시간 기본값(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring
-            // unrecordedTimeDefaults) — 화면에는 출처 없이 규칙만 쓴다(위와 같은 이유).
-            desc: <>녹음이 올라오지 않은 과제입니다. 읽은 반응이 없으므로 <b>오반응(X · 0점)으로
-              기본 채점</b>되어 화면·결과보고서 PDF에 그대로 나갑니다. 문장 읽기유창성은 그 문장의
-              읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산합니다(시간 칸에 흐리게 보입니다).
-              녹음을 들어보고 고치면 저장한 값이 기본값을 대신합니다.</>,
+            // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes).
+            desc: <>녹음이 올라오지 않은 과제입니다(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으므로 <b>오반응(X ·
+              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나갑니다. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산합니다.</>,
           },
           {
             badge: (
