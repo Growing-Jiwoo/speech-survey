@@ -220,7 +220,7 @@ export function ResultSheet({
             ))}
           </dl>
         </div>
-        <p className="mt-2 text-[12px] text-ink-mute">
+        <p className="mt-3.5 text-[12px] text-ink-mute">
           담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email)})
           {' · '}{session.submitted_at ? '제출 완료' : '진행 중'}
           {' · '}
