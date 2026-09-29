@@ -48,6 +48,9 @@ const TEXT_W = 518
  */
 const LINE = 1.72
 const ASCENT = 1.33
+/** 크기별 줄 높이 실측값(Word 출력의 행 높이에서 역산, 2026-09-29). 표에 없는 크기는 LINE 배수. */
+const LINE_AT: Record<number, number> = { 7.5: 12.9, 8.5: 14.6, 9: 15.6, 9.5: 16.6, 10: 17.3, 10.5: 18.15, 12: 20.7, 14: 24.8, 16: 27.5 }
+const lineHeightOf = (size: number) => LINE_AT[size] ?? LINE * size
 /**
  * 맑은 고딕 글자 진행 폭(upm 2048 기준, malgun.ttf·malgunbd.ttf 실측 2026-09-29). 줄바꿈 계산 전용.
  * 한글 음절(가~힣)은 정체·굵은체 모두 2048(1em)이고, 아래는 ASCII 인쇄 문자와 양식에 쓰인 기호(· –)다.
@@ -147,7 +150,7 @@ function layoutWidthOf(f: Fonts, r: Run, t: string): number {
  * 폭은 맑은 고딕 진행 폭(`layoutWidthOf`)으로 재서 Word와 같은 곳에서 나뉘게 한다.
  */
 function wrap(f: Fonts, p: Para, width: number): Line[] {
-  const lh = (r: Run) => LINE * sizeOf(r) * (p.lineMul ?? 1)
+  const lh = (r: Run) => lineHeightOf(sizeOf(r)) * (p.lineMul ?? 1)
   const ascOf = (r: Run) => ASCENT * sizeOf(r)
   const lineOf = (pieces: { run: Run; t: string }[]): Line => {
     const runs = pieces.filter(x => x.t !== '')
@@ -197,9 +200,9 @@ function drawPara(page: PDFPage, f: Fonts, p: Para, x: number, top: number, widt
   let y = top + (p.before ?? 0)
   for (const line of wrap(f, p, width)) {
     let cx = p.align === 'center' ? x + (width - line.w) / 2 : x
-    // 줄 간격 배수로 늘어난 몫은 글자 위에 둔다(Word).
+    // 줄 간격 배수로 늘어난 몫은 글자 위아래에 반씩 둔다(Word 정답본 실측 — 1.15배 문단에서 위에만 두면 1.3pt 낮다).
     const unscaled = line.h / (p.lineMul ?? 1)
-    const baseline = y + (line.h - unscaled) + line.asc
+    const baseline = y + (line.h - unscaled) / 2 + line.asc
     for (const r of line.runs) {
       page.drawText(r.t, { x: cx, y: Y(baseline), size: sizeOf(r), font: fontOf(f, r), color: hex(r.color ?? '000000') })
       cx += widthOf(f, r)
@@ -223,7 +226,7 @@ interface Cell {
 }
 
 function cellContentH(f: Fonts, c: Cell): number {
-  if (c.box) return LINE * 9.5   // ☐ 글리프 한 줄(9.5pt)의 높이
+  if (c.box) return lineHeightOf(9.5)   // ☐ 글리프 한 줄(9.5pt)의 높이
   return c.paras.reduce((n, p) => n + paraHeight(f, p, c.w - c.mar[1] - c.mar[3]), 0)
 }
 
@@ -249,7 +252,7 @@ function drawRow(page: PDFPage, f: Fonts, cells: Cell[], top: number): number {
     const inner = c.w - c.mar[1] - c.mar[3]
     const contentH = cellContentH(f, c)
     let y = top + c.mar[0] + (c.valign === 'center' ? (h - c.mar[0] - c.mar[2] - contentH) / 2 : 0)
-    if (c.box) drawBox(page, x + c.w / 2, y + LINE * 9.5 / 2, c.box === 'checked')
+    if (c.box) drawBox(page, x + c.w / 2, y + lineHeightOf(9.5) / 2, c.box === 'checked')
     else for (const p of c.paras) y = drawPara(page, f, p, x + c.mar[3], y, inner)
     x += c.w
   }
@@ -276,7 +279,7 @@ function drawBox(page: PDFPage, cx: number, cy: number, checked: boolean) {
  *  (7 + 줄 + 4.5), 본문 왼쪽 여백에서 4.3pt 왼쪽에 2.9pt 폭으로 그려진다. */
 function drawHeading(page: PDFPage, f: Fonts, label: string, accent: string, top: number): number {
   const p: Para = { runs: [bold(label, 10.5, accent)], before: 7, after: 4.5 }
-  const h = 7 + LINE * 10.5 + 4.5
+  const h = 7 + lineHeightOf(10.5) + 4.5
   page.drawRectangle({ x: PAGE.left - 4.3, y: Y(top + h), width: 2.9, height: h, color: hex(accent) })
   return drawPara(page, f, p, PAGE.left + 6, top, TEXT_W - 6)
 }
@@ -294,6 +297,10 @@ const PROVINCES = new Set(['강원', '경기', '충북', '충남', '전북', '�
 export function placeLabel(regionShort: string, addr: string | undefined): string {
   if (!addr || !PROVINCES.has(regionShort)) return regionShort
   return addr.length >= 3 ? addr.replace(/[시군]$/, '') : addr
+}
+/** 「지역 학교명」. 학교 이름이 지역으로 시작하면(대구성지초등학교·전주서일초등학교) 지역을 겹쳐 적지 않는다. */
+export function schoolLabel(place: string, schoolName: string): string {
+  return !place || schoolName.startsWith(place) ? schoolName : `${place} ${schoolName}`
 }
 async function schoolPlace(region: string, schoolId: string): Promise<string> {
   const r = REGIONS.find(x => x.name === region)
@@ -358,7 +365,7 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   })
   const [c1, c2, c3] = [172.65, 172.65, 172.7]
   y = drawRow(page, f, [
-    info('지역 / 학교', `${place} ${session.school_name}`.trim(), c1),
+    info('지역 / 학교', schoolLabel(place, session.school_name), c1),
     info('학년 / 학기', `${session.grade}학년 ${semesterOf(session.started_at)}학기`, c2),
     info('이름', session.child_name, c3),
   ], y)

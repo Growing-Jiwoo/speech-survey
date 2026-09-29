@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { placeLabel, renderReport } from '@/lib/pdf/report'
+import { placeLabel, renderReport, schoolLabel } from '@/lib/pdf/report'
 import { FORMS, formForGrade, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { finalVerdict } from '@/lib/scoring'
@@ -108,6 +108,11 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     expect(placeLabel('세종', '연서면')).toBe('세종')
     expect(placeLabel('서울', '송파구')).toBe('서울')
     expect(placeLabel('강원', undefined)).toBe('강원')
+    // 학교 이름에 지역이 이미 들어 있으면 겹쳐 적지 않는다
+    expect(schoolLabel('대구', '대구성지초등학교')).toBe('대구성지초등학교')
+    expect(schoolLabel('전주', '전주서일초등학교')).toBe('전주서일초등학교')
+    expect(schoolLabel('부산', '운산초등학교')).toBe('부산 운산초등학교')
+    expect(schoolLabel('', '교동초등학교')).toBe('교동초등학교')
   })
 
   it('학교 목록에 없는 학교는 시도 약칭으로 물러난다', async () => {
