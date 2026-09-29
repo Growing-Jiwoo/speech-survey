@@ -33,12 +33,14 @@ export function SentenceRows({
         const max = itemMaxWords(item)
         return (
           <div key={item.code} className="border-t border-line/60 px-4 py-3 first:border-t-0">
-            <div className="flex items-start gap-3">
+            {/* 좁은 폭에서는 입력 칸 묶음(시간·어절 ≈ 260px)이 다음 줄 오른쪽으로 내려간다 — 한 줄에 두면
+                문장이 한두 어절씩 끊겨 읽을 수 없었다(375px 실측). 넓은 폭에서는 종전처럼 한 줄이다. */}
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
               <span className="w-5 flex-none pt-1 text-[13px] font-bold text-ink-mute">{i + 1}</span>
-              <p className="font-read min-w-0 flex-1 whitespace-pre-line break-keep text-[15px] leading-relaxed">
+              <p className="font-read min-w-[12rem] flex-1 whitespace-pre-line break-keep text-[15px] leading-relaxed">
                 {item.text}
               </p>
-              <div className="flex flex-none items-center gap-1.5 pt-0.5">
+              <div className="ml-auto flex flex-none items-center gap-1.5 pt-0.5">
                 <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec}
                   value={times[item.code]} fallback={timeDefaults[item.code]}
                   onChange={v => onTimeChange(item.code, v)} />
