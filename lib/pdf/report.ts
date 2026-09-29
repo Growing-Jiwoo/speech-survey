@@ -5,9 +5,10 @@
 //
 // 글꼴: 양식은 맑은 고딕(Microsoft 전용 글꼴)·Segoe UI Symbol·Times New Roman을 쓰지만 세 글꼴 모두
 // 서버에 실어 배포할 수 없다(재배포 금지 EULA). 글자는 나눔고딕(OFL, assets/fonts)으로 그리되
-// **줄 높이와 줄바꿈은 맑은 고딕의 메트릭(세로 메트릭·글자 진행 폭)으로 계산**한다 — 글꼴을 바꾸면서
-// 줄 간격·줄바꿈 위치까지 따라 바꾸면 세로 배치가 양식과 어긋난다(맑은 고딕은 한글이 1em, 나눔고딕은
-// 0.94em이라 긴 문단의 줄 수가 달라진다). 진행 폭은 글꼴 프로그램이 아니라 숫자라 여기 적어 둘 수 있다.
+// **줄 높이·베이스라인은 Word가 이 양식을 PDF로 낸 것을 실측한 값**(아래 LINE·ASCENT·EMPTY_LINE)으로,
+// **줄바꿈은 맑은 고딕의 글자 진행 폭**(MALGUN_ADV)으로 계산한다 — 글꼴을 바꾸면서 줄 간격·줄바꿈
+// 위치까지 따라 바꾸면 세로 배치가 양식과 어긋난다(맑은 고딕은 한글이 1em, 나눔고딕은 0.94em이라
+// 긴 문단의 줄 수가 달라진다). 진행 폭은 글꼴 프로그램이 아니라 숫자라 여기 적어 둘 수 있다.
 // 그 결과 줄은 Word와 같은 곳에서 나뉘고, 나눔고딕 글자가 조금 좁아 줄 오른쪽에 여유가 남는다.
 // 확인란(☐ ☑)은 글리프 대신 선으로 그린다(나눔고딕에 없다).
 import { readFile } from 'node:fs/promises'
@@ -38,9 +39,15 @@ const PUBLIC = path.join(process.cwd(), 'public')
 const PAGE = { w: 612, h: 792, top: 31, left: 47 }
 /** 본문 폭 = 모든 표의 폭(10360 twips) */
 const TEXT_W = 518
-/** 맑은 고딕 세로 메트릭(hhea ascender 2229 · descender −495 · upm 2048). 줄 높이 1.330em, 베이스라인 1.088em. */
-const LINE = 2724 / 2048
-const ASCENT = 2229 / 2048
+/**
+ * 줄 높이·베이스라인 — Word가 이 양식을 PDF로 낸 것(2026-09-29, Word for Mac 16.111)을 실측한 값이다.
+ * 글꼴 표의 메트릭(hhea 1.33em)이 아니라 **Word가 실제로 놓은 자리**를 따른다: Word는 맑은 고딕 줄을
+ * 글자 크기의 1.72배로 잡고 베이스라인을 줄 위에서 1.33em에 둔다(위쪽에 0.39em 여유). 서식 없는 빈 문단은
+ * 문단 기호 글꼴(Times New Roman 10pt) 기준 11.5pt다. 표 행은 여기에 테두리 굵기(0.5pt)만큼 더 높다.
+ * 값을 바꾸려면 Word 출력과 다시 겹쳐 볼 것(scratchpad의 wordcmp.py 방식 — 행 경계선·베이스라인 대조).
+ */
+const LINE = 1.72
+const ASCENT = 1.33
 /**
  * 맑은 고딕 글자 진행 폭(upm 2048 기준, malgun.ttf·malgunbd.ttf 실측 2026-09-29). 줄바꿈 계산 전용.
  * 한글 음절(가~힣)은 정체·굵은체 모두 2048(1em)이고, 아래는 ASCII 인쇄 문자와 양식에 쓰인 기호(· –)다.
@@ -51,9 +58,11 @@ const MALGUN_ADV: Record<'r' | 'b', Record<string, number>> = {
   r: {"0":1128,"1":1128,"2":1128,"3":1128,"4":1128,"5":1128,"6":1128,"7":1128,"8":1128,"9":1128," ":720,"!":592,"\"":809,"#":1242,"$":1128,"%":1713,"&":1675,"'":475,"(":624,")":624,"*":870,"+":1435,",":448,"-":840,".":448,"/":811,":":448,";":448,"<":1435,"=":1435,">":1435,"?":942,"@":2006,"A":1348,"B":1195,"C":1300,"D":1469,"E":1059,"F":1021,"G":1437,"H":1484,"I":553,"J":737,"K":1209,"L":983,"M":1878,"N":1567,"O":1584,"P":1169,"Q":1584,"R":1249,"S":1112,"T":1093,"U":1439,"V":1299,"W":1953,"X":1231,"Y":1154,"Z":1193,"[":624,"\\":1564,"]":624,"^":1435,"_":872,"`":557,"a":1065,"b":1230,"c":968,"d":1233,"e":1096,"f":648,"g":1233,"h":1185,"i":504,"j":504,"k":1036,"l":504,"m":1802,"n":1184,"o":1227,"p":1230,"q":1233,"r":724,"s":887,"t":706,"u":1184,"v":998,"w":1508,"x":952,"y":1009,"z":946,"{":624,"|":490,"}":624,"~":1435,"·":448,"–":1051},
   b: {"0":1187,"1":1187,"2":1187,"3":1187,"4":1187,"5":1187,"6":1187,"7":1187,"8":1187,"9":1187," ":720,"!":662,"\"":975,"#":1245,"$":1187,"%":1793,"&":1755,"'":577,"(":733,")":733,"*":934,"+":1473,",":536,"-":847,".":536,"/":899,":":536,";":536,"<":1473,"=":1473,">":1473,"?":926,"@":2005,"A":1441,"B":1305,"C":1308,"D":1527,"E":1103,"F":1074,"G":1479,"H":1576,"I":635,"J":882,"K":1321,"L":1049,"M":1975,"N":1634,"O":1590,"P":1259,"Q":1590,"R":1339,"S":1159,"T":1193,"U":1497,"V":1374,"W":2068,"X":1338,"Y":1242,"Z":1252,"[":733,"\\":1564,"]":733,"^":1473,"_":872,"`":632,"a":1112,"b":1283,"c":998,"d":1282,"e":1126,"f":763,"g":1282,"h":1243,"i":562,"j":572,"k":1137,"l":562,"m":1891,"n":1246,"o":1269,"p":1283,"q":1282,"r":806,"s":946,"t":787,"u":1246,"v":1099,"w":1629,"x":1103,"y":1097,"z":990,"{":733,"|":632,"}":733,"~":1473,"·":536,"–":1051},
 }
-/** 서식 없는 문단·빈 문단의 글자 크기(Word 기본 10pt). 빈 줄(간격용 문단)의 높이도 여기서 나온다. */
+/** 서식 없는 문단의 글자 크기(Word 기본 10pt). */
 const BASE_SIZE = 10
-const EMPTY_LINE = LINE * BASE_SIZE
+/** 빈 문단(간격용)과 문단 기호의 줄 높이 — 문단 기호 글꼴 Times New Roman 10pt. Word 실측 11.75
+ *  (표 메트릭 11.5보다 조금 크다 — Word가 줄을 트윕 단위로 올림한 결과로 보인다). */
+const EMPTY_LINE = 11.75
 /** 표 안 칸 테두리 — 단선 sz=4(0.5pt) E4E8EE */
 const RULE = { color: 'E4E8EE', width: 0.5 }
 
@@ -139,10 +148,11 @@ function layoutWidthOf(f: Fonts, r: Run, t: string): number {
  */
 function wrap(f: Fonts, p: Para, width: number): Line[] {
   const lh = (r: Run) => LINE * sizeOf(r) * (p.lineMul ?? 1)
+  const ascOf = (r: Run) => ASCENT * sizeOf(r)
   const lineOf = (pieces: { run: Run; t: string }[]): Line => {
     const runs = pieces.filter(x => x.t !== '')
     const h = Math.max(EMPTY_LINE * (p.lineMul ?? 1), ...runs.map(x => lh(x.run)))
-    const asc = Math.max(ASCENT * BASE_SIZE, ...runs.map(x => ASCENT * sizeOf(x.run)))
+    const asc = Math.max(0, ...runs.map(x => ascOf(x.run)))
     // 같은 서식의 조각을 합친다 — drawText 호출 수를 줄이고 폭 계산도 한 번에 한다
     const out: Run[] = []
     for (const x of runs) {
@@ -188,7 +198,8 @@ function drawPara(page: PDFPage, f: Fonts, p: Para, x: number, top: number, widt
   for (const line of wrap(f, p, width)) {
     let cx = p.align === 'center' ? x + (width - line.w) / 2 : x
     // 줄 간격 배수로 늘어난 몫은 글자 위에 둔다(Word).
-    const baseline = y + (line.h - Math.max(EMPTY_LINE, ...line.runs.map(r => LINE * sizeOf(r)))) + line.asc
+    const unscaled = line.h / (p.lineMul ?? 1)
+    const baseline = y + (line.h - unscaled) + line.asc
     for (const r of line.runs) {
       page.drawText(r.t, { x: cx, y: Y(baseline), size: sizeOf(r), font: fontOf(f, r), color: hex(r.color ?? '000000') })
       cx += widthOf(f, r)
@@ -216,9 +227,11 @@ function cellContentH(f: Fonts, c: Cell): number {
   return c.paras.reduce((n, p) => n + paraHeight(f, p, c.w - c.mar[1] - c.mar[3]), 0)
 }
 
-/** 표 한 행. 행 높이는 가장 높은 칸이 정한다. 돌려주는 값은 행 아래쪽 y. */
+/** 표 한 행. 행 높이는 가장 높은 칸이 정하고, 테두리가 있으면 그 굵기(0.5pt)만큼 더 높다(Word 실측 —
+ *  행 경계선 사이 거리가 여백+내용보다 테두리 하나만큼 길다). 돌려주는 값은 행 아래쪽 y. */
 function drawRow(page: PDFPage, f: Fonts, cells: Cell[], top: number): number {
-  const h = Math.max(...cells.map(c => c.mar[0] + cellContentH(f, c) + c.mar[2]))
+  const bordered = cells.some(c => c.border !== null)
+  const h = Math.max(...cells.map(c => c.mar[0] + cellContentH(f, c) + c.mar[2])) + (bordered ? RULE.width : 0)
   let x = PAGE.left
   // 채우기·테두리를 먼저 전부 그리고 글자를 얹는다 — 옆 칸의 굵은 테두리가 글자를 덮지 않게.
   for (const c of cells) {
@@ -259,12 +272,12 @@ function drawBox(page: PDFPage, cx: number, cy: number, checked: boolean) {
   page.drawLine({ start: knee, end: { x: cx + half - pad, y: Y(cy - half + pad) }, ...opts })
 }
 
-/** 소제목 — 왼쪽에 3pt 굵기의 세로 띠(pBdr left sz=24), 띠와 글자 사이 6pt, 들여쓰기 6pt. */
+/** 소제목 — 왼쪽 세로 띠(pBdr left sz=24 → 3pt)와 들여쓰기 6pt. Word 실측: 띠는 문단 앞·뒤 간격까지 덮고
+ *  (7 + 줄 + 4.5), 본문 왼쪽 여백에서 4.3pt 왼쪽에 2.9pt 폭으로 그려진다. */
 function drawHeading(page: PDFPage, f: Fonts, label: string, accent: string, top: number): number {
   const p: Para = { runs: [bold(label, 10.5, accent)], before: 7, after: 4.5 }
-  const lineTop = top + 7
-  const lineH = LINE * 10.5
-  page.drawRectangle({ x: PAGE.left + 6 - 6 - 3, y: Y(lineTop + lineH), width: 3, height: lineH, color: hex(accent) })
+  const h = 7 + LINE * 10.5 + 4.5
+  page.drawRectangle({ x: PAGE.left - 4.3, y: Y(top + h), width: 2.9, height: h, color: hex(accent) })
   return drawPara(page, f, p, PAGE.left + 6, top, TEXT_W - 6)
 }
 
@@ -404,10 +417,10 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
     ], y)
   }
 
-  // 6. 꼬리말 — 위에 0.5pt 선(E4E8EE), 선과 글자 사이 8pt
+  // 6. 꼬리말 — 위에 0.5pt 선(E4E8EE), 선과 글자 사이 8pt(선 굵기는 별도로 더한다 — Word 실측)
   y += 8
-  page.drawLine({ start: { x: PAGE.left, y: Y(y) }, end: { x: PAGE.left + TEXT_W, y: Y(y) }, thickness: 0.5, color: hex('E4E8EE') })
-  y += 8
+  page.drawLine({ start: { x: PAGE.left, y: Y(y + RULE.width / 2) }, end: { x: PAGE.left + TEXT_W, y: Y(y + RULE.width / 2) }, thickness: RULE.width, color: hex('E4E8EE') })
+  y += RULE.width + 8
   drawPara(page, f, { runs: [text('KODYS · Korean Dyslexia Screening Test', 7.5, '97A1AE')], align: 'center' }, PAGE.left, y, TEXT_W)
 
   return doc.save()
