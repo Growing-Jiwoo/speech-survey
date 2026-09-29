@@ -298,45 +298,71 @@ function drawHeading(page: PDFPage, f: Fonts, label: string, accent: string, top
 
 // ── 학교 소재지 ──────────────────────────────────────────────────────────────
 const SCHOOLS = new Map<string, Promise<School[]>>()
-/**
- * 머리글 「지역 / 학교」의 지역. 담당자 예시가 「춘천 교동초등학교」(시·군 이름, 「시」 없이)라 같은 꼴로 만든다.
- * · 도(강원·경기·충북…): 학교 목록의 소재지 `addr`(춘천시·철원군)에서 끝의 시·군을 뗀다 → 춘천·철원.
- * · 특별시·광역시·세종: `addr`이 구·면·동(동구·연서면)이라 지역으로 읽히지 않으므로 도시 이름(부산·세종)을 쓴다.
- * 사용자 확정(2026-09-29) — 담당자 회신이 아니다. 목록에 없는 학교(옛 세션·수동 입력)는 시도 약칭으로 물러난다.
- */
+/** 지역 파일 하나(public/schools/<slug>.json). 실패한 읽기는 캐시에 남기지 않는다 — 남기면 그 지역의
+ *  모든 PDF가 프로세스가 죽을 때까지 500이고, 교사 라우트는 한 학급 25장을 병렬로 만들어 한 번의 실패가
+ *  학급 전체를 막는다. 빈 목록으로 물러나면 시도 약칭 표기가 된다(소재지는 표기일 뿐 판정이 아니다). */
+function schoolsOf(slug: string): Promise<School[]> {
+  let p = SCHOOLS.get(slug)
+  if (!p) {
+    p = readFile(path.join(PUBLIC, 'schools', `${slug}.json`), 'utf8').then(s => JSON.parse(s) as School[])
+      .catch(e => { SCHOOLS.delete(slug); console.error('[report] 학교 목록 읽기 실패', slug, e); return [] })
+    SCHOOLS.set(slug, p)
+  }
+  return p
+}
 /** 소재지가 시·군인 지역(도). 나머지(특별시·광역시·세종)는 소재지가 구·면·동이라 도시 이름을 쓴다. */
 const PROVINCES = new Set(['강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남', '제주'])
+/**
+ * 머리글 「지역 / 학교」. 담당자 예시가 「춘천 교동초등학교」(시·군 이름, 「시」 없이)라 같은 꼴로 만든다.
+ * 사용자 확정(2026-09-29) — 담당자 회신이 아니다.
+ * · 도(강원·경기·충북…): 학교 목록의 소재지 `addr`(춘천시·철원군)에서 끝의 시·군을 뗀다 → 춘천·철원.
+ * · 특별시·광역시·세종: `addr`이 구·면·동(동구·연서면)이라 지역으로 읽히지 않으므로 도시 이름(부산·세종)을 쓴다.
+ * · 학교 이름이 지역으로 시작하면(대구성지초등학교·전주서일초등학교) 지역을 겹쳐 적지 않는다.
+ * · 그래도 다른 학교와 표기가 같아지면(전국 6,320곳 중 3쌍) 한 단계 더 붙인다 — 도는 시도(강원 고성
+ *   동광초등학교), 특별·광역시는 구(부산 해운대구 송정초등학교). 소재지까지 같은 한 쌍(포항 달전초)은 그대로다.
+ * `dupes`는 전국 목록에서 겹치는 기본 표기의 집합(`dupLabels`), 목록에 없는 학교는 시도 약칭 + 학교명.
+ */
 export function placeLabel(regionShort: string, addr: string | undefined): string {
   if (!addr || !PROVINCES.has(regionShort)) return regionShort
   return addr.length >= 3 ? addr.replace(/[시군]$/, '') : addr
 }
-/** 「지역 학교명」. 학교 이름이 지역으로 시작하면(대구성지초등학교·전주서일초등학교) 지역을 겹쳐 적지 않는다. */
-export function schoolLabel(place: string, schoolName: string): string {
-  return !place || schoolName.startsWith(place) ? schoolName : `${place} ${schoolName}`
+export function schoolLabel(regionShort: string, addr: string | undefined, schoolName: string, dupes?: Set<string>): string {
+  const place = placeLabel(regionShort, addr)
+  const base = !place || schoolName.startsWith(place) ? schoolName : `${place} ${schoolName}`
+  if (!addr || !dupes?.has(base)) return base
+  const wider = PROVINCES.has(regionShort) ? `${regionShort} ${base}` : `${regionShort} ${addr} ${schoolName}`
+  return wider
 }
-async function schoolPlace(region: string, schoolId: string): Promise<string> {
+/** 전국 학교 목록에서 기본 표기가 두 학교 이상에 겹치는 표기들. 목록이 바뀌어도 자동으로 따라간다. */
+export async function dupLabels(all: { short: string; schools: School[] }[]): Promise<Set<string>> {
+  const seen = new Map<string, number>()
+  for (const { short, schools } of all)
+    for (const s of schools) {
+      const k = schoolLabel(short, s.addr, s.name)
+      seen.set(k, (seen.get(k) ?? 0) + 1)
+    }
+  return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k))
+}
+let DUPES: Promise<Set<string>> | undefined
+async function schoolHeading(region: string, schoolId: string, schoolName: string): Promise<string> {
   const r = REGIONS.find(x => x.name === region)
-  if (!r) return ''
-  let p = SCHOOLS.get(r.slug)
-  if (!p) {
-    p = readFile(path.join(PUBLIC, 'schools', `${r.slug}.json`), 'utf8').then(s => JSON.parse(s) as School[])
-    // 실패한 읽기를 캐시에 남기면 그 지역의 모든 PDF가 프로세스가 죽을 때까지 500이다 —
-    // 교사 라우트는 한 학급 25장을 병렬로 만들므로 한 번의 실패가 학급 전체를 막는다.
-    // 캐시에서 빼고 시도 약칭으로 물러난다(소재지는 표기일 뿐 판정이 아니다).
-    p = p.catch(e => { SCHOOLS.delete(r.slug); console.error('[report] 학교 목록 읽기 실패', r.slug, e); return [] })
-    SCHOOLS.set(r.slug, p)
+  if (!r) return schoolName
+  const addr = (await schoolsOf(r.slug)).find(s => s.id === schoolId)?.addr
+  if (!DUPES) {
+    DUPES = Promise.all(REGIONS.map(async x => ({ short: x.short, schools: await schoolsOf(x.slug) }))).then(dupLabels)
+    DUPES.catch(() => { DUPES = undefined })
   }
-  return placeLabel(r.short, (await p).find(s => s.id === schoolId)?.addr)
+  return schoolLabel(r.short, addr, schoolName, await DUPES)
 }
 
 // ── 본체 ─────────────────────────────────────────────────────────────────────
 export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   const { form, session } = input
   const R = form.report
-  const [regularBytes, boldBytes, place] = await Promise.all([
+  const [regularBytes, boldBytes, schoolHead] = await Promise.all([
     readFile(path.join(ASSETS, 'fonts', 'NanumGothic.ttf')),
     readFile(path.join(ASSETS, 'fonts', 'NanumGothicBold.ttf')),
-    schoolPlace(session.school_region, session.school_id),
+    schoolHeading(session.school_region, session.school_id, session.school_name),
   ])
 
   const doc = await PDFDocument.create()
@@ -378,7 +404,7 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   })
   const [c1, c2, c3] = [172.65, 172.65, 172.7]
   y = drawRow(page, f, [
-    info('지역 / 학교', schoolLabel(place, session.school_name), c1),
+    info('지역 / 학교', schoolHead, c1),
     info('학년 / 학기', `${session.grade}학년 ${semesterOf(session.started_at)}학기`, c2),
     info('이름', session.child_name, c3),
   ], y)
