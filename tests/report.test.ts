@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { dupLabels, placeLabel, renderReport, schoolLabel } from '@/lib/pdf/report'
+import { DUP_LABELS, dupLabels, placeLabel, renderReport, schoolLabel } from '@/lib/pdf/report'
 import { FORMS, formForGrade, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { finalVerdict } from '@/lib/scoring'
@@ -108,25 +108,33 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     expect(placeLabel('세종', '연서면')).toBe('세종')
     expect(placeLabel('서울', '송파구')).toBe('서울')
     expect(placeLabel('강원', undefined)).toBe('강원')
+    // 도의 시·군 이름이 광역시 약칭과 같으면 시도를 붙인다 — 경기 광주시 ≠ 광주광역시
+    expect(placeLabel('경기', '광주시')).toBe('경기 광주')
+    expect(schoolLabel('경기', '광주시', '광주초등학교')).toBe('경기 광주 광주초등학교')
     // 학교 이름에 지역이 이미 들어 있으면 겹쳐 적지 않는다
     expect(schoolLabel('대구', '달서구', '대구성지초등학교')).toBe('대구성지초등학교')
     expect(schoolLabel('전북', '전주시', '전주서일초등학교')).toBe('전주서일초등학교')
     expect(schoolLabel('부산', '남구', '운산초등학교')).toBe('부산 운산초등학교')
     expect(schoolLabel('강원', undefined, '교동초등학교')).toBe('강원 교동초등학교')
     // 다른 학교와 표기가 겹치면 한 단계 더 붙인다 — 도는 시도, 광역시는 구
-    const dupes = new Set(['부산 송정초등학교', '고성 동광초등학교'])
-    expect(schoolLabel('부산', '해운대구', '송정초등학교', dupes)).toBe('부산 해운대구 송정초등학교')
-    expect(schoolLabel('강원', '고성군', '동광초등학교', dupes)).toBe('강원 고성 동광초등학교')
-    expect(schoolLabel('경남', '고성군', '동광초등학교', dupes)).toBe('경남 고성 동광초등학교')
-    expect(schoolLabel('강원', '춘천시', '교동초등학교', dupes)).toBe('춘천 교동초등학교')
+    expect(schoolLabel('부산', '해운대구', '송정초등학교')).toBe('부산 해운대구 송정초등학교')
+    expect(schoolLabel('강원', '고성군', '동광초등학교')).toBe('강원 고성 동광초등학교')
+    expect(schoolLabel('경남', '고성군', '동광초등학교')).toBe('경남 고성 동광초등학교')
+    expect(schoolLabel('강원', '춘천시', '교동초등학교')).toBe('춘천 교동초등학교')
   })
 
-  it('전국 학교 목록에서 겹치는 표기는 세 쌍뿐이다 — 목록이 바뀌면 이 수도 바뀐다', async () => {
+  it('DUP_LABELS는 전국 학교 목록에서 실제로 겹치는 표기와 같다 — 목록이 바뀌면 상수도 고칠 것', async () => {
     const { REGIONS } = await import('@/lib/schools')
     const { readFile } = await import('node:fs/promises')
     const all = await Promise.all(REGIONS.map(async r => ({
       short: r.short, schools: JSON.parse(await readFile(`public/schools/${r.slug}.json`, 'utf8')) })))
-    expect([...await dupLabels(all)].sort()).toEqual(['고성 동광초등학교', '부산 송정초등학교', '포항 달전초등학교'])
+    expect([...dupLabels(all)].sort()).toEqual([...DUP_LABELS].sort())
+  })
+
+  it('겹치는 학교는 보고서 머리글에도 넓힌 표기로 찍힌다', async () => {
+    const text = await textOf(await renderReport({ form,
+      session: { ...session, school_region: '강원특별자치도교육청', school_id: 'B000005223', school_name: '동광초등학교' }, ...blank }))
+    expect(text).toContain('강원 고성 동광초등학교')
   })
 
   it('글꼴에 없는 글자는 사라지지 않고 「?」로 드러난다', async () => {

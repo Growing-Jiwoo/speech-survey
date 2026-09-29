@@ -43,8 +43,9 @@ const TEXT_W = 518
  * 줄 높이·베이스라인 — Word가 이 양식을 PDF로 낸 것(2026-09-29, Word for Mac 16.111)을 실측한 값이다.
  * 글꼴 표의 메트릭(hhea 1.33em)이 아니라 **Word가 실제로 놓은 자리**를 따른다: Word는 맑은 고딕 줄을
  * 글자 크기의 1.72배로 잡고 베이스라인을 줄 위에서 1.33em에 둔다(위쪽에 0.39em 여유). 서식 없는 빈 문단은
- * 문단 기호 글꼴(Times New Roman 10pt) 기준 11.5pt다. 표 행은 여기에 테두리 굵기(0.5pt)만큼 더 높다.
- * 값을 바꾸려면 Word 출력과 다시 겹쳐 볼 것(scratchpad의 wordcmp.py 방식 — 행 경계선·베이스라인 대조).
+ * 문단 기호 글꼴(Times New Roman 10pt) 기준 11.75pt다. 표 행은 여기에 테두리 굵기(0.5pt)만큼 더 높다.
+ * 값을 바꾸려면 Word 출력과 다시 겹쳐 볼 것(양식 docx를 Word로 PDF 저장 → pdfplumber로 행 경계선·글자
+ * 베이스라인을 뽑아 이 출력과 대조).
  */
 const LINE = 1.72
 const ASCENT = 1.33
@@ -122,15 +123,16 @@ interface Para {
   lineMul?: number
 }
 interface Line { runs: Run[]; h: number; asc: number; w: number }
-interface Fonts { r: PDFFont; b: PDFFont; glyphs: Set<number> }
+interface Fonts { r: PDFFont; b: PDFFont; glyphs: { r: Set<number>; b: Set<number> } }
 /**
  * 글꼴에 없는 글자는 「?」로 바꿔 그린다. pdf-lib는 없는 글리프를 조용히 건너뛰어 글자가 사라지는데,
  * 임상 문서에서 이름 한 글자가 빈칸이 되는 것보다 「?」로 드러나는 편이 낫다. 입력 단계에서 이름은
  * 완성형 한글·영문만 받으므로(lib/schema NAME_RE) 실제로는 거의 오지 않는 경로다.
  */
-function drawable(f: Fonts, t: string): string {
+function drawable(f: Fonts, r: Run, t: string): string {
+  const glyphs = r.bold ? f.glyphs.b : f.glyphs.r
   let out = ''
-  for (const ch of t) out += f.glyphs.has(ch.codePointAt(0)!) ? ch : '?'
+  for (const ch of t) out += glyphs.has(ch.codePointAt(0)!) ? ch : '?'
   return out
 }
 
@@ -141,7 +143,7 @@ const sizeOf = (r: Run) => r.size ?? BASE_SIZE
 const hex = (h: string) => rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255)
 const fontOf = (f: Fonts, r: Run) => (r.bold ? f.b : f.r)
 /** 그리는 글꼴(나눔고딕)의 폭 — 글자를 실제로 놓을 때·가운데 정렬에 쓴다. */
-const widthOf = (f: Fonts, r: Run, t = r.t) => fontOf(f, r).widthOfTextAtSize(drawable(f, t), sizeOf(r))
+const widthOf = (f: Fonts, r: Run, t = r.t) => fontOf(f, r).widthOfTextAtSize(drawable(f, r, t), sizeOf(r))
 /** 맑은 고딕의 폭 — 줄바꿈 판단에만 쓴다(Word와 같은 곳에서 줄이 나뉘게). */
 function layoutWidthOf(f: Fonts, r: Run, t: string): number {
   const table = MALGUN_ADV[r.bold ? 'b' : 'r']
@@ -215,7 +217,7 @@ function drawPara(page: PDFPage, f: Fonts, p: Para, x: number, top: number, widt
     const unscaled = line.h / (p.lineMul ?? 1)
     const baseline = y + (line.h - unscaled) / 2 + line.asc
     for (const r of line.runs) {
-      const t = drawable(f, r.t)
+      const t = drawable(f, r, r.t)
       page.drawText(t, { x: cx, y: Y(baseline), size: sizeOf(r), font: fontOf(f, r), color: hex(r.color ?? '000000') })
       cx += widthOf(f, r, t)
     }
@@ -313,46 +315,51 @@ function schoolsOf(slug: string): Promise<School[]> {
 /** 소재지가 시·군인 지역(도). 나머지(특별시·광역시·세종)는 소재지가 구·면·동이라 도시 이름을 쓴다. */
 const PROVINCES = new Set(['강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남', '제주'])
 /**
+ * 전국 학교 목록에서 「지역 학교명」 기본 표기가 다른 학교와 겹치는 것들(2026-09-29 기준 3쌍). 상수로 두는
+ * 이유: 매 프로세스마다 17개 지역 파일을 전부 읽어 계산하면 한 파일이라도 일시 실패했을 때 불완전한 집합이
+ * 캐시돼 같은 입력이 인스턴스마다 다른 바이트를 낼 수 있다. 목록이 바뀌어 이 상수가 어긋나면
+ * tests/report.test.ts가 데이터에서 다시 계산해 잡는다(`dupLabels`).
+ * 포항 달전초 한 쌍은 소재지까지 같아 넓혀도(경북 포항 달전초등학교) 여전히 같은 표기다.
+ */
+export const DUP_LABELS = new Set(['부산 송정초등학교', '고성 동광초등학교', '포항 달전초등학교'])
+/**
  * 머리글 「지역 / 학교」. 담당자 예시가 「춘천 교동초등학교」(시·군 이름, 「시」 없이)라 같은 꼴로 만든다.
  * 사용자 확정(2026-09-29) — 담당자 회신이 아니다.
  * · 도(강원·경기·충북…): 학교 목록의 소재지 `addr`(춘천시·철원군)에서 끝의 시·군을 뗀다 → 춘천·철원.
+ *   단 그 이름이 광역시 약칭과 같으면(경기 광주시) 시도를 앞에 붙인다 → 「경기 광주 ○○초등학교」.
  * · 특별시·광역시·세종: `addr`이 구·면·동(동구·연서면)이라 지역으로 읽히지 않으므로 도시 이름(부산·세종)을 쓴다.
  * · 학교 이름이 지역으로 시작하면(대구성지초등학교·전주서일초등학교) 지역을 겹쳐 적지 않는다.
- * · 그래도 다른 학교와 표기가 같아지면(전국 6,320곳 중 3쌍) 한 단계 더 붙인다 — 도는 시도(강원 고성
- *   동광초등학교), 특별·광역시는 구(부산 해운대구 송정초등학교). 소재지까지 같은 한 쌍(포항 달전초)은 그대로다.
- * `dupes`는 전국 목록에서 겹치는 기본 표기의 집합(`dupLabels`), 목록에 없는 학교는 시도 약칭 + 학교명.
+ * · 그래도 다른 학교와 표기가 같아지면(`DUP_LABELS`) 한 단계 더 붙인다 — 도는 시도(강원 고성 동광초등학교),
+ *   특별·광역시는 구(부산 해운대구 송정초등학교).
+ * 목록에 없는 학교(옛 세션·수동 입력)는 시도 약칭 + 학교명.
  */
+const METROS = new Set(REGIONS.filter(r => !PROVINCES.has(r.short)).map(r => r.short))
 export function placeLabel(regionShort: string, addr: string | undefined): string {
   if (!addr || !PROVINCES.has(regionShort)) return regionShort
-  return addr.length >= 3 ? addr.replace(/[시군]$/, '') : addr
+  const city = addr.length >= 3 ? addr.replace(/[시군]$/, '') : addr
+  return METROS.has(city) ? `${regionShort} ${city}` : city
 }
-export function schoolLabel(regionShort: string, addr: string | undefined, schoolName: string, dupes?: Set<string>): string {
+export function schoolLabel(regionShort: string, addr: string | undefined, schoolName: string, dupes: Set<string> = DUP_LABELS): string {
   const place = placeLabel(regionShort, addr)
   const base = !place || schoolName.startsWith(place) ? schoolName : `${place} ${schoolName}`
-  if (!addr || !dupes?.has(base)) return base
-  const wider = PROVINCES.has(regionShort) ? `${regionShort} ${base}` : `${regionShort} ${addr} ${schoolName}`
-  return wider
+  if (!addr || !dupes.has(base)) return base
+  return PROVINCES.has(regionShort) ? `${regionShort} ${base}` : `${regionShort} ${addr} ${schoolName}`
 }
-/** 전국 학교 목록에서 기본 표기가 두 학교 이상에 겹치는 표기들. 목록이 바뀌어도 자동으로 따라간다. */
-export async function dupLabels(all: { short: string; schools: School[] }[]): Promise<Set<string>> {
+/** 전국 목록에서 기본 표기가 두 학교 이상에 겹치는 표기들 — `DUP_LABELS`가 최신인지 테스트가 이것으로 대조한다. */
+export function dupLabels(all: { short: string; schools: School[] }[]): Set<string> {
   const seen = new Map<string, number>()
   for (const { short, schools } of all)
     for (const s of schools) {
-      const k = schoolLabel(short, s.addr, s.name)
+      const k = schoolLabel(short, s.addr, s.name, new Set())
       seen.set(k, (seen.get(k) ?? 0) + 1)
     }
   return new Set([...seen].filter(([, n]) => n > 1).map(([k]) => k))
 }
-let DUPES: Promise<Set<string>> | undefined
 async function schoolHeading(region: string, schoolId: string, schoolName: string): Promise<string> {
   const r = REGIONS.find(x => x.name === region)
   if (!r) return schoolName
   const addr = (await schoolsOf(r.slug)).find(s => s.id === schoolId)?.addr
-  if (!DUPES) {
-    DUPES = Promise.all(REGIONS.map(async x => ({ short: x.short, schools: await schoolsOf(x.slug) }))).then(dupLabels)
-    DUPES.catch(() => { DUPES = undefined })
-  }
-  return schoolLabel(r.short, addr, schoolName, await DUPES)
+  return schoolLabel(r.short, addr, schoolName)
 }
 
 // ── 본체 ─────────────────────────────────────────────────────────────────────
@@ -373,10 +380,8 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   doc.setCreationDate(at); doc.setModificationDate(at)
   doc.setProducer('kids-speech-survey'); doc.setCreator('kids-speech-survey')
   const regular = await doc.embedFont(regularBytes, { subset: true, customName: 'NanumGothic' })
-  const f: Fonts = {
-    r: regular, b: await doc.embedFont(boldBytes, { subset: true, customName: 'NanumGothicBold' }),
-    glyphs: new Set(regular.getCharacterSet()),
-  }
+  const boldFont = await doc.embedFont(boldBytes, { subset: true, customName: 'NanumGothicBold' })
+  const f: Fonts = { r: regular, b: boldFont, glyphs: { r: new Set(regular.getCharacterSet()), b: new Set(boldFont.getCharacterSet()) } }
   const page = doc.addPage([PAGE.w, PAGE.h])
 
   const r = scoreSession(form, input)
