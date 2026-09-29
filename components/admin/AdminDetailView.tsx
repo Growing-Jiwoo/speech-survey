@@ -149,6 +149,7 @@ export function AdminDetailView() {
             initialMarks={input.marks}
             initialSentences={input.sentences}
             initialTimes={rawInput.times}
+            incomplete={missingCount > 0}
             timeDefaults={timeDefaults}
             attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />

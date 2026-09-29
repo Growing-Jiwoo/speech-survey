@@ -11,11 +11,12 @@ import {
   FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreSession, scoringFor,
   sheetPdfGate, type TaskKey,
 } from '@/lib/scoring'
-import { contactLabel, gradeClassLabel, sheetDateLabel } from '@/lib/format'
+import { birthLabel, classLabel, contactLabel, reportDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BadgeLegend } from './BadgeLegend'
+import { StatusBadge } from './StatusBadge'
 import { ScoreBand } from './sheet/ScoreBand'
 import { TaskSection } from './sheet/TaskSection'
 import { Subtotal } from './sheet/Subtotal'
@@ -32,10 +33,12 @@ const AUTOSAVE_DELAY_MS = 1500
 
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes, timeDefaults,
-  attemptsOf, onAudioError, onDirtyChange,
+  incomplete, attemptsOf, onAudioError, onDirtyChange,
 }: {
   sessionId: string
   session: SessionRow
+  /** 받아야 할 녹음·쓰기가 비었는지 — 머리글 상태 배지가 목록과 같은 3단계를 쓰도록 상위가 넘긴다 */
+  incomplete: boolean
   /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
   form: SurveyForm
   /** 쓰기 과제는 검사 중 수집돼 여기서 다시 채점하지 않는다. 값은 정확히 쓴 어절 수. */
@@ -196,45 +199,43 @@ export function ResultSheet({
     <section className="result-sheet"
       // 채점 컨트롤이 이 값을 scroll-margin-bottom으로 쓴다(globals.css)
       style={{ '--sheet-bottom-bar': `${saveBarH}px` } as React.CSSProperties}>
-      {/* 머리글 — 종이 검사지 상단과 같은 항목 */}
-      <header className="border-b-2 border-ink/80 px-5 pb-3 pt-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-[26px] font-bold leading-none tracking-tight">{form.title}</h1>
-            <p className="mt-1 text-[12px] font-bold text-ink-mute">{form.subtitle}</p>
+      {/* 머리글 — 「누구의 검사인가」가 먼저 읽히게 아이 이름을 가장 크게 둔다(사용자 확정 2026-09-29).
+          채점자는 아이를 넘기며 이름으로 확인한다 — 일곱 칸을 같은 굵기로 한 줄에 늘어놓았더니 이름이
+          묻혔다. 양식·상태는 오른쪽 위 배지로, 채점 중 거의 안 보는 담임·동의는 아래 작은 줄로 내린다.
+          날짜·생년월일은 결과보고서 PDF와 같은 표기(birthLabel·reportDateLabel)다. */}
+      <header className="border-b-2 border-ink/80 px-5 pb-3.5 pt-5">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-[26px] font-bold leading-none tracking-tight">{session.child_name}</h1>
+              <span className="text-[14px] text-ink-soft">{session.gender} · {birthLabel(session.birth_ymd)}</span>
+            </div>
+            <p className="mt-2.5 text-[14px] text-ink-soft">
+              {session.school_name} {classLabel(session.grade, session.class_no)} {session.child_no}번
+              {' · '}검사일 {reportDateLabel(session.started_at)}
+            </p>
           </div>
-          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]">
-            {[
-              ['학교', session.school_name],
-              ['학년', gradeClassLabel(session.grade, session.class_no)],
-              ['번호', String(session.child_no)],
-              ['학생명', session.child_name],
-              ['성별', session.gender],
-              ['생년월일', session.birth_ymd],
-              ['검사일', sheetDateLabel(session.started_at)],
-            ].map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-ink-mute">{k}</dt>
-                <dd className="font-bold">{v}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="flex flex-wrap items-center gap-1.5 sm:flex-col sm:items-end sm:gap-2">
+            {/* 양식은 학년이 정한다 — 어떤 검사지로 채점했는지 기록에 남기는 식별자라 작게라도 늘 보인다 */}
+            <span title={form.subtitle}
+              className="rounded-md border border-line px-2 py-0.5 text-[12px] font-bold tracking-tight text-ink-mute">
+              {form.title}
+            </span>
+            <div className="flex flex-wrap gap-1.5 sm:justify-end">
+              <StatusBadge submitted={!!session.submitted_at} incomplete={incomplete} />
+              {/* 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
+                  PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 기준표 전에는 이 화면이 유일한 경고다. */}
+              {PROVISIONAL_CRITERIA && <Badge tone="amber">임시 기준 · 확정 전</Badge>}
+            </div>
+          </div>
         </div>
-        <p className="mt-3.5 text-[12px] text-ink-mute">
-          담임 {session.teacher_name} ({contactLabel(session.teacher_phone, session.teacher_email)})
-          {' · '}{session.submitted_at ? '제출 완료' : '진행 중'}
+        <p className="mt-4 border-t border-line pt-2.5 text-[12px] text-ink-mute">
+          담임 {session.teacher_name} · {contactLabel(session.teacher_phone, session.teacher_email)}
           {' · '}
           {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) — 도입 전 수집분은 '기록 없음' */}
           {session.guardian_consented_at
-            ? `보호자 동의 확인 ${new Date(session.guardian_consented_at).toLocaleDateString('ko-KR')}`
+            ? `보호자 동의 확인 ${reportDateLabel(session.guardian_consented_at)}`
             : '보호자 동의 기록 없음'}
-          {PROVISIONAL_CRITERIA && (
-            // 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
-            // PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 기준표 전에는 이 화면이 유일한 경고다.
-            <span className="ml-2 rounded border border-amber/50 bg-amber/10 px-1.5 py-0.5 font-bold text-amber print:bg-amber/10">
-              임시 기준 · 확정 전
-            </span>
-          )}
         </p>
       </header>
 

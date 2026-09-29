@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { approvalNoticeText, birthLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel } from '@/lib/format'
+import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel } from '@/lib/format'
 import { APPLY_CHECKS, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
@@ -22,6 +22,13 @@ describe('pad2', () => {
   it('두 자리 0 패딩', () => {
     expect(pad2(3)).toBe('03')
     expect(pad2(12)).toBe('12')
+  })
+})
+
+describe('classLabel (결과지 머리글의 풀어 쓴 학급)', () => {
+  it('일반 학급은 「1학년 2반」, 단일학급은 「1학년 단일학급」', () => {
+    expect(classLabel(1, 2)).toBe('1학년 2반')
+    expect(classLabel(2, 0)).toBe('2학년 단일학급')
   })
 })
 
