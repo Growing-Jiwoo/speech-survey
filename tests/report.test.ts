@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { renderReport } from '@/lib/pdf/report'
+import { placeLabel, renderReport } from '@/lib/pdf/report'
 import { FORMS, formForGrade, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { finalVerdict } from '@/lib/scoring'
@@ -50,7 +50,7 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     const text = await textOf(await renderReport({ form, session, ...blank }))
     expect(text).toContain('한국 난독 선별 검사')
     expect(text).toContain(`KODYS – ${form.id.replace('KODYS-', '')} · Korean Dyslexia Screening Test`)
-    expect(text).toContain('춘천시 교동초등학교')      // 학교 목록의 소재지 + 학교명
+    expect(text).toContain('춘천 교동초등학교')       // 학교 목록의 소재지(춘천시 → 춘천) + 학교명
     expect(text).toContain(`${form.grades[0]}학년 2학기`) // 9월 검사 → 2학기
     expect(text).toContain('김가나')
     expect(text).toContain('남')
@@ -98,6 +98,16 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
       form, session: { ...session, school_name: '서울대학교사범대학부설초등학교', child_name: '남궁민수' }, ...blank,
     })
     expect(await textOf(bytes)).toContain('서울대학교사범대학부설초등학교')
+  })
+
+  it('지역 표기: 도는 시·군 이름(시·군 제거), 특별·광역시·세종은 도시 이름', () => {
+    expect(placeLabel('강원', '춘천시')).toBe('춘천')
+    expect(placeLabel('강원', '철원군')).toBe('철원')
+    expect(placeLabel('경기', '수원시')).toBe('수원')
+    expect(placeLabel('부산', '동구')).toBe('부산')
+    expect(placeLabel('세종', '연서면')).toBe('세종')
+    expect(placeLabel('서울', '송파구')).toBe('서울')
+    expect(placeLabel('강원', undefined)).toBe('강원')
   })
 
   it('학교 목록에 없는 학교는 시도 약칭으로 물러난다', async () => {

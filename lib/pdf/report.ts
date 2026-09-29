@@ -284,10 +284,17 @@ function drawHeading(page: PDFPage, f: Fonts, label: string, accent: string, top
 // ── 학교 소재지 ──────────────────────────────────────────────────────────────
 const SCHOOLS = new Map<string, Promise<School[]>>()
 /**
- * 머리글 「지역 / 학교」의 지역. 담당자 예시가 「춘천 교동초등학교」(시·군 단위)라 학교 목록의
- * 소재지(`addr`, 예: 춘천시)를 쓴다. 사용자 확정(2026-09-28) — 담당자 회신이 아니다. 목록에 없는
- * 학교(옛 세션·수동 입력)는 시도 약칭으로 물러난다.
+ * 머리글 「지역 / 학교」의 지역. 담당자 예시가 「춘천 교동초등학교」(시·군 이름, 「시」 없이)라 같은 꼴로 만든다.
+ * · 도(강원·경기·충북…): 학교 목록의 소재지 `addr`(춘천시·철원군)에서 끝의 시·군을 뗀다 → 춘천·철원.
+ * · 특별시·광역시·세종: `addr`이 구·면·동(동구·연서면)이라 지역으로 읽히지 않으므로 도시 이름(부산·세종)을 쓴다.
+ * 사용자 확정(2026-09-29) — 담당자 회신이 아니다. 목록에 없는 학교(옛 세션·수동 입력)는 시도 약칭으로 물러난다.
  */
+/** 소재지가 시·군인 지역(도). 나머지(특별시·광역시·세종)는 소재지가 구·면·동이라 도시 이름을 쓴다. */
+const PROVINCES = new Set(['강원', '경기', '충북', '충남', '전북', '전남', '경북', '경남', '제주'])
+export function placeLabel(regionShort: string, addr: string | undefined): string {
+  if (!addr || !PROVINCES.has(regionShort)) return regionShort
+  return addr.length >= 3 ? addr.replace(/[시군]$/, '') : addr
+}
 async function schoolPlace(region: string, schoolId: string): Promise<string> {
   const r = REGIONS.find(x => x.name === region)
   if (!r) return ''
@@ -300,7 +307,7 @@ async function schoolPlace(region: string, schoolId: string): Promise<string> {
     p = p.catch(e => { SCHOOLS.delete(r.slug); console.error('[report] 학교 목록 읽기 실패', r.slug, e); return [] })
     SCHOOLS.set(r.slug, p)
   }
-  return (await p).find(s => s.id === schoolId)?.addr ?? r.short
+  return placeLabel(r.short, (await p).find(s => s.id === schoolId)?.addr)
 }
 
 // ── 본체 ─────────────────────────────────────────────────────────────────────
