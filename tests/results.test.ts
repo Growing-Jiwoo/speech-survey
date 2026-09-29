@@ -99,6 +99,30 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
   })
 })
 
+describe('evaluateSession — 문장 읽기유창성(어절/초)', () => {
+  const recordedAll = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
+  it('교사 결과표의 문장 읽기 점수는 관리자 결과지와 같은 어절/초다', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, recordings: recordedAll, ...READ_SCORED, ...WRITE_SCORED }))
+    expect(r.scores?.sentenceReading).toBe(2)
+  })
+  it('녹음 없는 문장이 섞이면 그 문장은 20초·0어절로 들어간다 — 교사 쪽도 같은 기본값', () => {
+    // 1번 문장만 녹음·채점(7어절 5초), 2~4번 미녹음 → 7 ÷ 65 = 0.11
+    const r = evaluateSession(row({ id: 's', child_no: 1,
+      recordings: recordedAll.filter(x => !['p_rs02', 'p_rs03', 'p_rs04'].includes(x.item_code)),
+      reading_marks: READ_SCORED.reading_marks,
+      sentence_scores: [{ item_code: 'rs01', words: 7 }], sentence_times: [{ item_code: 'rs01', seconds: 5 }] }))
+    expect(r.status).toBe('scored')
+    expect(r.scores?.sentenceReading).toBe(0.11)
+  })
+  it('G2 세션도 같다 — 정확 어절 35 ÷ 20초 = 1.75', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, grade: 2, recordings: recordedAll,
+      reading_marks: READ_SCORED.reading_marks,
+      sentence_scores: [{ item_code: 'rs01', words: 7 }, { item_code: 'rs02', words: 8 }, { item_code: 'rs03', words: 9 }, { item_code: 'rs04', words: 11 }],
+      sentence_times: ['rs01', 'rs02', 'rs03', 'rs04'].map(item_code => ({ item_code, seconds: 5 })) }))
+    expect(r.scores?.sentenceReading).toBe(1.75)
+  })
+})
+
 describe('scoreInputFor — PDF가 관리자와 같은 입력을 쓴다', () => {
   it('제출된 세션은 미녹음 기본값이 적용되고 form은 학년 양식', () => {
     const { form, input } = scoreInputFor(row({ id: 's', child_no: 1, recordings: [] }))

@@ -77,6 +77,12 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(res.status).toBe(400)
     expect(db.sessionDetail).not.toHaveBeenCalled()
   })
+  it('테이블이 없어 조회가 실패해도(마이그레이션 미실행) 500 + 내부 오류 원문을 싣지 않는다', async () => {
+    vi.mocked(db.sessionDetail).mockRejectedValueOnce(new Error("Could not find the table 'public.sentence_times'"))
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/sentence_times/)
+  })
   it('DB 오류 시 500 + 일반화된 메시지', async () => {
     vi.mocked(db.sessionDetail).mockRejectedValueOnce(new Error('JSON object requested, multiple rows'))
     const res = await DETAIL(req(), ctx(SID))

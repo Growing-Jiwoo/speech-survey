@@ -200,6 +200,15 @@ describe('sessionDetail — 6개 병렬 조회 결과가 각자 올바른 필드
   })
 })
 
+describe('sessionDetail — 읽은 시간 조회 실패', () => {
+  it('[REGRESSION] sentence_times 조회가 실패하면(마이그레이션 005 미실행 등) 던진다 — 「시간 없음」으로 조용히 넘기지 않는다', async () => {
+    // 조용히 빈 배열로 넘기면 모든 검사가 「채점 전」으로 보이고, 채점자가 넣은 시간은 저장에서 사라진다.
+    enqueue('sessions', { data: { id: SID }, error: null })
+    enqueue('sentence_times', { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.sentence_times'" } })
+    await expect(sessionDetail(SID)).rejects.toThrow()
+  })
+})
+
 describe('sessionState', () => {
   it('행 없음 → missing', async () => {
     enqueue('sessions', { data: null, error: null })

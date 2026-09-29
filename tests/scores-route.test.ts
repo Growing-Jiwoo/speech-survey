@@ -137,6 +137,33 @@ describe('PUT …/scores — 문장 읽은 시간(times)', () => {
     expect(db.saveScores).not.toHaveBeenCalled()
   })
 
+  it('불리언·아주 작은 수·Infinity 문자열은 400', async () => {
+    for (const bad of [true, 1e-7, 'Infinity']) expect((await put({ rs01: bad })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('하나라도 틀리면 전체를 거부한다 — 맞는 문장만 골라 저장하지 않는다(부분 저장 금지)', async () => {
+    expect((await put({ rs01: 4, rs02: 99 })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('낱말·어절·시간을 한 요청에 함께 저장한다', async () => {
+    await PUT(req({ marks: { rw01: true }, sentences: { rs01: 7 }, times: { rs01: 4.5 } }), ctx())
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [{ itemCode: 'rw01', correct: true }],
+      [{ itemCode: 'rs01', words: 7 }], RS, [{ itemCode: 'rs01', seconds: 4.5 }])
+  })
+
+  it('G2 세션도 문장 읽기 코드(rs..)만 받고 상한은 같은 25초', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
+    expect((await put({ rs04: 25 })).status).toBe(200)
+    expect((await put({ sw01: 3 })).status).toBe(400)
+  })
+
+  it('담당 양식이 없는 학년(3학년 → G1 폴백)도 같은 규칙', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3 })
+    expect((await put({ rs01: 4 })).status).toBe(200)
+  })
+
   it('times가 배열·null이면 400 (typeof "object" 함정)', async () => {
     expect((await put([])).status).toBe(400)
     expect((await put(null)).status).toBe(400)

@@ -474,3 +474,90 @@ describe('읽은 시간 입력 — parseReadSec · isValidReadSec · readSecLabe
     expect(readSecLabel(17.5)).toBe('17.5')
   })
 })
+
+describe('문장 읽기유창성 — 경계·예외 상황', () => {
+  const MAX = readSecMax(G1)
+
+  it('[전수] 어절 0~36 × 시간 0.4~100초(0.1초 간격) 전부 — 둘째 자리까지이고, 참값과 0.005 안이며, 딱 절반이면 올린다', () => {
+    const caps = g1.sentenceItems.map(itemMaxWords)            // 7·7·8·14
+    const codes = g1.sentenceItems.map(i => i.code)
+    let checked = 0
+    for (let w = 0; w <= 36; w++) {
+      // 어절을 문장 만점 안에서 앞에서부터 채운다
+      let left = w
+      const sentences = Object.fromEntries(codes.map((c, k) => { const n = Math.min(left, caps[k]); left -= n; return [c, n] }))
+      for (let tenths = 4; tenths <= 1000; tenths++) {
+        const times = { rs01: (tenths - 3) / 10, rs02: 0.1, rs03: 0.1, rs04: 0.1 }
+        const r = score({ sentences, times })
+        const hundredths = r.sentenceReading * 100
+        expect(Math.abs(hundredths - Math.round(hundredths))).toBeLessThan(1e-9)          // 둘째 자리까지
+        expect(r.sentenceSec * 10).toBe(tenths)                                           // 분모에 오차 없음
+        const num = w * 1000, exactFloor = Math.floor(num / tenths), rem = num % tenths
+        const want = 2 * rem >= tenths ? exactFloor + 1 : exactFloor                     // 반올림(절반은 올림)을 정수로
+        if (Math.round(hundredths) !== want) throw new Error(`w=${w} tenths=${tenths}: ${r.sentenceReading} ≠ ${want / 100}`)
+        checked++
+      }
+    }
+    expect(checked).toBe(37 * 997)
+  })
+
+  it('G2 양식도 같은 규칙 — 정확 어절 만점 35, 미녹음 문장 20초', () => {
+    const r = scoreSession(G2, { ...empty, sentences: { rs01: 7, rs02: 8, rs03: 9, rs04: 11 },
+      times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5 } })
+    expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([35, 20, 1.75])
+    expect(withUnrecordedDefaults(g2, empty, () => false).times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
+  })
+
+  it('만점을 넘는 어절은 나누기 전에 잘라낸다 — 오입력이 비율을 부풀리지 않는다', () => {
+    const r = score({ sentences: { rs01: 99, rs02: 0, rs03: 0, rs04: 0 }, times: { rs01: 1, rs02: 1, rs03: 1, rs04: 1 } })
+    expect(r.sentenceWords).toBe(7)
+    expect(r.sentenceReading).toBe(1.75)
+  })
+
+  it('문장 읽기가 아닌 코드의 시간은 분모에 들어가지 않는다', () => {
+    const r = score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
+      times: { rs01: 4, rs02: 4, rs03: 4.5, rs04: 4.5, rw01: 100, sw01: 100, zz99: 100 } })
+    expect(r.sentenceSec).toBe(17)
+  })
+
+  it('녹음 없는 문장이라도 채점자가 시간을 넣으면 그 값이 기본값(20초)을 이긴다', () => {
+    const out = withUnrecordedDefaults(g1, { ...empty, times: { rs02: 7.5 } }, () => false)
+    expect(out.times).toEqual({ rs01: 20, rs02: 7.5, rs03: 20, rs04: 20 })
+  })
+
+  it('가장 느린 경우 — 네 문장 모두 녹음 상한(25초)에 만점이면 36 ÷ 100 = 0.36', () => {
+    const r = score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
+      times: { rs01: MAX, rs02: MAX, rs03: MAX, rs04: MAX } })
+    expect(r.sentenceReading).toBe(0.36)
+  })
+
+  it('읽기유창성 판정은 최종결과에 그대로 들어간다 — 다 맞게 읽어도 느리면 FAIL로 세어진다', () => {
+    const at1 = { ...G1, passMark: { ...G1.passMark, sentenceReading: 1 } }
+    const slow = scoreSession(at1, { ...empty,
+      marks: Object.fromEntries(READ_ALL.map(c => [c, false])),                         // 낱말 해독 FAIL
+      sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }, times: { rs01: 20, rs02: 20, rs03: 20, rs04: 20 },
+      writing: Object.fromEntries(WRITE_ALL.map(c => [c, 1])) })
+    expect(slow.verdict).toEqual({ wordReading: 'fail', sentenceReading: 'fail', writing: 'pass' })
+  })
+
+  it('parseReadSec — 전각 숫자·부호·공백 낀 숫자·유니코드 마이너스는 잘못 친 값, 「4.0」「00.5」는 받는다', () => {
+    for (const t of ['４', '+4', '4 5', '−4', '4.5.', '0x10', 'Infinity'])
+      expect(parseReadSec(t, MAX), t).toBeNull()
+    expect(parseReadSec('4.0', MAX)).toBe(4)
+    expect(parseReadSec('25.0', MAX)).toBe(25)
+    expect(parseReadSec('0.1', MAX)).toBe(0.1)
+    expect(parseReadSec('00.5', MAX)).toBe(0.5)
+  })
+
+  it('isValidReadSec — 아주 작은 수·-0·최댓값·상한 근처', () => {
+    for (const v of [1e-7, -0, Number.MAX_VALUE, 25.05, true, {}, []])
+      expect(isValidReadSec(v, MAX), String(v)).toBe(false)
+    expect(isValidReadSec(24.9, MAX)).toBe(true)
+    expect(isValidReadSec(0.1, MAX)).toBe(true)
+  })
+
+  it('readSecLabel — 0.1초·100초', () => {
+    expect(readSecLabel(0.1)).toBe('0.1')
+    expect(readSecLabel(100)).toBe('100')
+  })
+})
