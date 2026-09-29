@@ -60,8 +60,6 @@ describe('sheetDateLabel (검사일 표기)', () => {
   })
 })
 
-// 검사지의 「학년」 칸은 원래 학년만 적는 자리인데 이 앱은 반까지 함께 찍는다.
-// 한 줄로 뭉치면 인쇄물만 보고는 무엇이 학년이고 무엇이 반인지 알 수 없다.
 describe('reportDateLabel / birthLabel / semesterOf — 결과보고서 표기', () => {
   it('검사일은 KST 기준, 월·일 두 자리 (담당자 양식 2026-09-28)', () => {
     expect(reportDateLabel('2026-09-19T01:00:00.000Z')).toBe('2026. 09. 19.')

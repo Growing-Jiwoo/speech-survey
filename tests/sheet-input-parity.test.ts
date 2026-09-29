@@ -6,7 +6,7 @@
 // **같은 검사를 두 경로로 뽑으면 `renderReport`에 넘어가는 값이 같은가.**
 //
 // 지금 코드는 통과한다. 고칠 것을 찾는 테스트가 아니라 앞으로 갈리는 순간 알려 주는 테스트다.
-// 오늘 알려진 유일한 취약점은 학교명·반이다 — 교사 쪽은 학급 코드 행에서, 관리자 쪽은 검사에
+// 오늘 알려진 유일한 취약점은 학교(지역·id·이름)다 — 교사 쪽은 학급 코드 행에서, 관리자 쪽은 검사에
 // 복사된 사본에서 읽는다. 학급 정보를 고치는 기능이 생기면 그 순간 갈린다(아래 마지막 테스트).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
@@ -16,7 +16,7 @@ vi.mock('@/lib/db', () => ({
   sessionDetail: vi.fn(),
 }))
 vi.mock('@/lib/pdf/report', () => ({ renderReport: vi.fn() }))
-// 교사 라우트만 pdf-lib으로 병합한다 — 스탬핑을 모킹했으므로 병합도 흉내만 낸다.
+// 교사 라우트만 pdf-lib으로 병합한다 — 보고서 생성을 모킹했으므로 병합도 흉내만 낸다.
 vi.mock('pdf-lib', () => {
   const doc = {
     copyPages: vi.fn(async (_s: unknown, idx: number[]) => idx.map(i => ({ i }))),
@@ -84,7 +84,7 @@ function sessionRow(over: Partial<Record<string, unknown>> = {}) {
  * 관리자는 세션 행을 통째로 넘기고(안 쓰는 컬럼까지 들어 있다) 교사는 필요한 9개만 조립한다.
  * 그래서 객체를 통으로 비교하지 않고 **ReportInput이 선언한 값**만 비교한다.
  */
-function stamped(call: ReportInput) {
+function printed(call: ReportInput) {
   const s = call.session
   return {
     formId: call.form.id,
@@ -130,7 +130,7 @@ describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', ()
     const { teacherStatus, adminStatus, teacher, admin } = await bothRoutes()
     expect(teacherStatus).toBe(200)
     expect(adminStatus).toBe(200)
-    expect(stamped(teacher)).toEqual(stamped(admin))
+    expect(printed(teacher)).toEqual(printed(admin))
   })
 
   it('[REGRESSION] 미녹음 기본값(X·0점)이 양쪽에 똑같이 걸린다 — 한쪽만 빈 칸으로 나가면 안 된다', async () => {
@@ -190,12 +190,12 @@ describe('교사 결과지 ↔ 관리자 검사지 — 인쇄 입력 대조', ()
   // 오늘 유일하게 출처가 다른 값이다. 학급 정보를 고치는 기능은 아직 없어서 갈릴 수 없지만,
   // 그 기능이 생기는 순간 이 테스트가 빨간불을 켠다 — 그때 교사 쪽도 세션 사본을 읽게 바꾸면 된다.
   // (docs/qa/2026-09-22-teacher-results-e2e.md의 실행 기록 참고)
-  it('[REGRESSION] 학급 명부의 학교명·반이 검사 사본과 달라지면 두 문서가 갈린다 — 이 경우가 실제로 생기면 출처를 세션으로 맞출 것', async () => {
+  it('[REGRESSION] 학급 명부의 학교명이 검사 사본과 달라지면 두 문서가 갈린다 — 이 경우가 실제로 생기면 출처를 세션으로 맞출 것', async () => {
     const { teacher, admin } = await bothRoutes(
-      sessionRow(), { ...CODE_ROW, school_name: '이름이바뀐초등학교', class_no: 7 })
+      sessionRow(), { ...CODE_ROW, school_name: '이름이바뀐초등학교' })
     // 지금 동작을 있는 그대로 고정한다 — 교사 쪽만 새 이름을 따라간다
     expect(teacher.session.school_name).toBe('이름이바뀐초등학교')
     expect(admin.session.school_name).toBe('대구가창초등학교')
-    expect(stamped(teacher)).not.toEqual(stamped(admin))
+    expect(printed(teacher)).not.toEqual(printed(admin))
   })
 })

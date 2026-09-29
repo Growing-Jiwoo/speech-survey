@@ -150,7 +150,8 @@ function wrap(f: Fonts, p: Para, width: number): Line[] {
       if (last && last.size === x.run.size && last.color === x.run.color && !!last.bold === !!x.run.bold) last.t += x.t
       else out.push({ ...x.run, t: x.t })
     }
-    const w = out.reduce((n, r) => n + widthOf(f, r, r.t.replace(/\s+$/, '')), 0)
+    // 줄 끝 공백은 폭에 세지 않는다(Word가 줄 끝 공백을 매달아 두는 것과 같다) — 마지막 조각만.
+    const w = out.reduce((n, r, i) => n + widthOf(f, r, i === out.length - 1 ? r.t.replace(/\s+$/, '') : r.t), 0)
     return { runs: out, h, asc, w }
   }
   if (p.runs.every(r => r.t === '')) return [lineOf([])]
@@ -280,6 +281,10 @@ async function schoolPlace(region: string, schoolId: string): Promise<string> {
   let p = SCHOOLS.get(r.slug)
   if (!p) {
     p = readFile(path.join(PUBLIC, 'schools', `${r.slug}.json`), 'utf8').then(s => JSON.parse(s) as School[])
+    // 실패한 읽기를 캐시에 남기면 그 지역의 모든 PDF가 프로세스가 죽을 때까지 500이다 —
+    // 교사 라우트는 한 학급 25장을 병렬로 만들므로 한 번의 실패가 학급 전체를 막는다.
+    // 캐시에서 빼고 시도 약칭으로 물러난다(소재지는 표기일 뿐 판정이 아니다).
+    p = p.catch(e => { SCHOOLS.delete(r.slug); console.error('[report] 학교 목록 읽기 실패', r.slug, e); return [] })
     SCHOOLS.set(r.slug, p)
   }
   return (await p).find(s => s.id === schoolId)?.addr ?? r.short

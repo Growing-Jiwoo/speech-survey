@@ -238,8 +238,8 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(res.headers.get('cache-control')).toBe('no-store')
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_결과지_전체_\d{4}-\d{2}-\d{2}\.pdf/)
     // a2(1번 최신)·b1(3번) 두 장 — a1(옛 차수)·c1(미제출)은 빠진다
-    const stamped = vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.child_name)
-    expect(stamped).toEqual(['아이1', '아이3'])
+    const printed = vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.child_name)
+    expect(printed).toEqual(['아이1', '아이3'])
     expect(vi.mocked(pdf.renderReport).mock.calls[0][0].session).toMatchObject({ started_at: '2026-09-22T01:00:00.000Z' })
   })
   it('ids로 고르면 그 세션만 — 옛 차수도 고를 수 있다. 여럿이면 「N명」', async () => {

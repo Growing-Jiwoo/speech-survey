@@ -66,7 +66,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       return jsonError(`한 번에 ${MAX_SHEETS}장까지 받을 수 있어요. 나눠서 받아 주세요.`, 400)
 
     // 생성은 **병렬**(I/O 바운드 — 폰트·학교 목록 읽기), 병합만 순서대로(페이지 순서 = 번호순 보장).
-    const stamped = await Promise.all(picked.map(r => {
+    const pages = await Promise.all(picked.map(r => {
       const { form, input } = scoreInputFor(r)
       return renderReport({
         form, ...input,
@@ -77,7 +77,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       })
     }))
     const merged = await PDFDocument.create()
-    for (const bytes of stamped) {
+    for (const bytes of pages) {
       const one = await PDFDocument.load(bytes)
       for (const p of await merged.copyPages(one, one.getPageIndices())) merged.addPage(p)
     }
