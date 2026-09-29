@@ -115,6 +115,11 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     expect(schoolLabel('', '교동초등학교')).toBe('교동초등학교')
   })
 
+  it('글꼴에 없는 글자는 사라지지 않고 「?」로 드러난다', async () => {
+    const text = await textOf(await renderReport({ form, session: { ...session, child_name: '金가나' }, ...blank }))
+    expect(text).toContain('?가나')
+  })
+
   it('학교 목록에 없는 학교는 시도 약칭으로 물러난다', async () => {
     const text = await textOf(await renderReport({ form, session: { ...session, school_id: 'X-없음' }, ...blank }))
     expect(text).toContain('강원 교동초등학교')

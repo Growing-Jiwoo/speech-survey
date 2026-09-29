@@ -122,15 +122,26 @@ interface Para {
   lineMul?: number
 }
 interface Line { runs: Run[]; h: number; asc: number; w: number }
-interface Fonts { r: PDFFont; b: PDFFont }
+interface Fonts { r: PDFFont; b: PDFFont; glyphs: Set<number> }
+/**
+ * 글꼴에 없는 글자는 「?」로 바꿔 그린다. pdf-lib는 없는 글리프를 조용히 건너뛰어 글자가 사라지는데,
+ * 임상 문서에서 이름 한 글자가 빈칸이 되는 것보다 「?」로 드러나는 편이 낫다. 입력 단계에서 이름은
+ * 완성형 한글·영문만 받으므로(lib/schema NAME_RE) 실제로는 거의 오지 않는 경로다.
+ */
+function drawable(f: Fonts, t: string): string {
+  let out = ''
+  for (const ch of t) out += f.glyphs.has(ch.codePointAt(0)!) ? ch : '?'
+  return out
+}
 
 function text(t: string, size?: number, color?: string): Run { return { t, size, color } }
+// text()/bold()는 글꼴 로드 전에 호출되므로 치환은 그릴 때(drawPara) 한다.
 function bold(t: string, size?: number, color?: string): Run { return { t, size, color, bold: true } }
 const sizeOf = (r: Run) => r.size ?? BASE_SIZE
 const hex = (h: string) => rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255)
 const fontOf = (f: Fonts, r: Run) => (r.bold ? f.b : f.r)
 /** 그리는 글꼴(나눔고딕)의 폭 — 글자를 실제로 놓을 때·가운데 정렬에 쓴다. */
-const widthOf = (f: Fonts, r: Run, t = r.t) => fontOf(f, r).widthOfTextAtSize(t, sizeOf(r))
+const widthOf = (f: Fonts, r: Run, t = r.t) => fontOf(f, r).widthOfTextAtSize(drawable(f, t), sizeOf(r))
 /** 맑은 고딕의 폭 — 줄바꿈 판단에만 쓴다(Word와 같은 곳에서 줄이 나뉘게). */
 function layoutWidthOf(f: Fonts, r: Run, t: string): number {
   const table = MALGUN_ADV[r.bold ? 'b' : 'r']
@@ -204,8 +215,9 @@ function drawPara(page: PDFPage, f: Fonts, p: Para, x: number, top: number, widt
     const unscaled = line.h / (p.lineMul ?? 1)
     const baseline = y + (line.h - unscaled) / 2 + line.asc
     for (const r of line.runs) {
-      page.drawText(r.t, { x: cx, y: Y(baseline), size: sizeOf(r), font: fontOf(f, r), color: hex(r.color ?? '000000') })
-      cx += widthOf(f, r)
+      const t = drawable(f, r.t)
+      page.drawText(t, { x: cx, y: Y(baseline), size: sizeOf(r), font: fontOf(f, r), color: hex(r.color ?? '000000') })
+      cx += widthOf(f, r, t)
     }
     y += line.h
   }
@@ -334,9 +346,10 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   const at = new Date(session.started_at)
   doc.setCreationDate(at); doc.setModificationDate(at)
   doc.setProducer('kids-speech-survey'); doc.setCreator('kids-speech-survey')
+  const regular = await doc.embedFont(regularBytes, { subset: true, customName: 'NanumGothic' })
   const f: Fonts = {
-    r: await doc.embedFont(regularBytes, { subset: true, customName: 'NanumGothic' }),
-    b: await doc.embedFont(boldBytes, { subset: true, customName: 'NanumGothicBold' }),
+    r: regular, b: await doc.embedFont(boldBytes, { subset: true, customName: 'NanumGothicBold' }),
+    glyphs: new Set(regular.getCharacterSet()),
   }
   const page = doc.addPage([PAGE.w, PAGE.h])
 
