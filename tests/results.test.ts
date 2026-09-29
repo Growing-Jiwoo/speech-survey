@@ -21,10 +21,12 @@ const READ_SCORED = {
 const WRITE_SCORED = {
   writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: i < 8 })),
 }
-/** 세 과제 모두 채점됐고 쓰기가 기준 미달 = 판정이 실제로 나오는 Fail. A안에서 Fail은
- *  **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는 쓰기까지 채워야 한다. */
+/** 세 과제 모두 채점됐고 낱말 해독·쓰기가 기준 미달 = 판정이 실제로 나오는 Fail(FAIL 2개 이상,
+ *  담당자 확정 2026-09-29). A안에서 Fail은 **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는
+ *  쓰기까지 채워야 한다. */
 const ALL_SCORED_FAIL = {
   ...READ_SCORED,
+  reading_marks: READ_SCORED.reading_marks.map(m => ({ ...m, correct: false })),
   writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })),
 }
 
@@ -76,13 +78,16 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
     expect(r.verdict).toBeNull()
   })
-  // 담당자 확정(2026-09-28) 「3개 중에 1개 이상이 fail이면 최종결과가 fail」 — lib/scoring의 finalVerdict.
-  it('판정: 세 과제 모두 pass여야 pass, 하나라도 fail이면 fail (G1 임시 기준 9/23/6)', () => {
+  // 담당자 확정(2026-09-29) 「3개 중에 2개 이상이 fail이면 최종 fail」 — lib/scoring의 finalVerdict.
+  it('판정: fail이 2개 이상일 때만 fail — 쓰기 하나만 fail이면 pass (G1 임시 기준 9/23/6)', () => {
     const pass = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
     expect(pass.verdict).toBe('pass')
     const failWriting = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED,
       writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })) }))
-    expect(failWriting.verdict).toBe('fail')
+    expect(failWriting.verdict).toBe('pass')
+    // 읽기 두 과제가 미녹음(X·0점)이면 FAIL 2개 → 최종 FAIL
+    const failReading = evaluateSession(row({ id: 's', child_no: 1, recordings: [], ...WRITE_SCORED }))
+    expect(failReading.verdict).toBe('fail')
   })
 })
 

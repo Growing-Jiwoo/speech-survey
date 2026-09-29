@@ -61,8 +61,11 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
   it('세 과제가 다 채점되면 과제별 판정과 최종결과가 PASS/FAIL로 찍힌다', async () => {
     const all = await verdictRow(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: true }) }))
     expect(all).toEqual(['PASS', 'PASS', 'PASS', 'PASS'])
+    // 담당자 확정(2026-09-29): FAIL 2개 이상이어야 최종 FAIL — 쓰기 하나만 FAIL이면 최종 PASS(docx 예시와 같다)
     const oneFail = await verdictRow(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: false }) }))
-    expect(oneFail).toEqual(['PASS', 'PASS', 'FAIL', 'FAIL'])
+    expect(oneFail).toEqual(['PASS', 'PASS', 'FAIL', 'PASS'])
+    const twoFail = await verdictRow(await renderReport({ form, session, ...scored(form, { read: false, sentence: false, write: true }) }))
+    expect(twoFail).toEqual(['FAIL', 'FAIL', 'PASS', 'FAIL'])
   })
 
   it('[REGRESSION] 채점이 끝나지 않은 과제의 판정 칸은 비고, 최종결과·해석 문단도 비운다 — 미채점은 FAIL이 아니다', async () => {
@@ -135,10 +138,11 @@ describe('renderReport — 같은 입력이면 언제 만들어도 같은 바이
   }, 20_000)
 })
 
-describe('finalVerdict — 담당자 확정(2026-09-28) 「3개 중에 1개 이상이 fail이면 최종결과가 fail」', () => {
-  it('셋 다 pass여야 pass', () => {
+describe('finalVerdict — 담당자 확정(2026-09-29) 「3개 중에 2개 이상이 fail이면 최종 fail」', () => {
+  it('fail이 2개 이상일 때만 fail — 하나만 fail이면 pass', () => {
     expect(finalVerdict({ wordReading: 'pass', sentenceReading: 'pass', writing: 'pass' })).toBe('pass')
-    expect(finalVerdict({ wordReading: 'pass', sentenceReading: 'pass', writing: 'fail' })).toBe('fail')
+    expect(finalVerdict({ wordReading: 'pass', sentenceReading: 'pass', writing: 'fail' })).toBe('pass')
     expect(finalVerdict({ wordReading: 'fail', sentenceReading: 'fail', writing: 'pass' })).toBe('fail')
+    expect(finalVerdict({ wordReading: 'fail', sentenceReading: 'fail', writing: 'fail' })).toBe('fail')
   })
 })

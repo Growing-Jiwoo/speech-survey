@@ -358,7 +358,7 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
               </span>
             ),
             desc: <>과제별 기준 점수에 따른 판정입니다. 채점이 끝난 과제에만 나오며, 결과보고서 PDF의
-              결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 하나라도 Fail이면 Fail입니다.</>,
+              결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 둘 이상 Fail이면 Fail입니다.</>,
           },
           ...(PROVISIONAL_CRITERIA ? [{
             badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,

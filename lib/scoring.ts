@@ -36,16 +36,15 @@ export type Verdict = 'pass' | 'fail'
 export const TASK_KEYS: TaskKey[] = ['wordReading', 'sentenceReading', 'writing']
 
 /**
- * 최종결과: **세 영역 중 하나라도 FAIL이면 FAIL, 셋 다 PASS여야 PASS.**
+ * 최종결과: **세 영역 중 FAIL이 2개 이상이면 FAIL, 아니면 PASS.**
  *
- * 담당자 확정(2026-09-28) — 원문 「3개 중에 1개 이상이 fail이면 최종결과가 fail로 나오고 그 외에는
- * 다 pass」. ⚠️ 담당자가 배포한 결과보고서 예시 파일(`KODYS_G*_결과보고서.docx`)은 이와 어긋난다
- * (예시 표 PASS·PASS·FAIL → 최종 PASS, 미통과 문구 「2개 이상의 영역에서 … 미통과」). 회신 원문이
- * 직접적이라 회신을 따랐고, 예시·문구의 불일치는 담당자에게 되물을 항목이다.
- * 교사 결과 화면(`lib/results.ts`)과 결과보고서 PDF(`lib/pdf/report.ts`)가 같이 쓴다.
+ * 담당자 확정(2026-09-29) — 원문 「3개 중에 2개 이상이 fail이면 최종 fail로 할려고」. 2026-09-28 회신
+ * 「1개 이상이 fail이면 fail」은 담당자가 「내가 잘못 얘기했다」며 정정했다. 담당자가 배포한 결과보고서
+ * 예시(`KODYS_G*_결과보고서.docx`: PASS·PASS·FAIL → 최종 PASS, 미통과 문구 「2개 이상의 영역에서」)와
+ * 일치한다. 교사 결과 화면(`lib/results.ts`)과 결과보고서 PDF(`lib/pdf/report.ts`)가 같이 쓴다.
  */
 export function finalVerdict(v: Record<TaskKey, Verdict>): Verdict {
-  return TASK_KEYS.every(k => v[k] === 'pass') ? 'pass' : 'fail'
+  return TASK_KEYS.filter(k => v[k] === 'fail').length >= 2 ? 'fail' : 'pass'
 }
 
 export interface FormScoring {

@@ -65,8 +65,8 @@ const FAIL = { fill: 'FBE9E7', ink: 'B3261E', rule: 'F2C4BE' }
 /**
  * 결과 해석 및 권고. 담당자 확정(2026-09-28) — 담당자가 `KODYS_G*_결과보고서.docx`에 최종결과
  * PASS/FAIL별로 넣어 둔 문장 그대로다(「최종결과 pass, fail인 경우 멘트는 여기에다가 넣어놨어」).
- * G1·G2가 같은 문장이다. ⚠️ FAIL 문구의 「2개 이상의 영역」은 최종 판정 규칙(하나라도 FAIL → FAIL,
- * lib/scoring finalVerdict)과 어긋난다 — 담당자에게 되물을 항목이며 문구는 임의로 고치지 않는다.
+ * G1·G2가 같은 문장이다. FAIL 문구의 「2개 이상의 영역」은 최종 판정 규칙(FAIL 2개 이상 → FAIL,
+ * lib/scoring finalVerdict, 담당자 확정 2026-09-29)과 맞는다.
  */
 const INTERPRETATION: Record<Verdict, Run[]> = {
   pass: [

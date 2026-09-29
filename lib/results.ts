@@ -75,7 +75,7 @@ export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'sta
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
   const allScored = TASK_KEYS.every(k => result.complete[k])
-  // 최종 판정 규칙(하나라도 FAIL → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
+  // 최종 판정 규칙(FAIL 2개 이상 → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
   const verdict: Verdict | null = allScored ? finalVerdict(result.verdict) : null
   return {
     status: 'scored',
