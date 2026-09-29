@@ -272,7 +272,10 @@ export function withUnrecordedDefaults(
       for (const i of p.items) if (sentences[i.code] === undefined) sentences[i.code] = 0
     }
   }
-  const times = { ...unrecordedTimeDefaults(f, hasRecording), ...input.times }
+  // 위 둘과 같이 「비어 있을 때만」 채운다 — spread로 합치면 값이 undefined인 키가 기본값을 지운다.
+  const times = { ...input.times }
+  for (const [code, sec] of Object.entries(unrecordedTimeDefaults(f, hasRecording)))
+    if (times[code] === undefined) times[code] = sec
   return { ...input, marks, sentences, times }
 }
 

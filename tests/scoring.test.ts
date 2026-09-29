@@ -345,6 +345,11 @@ describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기�
     expect(out.times.rs01).toBe(3.5)
   })
 
+  it('값이 undefined인 키가 있어도 시간 기본값을 채운다 (비어 있는 것과 같다)', () => {
+    const out = withUnrecordedDefaults(g1, { ...empty, times: { rs02: undefined } }, code => code !== 'p_rs02')
+    expect(out.times.rs02).toBe(20)
+  })
+
   it('녹음이 다 있으면 아무것도 채우지 않는다', () => {
     expect(withUnrecordedDefaults(g1, empty, all)).toEqual(empty)
   })
