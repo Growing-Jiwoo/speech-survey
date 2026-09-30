@@ -4,13 +4,17 @@ vi.mock('@/lib/db', () => ({
   listSessions: vi.fn().mockResolvedValue([]),
   sessionDetail: vi.fn(),
   signedAudioUrl: vi.fn(),
+  signedScanUrl: vi.fn(),
   deleteSession: vi.fn().mockResolvedValue(undefined),
   updateSessionIdentity: vi.fn(),
+  sessionState: vi.fn(),
+  unlinkWritingScan: vi.fn().mockResolvedValue(undefined),
 }))
 
 import { GET as LIST } from '@/app/api/admin/sessions/route'
 import { GET as DETAIL, DELETE, PATCH } from '@/app/api/admin/sessions/[id]/route'
 import { GET as SHEET } from '@/app/api/admin/sessions/[id]/sheet.pdf/route'
+import { DELETE as UNLINK } from '@/app/api/admin/sessions/[id]/scan/route'
 import { POST as LOGOUT } from '@/app/api/admin/logout/route'
 import * as db from '@/lib/db'
 import { itemsFor } from '@/lib/items'
@@ -24,7 +28,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.listSessions).mockResolvedValue([])
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
+    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [], times: [], scan: null,
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
 })
@@ -54,7 +58,7 @@ describe('GET /api/admin/sessions/[id]', () => {
       ],
       writing: [{ item_code: 'ww01', can_write: true }],
       marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
-      times: [{ item_code: 'rs01', seconds: 4.5 }],
+      times: [{ item_code: 'rs01', seconds: 4.5 }], scan: null,
     })
     vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
 
@@ -71,6 +75,39 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(body.marks).toEqual([{ item_code: 'rw01', correct: true }])
     expect(body.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
     expect(body.times).toEqual([{ item_code: 'rs01', seconds: 4.5 }])
+  })
+  it('쓰기 기록지 스캔본은 서명 URL로만 싣는다 — 스토리지 경로는 싣지 않는다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: { id: SID, grade: 1 } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
+      scan: { session_id: SID, path: `${SID}/1727650000000.jpg`, content_type: 'image/jpeg', bytes: 5, uploaded_at: '2026-09-30T05:00:00Z' },
+    })
+    vi.mocked(db.signedScanUrl).mockResolvedValueOnce('https://signed/scan')
+    const body = await (await DETAIL(req(), ctx(SID))).json()
+    expect(body.scan).toEqual({ url: 'https://signed/scan', missing: false, uploadedAt: '2026-09-30T05:00:00Z' })
+    expect(JSON.stringify(body)).not.toContain('1727650000000')
+  })
+  it('[REGRESSION] 스캔본 서명이 실패해도(파일 없는 행) 결과지는 열린다 — url만 null, 화면이 연결 해제를 권한다', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: { id: SID, grade: 1 } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
+      scan: { session_id: SID, path: `${SID}/gone.jpg`, content_type: 'image/jpeg', bytes: 5, uploaded_at: 'T' },
+    })
+    vi.mocked(db.signedScanUrl).mockRejectedValueOnce(new Error('Object not found'))
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(200)
+    expect((await res.json()).scan).toEqual({ url: null, missing: true, uploadedAt: 'T' })
+  })
+  it('[REGRESSION] 파일 없음이 아닌 서명 실패(스토리지 일시 오류)는 missing이 아니다 — 화면이 연결 해제(지우는 동작)를 권하지 않게', async () => {
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({
+      session: { id: SID, grade: 1 } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
+      scan: { session_id: SID, path: `${SID}/1.jpg`, content_type: 'image/jpeg', bytes: 5, uploaded_at: 'T' },
+    })
+    vi.mocked(db.signedScanUrl).mockRejectedValueOnce(new Error('fetch failed'))
+    expect((await (await DETAIL(req(), ctx(SID))).json()).scan).toEqual({ url: null, missing: false, uploadedAt: 'T' })
+  })
+  it('스캔본이 없으면 scan은 null이고 서명 URL을 만들지 않는다', async () => {
+    const body = await (await DETAIL(req(), ctx(SID))).json()
+    expect(body.scan).toBeNull()
+    expect(db.signedScanUrl).not.toHaveBeenCalled()
   })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))
@@ -94,7 +131,7 @@ describe('GET /api/admin/sessions/[id]', () => {
   // sheet.pdf의 `if (!session)` 가드는 도달조차 못 했다.
   it('[REGRESSION] 없는 세션은 404 — 장애(500)와 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [], scan: null,
     })
     const res = await DETAIL(req(), ctx(SID))
     expect(res.status).toBe(404)
@@ -131,14 +168,14 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
     marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
-    times: [{ item_code: 'rs01', seconds: 4.5 }],
+    times: [{ item_code: 'rs01', seconds: 4.5 }], scan: null,
   })
 
   // 이 라우트의 `if (!session)` 가드는 sessionDetail이 `.single()`이던 동안 도달조차 못 했다
   // (행 0개에 throw → catch → 500). maybeSingle로 바꾼 뒤 가드가 실제로 동작하는지 고정한다.
   it('[REGRESSION] 없는 세션은 404 — 삭제된 세션과 장애를 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [], scan: null,
     })
     const res = await SHEET(req(), ctx(SID))
     expect(res.status).toBe(404)
@@ -279,3 +316,33 @@ describe('PATCH /api/admin/sessions/[id]', () => {
     expect((await res.json()).error).not.toMatch(/pg internal/)
   })
 })
+
+describe('DELETE /api/admin/sessions/[id]/scan — 연결 해제', () => {
+  it('스캔본 방식 검사 — 스캔본과 쓰기 채점을 함께 지운다(낱말 쓰기 코드 전부가 소유 범위)', async () => {
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    const res = await UNLINK(req('DELETE'), ctx(SID))
+    expect(res.status).toBe(200)
+    expect(db.unlinkWritingScan).toHaveBeenCalledWith(SID, 'word', itemsFor(formForGrade(1)).writingItems.map(i => i.code))
+  })
+  it('문장 쓰기(G2)는 sentence 종류로', async () => {
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 2, writingMode: 'scan' })
+    await UNLINK(req('DELETE'), ctx(SID))
+    expect(vi.mocked(db.unlinkWritingScan).mock.calls[0][1]).toBe('sentence')
+  })
+  it('[핵심] 화면 방식 검사는 409 — 검사 중 입력한 쓰기를 지우면 되돌릴 길이 없다', async () => {
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    expect((await UNLINK(req('DELETE'), ctx(SID))).status).toBe(409)
+    expect(db.unlinkWritingScan).not.toHaveBeenCalled()
+  })
+  it('없는 세션 404 · UUID 아님 400 · 장애 500(내부 문구 비노출)', async () => {
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'missing', grade: 0, writingMode: 'screen' })
+    expect((await UNLINK(req('DELETE'), ctx(SID))).status).toBe(404)
+    expect((await UNLINK(req('DELETE'), ctx('../x'))).status).toBe(400)
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.unlinkWritingScan).mockRejectedValueOnce(new Error('storage path leak'))
+    const res = await UNLINK(req('DELETE'), ctx(SID))
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/storage/)
+  })
+})
+

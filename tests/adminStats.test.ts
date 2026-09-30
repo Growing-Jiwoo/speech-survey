@@ -24,12 +24,36 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
-    edited_at: null, original_identity: null,
+    edited_at: null, original_identity: null, writing_mode: 'screen' as const,
     recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }
   return { ...row, progress: over.progress ?? sessionProgress(row) }
 }
+
+describe('sessionProgress — 쓰기 스캔본(2026-09-30)', () => {
+  const ALL_REC = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
+  it('스캔본 방식의 빈 쓰기는 「미완료」가 아니다 — 담당자가 스캔본으로 채울 칸이다', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC, writing_mode: 'scan' }))
+    expect(p).toMatchObject({ scan: 'wait', written: 0, incomplete: false })
+  })
+  it('화면 방식은 종전대로 쓰기가 비면 미완료', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC }))
+    expect(p).toMatchObject({ scan: null, incomplete: true })
+  })
+  it('스캔본이 올라왔으면 uploaded — 담당자가 채점할 차례(목록이 「스캔 대기」와 가른다). 관계는 객체·배열 어느 모양이든', () => {
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: { session_id: 'x' } })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [{ session_id: 'x' }] })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [] })).scan).toBe('wait')
+  })
+  it('[REGRESSION] 스캔본 없이 쓰기를 넣기 시작했으면(종이로 채점) 「스캔 대기」가 아니다 — 선생님은 이미 올릴 수 없다', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC, writing_mode: 'scan', writing_answers: [{ item_code: 'ww01', can_write: true }] }))
+    expect(p).toMatchObject({ scan: 'uploaded', written: 1, incomplete: false })
+  })
+  it('스캔본 방식이어도 녹음이 빠졌으면 미완료', () => {
+    expect(sessionProgress(mkSession({ recordings: ALL_REC.slice(1), writing_mode: 'scan' })).incomplete).toBe(true)
+  })
+})
 
 describe('sessionProgress', () => {
   it('중복 item_code 녹음(재녹음)은 1개로 집계한다', () => {

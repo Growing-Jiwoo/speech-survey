@@ -8,10 +8,12 @@
 // bg-well(#F7F9FE)은 흰색과 거의 구분되지 않아 밴드 구실을 못 했다 — bg(#F4F6FB)를 쓴다.
 import type { ReactNode } from 'react'
 
-export function TaskSection({ title, hint, children }: {
+export function TaskSection({ title, hint, aside, children }: {
   title: string
   /** 채점 기준 한 줄 (예: '20초 동안 정확하게 읽은 낱말 수' — 값은 양식의 `limits`에서 온다) */
   hint?: string
+  /** 제목 띠 오른쪽 끝의 작은 표식(예: 쓰기 스캔본을 언제 올렸는지) */
+  aside?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -21,6 +23,7 @@ export function TaskSection({ title, hint, children }: {
       <h2 className="flex min-h-12 flex-wrap items-center gap-x-2.5 bg-bg px-4 py-2.5">
         <span className="text-[16px] font-bold leading-none">{title}</span>
         {hint && <span className="text-[12px] leading-none text-ink-mute">{hint}</span>}
+        {aside && <span className="ml-auto">{aside}</span>}
       </h2>
       {children}
     </section>

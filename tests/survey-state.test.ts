@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk } from '@/lib/survey-state'
+import {
+  newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk,
+  saveWritingModePref, writingModePref, resolveWritingMode, type SurveyState,
+} from '@/lib/survey-state'
 
 // node 환경에는 localStorage가 없으므로 Map 기반 스텁을 주입한다.
 beforeEach(() => {
@@ -204,3 +207,62 @@ describe('마이크 확인 기억 (같은 기기 연속 검사 — 사용자 확
     expect(recentMicOk(10 * 60_000)).toBe(true)
   })
 })
+
+describe('쓰기 방식 — 기기 기본값(마지막으로 고른 것, 사용자 확정 2026-09-30)', () => {
+  it('처음에는 screen(지금까지의 방식)', () => {
+    expect(writingModePref()).toBe('screen')
+  })
+  it('고른 방식을 기억한다 — 한 반을 같은 방식으로 검사할 때 아이마다 다시 누르지 않게', () => {
+    saveClassCode('ABC234')
+    saveWritingModePref('scan')
+    expect(writingModePref()).toBe('scan')
+    saveWritingModePref('screen')
+    expect(writingModePref()).toBe('screen')
+  })
+  it('[REGRESSION] 다른 학급에는 넘어가지 않는다 — 컴퓨터실 PC에서 1반의 스캔본 방식이 기록지 없는 2반에 걸리지 않게', () => {
+    saveClassCode('ABC234')
+    saveWritingModePref('scan')
+    saveClassCode('XYZ789')
+    expect(writingModePref()).toBe('screen')
+    saveClassCode('ABC234')
+    expect(writingModePref()).toBe('scan')
+  })
+  it('기기 키라 clearState(아동 흔적 파기)가 지우지 않는다', () => {
+    saveClassCode('ABC234')
+    const s = newState('sid-1', '홍길동', 3, 'tok', 1)
+    saveState(s)
+    saveWritingModePref('scan')
+    clearState()
+    expect(writingModePref()).toBe('scan')
+  })
+  it('손상된 값은 screen', () => {
+    localStorage.setItem('kodys-survey:writingMode', 'paper')
+    expect(writingModePref()).toBe('screen')
+  })
+  it('검사에서 고른 값이 기기 기본값보다 먼저다', () => {
+    saveClassCode('ABC234')
+    saveWritingModePref('scan')
+    expect(resolveWritingMode({ writingMode: 'screen' })).toBe('screen')
+    expect(resolveWritingMode({})).toBe('scan')
+  })
+  it('[REGRESSION] 검사 상태에 손상된 값이 있으면 기기 기본값 — 그대로 보내면 제출이 400으로 막힌다', () => {
+    expect(resolveWritingMode({ writingMode: 'paper' as SurveyState['writingMode'] })).toBe('screen')
+  })
+  it('[REGRESSION] 고르지 않았어도 화면에 표시한 값이 있으면 화면 방식 — 멈춘 사이 기본값이 스캔본으로 바뀌어도 버리지 않는다', () => {
+    saveClassCode('ABC234')
+    saveWritingModePref('scan')   // 같은 컴퓨터의 다른 아이가 스캔본을 골랐다
+    expect(resolveWritingMode({ writing: { ww01: 1 } })).toBe('screen')
+    expect(resolveWritingMode({ writing: {} })).toBe('scan')
+    // 직접 고른 값은 여전히 먼저다 — 표시하다가 스캔본으로 바꾼 검사는 스캔본
+    expect(resolveWritingMode({ writingMode: 'scan', writing: { ww01: 1 } })).toBe('scan')
+  })
+  it('스키마 버전을 올리지 않는다 — 방식이 없는 옛 상태도 그대로 복원된다(진행 중 검사를 버리지 않게)', () => {
+    const s = newState('sid-9', '홍길동', 3, 'tok', 1)
+    saveState(s)
+    const back = loadState()!
+    expect(back.writingMode).toBeUndefined()
+    saveState({ ...back, writingMode: 'scan' })
+    expect(loadState()!.writingMode).toBe('scan')
+  })
+})
+

@@ -66,9 +66,10 @@ export async function POST(req: Request) {
     }
     lastSentAt.set(code, Date.now())
 
-    // 채점 완료 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 여기서 필요 없다
-    // (세션만으로 센다 — 미실시는 채점 수와 무관).
-    const scoredCount = summarize(buildChildren([], rows)).scored
+    // 받을 수 있는 결과지 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 여기서 필요 없다
+    // (세션만으로 센다 — 미실시는 채점 수와 무관). 「채점 완료」 칸이 아니라 받을 수 있는 수를 쓴다 — 스캔본
+    // 쓰기만 남은 아이는 채점 완료가 아니어도 링크에서 읽기 점수를 볼 수 있다(lib/results-view summarize).
+    const scoredCount = summarize(buildChildren([], rows)).downloadable
     return NextResponse.json({ sent: true, maskedEmail: maskEmail(row.teacher_email), scoredCount })
   } catch (e) {
     console.error('[results/request] 실패', e)

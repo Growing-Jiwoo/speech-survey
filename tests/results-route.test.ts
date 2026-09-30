@@ -35,6 +35,7 @@ import { POST as REQUEST } from '@/app/api/results/request/route'
 import { GET as LIST } from '@/app/api/results/[token]/route'
 import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
+import { classSheetTag } from '@/lib/writing-sheet'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
 import * as pdf from '@/lib/pdf/report'
@@ -65,7 +66,8 @@ beforeEach(() => {
 describe('POST /api/results/request', () => {
   // 코드당 쿨다운은 모듈 상태라 테스트마다 다른 코드를 쓴다.
   // CODE_ALPHABET(lib/schema.ts)이 0·1·I·L·O를 뺀 집합이라 2~9만으로 만들어야 서로도, 형식 검증과도 부딪히지 않는다.
-  const codeOf = (n: number) => `RQ${2222 + n}`
+  // 2222 + n으로 만들면 테스트가 늘어 n이 8을 넘는 순간 0이 섞여(2230) 형식 오류 400이 난다 — 8진수 자리를 2~9로 옮긴다.
+  const codeOf = (n: number) => `RQ${n.toString(8).padStart(4, '0').replace(/[0-7]/g, d => String(Number(d) + 2))}`
   let n = 0
   const fresh = () => {
     const code = codeOf(++n)
@@ -135,11 +137,22 @@ describe('POST /api/results/request', () => {
     vi.mocked(db.findClassCode).mockResolvedValue({ ...CODE_ROW, code })
     expect((await REQUEST(reqFor({ code }))).status).toBe(200)
   })
+  it('scoredCount는 **받을 수 있는** 수 — 쓰기 스캔본을 기다리는 아이도 읽기 점수는 링크에서 볼 수 있다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([{
+      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+      started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'scan' as const, writing_scan: null,
+    }])
+    const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
+    expect(json.scoredCount).toBe(1)
+  })
   it('채점 완료 수를 함께 돌려준다 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거', async () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
       id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
       started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
       recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'screen' as const, writing_scan: null,
     }])
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
@@ -152,6 +165,7 @@ describe('GET /api/results/[token]', () => {
     id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen' as const, writing_scan: null,
   }
   beforeEach(() => {
     vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
@@ -177,6 +191,17 @@ describe('GET /api/results/[token]', () => {
     expect(untested).toMatchObject({ childNo: 2, sessions: [] })
     expect(db.findClassCodeById).toHaveBeenCalledWith(CID)
     expect(db.classResults).toHaveBeenCalledWith(CID)
+  })
+  it('쓰기 기록지 QR의 반 표시(sheetTag)와 세션마다 쓰기 방식·스캔 상태를 싣는다 — 스캔본 경로·그림은 싣지 않는다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([{
+      ...SESSION, writing_mode: 'scan', writing_scan: { uploaded_at: '2026-09-30T05:00:00.000Z' },
+    }])
+    const json = await (await listReq(await createResultsToken(CID, 'test-secret'))).json()
+    expect(json.sheetTag).toBe(await classSheetTag(CID))
+    expect(json.children[0].sessions[0]).toMatchObject({ writingMode: 'scan', scanState: 'uploaded' })
+    const text = JSON.stringify(json)
+    expect(text).not.toContain('uploaded_at')
+    expect(text).not.toContain('writing_scan')
   })
   it('[REGRESSION] 아동 정보가 담긴 응답을 캐시에 남기지 않는다(no-store)', async () => {
     const res = await listReq(await createResultsToken(CID, 'test-secret'))
@@ -220,6 +245,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: ['none'],
     started_at, submitted_at: started_at,
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen' as const, writing_scan: null,
   })
   const ROWS = [
     scored('a1', 1, '2026-09-21T01:00:00.000Z'),

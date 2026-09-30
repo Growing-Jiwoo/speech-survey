@@ -11,7 +11,7 @@ import {
   FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreSession, scoringFor,
   sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
 } from '@/lib/scoring'
-import { birthLabel, classLabel, contactLabel, reportDateLabel } from '@/lib/format'
+import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -24,6 +24,8 @@ import { WordScoreRows } from './sheet/WordScoreRows'
 import { WritingChips } from './sheet/WritingChips'
 import { SentenceRows } from './sheet/SentenceRows'
 import { SentenceWriteRows } from './sheet/SentenceWriteRows'
+import { ScanViewer } from './sheet/ScanViewer'
+import { ScanWritingRows } from './sheet/ScanWritingRows'
 import { PageAudio, type Attempt } from './sheet/PageAudio'
 import type { SessionRow } from '@/lib/db'
 
@@ -31,10 +33,11 @@ import type { SessionRow } from '@/lib/db'
  *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
 const AUTOSAVE_DELAY_MS = 1500
 const NO_CODES: ReadonlySet<string> = new Set()
+const SCAN_CHANGED_NOTICE = '그사이 선생님이 스캔본을 올리거나 바꿨어요. 저장하지 않은 쓰기 채점을 지웠으니 새 스캔본을 보고 다시 채점해 주세요.'
 
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
-  incomplete, attemptsOf, onAudioError, onDirtyChange,
+  incomplete, attemptsOf, onAudioError, onDirtyChange, scan, onScanUnlinked, onScanStale, onSaved,
 }: {
   sessionId: string
   session: SessionRow
@@ -42,7 +45,8 @@ export function ResultSheet({
   incomplete: boolean
   /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
   form: SurveyForm
-  /** 쓰기 과제는 검사 중 수집돼 여기서 다시 채점하지 않는다. 값은 정확히 쓴 어절 수. */
+  /** 쓰기 답 — 값은 정확히 쓴 어절 수. 화면 방식 검사는 검사 중 수집분이라 여기서 다시 채점하지 않고,
+   *  스캔본 방식 검사(session.writing_mode === 'scan')만 담당자가 이 화면에서 채점한다(처음 값으로만 쓴다). */
   writing: Partial<Record<string, number>>
   initialMarks: Partial<Record<string, boolean>>
   /** 문장 읽기유창성 점수만 (문장 쓰기는 writing으로 들어온다) */
@@ -54,6 +58,17 @@ export function ResultSheet({
   onAudioError: () => void
   /** 저장하지 않은 채점이 있는지 — 상위가 아동 이동·이탈을 막는 데 쓴다 */
   onDirtyChange?: (dirty: boolean) => void
+  /** 쓰기 기록지 스캔본(스캔본 방식이고 선생님이 올렸을 때만) — 서명 URL. 서명에 실패하면 url이 null
+   *  (파일이 없으면 missing) */
+  scan?: { url: string | null; missing?: boolean; uploadedAt: string } | null
+  /** 「연결 해제」가 끝났다 — 상위가 상세를 다시 받는다(스캔본이 사라진 화면) */
+  onScanUnlinked?: () => void
+  /** 가진 스캔본 정보가 낡았다(저장이 「그사이 바뀜」 409로 막혔거나 그림 링크가 만료됐다) — 상위가 상세를 다시 받는다 */
+  onScanStale?: () => void
+  /** 저장에 성공한 값 — 상위가 캐시를 고친다. 안 고치면 목록을 다녀왔을 때 옛 캐시로 화면이 초기화되고,
+   *  다음 자동 저장이 그 옛 값으로 방금 저장한 채점을 덮는다 */
+  onSaved?: (v: { marks: Partial<Record<string, boolean>>; sentences: Partial<Record<string, number>>
+    times: Partial<Record<string, number>>; writing?: Partial<Record<string, number>> }) => void
 }) {
   const f = itemsFor(form)
   // 미녹음 문항은 잠근다 — 들을 녹음이 없어 채점자가 판단할 것이 없다(lib/scoring withUnrecordedFixed).
@@ -67,10 +82,32 @@ export function ResultSheet({
   const [marks, setMarks] = useState(() => unlocked(initialMarks))
   const [sentences, setSentences] = useState(() => unlocked(initialSentences))
   const [times, setTimes] = useState(() => unlocked(initialTimes))
+  // 스캔본 방식이면 쓰기도 이 화면의 채점 상태다(담당자가 스캔본을 보고 찍는다). 화면 방식은 prop 그대로(읽기 전용).
+  const scanMode = session.writing_mode === 'scan'
+  const [written, setWritten] = useState(writing)
   // 저장에 성공한 값 — 화면 상태와 비교해 "저장 안 한 변경"을 판단한다
   const [savedMarks, setSavedMarks] = useState(marks)
   const [savedSentences, setSavedSentences] = useState(sentences)
   const [savedTimes, setSavedTimes] = useState(times)
+  const [savedWritten, setSavedWritten] = useState(written)
+  // 상위 콜백은 최신 것을 참조만 한다 — 저장 함수가 부모의 렌더마다 새로 만들어지면 자동 저장 타이머가 계속 밀린다
+  const onSavedRef = useRef(onSaved)
+  useEffect(() => { onSavedRef.current = onSaved })
+  const seenScanAt = scan?.uploadedAt ?? null
+  // 스캔본이 바뀐 것을 알았을 때(409 뒤 다시 받은 상세, 뒤에서 다시 받은 상세) 옛 그림을 보고 찍은 **저장 전** 쓰기는
+  // 버린다 — 그대로 두면 새 올린 시각과 함께 저장돼 새 그림에 옛 그림의 점수가 붙는다. 렌더 중에 비교한다
+  // (이전 값 보관 — 효과에서 고치면 그 사이 자동 저장 타이머가 새 시각으로 한 번 돈다).
+  /** 저장된 쓰기가 있다 — 스캔본 없이 넣었으면 선생님은 올릴 수 없다(lib/scan-mapping 「채점됨」) */
+  const hasSavedWriting = Object.keys(savedWritten).length > 0
+  const [prevScanAt, setPrevScanAt] = useState(seenScanAt)
+  const [scanNotice, setScanNotice] = useState('')
+  if (prevScanAt !== seenScanAt) {
+    setPrevScanAt(seenScanAt)
+    if (JSON.stringify(written) !== JSON.stringify(savedWritten)) { setWritten(savedWritten); setScanNotice(SCAN_CHANGED_NOTICE) }
+  }
+  const [unlinkOpen, setUnlinkOpen] = useState(false)
+  const [unlinking, setUnlinking] = useState(false)
+  const [unlinkErr, setUnlinkErr] = useState('')
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
@@ -100,7 +137,7 @@ export function ResultSheet({
 
   const { taskMax, sentenceWordsMax, readMax, writeMax, passMark } = scoringFor(form)
   // 결과보고서 PDF 라우트·교사 결과지와 같은 함수로 미녹음을 고정한 뒤 계산한다 — 저장 전에도 화면과 인쇄물이 같다.
-  const entered = { marks, sentences, times, writing }
+  const entered = { marks, sentences, times, writing: scanMode ? written : writing }
   const r = scoreSession(form, session.submitted_at ? withUnrecordedFixed(f, entered, hasRecording) : entered)
   const writingLabel = SECTION_LABEL[f.writingSection]
 
@@ -109,6 +146,7 @@ export function ResultSheet({
   const dirty = JSON.stringify(marks) !== JSON.stringify(savedMarks)
     || JSON.stringify(sentences) !== JSON.stringify(savedSentences)
     || JSON.stringify(times) !== JSON.stringify(savedTimes)
+    || (scanMode && JSON.stringify(written) !== JSON.stringify(savedWritten))
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
   // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
   // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
@@ -126,12 +164,26 @@ export function ResultSheet({
     setSaving(true)
     if (!auto) setMsg('')
     // requestJson은 init으로 { method?, body? }만 받고, body가 있으면 Content-Type과 직렬화를 스스로 한다.
+    // 쓰기는 스캔본 방식이고 **고쳤을 때만** 싣는다 — 화면 방식 검사에 실으면 라우트가 409로 거부하고(쓰기 소유권),
+    // 고치지 않은 쓰기를 읽기 저장마다 다시 보내면 연결 해제와 겹쳤을 때 지운 채점을 되살린다.
+    // 본 스캔본의 올린 시각을 함께 보낸다 — 그사이 선생님이 바꿨으면 라우트가 409로 막는다.
+    const writingDirty = scanMode && JSON.stringify(written) !== JSON.stringify(savedWritten)
     const res = await requestJson(`/api/admin/sessions/${sessionId}/scores`,
-      { method: 'PUT', body: { marks, sentences, times } },
+      { method: 'PUT', body: { marks, sentences, times,
+        ...(writingDirty ? { writing: written, scanUploadedAt: seenScanAt } : {}) } },
       '채점 저장에 실패했어요. 다시 시도해 주세요.')
     setSaving(false)
+    if (!res.ok && res.status === 409 && writingDirty) {
+      // 그사이 선생님이 스캔본을 올리거나 바꿨다(이 요청의 올린 시각이 낡았다). 옛 그림을 보고 찍은 쓰기는 버리고
+      // 새 스캔본을 받는다 — 요청 전체가 거부됐으므로 읽기 채점은 다음 자동 저장이 쓰기 없이 다시 보낸다.
+      // 그냥 문구만 띄우면 목록을 다녀와도 같은 캐시로 다시 열려 409가 되풀이되고 읽기 저장까지 막힌다.
+      setWritten(savedWritten); setScanNotice(SCAN_CHANGED_NOTICE); setMsg('')
+      onScanStale?.()
+      return
+    }
     if (res.ok) {
-      setSavedMarks(marks); setSavedSentences(sentences); setSavedTimes(times); setAutoFailed(false)
+      setSavedMarks(marks); setSavedSentences(sentences); setSavedTimes(times); setSavedWritten(written); setAutoFailed(false)
+      onSavedRef.current?.({ marks, sentences, times, ...(writingDirty ? { writing: written } : {}) })
       // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
       // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다.
       setMsg(auto ? '자동 저장됨' : '저장했어요.')
@@ -139,7 +191,7 @@ export function ResultSheet({
       setMsg(res.error)
       if (auto) setAutoFailed(true)
     }
-  }, [marks, sentences, times, sessionId])
+  }, [marks, sentences, times, written, savedWritten, scanMode, seenScanAt, sessionId, onScanStale])
 
   /**
    * 자동 저장 — dirty가 생기면 잠시 뒤 스스로 저장한다.
@@ -158,12 +210,13 @@ export function ResultSheet({
    * 결과보고서 PDF 관문 모달도 그 동작을 호출한다.
    */
   useEffect(() => {
-    if (!dirty || saving || autoFailed) return
+    // 연결 해제 창이 열려 있거나 해제 중이면 저장하지 않는다 — 해제가 지운 쓰기 채점을 뒤늦은 자동 저장이 되살린다.
+    if (!dirty || saving || autoFailed || unlinking || unlinkOpen) return
     const t = setTimeout(() => { void save(true) }, AUTOSAVE_DELAY_MS)
     return () => clearTimeout(t)
     // save는 marks·sentences가 바뀌면 새로 만들어진다 — 그래서 타이핑 중에는 타이머가
     // 계속 미뤄지고(디바운스), 손을 멈춘 뒤에 한 번만 저장된다.
-  }, [dirty, saving, autoFailed, save])
+  }, [dirty, saving, autoFailed, unlinking, unlinkOpen, save])
 
   // 채점을 고치면 이전 저장 결과 안내("저장했어요.")를 지운다 — 안 지우면 옆의
   // "저장하지 않은 채점이 있어요"와 동시에 떠서 무엇이 저장된 상태인지 알 수 없다
@@ -199,6 +252,22 @@ export function ResultSheet({
       else next[code] = v
       return next
     })
+  }
+
+  const setWrite = (code: string, v: number) => {
+    setMsg(''); setScanNotice(''); setAutoFailed(false); setWritten(w => ({ ...w, [code]: v }))
+  }
+
+  /** 「이 아이 기록지가 아니에요 — 연결 해제」: 스캔본과 그것을 보고 넣은 쓰기 채점을 지워 스캔 대기로 되돌린다. */
+  async function unlink() {
+    setUnlinking(true); setUnlinkErr('')
+    const res = await requestJson(`/api/admin/sessions/${sessionId}/scan`, { method: 'DELETE' },
+      '연결 해제에 실패했어요. 다시 시도해 주세요.')
+    setUnlinking(false)
+    if (!res.ok) { setUnlinkErr(res.error); return }
+    setWritten({}); setSavedWritten({}); setUnlinkOpen(false)
+    setMsg(scan ? '연결을 해제했어요. 선생님이 맞는 기록지를 올리면 여기에 보여요.' : '쓰기 채점을 지웠어요.')
+    onScanUnlinked?.()
   }
 
   const readItemsOf = (kind: 'meaning' | 'nonsense') => f.readItems.filter(i => i.kind === kind)
@@ -286,12 +355,75 @@ export function ResultSheet({
           verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
       </TaskSection>
 
-      {/* 쓰기 과제 — 검사 중 수집분(읽기 전용). 학년에 따라 낱말 쓰기 또는 문장 쓰기다. */}
+      {/* 쓰기 과제 — 학년에 따라 낱말 쓰기 또는 문장 쓰기다. 화면 방식은 검사 중 수집분(읽기 전용),
+          스캔본 방식은 담당자가 왼쪽 스캔본을 보며 오른쪽 칸을 찍는다(사용자 확정 2026-09-30).
+          스캔본이 아직 없어도 찍을 수 있다 — 판독이 어려워 종이를 따로 받아 채점하는 경우의 길이다. */}
       <TaskSection title={writingLabel}
-        hint={`검사 중 기록 · 정확하게 쓴 ${f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점`}>
+        hint={`${scanMode ? '스캔본을 보고 채점' : '검사 중 기록'} · 정확하게 쓴 ${f.writingSection === 'word_writing' ? '낱말' : '어절'} 1점`}
+        aside={scanMode && (scan
+          ? <Badge tone="blue" size="sm">스캔본 · {sheetDateLabel(scan.uploadedAt)} 선생님이 올림</Badge>
+          : hasSavedWriting
+            ? <Badge tone="blue" size="sm">스캔본 없이 채점 중</Badge>
+            : <Badge tone="amber" size="sm">스캔 대기 · 아직 안 올라왔어요</Badge>)}>
+      {scanMode && (
+        <div className="grid gap-4 px-4 py-3 lg:grid-cols-2">
+          {scanNotice && (
+            <p role="alert" className="rounded-xl border border-amber/40 bg-amber/10 px-3.5 py-2.5 text-[13px] font-bold text-amber lg:col-span-2">
+              {scanNotice}
+            </p>
+          )}
+          <div>
+            {scan?.url ? (
+              <ScanViewer url={scan.url} alt={`${session.child_name} ${writingLabel} 기록지 스캔본`} onExpired={onScanStale} />
+            ) : (
+              <div className="flex min-h-48 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line bg-well px-4 py-8 text-center">
+                {scan?.missing ? (
+                  // 행은 있는데 파일이 없다(정리가 중간에 끊긴 경우) — 연결을 해제하면 선생님이 다시 올릴 수 있다
+                  <>
+                    <p className="text-[13.5px] font-bold text-rec-deep">스캔본 파일을 찾지 못했어요</p>
+                    <p className="text-[12.5px] leading-relaxed text-ink-mute">아래 「스캔본 연결 해제」 뒤 선생님께 다시 올려 달라고 해 주세요.</p>
+                  </>
+                ) : scan ? (
+                  // 파일은 있을 수 있다(스토리지 일시 오류) — 해제는 스캔본과 쓰기 채점을 지우므로 권하지 않는다
+                  <>
+                    <p className="text-[13.5px] font-bold text-ink-soft">스캔본을 불러오지 못했어요</p>
+                    <p className="text-[12.5px] leading-relaxed text-ink-mute">잠시 뒤 결과지를 새로 열어 주세요.</p>
+                  </>
+                ) : hasSavedWriting ? (
+                  // 스캔본 없이 쓰기를 넣기 시작했다(종이로 채점) — 선생님 화면에서는 이미 「채점이 시작됨」이라 올릴 수 없다
+                  <>
+                    <p className="text-[13.5px] font-bold text-ink-soft">스캔본 없이 쓰기를 채점하고 있어요</p>
+                    <p className="text-[12.5px] leading-relaxed text-ink-mute">
+                      쓰기 칸이 채워져 있어 선생님은 스캔본을 올릴 수 없어요.<br />올리게 하려면 아래 「쓰기 채점 지우기」를 누르세요.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13.5px] font-bold text-ink-soft">아직 스캔본이 올라오지 않았어요</p>
+                    <p className="text-[12.5px] leading-relaxed text-ink-mute">
+                      선생님이 결과지 화면에서 올리면 여기에 보여요.<br />종이를 따로 받았다면 바로 채점해도 돼요.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            {/* 스캔본이 있으면 「다른 아이 기록지」 해제. 스캔본 없이 쓰기가 들어가 있으면 그것을 지우는 길 —
+                없으면 잘못 누른 칸 하나로 「채점 시작」이 되어 선생님이 스캔본을 영영 못 올린다. 같은 해제 동작이다. */}
+            {(scan || hasSavedWriting) && (
+              <button type="button" onClick={() => { setUnlinkErr(''); setUnlinkOpen(true) }} disabled={saving || unlinking}
+                className="mt-2 text-[12.5px] font-bold text-ink-soft underline underline-offset-2 transition hover:text-rec-deep disabled:opacity-40 print:hidden">
+                {scan?.missing ? '스캔본 연결 해제 — 선생님이 다시 올릴 수 있게'
+                  : scan ? '이 아이 기록지가 아니에요 — 연결 해제' : '쓰기 채점 지우기 — 선생님이 스캔본을 올릴 수 있게'}
+              </button>
+            )}
+          </div>
+          <ScanWritingRows items={f.writingItems} kind={f.writingSection === 'word_writing' ? 'word' : 'sentence'}
+            writing={written} onChange={setWrite} />
+        </div>
+      )}
       {f.writingSection === 'word_writing' ? (
         <>
-          <WritingChips items={f.writingItems} writing={writing} />
+          {!scanMode && <WritingChips items={f.writingItems} writing={writing} />}
           <Subtotal
             cells={[
               { label: '의미 점수', value: r.writeMeaning, max: writeMax.meaning },
@@ -302,7 +434,7 @@ export function ResultSheet({
         </>
       ) : (
         <>
-          <SentenceWriteRows items={f.writingItems} writing={writing} />
+          {!scanMode && <SentenceWriteRows items={f.writingItems} writing={writing} />}
           <Subtotal total={{ label: '총점', value: r.writing, max: taskMax.writing }}
             verdict={r.verdict.writing} complete={r.complete.writing} />
         </>
@@ -354,7 +486,7 @@ export function ResultSheet({
           onConfirm={() => {
             setGateOpen(false)
             if (gate.reason === 'dirty') { void save(); return }
-            // 결과지에서 채울 수 없는 과제(쓰기)만 남았으면 경고를 확인한 뒤 내려받는다.
+            // 쓰기만 남았으면 경고를 확인한 뒤 내려받는다(화면 방식은 여기서 채울 수 없고, 스캔본 방식도 A안이라 받게 둔다).
             // 페이지 이동이 아니라 PDF 다운로드다 — router.push로 바꾸면 파일이 아니라 라우트로 이동해 깨진다.
             // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             if (gate.overridable) window.location.href = pdfHref
@@ -364,6 +496,10 @@ export function ResultSheet({
             {gate.reason === 'dirty' ? (
               <>결과보고서 PDF는 <b>저장된 채점</b>으로 만들어집니다. 지금 화면의 수정은 아직 저장되지 않아
                 빠진 채로 나갑니다.</>
+            ) : gate.overridable && scanMode ? (
+              // 스캔본 방식은 이 화면에서 쓰기를 채울 수 있다 — 「채울 수 없으니」라고 하면 틀린 안내다
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있습니다. 스캔본을 보고 채점하면
+                판정이 채워지고, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나갑니다.</>
             ) : gate.overridable ? (
               <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b>가 검사 중에 기록되지 않았습니다.
                 이 화면에서는 채울 수 없으니, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나갑니다.</>
@@ -374,6 +510,21 @@ export function ResultSheet({
           </p>
         </ConfirmDialog>
       )}
+
+      {/* busy에 saving도 넣는다 — 창이 열리기 전에 떠난 자동 저장이 도착하기 전에 해제하면, 늦게 도착한 저장이
+          지운 쓰기 채점을 되살린다(창이 열려 있는 동안 새 자동 저장은 위 효과가 멈춘다). */}
+      <ConfirmDialog open={unlinkOpen} busy={unlinking || saving} error={unlinkErr} danger
+        title={scan?.missing ? '스캔본 연결을 해제할까요?' : scan ? '이 아이 기록지가 아닌가요?' : '쓰기 채점을 지울까요?'}
+        confirmLabel={unlinking ? '지우는 중…' : scan ? '연결 해제' : '쓰기 채점 지우기'}
+        onConfirm={() => void unlink()} onClose={() => setUnlinkOpen(false)}>
+        <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+          {scan ? '스캔본과 이 스캔본을 보고 넣은 ' : '이 검사에 넣은 '}
+          <b className="text-rec-deep">{writingLabel} 채점이 지워지고</b> 「스캔 대기」로 돌아가요.
+          {scan && (scan.missing
+            ? ' 담임 선생님께 기록지를 다시 올려 달라고 알려 주세요(연락처는 맨 위).'
+            : ' 담임 선생님께 맞는 기록지를 올려 달라고 알려 주세요(연락처는 맨 위).')}
+        </p>
+      </ConfirmDialog>
 
       {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}

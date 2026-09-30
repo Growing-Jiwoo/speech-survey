@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
   rosterWithTested: vi.fn(),
 }))
 
+import { classSheetTag } from '@/lib/writing-sheet'
 import { POST } from '@/app/api/sessions/verify-code/route'
 import * as db from '@/lib/db'
 
@@ -28,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.findClassCode).mockResolvedValue(ROW)
   vi.mocked(db.childTestState).mockResolvedValue(null)
-  vi.mocked(db.rosterWithTested).mockResolvedValue([])
+  vi.mocked(db.rosterWithTested).mockResolvedValue({ roster: [], scanPending: 0 })
 })
 
 describe('POST /api/sessions/verify-code', () => {
@@ -100,16 +101,41 @@ describe('POST /api/sessions/verify-code', () => {
 
   it('childNo 없이 호출하면 roster(번호별 검사 상태 포함)를 돌려주고 childTestState는 부르지 않는다', async () => {
     const roster = [
-      { childNo: 1, name: '김서아', gender: '여' as const, birthYmd: '190304', tested: null },
-      { childNo: 2, name: '박도윤', gender: '남' as const, birthYmd: '190712', tested: 'submitted' as const },
+      { childNo: 1, name: '김서아', gender: '여' as const, birthYmd: '190304', tested: null, writing: null },
+      { childNo: 2, name: '박도윤', gender: '남' as const, birthYmd: '190712', tested: 'submitted' as const, writing: 'wait' as const },
     ]
-    vi.mocked(db.rosterWithTested).mockResolvedValue(roster)
+    vi.mocked(db.rosterWithTested).mockResolvedValue({ roster, scanPending: 1 })
     const res = await POST(req({ code: 'K7M2P9' }))
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json.roster).toEqual(roster)
-    expect(db.rosterWithTested).toHaveBeenCalledWith(ROW.id)
+    expect(json.scanPending).toBe(1)
+    expect(db.rosterWithTested).toHaveBeenCalledWith(ROW.id, expect.any(Function))
     expect(db.childTestState).not.toHaveBeenCalled()
+  })
+
+  it('쓰기 문항 코드 판정은 세션 학년의 양식을 따른다 — 문장 읽기(rs..)는 쓰기가 아니다', async () => {
+    await POST(req({ code: 'K7M2P9' }))
+    const isWriting = vi.mocked(db.rosterWithTested).mock.calls[0][1]
+    expect(isWriting('ww01')).toBe(true)
+    expect(isWriting('rs01')).toBe(false)
+    vi.mocked(db.findClassCode).mockResolvedValue({ ...ROW, grade: 2 })
+    await POST(req({ code: 'K7M2P9' }))
+    const isWriting2 = vi.mocked(db.rosterWithTested).mock.calls[1][1]
+    expect(isWriting2('sw01')).toBe(true)
+    expect(isWriting2('ww01')).toBe(false)
+  })
+
+  it('기록지 인쇄 정보: 반 표시(해시 8자리)와 쓰는 칸 종류·개수 — 문항 글자는 싣지 않는다', async () => {
+    const json = await (await POST(req({ code: 'K7M2P9' }))).json()
+    expect(json.sheet.tag).toMatch(/^[0-9a-f]{8}$/)
+    // 인쇄 쪽 반 표시가 올리기 쪽(결과 라우트의 sheetTag)과 같은 함수·같은 입력이어야 한다 — 한쪽만 바뀌면 모든 쪽이 「다른 반」이 된다
+    expect(json.sheet.tag).toBe(await classSheetTag(ROW.id))
+    expect(json.sheet.layout).toEqual({ kind: 'word', count: 10 })
+    expect(JSON.stringify(json.sheet)).not.toContain(ROW.id)
+    vi.mocked(db.findClassCode).mockResolvedValue({ ...ROW, grade: 2 })
+    const g2 = await (await POST(req({ code: 'K7M2P9' }))).json()
+    expect(g2.sheet.layout).toEqual({ kind: 'sentence', count: 5 })
   })
 
   it('childNo와 함께 호출하면 기존처럼 alreadyTested만 답하고 rosterWithTested는 부르지 않는다', async () => {
@@ -123,7 +149,7 @@ describe('POST /api/sessions/verify-code', () => {
   })
 
   it('명단이 빈 학급(관리자 직접 발급 코드)은 roster: []를 돌려준다', async () => {
-    vi.mocked(db.rosterWithTested).mockResolvedValue([])
+    vi.mocked(db.rosterWithTested).mockResolvedValue({ roster: [], scanPending: 0 })
     const res = await POST(req({ code: 'K7M2P9' }))
     const json = await res.json()
     expect(res.status).toBe(200)

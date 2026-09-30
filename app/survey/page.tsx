@@ -11,7 +11,7 @@ import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { canAdvance, visiblePages } from '@/lib/survey-flow'
-import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
+import { loadState, resolveWritingMode, saveState, saveWritingModePref, type SurveyState, type WritingMode } from '@/lib/survey-state'
 import { uploadRecording } from '@/lib/upload'
 import { Blip } from '@/components/Blip'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -25,6 +25,7 @@ import { RetryBanner } from '@/components/survey/RetryBanner'
 import { SectionIntro } from '@/components/survey/SectionIntro'
 import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
+import { ScanWritingPanel, WritingModeToggle } from '@/components/survey/WritingMode'
 
 function SurveyInner() {
   const router = useRouter()
@@ -236,11 +237,20 @@ function SurveyInner() {
     // (담당자 확정 2026-09-21). 버튼 라벨을 정하는 `skipping`과 **같은 조건**을 쓴다:
     // 화면이 「모르겠어요」라고 말한 그 누름만 기록해야 둘이 어긋나지 않는다.
     if (skipping) patch(prev => ({ skipped: [...new Set([...prev.skipped, page.code])] }))
+    // 쓰기 페이지를 떠날 때 **그때 보이던 방식**을 이 검사에 고정한다 — 토글을 안 누르면 방식은 기기 기본값에서
+    // 읽히는데, 같은 기기의 다른 탭에서 기본값이 바뀌면 제출 때 다른 방식으로 나가 화면에서 고른 쓰기가 버려진다.
+    if (page.section === f.writingSection && st && !st.writingMode) patch({ writingMode })
     goNext()
   }
 
   function changeWriting(code: string, v: number) {
     patch(prev => ({ writing: { ...prev.writing, [code]: v } }))
+  }
+
+  /** 쓰기 방식 — 이 검사에 기록하고, 다음 아이를 위해 기기 기본값으로도 남긴다(사용자 확정 2026-09-30). */
+  function changeWritingMode(m: WritingMode) {
+    saveWritingModePref(m)
+    patch({ writingMode: m })
   }
 
   async function retryUpload(code: string) {
@@ -254,7 +264,8 @@ function SurveyInner() {
 
   // 다음으로 넘어갈 수 있는 조건(페이지 종류별)은 survey-flow의 canAdvance가 판정한다.
   // 녹음 중에는 이 화면에서 항상 잠근다(busy). 업로드는 뒤에서 돌아가므로 잠그지 않는다.
-  const canNext = !busy && canAdvance(f, page, st)
+  const writingMode = resolveWritingMode(st)
+  const canNext = !busy && canAdvance(f, page, { ...st, writingMode })
 
   // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
   // (누르면 `tryNext`가 그 페이지를 `skipped`에 남겨 검토 화면이 미녹음과 구분한다 — 2026-09-21)
@@ -348,16 +359,26 @@ function SurveyInner() {
 
               <RetryBanner form={f} codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
 
-              {page.section === 'word_writing' && (
+              {/* 쓰기는 방식을 먼저 고른다 — 스캔본 방식이면 표시 없이 넘어가고 담당자가 스캔본을 채점한다. */}
+              {page.section === f.writingSection && writingMode === 'scan' && (
+                <ScanWritingPanel toggle={<WritingModeToggle mode={writingMode} onChange={changeWritingMode} />}
+                  items={page.items} kind={page.section === 'word_writing' ? 'word' : 'sentence'}
+                  childNo={st.childNo} childName={st.childName}
+                  screenMarks={page.items.filter(i => st.writing[i.code] !== undefined).length} />
+              )}
+
+              {page.section === 'word_writing' && writingMode === 'screen' && (
                 <WritingPage items={page.items} value={st.writing}
+                  toggle={<WritingModeToggle mode={writingMode} onChange={changeWritingMode} />}
                   onChange={changeWriting}
                   onSetAll={v => patch(prev => ({
                     writing: { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) },
                   }))} />
               )}
 
-              {page.section === 'sentence_writing' && (
+              {page.section === 'sentence_writing' && writingMode === 'screen' && (
                 <SentenceWritingPage items={page.items} value={st.writing}
+                  toggle={<WritingModeToggle mode={writingMode} onChange={changeWritingMode} />}
                   onChange={changeWriting} />
               )}
 

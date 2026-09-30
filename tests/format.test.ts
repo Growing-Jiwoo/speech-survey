@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel } from '@/lib/format'
-import { APPLY_CHECKS, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
+import { APPLY_CHECKS, CONSENT_NOTICE, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
   it('정상 값', () => {
@@ -136,6 +136,12 @@ describe('신청 화면 안내·동의 문구(lib/consent)', () => {
 
   it('[REGRESSION] 보관 기간은 고지 문구와 같은 상수를 쓴다', () => {
     expect(APPLY_CHECKS[0].note).toContain(RETENTION_LABEL)
+  })
+
+  it('[REGRESSION] 수집 항목에 쓰기 기록지 이미지(스캔본)가 있다 — 모으는 항목은 고지해야 한다(제15조 제2항)', () => {
+    const items = CONSENT_NOTICE.find(n => n.label === '수집 항목')!.value
+    expect(items).toContain('쓰기 기록지 이미지')
+    expect(items).toContain('음성 녹음')
   })
 
   it('체크 2번은 화면의 검사 안내를 가리킨다 — 안내를 지우면 가짜 동의가 된다', () => {

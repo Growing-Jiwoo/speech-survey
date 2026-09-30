@@ -12,6 +12,9 @@ Supabase CLI를 쓰지 않는다 — **SQL Editor에서 직접 실행**한다(�
 
 - **RLS는 전면 차단**(anon 정책 없음) — 모든 접근은 서버 라우트의 service role 경유.
 - 녹음 파일은 스토리지 버킷 `recordings`에 `{sessionId}/{itemCode}_{attemptNo}.{ext}`로 저장.
+- 쓰기 기록지 스캔본(아동 필적 — PII)은 비공개 버킷 `writing-scans`에 `{sessionId}/{올린 시각 ms}-{무작위 8자}.{jpg|png}`로
+  저장(`006`). 세션당 한 장이고 다시 올리면 새 경로에 올린 뒤 옛 파일을 지운다. 세션을 지우면 두 버킷 모두
+  `{sessionId}/` 아래를 지운 뒤 행을 지운다(`lib/db.ts`의 `deleteSession`).
 - **`sentence_scores`에는 두 종류의 점수가 섞여 있다** — 문장 읽기유창성(`rs..`, 관리자 채점)과
   문장 쓰기(`sw..`, G2에서 검사 중 수집). 모양이 `(item_code, words)`로 같아 테이블을 공유한다.
   관리자 채점 저장(`saveScores`)의 "이번에 안 보낸 행 삭제"는 반드시 `rs..`로 범위를 한정해야 한다

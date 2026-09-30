@@ -7,6 +7,7 @@
 | `003_apply_and_roster.sql` | 교사 신청: `class_codes.status`(pending/active)·`applied_at` + 학급 명단 `class_roster`(RLS). 스펙 2026-08-18 |
 | `004_session_idempotency.sql` | `sessions.idem_key` + 부분 unique 인덱스 — 시작 화면의 [맞아요, 시작하기] 연타·재전송이 세션을 두 개 만들지 않게 한다(사용자 확정 2026-08-21). **시간 창으로 막지 않은 이유**가 파일 주석에 있다: 이 앱은 재검사를 허용하고 정상 재검사가 짧은 간격으로 일어나므로, 시간 창은 현장에서 검사를 막는 쪽으로 실패한다 |
 | `005_sentence_times.sql` | 문장 읽기유창성의 문장별 읽은 시간 `sentence_times(session_id, item_code, seconds numeric(4,1) > 0)`(RLS) — 총점이 어절/초가 됐다(담당자 확정 2026-09-29). `sentence_scores`에 열을 붙이지 않은 이유가 파일 주석에 있다: 어절과 시간은 따로 입력되는데 `words`가 NOT NULL이라 시간을 먼저 넣으면 담을 행이 없다. **코드 배포보다 먼저 실행할 것** — 새 코드는 결과지·결과보고서를 만들 때 이 테이블을 읽는다. 재실행 안전 |
+| `006_writing_scan.sql` | 쓰기 기록지 스캔본(2026-09-30): `sessions.writing_mode`(`screen`/`scan`, not null default `screen` — 도입 전 검사는 전부 화면 방식이었다) + 스캔본 행 `writing_scans(session_id PK → sessions, path, content_type, bytes, uploaded_at)`(RLS, 세션당 한 장) + 비공개 스토리지 버킷 `writing-scans`(한 장 4MB · JPEG/PNG만 — 이미 있는 버킷에도 다시 돌리면 상한이 걸린다, `on conflict do update`). **코드 배포보다 먼저 실행할 것** — 새 코드는 제출·목록·결과지에서 `writing_mode`와 `writing_scans`를 읽는다. 재실행 안전 |
 
 적용 방법은 [../README.md](../README.md)와 루트 README 셋업 절 참고 — **Supabase CLI를 쓰지 않고
 SQL Editor에서 위→아래로 한 번에 실행한다.**
@@ -34,7 +35,7 @@ SQL Editor에서 위→아래로 한 번에 실행한다.**
   anon은 전면 차단이다 — 모든 접근이 서버 라우트의 service role을 지나게 된다.
   새 테이블을 추가하면 **RLS 활성화를 빠뜨리지 말 것**(정책을 안 쓰는 설계라 눈에 안 띈다).
 - **`sentence_scores`에는 두 종류의 점수가 섞인다** — 문장 읽기유창성(`rs..`, 관리자 채점)과
-  문장 쓰기(`sw..`, G2에서 검사 중 수집). 모양이 같아 테이블을 공유하며, 그 대가로 관리자 채점
+  문장 쓰기(`sw..`, G2에서 검사 중 수집 · 스캔본 방식이면 관리자 채점). 모양이 같아 테이블을 공유하며, 그 대가로 관리자 채점
   저장이 삭제 범위를 `rs..`로 한정해야 한다(`lib/db.ts`의 `saveScores`). 문장 읽기의 **읽은 시간**은
   이 테이블이 아니라 `sentence_times`(005)에 있다 — 녹음 없는 문장의 시간(제한 시간 고정)은 저장하지 않고
   채점할 때 파생한다(`lib/scoring.ts`의 `unrecordedTimes`).

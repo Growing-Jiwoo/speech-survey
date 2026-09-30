@@ -3,6 +3,7 @@
 // (components/results/ResultsView)이 그것을 import하면 검사지 문항이 공개 JS 청크에 실린다.
 // 이 파일은 **값으로 import하는 것이 없어야 한다**(타입만) — scripts/check-client-bundle.ts가 지킨다.
 import type { TaskKey, Verdict } from './scoring'
+import type { ScanTarget, ScanTargetState } from './scan-mapping'
 
 /**
  * 세션 상태. 사용자 확정(2026-09-22):
@@ -29,8 +30,9 @@ export interface ResultsSession {
   /**
    * 과제별 채점 완료 여부(`scoreSession`의 `complete` 그대로). scored일 때만 채워진다.
    *
-   * A안(사용자 확정 2026-09-22)으로 **쓰기가 채점되지 않아도 scored가 된다** — 쓰기는 검사 중
-   * 검사자가 넣는 값이라 관리자가 나중에 채울 수 없고, 요구하면 그 아이 결과지가 영영 안 나간다.
+   * A안(사용자 확정 2026-09-22)으로 **쓰기가 채점되지 않아도 scored가 된다** — (화면 방식) 쓰기는 검사 중
+   * 검사자가 넣는 값이라 관리자가 나중에 채울 수 없고, 요구하면 그 아이 결과지가 영영 안 나간다. 스캔본 방식은
+   * 담당자가 나중에 채우지만 받기 기준은 같다 — 대신 받을 때 「쓰기 채점 전」을 알린다(`awaitsScanWriting`).
    * 그 대가로 `scores.writing`에 0이 들어오는데, **그 0은 「0점을 받았다」가 아니다.**
    * lib/scoring.ts의 `complete` 주석이 경계하는 그대로다 — "아직 채점 전인 과제까지 0점 Fail로
    * 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은
@@ -41,6 +43,38 @@ export interface ResultsSession {
    * `verdict`가 null이면 판정 칸을 비운다.
    */
   complete: Record<TaskKey, boolean> | null
+  /** 쓰기 방식(migration 006) — scan이면 담당자가 스캔본으로 쓰기를 채점한다 */
+  writingMode: 'screen' | 'scan'
+  /** 쓰기 상태(lib/scan-mapping) — 스캔 대기·올림·채점됨 등. 올리기 확인 화면과 상태 배지가 쓴다 */
+  scanState: ScanTargetState
+}
+
+/**
+ * 화면에 보이는 상태 — `status`(받을 수 있나)와 따로 둔다. 사용자 확정(2026-09-30, 담당자 시안 공유):
+ * 스캔본 방식은 **스캔 대기 → 채점 중 → 채점 완료**로 바뀌고, 채점 완료는 세 과제가 다 채점된 때다.
+ * 화면 방식은 종전 그대로다(A안 — 쓰기가 비어도 읽기 채점이 끝나면 채점 완료).
+ * 받기는 두 방식 모두 A안 그대로 `status === 'scored'`면 된다 — 스캔 대기인 아이도 읽기 채점이 끝났으면
+ * 결과지를 받을 수 있다(쓰기·최종결과 칸이 빈 채로. 받을 때 경고가 알린다).
+ */
+export type SessionLabel = SessionStatus | 'scanWait' | 'replaced'
+
+/**
+ * @param scanTargetId 그 아이의 스캔본이 붙을 검사(`scanTargetSession`)의 id. 주면 스캔 대기인데 대상이 아닌
+ *   검사를 「재검사로 대체」(`replaced`)로 가른다 — 더 최근에 제출된 재검사가 있어 이 검사에는 스캔본을 올릴 수
+ *   없다(QR에 차수가 없어 올리면 최근 검사로 간다). 「스캔 대기」로 두면 선생님이 올릴 곳을 찾아 헤맨다.
+ */
+export function sessionLabel(s: ResultsSession, scanTargetId?: string): SessionLabel {
+  if (s.status === 'unsubmitted') return 'unsubmitted'
+  // 선생님이 할 일(스캔본 올리기)이 남았다는 것이 가장 먼저다 — 읽기 채점 여부와 무관하게
+  if (s.scanState === 'wait') return scanTargetId !== undefined && s.id !== scanTargetId ? 'replaced' : 'scanWait'
+  if (s.status === 'scoring') return 'scoring'
+  return awaitsScanWriting(s) ? 'scoring' : 'scored'
+}
+
+/** 스캔본 방식인데 쓰기가 아직 다 채점되지 않았다 — 담당자가 채울 것이라 「나중에 다시 받을」 결과지다.
+ *  화면 방식의 빈 쓰기(A안)는 여기 들지 않는다: 그 칸은 나중에 채워지지 않는다. */
+export function awaitsScanWriting(s: ResultsSession): boolean {
+  return s.writingMode === 'scan' && s.complete?.writing !== true
 }
 
 export interface ResultsChild {
@@ -75,25 +109,61 @@ export function childVerdict(c: ResultsChild): Verdict | null {
   return s?.status === 'scored' ? s.verdict : null
 }
 
+/**
+ * 그 아이의 스캔본이 붙을 검사 — **가장 최근에 제출된 검사**, 없으면 가장 최근 검사.
+ * 기록지 QR에는 반과 번호만 있어 몇 차 검사인지 모른다. 재검사를 시작했다가 그만둔(제출 전) 검사가
+ * 앞 차수의 스캔 대기를 가리면 선생님이 올릴 곳이 사라진다. 시작 화면의 「스캔 대기 N명」
+ * (lib/db rosterWithTested)도 같은 규칙이다.
+ */
+export function scanTargetSession(c: ResultsChild): ResultsSession | null {
+  for (let i = c.sessions.length - 1; i >= 0; i--) if (c.sessions[i].submittedAt) return c.sessions[i]
+  return latestSession(c)
+}
+
+/** 올리기 확인 화면의 대상 — 아이마다 스캔본이 붙을 검사 하나. 검사가 없는 아이(미실시)는 없다. */
+export function scanTargets(children: ResultsChild[]): ScanTarget[] {
+  const out: ScanTarget[] = []
+  for (const c of children) {
+    const t = scanTargetSession(c)
+    if (t) out.push({
+      childNo: c.childNo, name: c.name, sessionId: t.id, state: t.scanState,
+      retest: c.sessions.length > 1, testedAt: t.startedAt,
+    })
+  }
+  return out.sort((a, b) => a.childNo - b.childNo)
+}
+
 export interface ResultsSummary {
   /** 세션이 하나라도 있는 아이 */
   tested: number
-  /** 최신 세션 기준 */
-  scored: number; fail: number; scoring: number; unsubmitted: number
+  /** 이 네 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다) */
+  scored: number; scoring: number; scanWait: number; unsubmitted: number
+  /** 채점 완료 중 Fail(최신 세션 판정) */
+  fail: number
   /** 명단에만 있는 아이 */
   untested: number
+  /** **받을 수 있는 결과지가 있는 아이** 수 = [전체 PDF 다운로드]가 세는 것. 스캔본 방식은 쓰기 채점 전이어도
+   *  읽기 채점이 끝나면 받을 수 있어(A안) 「채점 완료」보다 클 수 있다 */
+  downloadable: number
 }
 
 export function summarize(children: ResultsChild[]): ResultsSummary {
-  const s: ResultsSummary = { tested: 0, scored: 0, fail: 0, scoring: 0, unsubmitted: 0, untested: 0 }
+  const s: ResultsSummary = { tested: 0, scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0, fail: 0, untested: 0, downloadable: 0 }
   for (const c of children) {
     const l = latestSession(c)
     if (!l) { s.untested++; continue }
     s.tested++
-    // 「채점 완료」는 **받을 수 있는 결과지가 있는 아이** 수다(= 다운로드 버튼이 세는 것과 같은 기준).
-    // 최신 세션이 중단된 재검사여도 채점이 끝난 앞 차수가 있으면 그 아이는 결과지를 받을 수 있다.
-    // 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다).
-    if (latestScored(c)) { s.scored++; if (l.verdict === 'fail') s.fail++ }
+    const d = latestScored(c)
+    if (d) s.downloadable++
+    // 스캔본을 기다리는 아이는 채점이 끝난 앞 차수가 있어도 「스캔 대기」다 — 선생님이 할 일이 남았다
+    // (시작 화면 배너의 수와 같아야 한다).
+    if (scanTargetSession(c)?.scanState === 'wait') { s.scanWait++; continue }
+    // 받을 수 있는 결과지가 있으면 그 검사 기준 — 최신 세션이 중단된 재검사여도 채점이 끝난 앞 차수가
+    // 있으면 그 아이는 결과지를 받을 수 있다. 다만 스캔본 쓰기가 남았으면 아직 「채점 중」이다.
+    if (d) {
+      if (sessionLabel(d, scanTargetSession(c)?.id) === 'scored') { s.scored++; if (l.verdict === 'fail') s.fail++ }
+      else s.scoring++
+    }
     else if (l.status === 'scoring') s.scoring++
     else s.unsubmitted++
   }

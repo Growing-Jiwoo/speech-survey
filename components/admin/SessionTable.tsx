@@ -129,7 +129,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         cell: ({ row }) => {
           // 분모는 행마다 다르다 — 그 아동의 학년 검사지 문항 수다.
           const p = row.original.progress
-          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
+          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} scan={p.scan} />
         },
       }),
       col.display({
@@ -345,11 +345,18 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   )
 }
 
-function ProgressCell({ recorded, written, totals }: { recorded: number; written: number; totals: Totals }) {
+function ProgressCell({ recorded, written, totals, scan }: {
+  recorded: number; written: number; totals: Totals; scan: 'wait' | 'uploaded' | null
+}) {
   return (
     <div className="flex min-w-[140px] flex-col gap-1 py-1.5">
       <Track label="녹음" value={recorded} max={totals.rec} />
-      <Track label="쓰기" value={written} max={totals.write} />
+      {/* 스캔본 방식은 쓰기가 비어 있는 것이 정상이다 — 빨갛게 그리지 않고, 담당자가 채점할 차례(스캔본 올라옴)인지
+          선생님이 올리기를 기다리는지를 가른다. 다 채점되면 다른 검사처럼 막대로 보인다 */}
+      {scan && written < totals.write
+        ? <div className="flex items-center gap-1.5"><span className="w-7 text-[12px] text-ink-mute">쓰기</span>
+            {scan === 'uploaded' ? <Badge tone="blue" size="sm">스캔본 채점</Badge> : <Badge tone="amber" size="sm">스캔 대기</Badge>}</div>
+        : <Track label="쓰기" value={written} max={totals.write} />}
     </div>
   )
 }

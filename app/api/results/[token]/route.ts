@@ -3,13 +3,15 @@
 // 만료·변조·형식 오류를 구분하지 않고 401 하나로 뭉뚱그린다 — verifyResultsToken·verify-code와
 // 같은 방침(사유를 나눠 보여주면 그 자체가 정보다).
 // 응답에 생년월일·연락처·스토리지 경로를 싣지 않는다 — 교사가 볼 것은 이름·번호·점수·판정·상태다
-// (사용자 확정 2026-09-22 — 임상 규칙 아님, 개발 판단).
+// (사용자 확정 2026-09-22 — 임상 규칙 아님, 개발 판단). 스캔본도 그림·경로는 싣지 않고 상태만 싣는다.
+// `sheetTag`는 쓰기 기록지 QR의 반 표시다 — 올린 스캔본이 이 반 것인지 화면이 가린다(lib/writing-sheet).
 import { NextResponse } from 'next/server'
 import { verifyResultsToken } from '@/lib/auth'
 import { classResults, findClassCodeById, listRoster } from '@/lib/db'
 import { env } from '@/lib/env'
 import { formForGrade } from '@/lib/forms'
 import { buildChildren } from '@/lib/results'
+import { classSheetTag } from '@/lib/writing-sheet'
 import { jsonError } from '@/lib/request'
 import { PROVISIONAL_CRITERIA, scoringFor } from '@/lib/scoring'
 
@@ -20,8 +22,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   const classCodeId = await verifyResultsToken(token, env('SESSION_SECRET'))
   if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않습니다.', 401)
   try {
-    const [row, roster, rows] = await Promise.all([
-      findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId),
+    const [row, roster, rows, sheetTag] = await Promise.all([
+      findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
     ])
     if (!row) return jsonError('학급을 찾을 수 없습니다.', 404)
     const form = formForGrade(row.grade)
@@ -35,6 +37,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
         roster.map(r => ({ child_no: r.child_no, child_name: r.child_name, gender: r.gender })),
         rows,
       ),
+      sheetTag,
     }, { headers: { 'cache-control': 'no-store' } })
   } catch (e) {
     console.error('[results/:token] 조회 실패', e)

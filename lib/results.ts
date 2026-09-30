@@ -10,6 +10,7 @@ import {
   type ScoreInput, type Verdict,
 } from './scoring'
 import { childVerdict, type ResultsChild, type ResultsSession } from './results-view'
+import { scanTargetState } from './scan-mapping'
 
 // 화면용 타입·헬퍼는 lib/results-view.ts에 있다(떼어 낸 이유는 그 파일 머리 주석). 서버 쪽 호출부가
 // 한 곳에서 import하도록 다시 내보낸다.
@@ -33,6 +34,10 @@ export interface ResultsSessionRow {
   sentence_scores: { item_code: string; words: number }[]
   sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
+  /** 쓰기 방식(migration 006) */
+  writing_mode: 'screen' | 'scan'
+  /** 쓰기 기록지 스캔본이 올라왔으면 그 시각. **목록 API 응답에는 싣지 않는다**(상태 계산에만 쓴다) */
+  writing_scan: { uploaded_at: string } | null
 }
 
 /** 명단 한 줄 — `RosterRow`의 부분집합(생년월일은 결과 표에 싣지 않는다). */
@@ -66,14 +71,23 @@ export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: 
   return { form, input: withUnrecordedFixed(f, raw, c => recorded.has(c)) }
 }
 
-export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete'> {
-  if (!r.submitted_at) return { status: 'unsubmitted', scores: null, verdict: null, complete: null }
+type Evaluated = Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete' | 'writingMode' | 'scanState'>
+
+export function evaluateSession(r: ResultsSessionRow): Evaluated {
+  // 컬럼은 not null default 'screen' — scan이 아닌 값은 화면 방식으로 읽는다(lib/db rosterWithTested와 같다)
+  const writingMode = r.writing_mode === 'scan' ? 'scan' : 'screen'
+  if (!r.submitted_at)
+    return { status: 'unsubmitted', scores: null, verdict: null, complete: null, writingMode, scanState: 'unsubmitted' }
   const { form, input } = scoreInputFor(r)
   const result = scoreSession(form, input)
+  // 쓰기 상태 — 담당자가 쓰기를 하나라도 넣었으면 「채점됨」(그 뒤로 선생님이 스캔본을 바꾸지 못한다)
+  const scanState = scanTargetState({
+    submitted: true, mode: writingMode, hasScan: r.writing_scan !== null, hasWriting: Object.keys(input.writing).length > 0,
+  })
   // 관리자 PDF와 같은 게이트 — 읽기 두 과제가 남으면 막고, 쓰기만 남으면(overridable) 통과.
   const gate = sheetPdfGate(result, false)
   if (gate !== null && !gate.overridable)
-    return { status: 'scoring', scores: null, verdict: null, complete: null }
+    return { status: 'scoring', scores: null, verdict: null, complete: null, writingMode, scanState }
   // **모든 과제가 채점됐을 때만 판정한다**(사용자 확정 2026-09-22 A안 — 관리자 화면과 동일).
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
@@ -85,6 +99,8 @@ export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'sta
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },
     verdict,
     complete: result.complete,
+    writingMode,
+    scanState,
   }
 }
 

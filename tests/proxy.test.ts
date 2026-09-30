@@ -72,3 +72,13 @@ describe('proxy — 인증 성공', () => {
     expect(passed(await proxy(mkReq('/api/admin/sessions', token)))).toBe(true)
   })
 })
+
+describe('proxy — CSP(쓰기 스캔본)', () => {
+  it('스캔본 서명 URL(Supabase)을 img-src에, pdf.js 작업자를 worker-src에 허용한다', async () => {
+    vi.stubEnv('SUPABASE_URL', 'https://abc.supabase.co')
+    const csp = (await proxy(mkReq('/results/x'))).headers.get('content-security-policy') ?? ''
+    expect(csp).toMatch(/img-src 'self' data: blob: https:\/\/abc\.supabase\.co/)
+    expect(csp).toContain("worker-src 'self'")
+  })
+})
+

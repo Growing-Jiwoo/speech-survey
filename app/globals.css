@@ -120,20 +120,24 @@ button, a, label {
 }
 .kpi b { color: var(--color-ink); font-family: var(--font-read); }
 
-/* 버튼 스킨 3종 — 크기(h-*, flex-*)는 호출부 클래스로 지정하고 여기는 색·모양만 담당.
- * .cta(큰 주 행동 버튼)와 달리 화면 하단 내비·모달 등 나란히 놓이는 버튼용. */
-.btn-ghost, .btn-primary, .btn-danger {
+/* 버튼 스킨 4종 — 크기(h-*, flex-*)는 호출부 클래스로 지정하고 여기는 색·모양만 담당.
+ * .cta(큰 주 행동 버튼)와 달리 화면 하단 내비·모달 등 나란히 놓이는 버튼용.
+ * .btn-outline은 모달에서 주 행동 옆의 둘째 선택지(결과지 받기의 [완성된 N장만])다. */
+.btn-ghost, .btn-primary, .btn-danger, .btn-outline {
   display: flex; align-items: center; justify-content: center;
   border-radius: 12px; font-size: 15px; font-weight: 700;
   transition: transform .08s, box-shadow .08s, opacity .15s, border-color .15s;
 }
-.btn-ghost:disabled, .btn-primary:disabled, .btn-danger:disabled { opacity: .4; }
+.btn-ghost:disabled, .btn-primary:disabled, .btn-danger:disabled, .btn-outline:disabled { opacity: .4; }
 .btn-ghost {
   border: 1.5px solid var(--color-line);
   background: var(--color-well); color: var(--color-ink-soft);
 }
 .btn-ghost:hover:not(:disabled) { border-color: var(--color-ink-mute); background: #fff; }
 .btn-ghost:active:not(:disabled) { transform: translateY(1px); }
+.btn-outline { border: 1.5px solid var(--color-blue); background: #fff; color: var(--color-blue); }
+.btn-outline:hover:not(:disabled) { background: rgb(47 107 255 / .05); }
+.btn-outline:active:not(:disabled) { transform: translateY(1px); }
 .btn-primary {
   background: var(--color-blue); color: #fff;
   box-shadow: 0 3px 0 var(--color-blue-deep);
@@ -211,5 +215,14 @@ button, a, label {
   }
   /* .result-sheet 자신도 <section>이라 위 138행의 일반 section 규칙으로 이미 break-inside: avoid를 받는다.
      138행을 바꿀 때 이 의존을 놓치지 않도록 여기 적어둔다. */
+
+  /* 쓰기 기록지 인쇄(시작 화면 [쓰기 기록지 인쇄 →], components/start/WritingSheetDialog) —
+     인쇄 전용 뿌리만 남기고 화면(인쇄 확인 창 포함)은 전부 숨긴다. 한 장에 한 아이, 장마다 쪽을 넘긴다. */
+  body.printing-sheets > :not(#sheet-print-root) { display: none !important; }
+  body.printing-sheets { background: #fff; }
+  /* 기록지를 인쇄하는 동안만 쪽 여백이 0이다 — 그 @page 규칙은 인쇄 창이 넣었다 뺀다(WritingSheetDialog, 이유는 거기).
+     여백은 기록지 안쪽 padding(12mm·10mm)이 대신한다. */
+  .writing-sheet { break-after: page; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .writing-sheet:last-child { break-after: auto; }
 
 }
