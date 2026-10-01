@@ -86,22 +86,25 @@ describe('POST /api/apply', () => {
 })
 
 describe('관리자 알림 합치기 — 신청 폭주가 메일 발송기가 되는 것을 막는다', () => {
-  // lastNotifiedAt은 route.ts 모듈 스코프 싱글턴이라 이 파일의 앞선 테스트들이 실제 시각으로
-  // 이미 한 번 보냈을 수 있다. 페이크 타이머로 "실제 지금 + N시간"에 앉혀 그 흔적과 절대
-  // 겹치지 않게 한다(테스트끼리도 서로 24시간씩 떨어뜨려 독립시킨다).
+  // lastNotifiedAt은 route.ts 모듈 스코프 싱글턴이라 이 파일의 다른 테스트가 이미 보냈을 수 있다.
+  // 그래서 테스트마다 시계를 **이전에 돈 어떤 테스트보다도 하루 뒤**에 앉힌다(nextDay).
+  // 종전처럼 「지금 + 24시간」「지금 + 48시간」을 고정으로 주면 선언 순서대로 돈다는 가정이라,
+  // 순서를 섞으면(--sequence.shuffle) +48시간이 먼저 보내고 +24시간 테스트가 「창 안」으로 읽혀
+  // 한 통도 안 나갔다. 실행 순서대로 늘어나는 시계는 어떤 순서로 돌아도 앞 흔적과 겹치지 않는다.
+  let clock = Date.now()
+  const nextDay = () => (clock += 24 * 3600_000)
+  beforeEach(() => { vi.useFakeTimers() })
   afterEach(() => { vi.useRealTimers() })
 
   it('연달아 두 번 신청해도 메일은 한 번만 보낸다', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(Date.now() + 24 * 3600_000)
+    vi.setSystemTime(nextDay())
     await post(BODY)
     await post(BODY)
     expect(sendMail).toHaveBeenCalledTimes(1)
   })
 
   it('합치기 창(10분)이 지나면 다시 보낸다', async () => {
-    vi.useFakeTimers()
-    const base = Date.now() + 48 * 3600_000
+    const base = nextDay()
     vi.setSystemTime(base)
     await post(BODY)
     vi.setSystemTime(base + 11 * 60_000)
