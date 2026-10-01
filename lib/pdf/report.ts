@@ -167,7 +167,11 @@ function wrap(f: Fonts, p: Para, width: number): Line[] {
   const ascOf = (r: Run) => ASCENT * sizeOf(r)
   const lineOf = (pieces: { run: Run; t: string }[]): Line => {
     const runs = pieces.filter(x => x.t !== '')
-    const h = Math.max(EMPTY_LINE * (p.lineMul ?? 1), ...runs.map(x => lh(x.run)))
+    // 글자가 없는 줄(채점 전 과제의 빈 판정 칸·빈 해석 상자)도 **그 칸의 글꼴 크기**로 높이를 잡는다 — Word는 빈 칸을
+    // 문단 기호 글꼴(그 칸의 12·14pt 굵게)로 줄을 잡는다. 10pt 기본값으로 떨어뜨리면 채점 전 결과보고서만 아래가
+    // 위로 당겨져, 한 파일에 섞인 아이들의 세로 배치가 달라진다.
+    const emptyH = p.runs.length > 0 ? lh(p.runs[0]) : EMPTY_LINE * (p.lineMul ?? 1)
+    const h = Math.max(EMPTY_LINE * (p.lineMul ?? 1), emptyH, ...runs.map(x => lh(x.run)))
     const asc = Math.max(0, ...runs.map(x => ascOf(x.run)))
     // 같은 서식의 조각을 합친다 — drawText 호출 수를 줄이고 폭 계산도 한 번에 한다
     const out: Run[] = []
@@ -445,7 +449,10 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
   y = drawHeading(page, f, '결과 해석 및 권고', R.accent, y)
   y = drawRow(page, f, [{
     w: TEXT_W, fill: 'FCFDFE', mar: [8, 10, 8, 10],
-    paras: [{ runs: final ? INTERPRETATION[final].map(run => ({ ...run, color: INK })) : [text('')], after: 2, lineMul: R.interpretationLine }],
+    // 최종결과가 없으면(채점 전) 상자를 비우되 높이는 통과 문장(2줄)과 같게 — 채점 전 결과보고서만 아래가 당겨지지 않게
+    paras: final
+      ? [{ runs: INTERPRETATION[final].map(run => ({ ...run, color: INK })), after: 2, lineMul: R.interpretationLine }]
+      : [{ runs: [text('', INTERPRETATION.pass[0].size)], lineMul: R.interpretationLine }, { runs: [text('', INTERPRETATION.pass[0].size)], after: 2, lineMul: R.interpretationLine }],
   }], y)
   y += R.gapAfterInterpretation * (EMPTY_LINE + 7)
 
