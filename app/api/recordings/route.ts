@@ -13,9 +13,9 @@ import { UUID_RE, jsonError } from '@/lib/request'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const MAX_BYTES = 5 * 1024 * 1024   // 최대 45초 opus 녹음의 수 배 여유 — 스토리지 남용 방지
+const MAX_BYTES = 5 * 1024 * 1024   // 최대 25초(20초 + 여유 5초) opus 녹음의 수 배 여유 — 스토리지 남용 방지
 const MAX_ATTEMPTS = 10             // 페이지당 재녹음 상한
-const MAX_DURATION_SEC = 120        // numeric(5,2) 오버플로 방지 + 비정상 장시간 차단(현재 페이지 최대 45초 대비 여유)
+const MAX_DURATION_SEC = 120        // numeric(5,2) 오버플로 방지 + 비정상 장시간 차단(현재 페이지 최대 25초 대비 여유)
 const MAX_PER_SESSION = 200         // 세션당 총 녹음 상한 — 스토리지/DB 남용 방지
 
 export async function POST(req: Request) {
