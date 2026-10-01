@@ -41,6 +41,17 @@ function scored(form: SurveyForm, ok: { read: boolean; sentence: boolean; write:
 describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, form: SurveyForm) => {
   const session = sessionFor(form)
 
+  it('채점 전 결과보고서도 아래 배치가 채점 완료본과 같다 — 빈 판정 칸·빈 해석 상자가 줄 높이를 떨어뜨리지 않는다', async () => {
+    // 한 반을 한 파일로 받으면 채점 전 아이와 완료 아이가 섞인다 — 쪽마다 세로 배치가 다르면 같은 양식으로 보이지 않는다.
+    const headingY = async (bytes: Uint8Array) =>
+      Math.min(...(await textItems(bytes)).filter(i => i.str.includes('추가 관찰')).map(i => i.y))
+    const pass = await headingY(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: true }) }))
+    const pending = await headingY(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: true }), writing: {} }))
+    const none = await headingY(await renderReport({ form, session, ...blank }))
+    expect(pending).toBeCloseTo(pass, 1)
+    expect(none).toBeCloseTo(pass, 1)
+  })
+
   it('Letter 한 장이다 (담당자 양식 docx가 Letter다 — A4로 바꾸지 말 것)', async () => {
     const out = await PDFDocument.load(await renderReport({ form, session, ...blank }))
     expect(out.getPageCount()).toBe(1)
