@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { awaitsScanScoring, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import { StatusBadge } from './StatusBadge'
@@ -64,6 +64,8 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   // 회차는 **필터를 통과한 rows가 아니라 전체 목록**에서 센다 — "진행 중"만 걸러 본 화면에서
   // 2회차 세션만 남았다고 "1/1회차"로 보이면, 앞선 검사가 없는 것처럼 읽혀 거짓이 된다.
   const retest = useMemo(() => retestOrdinals(all), [all])
+  // 필터 이전 전체로 센다 — 다른 필터가 걸려 있어도 탭의 수는 「채점할 스캔본이 몇 건인가」를 말해야 한다
+  const scanReadyCount = useMemo(() => all.filter(awaitsScanScoring).length, [all])
 
   // ---- react-table 컬럼 정의 (셀 마크업·클래스는 기존 디자인 그대로 보존) ----
   const columns = useMemo(() => {
@@ -253,7 +255,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           아니게 되므로, 그 폭에서는 둘 다 붙이지 않는다(래퍼 주석 참고). */}
       <div ref={toolbarRef} className="bg-white lg:sticky lg:top-0 lg:z-20">
         <FilterToolbar filters={filters} schools={schools} grades={grades}
-          shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
+          shownCount={rows.length} scanReadyCount={scanReadyCount} onFilters={onFilters} onReset={onReset} />
       </div>
       {/* 세로 스크롤은 페이지가 맡는다(위 주석) — 여기서는 좁은 화면의 가로 넘침만 처리한다.
           `overflow-x: auto`는 CSS 규칙상 세로도 auto로 계산시켜 **이 div를 스크롤 컨테이너로

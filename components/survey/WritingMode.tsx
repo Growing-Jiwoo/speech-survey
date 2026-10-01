@@ -39,8 +39,11 @@ export function WritingModeToggle({ mode, onChange }: { mode: WritingMode; onCha
 
 /**
  * 「스캔본으로 올리기」를 골랐을 때의 카드 — 예/아니오(0·1·2) 대신 안내와 불러 줄 목록을 보인다.
- * ⚠️ 담당자 확인 대기 — 확정 아님: 선생님이 **이 화면의 목록을 보고 불러 줘도 되는지**(아이가 화면을 보면
- * 베낄 수 있다 — 2026-08-07 계획서부터 남은 질문). 지금은 화면 입력 방식과 같게 목록을 보여 준다.
+ * 선생님은 이 화면의 목록을 보고 불러 준다. 아이가 화면을 보면 베낄 수 있지만 **시스템으로 막지 않는다** —
+ * 아이가 화면을 보지 않게 하는 것은 사용자가 선생님께 따로 안내한다(사용자 확정 2026-10-01 — 담당자 회신 아님.
+ * 가림 화면·녹음 음성·종이 목록을 검토했으나 두지 않기로 했다). 목록은 화면 입력 방식과 같게 보인다.
+ * 첫 안내는 **종이의 이름을 확인하라**고 한다 — 기록지 QR은 종이에 찍힌 아이를 가리키므로, 다른 아이 종이에 쓰면
+ * 그 아이 기록으로 올라가고 시스템은 가려낼 수 없다.
  */
 export function ScanWritingPanel({ toggle, items, kind, childNo, childName, screenMarks = 0 }: {
   toggle: React.ReactNode
@@ -59,7 +62,7 @@ export function ScanWritingPanel({ toggle, items, kind, childNo, childName, scre
       <div className="mt-4 rounded-xl border-[1.5px] border-blue/25 bg-blue/[0.05] px-4 py-3.5">
         <p className="text-sm font-bold text-blue lg:text-base">이 학생은 기록지 스캔본으로 채점해요</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-ink-soft lg:text-sm">
-          <li>아이는 인쇄한 기록지(<b className="text-ink">{childNo}번 {childName}</b>)에 씁니다.</li>
+          <li>종이의 이름이 <b className="text-ink">{childNo}번 {childName}</b>인지 확인하고 건네 주세요(다른 아이 종이에 쓰면 그 아이 기록으로 올라가요).</li>
           <li>반 전체 검사가 끝나면 <b className="text-ink">결과지 화면</b>에서 스캔본을 올려 주세요.</li>
           <li>스캔본을 보고 <b className="text-ink">담당자가 채점</b>합니다.</li>
         </ul>

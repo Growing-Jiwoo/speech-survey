@@ -3,6 +3,7 @@ import type { SessionListRow } from '@/lib/db'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
+  awaitsScanScoring,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -233,6 +234,19 @@ describe('filterSessions', () => {
     expect(filterSessions(base, f({ today: true }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(base, f({ today: true, grade: 2 }), kstDateKey(now))).toHaveLength(0)
   })
+  it('scanReady — 스캔본이 올라왔거나 종이로 채점을 시작했는데 쓰기가 남은 검사만(목록의 「스캔본 채점」 배지와 같은 조건)', () => {
+    const SUB = { submitted_at: '2026-07-14T02:00:00.000Z' }
+    const all10 = G1_WRITE.map(item_code => ({ item_code, can_write: true }))
+    const rows = [
+      mkSession({ ...SUB, child_no: 1, writing_mode: 'scan', writing_scans: { session_id: 'x' } }),                          // 올라옴 · 채점 전 → 대상
+      mkSession({ ...SUB, child_no: 2, writing_mode: 'scan', writing_answers: all10.slice(0, 3) }),                            // 종이로 채점 중 → 대상
+      mkSession({ ...SUB, child_no: 3, writing_mode: 'scan', writing_scans: { session_id: 'y' }, writing_answers: all10 }),     // 다 채점됨
+      mkSession({ ...SUB, child_no: 4, writing_mode: 'scan' }),                                                                // 스캔 대기(선생님 차례)
+      mkSession({ ...SUB, child_no: 5, writing_answers: all10.slice(0, 3) }),                                                  // 화면 방식
+    ]
+    expect(filterSessions(rows, f({ status: 'scanReady' }), kstDateKey(now)).map(s => s.child_no)).toEqual([1, 2])
+    expect(rows.filter(awaitsScanScoring).map(s => s.child_no)).toEqual([1, 2])
+  })
 })
 
 describe('sortSessions', () => {
@@ -326,6 +340,11 @@ describe('URL 직렬화', () => {
   it('parseFilters — 잘못된 값은 기본값으로 폴백', () => {
     const sp = new URLSearchParams('status=bogus&grade=abc&sort=nope&dir=sideways')
     expect(parseFilters(sp)).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
+  })
+  it('parseFilters — status=scanReady(스캔본 채점) 허용, 왕복 보존', () => {
+    expect(parseFilters(new URLSearchParams('status=scanReady')).filters.status).toBe('scanReady')
+    const filters = { ...DEFAULT_FILTERS, status: 'scanReady' as const }
+    expect(parseFilters(new URLSearchParams(filtersToQuery(filters, DEFAULT_SORT))).filters).toEqual(filters)
   })
   it('parseFilters — 신규 sort 키(grade/submitted) 허용', () => {
     expect(parseFilters(new URLSearchParams('sort=grade&dir=asc')).sort).toEqual({ key: 'grade', dir: 'asc' })

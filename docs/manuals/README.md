@@ -57,6 +57,8 @@ src/
   그 페이지에서 뽑은 기록지를 그림으로 바꾼 **가짜 스캔본**이다 — 실제 아이의 기록지를 쓰지 말 것.
   `fig-sheet-scan`은 실제 문항으로 뽑고 4·8번을 일부러 틀리게 써서 O/X 예시를 보였다(채점 칸과 문항이 맞아야 한다).
   기록지(`t-30`)는 화면에 띄운 기록지 한 장을 찍은 것이다 — **담당자 양식이 오면 다시 찍는다.**
+  같은 날 `t-19b`를 한 번 더 찍었다 — 첫 안내가 「종이의 이름을 확인하고 건네 주세요」로 바뀌었고, 화면에서 먼저
+  표시하지 않은 깨끗한 상태로 찍었다(앞 판에는 주황 「저장되지 않아요」 안내가 함께 찍혀 있었다).
   PDF는 9/30과 같은 방법으로 뽑았다(관리자 21쪽 · 선생님 25쪽, 판 표기 10월).
 
 ## 그림 규칙 — 자르지 말 것
@@ -108,7 +110,7 @@ src/
 | `components/results/ScanUpload.tsx`·`lib/scan-mapping.ts`·`lib/scan-pages.ts`(스캔본 올리기·QR 짝짓기·파일 한도) | 선생님용 10장 「스캔본 올리기 — 결과지 화면에서」·캡처 `t-31`·`t-32`, 11장 문답 |
 | `lib/results-view.ts`의 `sessionLabel`·`summarize`(스캔 대기·받을 수 있는 수) | 선생님용 9장 표시 표·「쓰기 채점 전인 아이가 섞였을 때」·캡처 `t-25`·`t-27b`, 관리자용 5장 「스캔본」 행 |
 | `components/admin/ResultSheet.tsx`·`sheet/ScanViewer.tsx`·`sheet/ScanWritingRows.tsx`(스캔본 채점·연결 해제·쓰기 채점 지우기) | 관리자용 4장 「스캔본을 보며 쓰기 채점」·캡처 `fig-sheet-scan` |
-| `components/admin/SessionTable.tsx`(스캔 대기·스캔본 채점 표시) | 관리자용 3장 목록 설명 |
+| `components/admin/SessionTable.tsx`·`FilterToolbar.tsx`(스캔 대기·스캔본 채점 표시, 「스캔본 채점 N」 탭) | 관리자용 3장 목록 설명(진행률 칸) |
 | 배포 주소 변경 | **두 문서 모두** — 표지·본문의 `speech-survey.vercel.app` |
 
 지금 쓰는 주소는 Vercel 기본 주소다. 정식 도메인을 사면 두 문서의 주소를 모두 바꿔야 한다.

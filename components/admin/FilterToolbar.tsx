@@ -12,8 +12,10 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'inProgress', label: '진행 중' },
 ]
 
-export function FilterToolbar({ filters, schools, grades, shownCount, onFilters, onReset }: {
+export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyCount, onFilters, onReset }: {
   filters: Filters
+  /** 쓰기 채점이 남은 스캔본 검사 수(필터 이전 전체 기준). 0이면 탭을 숨긴다 — 스캔본을 안 쓰는 동안은 화면이 그대로다 */
+  scanReadyCount: number
   schools: string[]
   grades: number[]
   /** 현재 필터를 통과해 표에 보이는 행 수(필터 활성일 때 "N건 표시"로 노출) */
@@ -46,7 +48,8 @@ export function FilterToolbar({ filters, schools, grades, shownCount, onFilters,
         placeholder="이름·학교·담임·반 검색"
         className="h-10 w-52 rounded-xl border-[1.5px] border-line bg-well px-3.5 text-sm outline-none transition focus:border-blue" />
       <div className="flex gap-1.5">
-        {STATUS_TABS.map(t => (
+        {[...STATUS_TABS, ...(scanReadyCount > 0 || filters.status === 'scanReady'
+          ? [{ key: 'scanReady' as const, label: `스캔본 채점 ${scanReadyCount}` }] : [])].map(t => (
           <button key={t.key} type="button" onClick={() => onFilters({ status: t.key })} aria-pressed={filters.status === t.key}
             className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
               filters.status === t.key ? 'bg-blue text-white' : 'bg-well text-ink-soft'}`}>

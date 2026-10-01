@@ -8,7 +8,10 @@ export type { Totals }
 
 // ---------- 타입 ----------
 
-export type StatusFilter = 'all' | 'submitted' | 'inProgress'
+/** scanReady — 스캔본이 올라왔는데(또는 종이로 채점을 시작했는데) 쓰기 채점이 남은 검사(2026-10-01).
+ *  스캔본은 반 전체 검사 뒤 한꺼번에 올라와, 읽기 채점을 마친 검사에 다시 들어가야 한다 — 목록을 훑어 배지를
+ *  찾게 두면 놓치고, 놓친 아이는 선생님 화면에서 계속 「채점 중」이다. */
+export type StatusFilter = 'all' | 'submitted' | 'inProgress' | 'scanReady'
 
 export interface Filters {
   q: string
@@ -112,12 +115,17 @@ export function gradeOptions(sessions: SessionListRow[]): number[] {
 
 // ---------- 필터 · 정렬 ----------
 
+/** 담당자가 스캔본을 보고 쓰기를 채점할 차례 — 목록 진행률 칸의 파란 「스캔본 채점」 배지와 같은 조건(SessionTable) */
+export const awaitsScanScoring = (s: Pick<SessionListRow, 'progress'>) =>
+  s.progress.scan === 'uploaded' && s.progress.written < s.progress.expected.write
+
 /** @param todayKey "오늘 참여" 필터 기준 KST 일자 키(`kstDateKey(now)`) */
 export function filterSessions(sessions: SessionListRow[], f: Filters, todayKey: string): SessionListRow[] {
   const keyword = f.q.trim()
   return sessions.filter(s => {
     if (f.status === 'submitted' && !s.submitted_at) return false
     if (f.status === 'inProgress' && s.submitted_at) return false
+    if (f.status === 'scanReady' && !awaitsScanScoring(s)) return false
     if (f.school !== null && s.school_name !== f.school) return false
     if (f.grade !== null && s.grade !== f.grade) return false
     if (f.today && kstDateKey(new Date(s.started_at)) !== todayKey) return false
@@ -182,7 +190,7 @@ export function adjacentSessionIds(
 
 // ---------- URL ↔ 상태 (searchParams 동기화) ----------
 
-const STATUS_SET = new Set<StatusFilter>(['all', 'submitted', 'inProgress'])
+const STATUS_SET = new Set<StatusFilter>(['all', 'submitted', 'inProgress', 'scanReady'])
 const SORT_KEY_SET = new Set<SortKey>(['name', 'school', 'grade', 'started', 'submitted', 'progress'])
 
 /** 잘못된/누락된 파라미터는 기본값으로 폴백한다 */
