@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server'
 import {
   sessionState, submitSession,
-  type SentenceScore, type WritingAnswer,
+  type SentenceScore, type WritingAnswer, type WritingMode,
 } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
@@ -28,6 +28,9 @@ export async function POST(req: Request) {
 
   const rawWriting = asRecord(b.writing)
   if (!rawWriting) return bad('쓰기 답 형식 오류')
+  // 쓰기 방식 — 없으면 screen(방식이 생기기 전의 화면이 보내는 요청과 같은 뜻). 그 밖의 값은 거부한다.
+  const writingMode: WritingMode = b.writingMode === undefined ? 'screen' : b.writingMode
+  if (writingMode !== 'screen' && writingMode !== 'scan') return bad('쓰기 방식 형식 오류')
   if (!Array.isArray(b.checklist) || b.checklist.some((c: unknown) => typeof c !== 'string' || !AREA_CODES.includes(c)))
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
@@ -61,15 +64,21 @@ export async function POST(req: Request) {
     validWriting[itemCode] = words
   }
 
+  // 스캔본 방식이면 쓰기 답을 저장하지 않는다 — 담당자가 스캔본을 보고 채점한다(검사 화면도 보내지 않지만
+  // 옛 탭·조작된 요청이 보내도 여기서 버린다: 두 출처의 점수가 한 검사에 섞이면 누가 채점했는지 모른다).
   const writing: WritingAnswer[] = []
   const sentenceWriting: SentenceScore[] = []
-  for (const [itemCode, words] of Object.entries(validWriting)) {
+  for (const [itemCode, words] of Object.entries(writingMode === 'scan' ? {} : validWriting)) {
     if (f.writingSection === 'word_writing') writing.push({ itemCode, canWrite: words >= 1 })
     else sentenceWriting.push({ itemCode, words })
   }
 
   try {
-    const result = await submitSession({ sessionId: b.sessionId, writing, sentenceWriting, checklist })
+    const result = await submitSession({
+      sessionId: b.sessionId, writingMode, writing, sentenceWriting, checklist,
+      // 스캔본이면 앞선 시도가 남긴 쓰기 답을 지운다(lib/db submitSession)
+      writingTask: { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', codes: f.writingItems.map(i => i.code) },
+    })
     if (result === 'not_found')
       return jsonError('세션을 찾을 수 없습니다.', 404)
     if (result === 'already_submitted')

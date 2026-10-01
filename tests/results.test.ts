@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   maskEmail, evaluateSession, scoreInputFor, buildChildren, latestSession, childVerdict,
-  summarize, sheetsFileName, latestScored, type ResultsSessionRow,
+  summarize, sheetsFileName, latestScored, sessionLabel, awaitsScanWriting, scanTargetSession, scanTargets,
+  type ResultsSessionRow,
 } from '@/lib/results'
 
 /** G1 세션 행 골격. 채점 행은 테스트마다 채운다. */
@@ -10,6 +11,7 @@ function row(over: Partial<ResultsSessionRow> & { id: string; child_no: number }
     child_name: `아이${over.child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen', writing_scan: null,
     ...over,
   }
 }
@@ -48,7 +50,7 @@ describe('maskEmail — 시작 화면에 주소를 통째로 내지 않는다', 
 describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 같은 기준, 사용자 확정 A안)', () => {
   it('미제출은 unsubmitted, 점수·판정 없음', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, submitted_at: null, ...READ_SCORED }))
-    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null, complete: null })
+    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null, complete: null, writingMode: 'screen', scanState: 'unsubmitted' })
   })
   it('제출됐지만 낱말 채점이 비면 scoring', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, sentence_scores: READ_SCORED.sentence_scores,
@@ -56,7 +58,7 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.status).toBe('scoring')
     expect(r.scores).toBeNull()
   })
-  it('읽기 두 과제가 채점되면 쓰기가 비어도 scored — 쓰기는 관리자가 채울 수 없어 막으면 영원히 못 받는다', () => {
+  it('읽기 두 과제가 채점되면 쓰기가 비어도 scored — (화면 방식) 쓰기는 관리자가 채울 수 없어 막으면 영원히 못 받는다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED }))
     expect(r.status).toBe('scored')
     expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 2, writing: 0 })
@@ -235,7 +237,7 @@ describe('summarize — 상단 한 줄', () => {
         row({ id: 's5', child_no: 5, sentence_scores: READ_SCORED.sentence_scores,  // scoring
           recordings: [{ item_code: 'p_rw_meaning' }] }),
       ])
-    expect(summarize(c)).toEqual({ tested: 4, scored: 2, fail: 1, scoring: 1, unsubmitted: 1, untested: 1 })
+    expect(summarize(c)).toEqual({ tested: 4, scored: 2, fail: 1, scoring: 1, scanWait: 0, unsubmitted: 1, untested: 1, downloadable: 2 })
   })
   it('[REGRESSION] 중단된 재검사가 있어도 「채점 완료」로 센다 — 버튼이 내려받는 것과 같은 기준', () => {
     const c = buildChildren([], [
@@ -243,7 +245,7 @@ describe('summarize — 상단 한 줄', () => {
       row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
     ])
     // 칸은 겹치지 않는다 — 이 아이는 「채점 완료」에만 센다(미제출로 두 번 세지 않는다)
-    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 0, scoring: 0, unsubmitted: 0, untested: 0 })
+    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 0, scoring: 0, scanWait: 0, unsubmitted: 0, untested: 0, downloadable: 1 })
   })
 })
 
@@ -272,3 +274,171 @@ describe('sheetsFileName — 관리자 규약 계승', () => {
     expect(sheetsFileName({ grade: 2, classNo: 0, date: '2026-09-22', all: true, picked: [] })).toBe('2학년_결과지_전체_2026-09-22.pdf')
   })
 })
+
+// ---------- 쓰기 스캔본(사용자 확정 2026-09-30) ----------
+
+const SCAN = { writing_mode: 'scan' as const }
+const UPLOADED = { ...SCAN, writing_scan: { uploaded_at: '2026-09-30T05:00:00.000Z' } }
+
+describe('evaluateSession — 쓰기 방식·스캔 상태', () => {
+  it('스캔본 방식 · 안 올림 · 쓰기 없음 → scanState wait. 읽기가 채점됐으면 받을 수는 있다(A안 status scored)', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...SCAN, ...READ_SCORED }))
+    expect(r).toMatchObject({ status: 'scored', writingMode: 'scan', scanState: 'wait', verdict: null })
+    expect(r.complete?.writing).toBe(false)
+  })
+  it('올렸고 담당자가 아직 안 찍었다 → uploaded', () => {
+    expect(evaluateSession(row({ id: 's', child_no: 1, ...UPLOADED, ...READ_SCORED })).scanState).toBe('uploaded')
+  })
+  it('담당자가 쓰기를 하나라도 넣었다 → scored(그 뒤로 선생님이 스캔본을 못 바꾼다)', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...UPLOADED, ...READ_SCORED,
+      writing_answers: [{ item_code: 'ww01', can_write: true }] }))
+    expect(r.scanState).toBe('scored')
+  })
+  it('읽기 채점이 남은(scoring) 검사도 스캔 상태를 싣는다 — 선생님이 올릴 대상인지는 읽기와 무관하다', () => {
+    // 녹음은 있는데 채점 전 — 녹음이 없으면 미녹음 고정(X·0)으로 읽기가 「채점됨」이 된다
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...SCAN, recordings: READ_SCORED.recordings }))
+    expect(r).toMatchObject({ status: 'scoring', scanState: 'wait' })
+  })
+  it('화면 방식은 screen, 쓰기 방식이 비어 오면(옛 행) 화면 방식으로 읽는다', () => {
+    expect(evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED })).scanState).toBe('screen')
+    expect(evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, writing_mode: undefined as never })))
+      .toMatchObject({ writingMode: 'screen', scanState: 'screen' })
+  })
+  it('다른 학년(G2)의 문장 쓰기 점수(sw..)도 쓰기 채점으로 센다 — 문장 읽기(rs..)는 아니다', () => {
+    const g2 = (sentence_scores: { item_code: string; words: number }[]) =>
+      evaluateSession(row({ id: 's', child_no: 1, grade: 2, ...UPLOADED, sentence_scores })).scanState
+    expect(g2([{ item_code: 'rs01', words: 3 }])).toBe('uploaded')
+    expect(g2([{ item_code: 'sw01', words: 1 }])).toBe('scored')
+  })
+})
+
+describe('sessionLabel — 화면에 보이는 상태(스캔 대기 → 채점 중 → 채점 완료)', () => {
+  const label = (over: Partial<ResultsSessionRow>) => {
+    const [c] = buildChildren([], [row({ id: 's', child_no: 1, ...over })])
+    return sessionLabel(c.sessions[0])
+  }
+  it('스캔 대기가 가장 먼저 — 읽기 채점 여부와 무관하게 선생님이 할 일이 남았다', () => {
+    expect(label({ ...SCAN, ...READ_SCORED })).toBe('scanWait')
+    expect(label({ ...SCAN })).toBe('scanWait')
+  })
+  it('올렸지만 쓰기가 다 채점되지 않았으면 채점 중(읽기가 끝났어도)', () => {
+    expect(label({ ...UPLOADED, ...READ_SCORED })).toBe('scoring')
+    expect(label({ ...UPLOADED, ...READ_SCORED, writing_answers: WRITE_SCORED.writing_answers.slice(0, 4) })).toBe('scoring')
+  })
+  it('세 과제가 다 채점되면 채점 완료', () => {
+    expect(label({ ...UPLOADED, ...READ_SCORED, ...WRITE_SCORED })).toBe('scored')
+  })
+  it('담당자가 스캔본 없이 채점해도(종이를 따로 받은 경우) 다 채점되면 채점 완료', () => {
+    expect(label({ ...SCAN, ...READ_SCORED, ...WRITE_SCORED })).toBe('scored')
+  })
+  it('화면 방식은 종전 그대로 — 쓰기가 비어도 읽기가 끝나면 채점 완료(A안)', () => {
+    expect(label({ ...READ_SCORED })).toBe('scored')
+  })
+  it('미제출은 미제출', () => {
+    expect(label({ ...SCAN, submitted_at: null })).toBe('unsubmitted')
+  })
+})
+
+describe('awaitsScanWriting — 받을 때 「쓰기 채점 전」 경고 대상', () => {
+  const one = (over: Partial<ResultsSessionRow>) => buildChildren([], [row({ id: 's', child_no: 1, ...over })])[0].sessions[0]
+  it('스캔본 방식이고 쓰기가 다 채점되지 않았을 때만', () => {
+    expect(awaitsScanWriting(one({ ...SCAN, ...READ_SCORED }))).toBe(true)
+    expect(awaitsScanWriting(one({ ...UPLOADED, ...READ_SCORED }))).toBe(true)
+    expect(awaitsScanWriting(one({ ...UPLOADED, ...READ_SCORED, ...WRITE_SCORED }))).toBe(false)
+  })
+  it('화면 방식의 빈 쓰기는 아니다 — 나중에 채워지지 않는 칸이다(종전대로 경고하지 않는다)', () => {
+    expect(awaitsScanWriting(one({ ...READ_SCORED }))).toBe(false)
+  })
+})
+
+describe('summarize — 스캔 대기·받을 수 있는 수', () => {
+  it('스캔 대기는 따로 센다. 받을 수 있는 수(다운로드 버튼)는 읽기 채점이 끝난 아이 전부(A안)', () => {
+    const c = buildChildren([], [
+      row({ id: 'a', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }),        // 화면 · 채점 완료
+      row({ id: 'b', child_no: 2, ...SCAN, ...READ_SCORED }),                 // 스캔 대기(받을 수는 있다)
+      row({ id: 'c', child_no: 3, ...SCAN, recordings: READ_SCORED.recordings }), // 스캔 대기(읽기도 남음)
+      row({ id: 'd', child_no: 4, ...UPLOADED, ...READ_SCORED }),             // 채점 중(쓰기 남음)
+      row({ id: 'e', child_no: 5, ...UPLOADED, ...READ_SCORED, ...WRITE_SCORED }), // 채점 완료
+    ])
+    expect(summarize(c)).toEqual({ tested: 5, scored: 2, scoring: 1, scanWait: 2, unsubmitted: 0, fail: 0, untested: 0, downloadable: 4 })
+  })
+  it('칸의 합은 검사 인원과 같다 — 한 아이를 두 칸에 세지 않는다', () => {
+    const c = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', ...SCAN, ...READ_SCORED }),
+      row({ id: 'b1', child_no: 2, ...SCAN, submitted_at: null }),
+    ])
+    const s = summarize(c)
+    expect(s.scored + s.scoring + s.scanWait + s.unsubmitted).toBe(s.tested)
+    // 1번: 최근 제출 검사가 스캔 대기 → 채점 완료된 앞 차수가 있어도 스캔 대기(선생님이 할 일이 남았다)
+    expect(s).toMatchObject({ tested: 2, scanWait: 1, unsubmitted: 1, downloadable: 1 })
+  })
+  it('그만둔 재검사 뒤의 앞 차수 스캔 대기도 센다 — 시작 화면 배너와 같은 기준', () => {
+    const c = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN, ...READ_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(summarize(c)).toMatchObject({ scanWait: 1, unsubmitted: 0, downloadable: 1 })
+  })
+})
+
+describe('scanTargetSession · scanTargets — 스캔본이 붙을 검사', () => {
+  it('가장 최근에 제출된 검사, 없으면 가장 최근 검사', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(scanTargetSession(c)?.id).toBe('a1')
+    const [d] = buildChildren([], [row({ id: 'b1', child_no: 2, submitted_at: null })])
+    expect(scanTargetSession(d)?.id).toBe('b1')
+  })
+  it('아이마다 하나, 번호순. 검사가 없는 아이(명단만)는 대상이 아니다', () => {
+    const c = buildChildren([{ child_no: 9, child_name: '명단만', gender: '여' }], [
+      row({ id: 'x', child_no: 3, ...SCAN }),
+      row({ id: 'y', child_no: 1, ...READ_SCORED }),
+    ])
+    expect(scanTargets(c)).toEqual([
+      { childNo: 1, name: '아이1', sessionId: 'y', state: 'screen', retest: false, testedAt: '2026-09-22T01:00:00.000Z' },
+      { childNo: 3, name: '아이3', sessionId: 'x', state: 'wait', retest: false, testedAt: '2026-09-22T01:00:00.000Z' },
+    ])
+  })
+  it('검사가 둘 이상인 아이는 retest — 확인 화면이 자동으로 붙이지 않는다(몇 차 기록지인지 모른다)', () => {
+    const c = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-29T01:00:00.000Z', ...SCAN }),
+    ])
+    expect(scanTargets(c)).toEqual([
+      { childNo: 1, name: '아이1', sessionId: 'a2', state: 'wait', retest: true, testedAt: '2026-09-29T01:00:00.000Z' },
+    ])
+  })
+})
+
+describe('sessionLabel — 재검사로 대체(스캔 대기인데 대상 검사가 아니다)', () => {
+  it('더 최근에 제출된 재검사가 있으면 앞 차수의 스캔 대기는 「재검사로 대체」 — 그 검사에는 올릴 수 없다', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN, ...READ_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', ...READ_SCORED }),  // 화면 방식으로 재검사
+    ])
+    const target = scanTargetSession(c)!.id
+    expect(target).toBe('a2')
+    expect(sessionLabel(c.sessions[0], target)).toBe('replaced')
+    expect(sessionLabel(c.sessions[1], target)).toBe('scored')
+    // 대상을 모르면(주지 않으면) 종전대로 스캔 대기
+    expect(sessionLabel(c.sessions[0])).toBe('scanWait')
+  })
+  it('중단된 재검사는 대체하지 않는다 — 앞 차수가 여전히 대상이라 스캔 대기', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN, ...READ_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(sessionLabel(c.sessions[0], scanTargetSession(c)!.id)).toBe('scanWait')
+  })
+  it('요약은 대체된 앞 차수를 채점 완료로 세지 않는다 — 재검사가 채점 중이면 그 아이는 채점 중', () => {
+    const c = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN, ...READ_SCORED }),   // 받을 수 있음 · 대체됨
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', recordings: READ_SCORED.recordings }),  // 읽기 채점 전
+    ])
+    expect(summarize(c)).toMatchObject({ tested: 1, scored: 0, scoring: 1, scanWait: 0, downloadable: 1 })
+  })
+})
+

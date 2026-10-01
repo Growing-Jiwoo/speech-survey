@@ -10,7 +10,7 @@ import { useFocusTrap } from '@/hooks/useFocusTrap'
  */
 export function ConfirmDialog({
   open, title, children, error, busy = false, danger = false,
-  confirmLabel, cancelLabel = '취소', onConfirm, onClose,
+  confirmLabel, cancelLabel = '취소', onConfirm, onClose, secondary,
 }: {
   open: boolean
   /** 모달 제목(질문). 줄바꿈이 필요하면 ReactNode로 전달 */
@@ -27,6 +27,9 @@ export function ConfirmDialog({
   cancelLabel?: string
   onConfirm: () => void
   onClose: () => void
+  /** 취소와 확인 사이의 둘째 선택지(예: 결과지 받기의 [완성된 N장만]). 있으면 창을 조금 넓힌다 — 버튼 셋이
+   *  좁은 창에 들어가면 글자가 두 줄로 감긴다. */
+  secondary?: { label: React.ReactNode; onClick: () => void }
 }) {
   const titleId = useId()
   const close = useCallback(() => { if (!busy) onClose() }, [busy, onClose])
@@ -44,7 +47,8 @@ export function ConfirmDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-6" onClick={close}>
       <div ref={trapRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        className="w-full max-w-sm overscroll-contain rounded-[20px] bg-white p-6 shadow-xl"
+        // 내용이 길면(받을 명단 + 경고) 창 안에서 스크롤한다 — 가운데 정렬 창이 화면을 넘으면 버튼에 닿을 수 없다
+        className={`max-h-[calc(100dvh-3rem)] w-full ${secondary ? 'max-w-md' : 'max-w-sm'} overflow-y-auto overscroll-contain rounded-[20px] bg-white p-6 shadow-xl`}
         onClick={e => e.stopPropagation()}>
         <h2 id={titleId} className="text-center text-lg font-bold leading-relaxed">{title}</h2>
         {children}
@@ -54,6 +58,12 @@ export function ConfirmDialog({
           <button onClick={close} disabled={busy} className="btn-ghost h-[50px] flex-1">
             {cancelLabel}
           </button>
+          {secondary && (
+            <button onClick={secondary.onClick} disabled={busy}
+              className="btn-outline h-[50px] flex-1">
+              {secondary.label}
+            </button>
+          )}
           <button onClick={onConfirm} disabled={busy}
             className={`${danger ? 'btn-danger' : 'btn-primary'} h-[50px] flex-1`}>
             {confirmLabel}
