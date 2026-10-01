@@ -6,6 +6,9 @@
 // 고른다 — lib/scan-mapping). 올릴 때는 쪽 하나씩 보낸다(app/api/results/[token]/scans).
 //
 // pdfjs(PDF 그리기)와 jsQR(QR 읽기)은 파일을 고를 때만 불러온다 — 결과지 화면 첫 로딩을 무겁게 하지 않는다.
+// pdfjs는 **legacy 빌드**를 쓴다 — 모던 빌드(6.x)는 2025년 무렵 이후 브라우저 기능(Math.sumPrecise·Promise.try·
+// Uint8Array.fromBase64 등)을 검사 없이 불러, 업데이트가 늦은 학교 PC·예전 iPad에서 PDF가 열리지 않는다. legacy는
+// 그 기능이 없을 때만 채워 넣는다(core-js, 약 10% 더 크다 — 파일을 고를 때만 받으니 첫 로딩과 무관).
 // 화질 검사는 하지 않는다(사용자 확정 2026-09-30) — 잘 스캔된 종이를 시스템이 잘못 경고하면 선생님만 번거롭다.
 // QR을 못 읽으면 그 쪽은 「누구 기록지인지 골라 주세요」가 된다. 단 거의 흰 쪽(양면 스캔의 뒷면)은 「빈 쪽」으로
 // 두어 올리지 않는다(isBlankPage) — 반의 절반이 「골라 주세요」로 뜨면 진짜 못 읽은 쪽이 묻힌다.
@@ -177,14 +180,14 @@ type JsQR = typeof import('jsqr').default
 let jsqrLoad: Promise<JsQR> | null = null
 const loadJsQR = () => (jsqrLoad ??= import('jsqr').then(m => m.default))
 
-type PdfJs = typeof import('pdfjs-dist')
+type PdfJs = typeof import('pdfjs-dist/legacy/build/pdf.mjs')
 let pdfjsLoad: Promise<PdfJs> | null = null
 function loadPdfJs(): Promise<PdfJs> {
-  return (pdfjsLoad ??= import('pdfjs-dist').then(pdfjs => {
+  return (pdfjsLoad ??= import('pdfjs-dist/legacy/build/pdf.mjs').then(pdfjs => {
     // 작업자(worker) — 번들러가 `new Worker(new URL(…, import.meta.url))`를 보고 따로 묶는다(같은 출처 파일).
     // CSP는 proxy.ts의 `worker-src 'self'`가 허용한다 — script-src의 strict-dynamic에 기대지 않는다.
     pdfjs.GlobalWorkerOptions.workerPort = new Worker(
-      new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url), { type: 'module' })
+      new URL('pdfjs-dist/legacy/build/pdf.worker.min.mjs', import.meta.url), { type: 'module' })
     return pdfjs
   }))
 }
@@ -246,8 +249,8 @@ export async function readScanFiles(
       const pdfjs = await loadPdfJs()
       let doc: Awaited<ReturnType<PdfJs['getDocument']>['promise']>
       try {
-        // isEvalSupported:false — 글꼴 처리에 eval을 쓰지 않게(CSP가 막는다. 스캔본은 그림이라 차이가 없다)
-        const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false })
+        // 6.x는 글꼴 처리에 eval을 쓰는 경로가 없다(옛 isEvalSupported 옵션도 없어졌다) — 운영 CSP가 eval을 막아도 그대로 된다
+        const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
         let timer: ReturnType<typeof setTimeout> | undefined
         doc = await Promise.race([
           task.promise,
@@ -267,7 +270,8 @@ export async function readScanFiles(
           const viewport = page.getViewport({ scale: PAGE_LONG_SIDE / Math.max(base.width, base.height) })
           const { c, ctx } = newCanvas(viewport.width, viewport.height)
           try {
-            await page.render({ canvasContext: ctx, viewport }).promise
+            // 6.x는 캔버스를 받는다 — 위에서 만든 같은 캔버스라 QR을 읽을 때 쓰는 그 2D 컨텍스트(willReadFrequently)에 그려진다
+            await page.render({ canvas: c, viewport }).promise
           } catch {
             throw new ScanReadError('pdf', file.name)
           }
@@ -275,7 +279,7 @@ export async function readScanFiles(
           await addPage(c, ctx, file.name, n)
         }
       } finally {
-        await doc.destroy()
+        await doc.loadingTask.destroy()   // 6.x는 문서가 아니라 불러오기 작업이 작업자 자원을 푼다
       }
     }
   } catch (e) {
