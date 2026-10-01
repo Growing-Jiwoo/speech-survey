@@ -8,13 +8,12 @@
 // 무의미 낱말(고춘·삭핌·찬축·닺고·구말·앍아·딻아)은 뜻이 없어 오타가 눈에 띄지 않는다.
 // 대조는 tests/forms.test.ts의 SHEET_G2가 글자 단위로 자동 검증한다.
 //
-// ⚠️ 아직 **가안**이다. 확정본을 받으면 assets/forms/kodys-g2.pdf를 교체하고
-//    scripts/extract-form-layout.mjs를 다시 돌려 g2-layout.ts를 통째로 갱신한다.
+// ⚠️ 아직 **가안**이다. 확정본을 받으면 assets/forms/kodys-g2.pdf를 교체하고 문항 배열과
+//    tests/forms.test.ts의 SHEET_G2를 함께 갱신한다.
 //
 // G1과의 구조적 차이: 쓰기 과제가 낱말 쓰기가 아니라 **문장 쓰기**다.
 // 문항마다 O/X가 아니라 어절 수(0~2)로 채점한다.
 import type { SurveyForm } from './index'
-import { G2_LAYOUT } from './g2-layout'
 
 export const G2: SurveyForm = {
   id: 'KODYS-G2',
@@ -41,5 +40,11 @@ export const G2: SurveyForm = {
   // **G1의 비율을 그대로 옮긴 것 자체가 개발 판단이다**(사용자 확정 2026-08-11) —
   // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다. 문장 읽기 만점이 36→35라 23→22.
   passMark: { wordReading: 9, sentenceReading: 22, writing: 6 },
-  layout: G2_LAYOUT,
+  // KODYS_G2_결과보고서_양식.docx(담당자 배포 2026-09-28) 실측값. 초록 계열.
+  // G1과 다른 곳(머리글 문구·마침표·줄 간격·빈 줄 수)은 담당자 파일이 실제로 그렇다 — 맞추지 말 것.
+  report: {
+    accent: '0F5C4A', accentTint: 'CDEBE1',
+    observationHeader: '주요 관찰 지표 (참고용)', notePeriod: false,
+    interpretationLine: 1, gapAfterInterpretation: 1,
+  },
 }

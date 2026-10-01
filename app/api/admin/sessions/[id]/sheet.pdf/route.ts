@@ -1,12 +1,13 @@
-// /api/admin/sessions/[id]/sheet.pdf — 공식 검사지 PDF 다운로드.
-// 담당자 배포 원본 검사지에 채점 결과만 얹어 내려준다(생성은 lib/pdf/stamp-sheet).
+// /api/admin/sessions/[id]/sheet.pdf — 결과보고서 PDF 다운로드.
+// 담당자 배포 결과보고서 양식(2026-09-28)에 인적사항·판정·체크리스트를 채워 내려준다(생성은 lib/pdf/report).
+// 경로 이름 sheet.pdf는 종전(검사지 스탬핑)에서 그대로 두었다 — 화면·설명서·테스트가 이 경로를 본다.
 // 파일명에 아동 이름이 들어가므로 proxy의 관리자 인증 뒤에서만 접근된다.
 import { NextResponse } from 'next/server'
 import { sessionDetail } from '@/lib/db'
 import { formForGrade } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
-import { stampSheet } from '@/lib/pdf/stamp-sheet'
+import { renderReport } from '@/lib/pdf/report'
 import { kstDateKey } from '@/lib/adminStats'
 import { pad2 } from '@/lib/format'
 import { UUID_RE, jsonError } from '@/lib/request'
@@ -23,18 +24,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const form = formForGrade(session.grade)
     const f = itemsFor(form)
     // 녹음이 없는 페이지는 오반응(X·0점)으로 채운다 — 관리자 결과지 화면과 같은 함수를 쓴다.
-    // 그러지 않으면 채점자가 X를 하나하나 찍어 저장하기 전까지 검사지의 점수 칸이 통째로
+    // 그러지 않으면 채점자가 X를 하나하나 찍어 저장하기 전까지 보고서의 판정 칸이 통째로
     // 비어 나갔다(사용자 보고 2026-08-12 항목 9). 화면과 같은 이유로 **제출된 세션에만**
     // 적용한다 — 진행 중인 검사의 빈 녹음은 아직 하지 않은 것이지 오반응이 아니다.
     const recorded = new Set(recordings.map(r => r.item_code))
     const input = scoreInputFrom(f, { marks, sentences, writing })
-    const bytes = await stampSheet({
+    const bytes = await renderReport({
       form,
       session,
       ...(session.submitted_at ? withUnrecordedDefaults(f, input, c => recorded.has(c)) : input),
     })
 
-    // 검사지에 찍히는 검사일과 같은 KST 기준 — UTC로 자르면 아침 검사가 하루 전으로 어긋난다.
+    // 보고서에 찍히는 검사일과 같은 KST 기준 — UTC로 자르면 아침 검사가 하루 전으로 어긋난다.
     const date = kstDateKey(new Date(session.started_at))
     // 아동 번호를 두 자리로 앞세운다(사용자 확정 2026-08-15): 한 학급 30명을 한꺼번에 받으면
     // ① 동명이인 파일이 서로 덮어쓰이고 ② 이름 정렬이 출석 번호 순서와 어긋나 인쇄물을 손으로
@@ -51,6 +52,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     })
   } catch (e) {
     console.error('[admin/sessions/:id/sheet.pdf] 생성 실패', e)
-    return jsonError('결과지를 만들지 못했습니다.', 500)
+    return jsonError('결과보고서를 만들지 못했습니다.', 500)
   }
 }

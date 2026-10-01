@@ -294,7 +294,7 @@ describe('withUnrecordedDefaults — 미녹음은 오반응(X·0점)으로 기�
     const marks = Object.fromEntries(g1.meaningReadCodes.map(c => [c, true]))
     const out = withUnrecordedDefaults(g1, { ...empty, marks }, code => code !== 'p_rw_nonsense')
     expect(g1.nonsenseReadCodes.every(c => out.marks[c] === false)).toBe(true)
-    // 이제 낱말 해독이 "채점 완료"가 되어 검사지 PDF의 총점 칸이 찍힌다
+    // 이제 낱말 해독이 "채점 완료"가 되어 결과보고서 PDF의 해독 판정 칸이 채워진다
     expect(scoreSession(G1, out).complete.wordReading).toBe(true)
     expect(scoreSession(G1, out).wordReading).toBe(7)
   })

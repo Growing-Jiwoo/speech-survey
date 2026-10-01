@@ -116,7 +116,8 @@ describe('DELETE /api/admin/sessions/[id]', () => {
 describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
   const detail = (started_at: string, submitted_at: string | null = null) => ({
     session: {
-      id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_no: 3, child_name: '홍길동',
+      id: SID, school_region: '경기도교육청', school_id: 'B000000000', school_name: '경기초등학교',
+      grade: 1, class_no: 3, child_no: 3, child_name: '홍길동', gender: '남',
       birth_ymd: '170310', started_at, submitted_at,
       checklist: [],
     } as never,

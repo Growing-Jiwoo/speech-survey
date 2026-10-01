@@ -6,7 +6,7 @@ import { formForGrade, type SurveyForm } from './forms'
 import { itemsFor } from './items'
 import { pad2 } from './format'
 import {
-  TASK_KEYS, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
+  TASK_KEYS, finalVerdict, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
   type ScoreInput, type Verdict,
 } from './scoring'
 import { childVerdict, type ResultsChild, type ResultsSession } from './results-view'
@@ -24,7 +24,7 @@ export interface ResultsSessionRow {
   grade: number
   started_at: string
   submitted_at: string | null
-  /** 결과지 PDF 머리글이 찍는다(stampSheet). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
+  /** 결과보고서 PDF 머리글이 찍는다(renderReport). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
   birth_ymd: string
   /** 검사자 체크리스트 — 결과지 PDF가 체크 표시를 찍는다(관리자 PDF와 같은 문서여야 한다) */
   checklist: string[]
@@ -75,9 +75,8 @@ export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'sta
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
   const allScored = TASK_KEYS.every(k => result.complete[k])
-  const verdict: Verdict | null = allScored
-    ? (TASK_KEYS.every(k => result.verdict[k] === 'pass') ? 'pass' : 'fail')
-    : null
+  // 최종 판정 규칙(FAIL 2개 이상 → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
+  const verdict: Verdict | null = allScored ? finalVerdict(result.verdict) : null
   return {
     status: 'scored',
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },

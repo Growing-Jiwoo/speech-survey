@@ -1,7 +1,7 @@
 // components/admin/ResultSheet.tsx — 관리자 결과지.
 // 종이 검사지(assets/forms/kodys-g*.pdf)와 같은 순서·구조로 두고,
 // 각 줄에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 놓는다.
-// 공식 출력물은 이 화면이 아니라 검사지 PDF다(/api/admin/sessions/[id]/sheet.pdf).
+// 공식 출력물은 이 화면이 아니라 결과보고서 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.
 'use client'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -130,7 +130,7 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
    * 그대로를 보내고, 문장 점수는 "보낸 것이 전부"로 취급된다.
    *
    * [채점 저장] 버튼은 그대로 둔다: 자동 저장이 실패했을 때 다시 시도하는 손잡이이고,
-   * 검사지 PDF 관문 모달도 그 동작을 호출한다.
+   * 결과보고서 PDF 관문 모달도 그 동작을 호출한다.
    */
   useEffect(() => {
     if (!dirty || saving || autoFailed) return
@@ -143,7 +143,7 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
   // 채점을 고치면 이전 저장 결과 안내("저장했어요.")를 지운다 — 안 지우면 옆의
   // "저장하지 않은 채점이 있어요"와 동시에 떠서 무엇이 저장된 상태인지 알 수 없다
   // (사용자 보고 2026-08-12 항목 6).
-  // 검사지 PDF 관문 — 채점이 끝나기 전에 실수로 공식 문서를 내려받지 않게 한다.
+  // 결과보고서 PDF 관문 — 채점이 끝나기 전에 실수로 공식 문서를 내려받지 않게 한다.
   const pdfHref = `/api/admin/sessions/${sessionId}/sheet.pdf`
   const gate = sheetPdfGate(r, dirty)
   const TASK_LABEL: Record<TaskKey, string> = {
@@ -206,7 +206,8 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
             ? `보호자 동의 확인 ${new Date(session.guardian_consented_at).toLocaleDateString('ko-KR')}`
             : '보호자 동의 기록 없음'}
           {PROVISIONAL_CRITERIA && (
-            // 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면·인쇄물 모두에 남긴다.
+            // 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
+            // PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 기준표 전에는 이 화면이 유일한 경고다.
             <span className="ml-2 rounded border border-amber/50 bg-amber/10 px-1.5 py-0.5 font-bold text-amber print:bg-amber/10">
               임시 기준 · 확정 전
             </span>
@@ -284,22 +285,22 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
           className="rounded-lg bg-blue px-4 py-2 text-sm font-bold text-white transition disabled:opacity-40">
           {saving ? '저장 중…' : '채점 저장'}
         </button>
-        {/* 공식 출력은 원본 검사지에 점수를 얹은 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
+        {/* 공식 출력은 담당자 양식의 결과보고서 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
             어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다.
             채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). */}
         <a href={pdfHref} download
           onClick={e => { if (gate) { e.preventDefault(); setGateOpen(true) } }}
           className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
-          검사지 PDF 다운로드
+          결과보고서 PDF 다운로드
         </a>
         {dirty && <span className="text-[13px] font-bold text-amber">저장하지 않은 채점이 있어요</span>}
         {msg && <span aria-live="polite" className="text-[13px] text-ink-soft">{msg}</span>}
       </div>
       {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
       <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
-        검사지 PDF는 저장한 채점 내용으로 만들어집니다
+        결과보고서 PDF는 저장한 채점 내용으로 만들어집니다
         {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
-          && ' · 채점이 끝나지 않은 과제는 점수 칸이 비어 나갑니다'}
+          && ' · 채점이 끝나지 않은 과제는 판정 칸이 비어 나갑니다'}
       </p>
 
       {gate && (
@@ -319,11 +320,11 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
           onClose={() => setGateOpen(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             {gate.reason === 'dirty' ? (
-              <>검사지 PDF는 <b>저장된 채점</b>으로 만들어집니다. 지금 화면의 수정은 아직 저장되지 않아
+              <>결과보고서 PDF는 <b>저장된 채점</b>으로 만들어집니다. 지금 화면의 수정은 아직 저장되지 않아
                 빠진 채로 나갑니다.</>
             ) : gate.overridable ? (
               <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b>가 검사 중에 기록되지 않았습니다.
-                이 화면에서는 채울 수 없으니, 그대로 내려받으면 점수 칸이 <b>빈 채로</b> 나갑니다.</>
+                이 화면에서는 채울 수 없으니, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나갑니다.</>
             ) : (
               <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있습니다.
                 녹음을 듣고 채점을 마친 뒤 <b>[채점 저장]</b>을 누르면 내려받을 수 있어요.</>
@@ -340,14 +341,14 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
           {
             badge: <Badge tone="mute">채점 전</Badge>,
             desc: <>아직 채점하지 않은 과제입니다. <b className="text-rec-deep">0점이 아닙니다</b> —
-              검사지 PDF에도 점수 칸이 비어 나갑니다.</>,
+              결과보고서 PDF에도 판정 칸이 비어 나갑니다.</>,
           },
           {
             badge: <Badge tone="rec">미녹음</Badge>,
             // 미녹음 기본 채점은 사용자 확정(2026-08-12)이다. 출처는 여기(주석)에만 둔다 —
             // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
             desc: <>녹음이 올라오지 않은 과제입니다. 읽은 반응이 없으므로 <b>오반응(X · 0점)으로
-              기본 채점</b>되어 화면·검사지 PDF에 그대로 나갑니다.
+              기본 채점</b>되어 화면·결과보고서 PDF에 그대로 나갑니다.
               녹음을 들어보고 고치면 저장한 값이 기본값을 대신합니다.</>,
           },
           {
@@ -356,8 +357,8 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
                 <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
               </span>
             ),
-            desc: <>과제별 기준 점수에 따른 판정입니다. 채점이 끝난 과제에만 나오며,
-              <b> 공식 검사지 PDF에는 찍히지 않습니다.</b></>,
+            desc: <>과제별 기준 점수에 따른 판정입니다. 채점이 끝난 과제에만 나오며, 결과보고서 PDF의
+              결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 둘 이상 Fail이면 Fail입니다.</>,
           },
           ...(PROVISIONAL_CRITERIA ? [{
             badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,

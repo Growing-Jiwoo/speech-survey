@@ -22,8 +22,10 @@ export function itemMaxWords(item: SurveyItem): number {
  * 담당자 회신(2026-08-11): "점수 기준이 아직 명확하지 않은데 대강 입력해둬도 괜찮다."
  * — 즉 담당자가 승낙한 것은 "임시값을 써도 된다"까지이고, **숫자 자체는 개발 판단이다**
  * (만점의 약 65%, 사용자 확정 2026-08-11).
- * 임의의 숫자이므로 이 플래그가 true인 동안 화면·인쇄물에 "임시 기준 · 확정 전"을 함께 표시한다
- * (시범 운영 중 나온 판정이 실제 판정으로 학교에 전달되는 것을 막기 위함).
+ * 임의의 숫자이므로 이 플래그가 true인 동안 **화면**에 "임시 기준 · 확정 전"을 함께 표시한다
+ * (시범 운영 중 나온 판정이 실제 판정으로 학교에 전달되는 것을 막기 위함). 결과보고서 PDF는
+ * 담당자 양식을 1:1로 따르므로 이 표시를 싣지 않는다 — 기준표(2026-10-02 예정) 전에는 내려받은
+ * PDF의 PASS/FAIL이 임시 기준에 의한 것임을 관리자 화면의 표시로만 알 수 있다.
  * 실제 기준표가 오면 양식의 숫자만 바꾸면 되고, 이미 채점한 세션도 저장된 점수로 다시 계산된다.
  */
 export const PROVISIONAL_CRITERIA = true
@@ -32,6 +34,18 @@ export type TaskKey = 'wordReading' | 'sentenceReading' | 'writing'
 export type Verdict = 'pass' | 'fail'
 
 export const TASK_KEYS: TaskKey[] = ['wordReading', 'sentenceReading', 'writing']
+
+/**
+ * 최종결과: **세 영역 중 FAIL이 2개 이상이면 FAIL, 아니면 PASS.**
+ *
+ * 담당자 확정(2026-09-29) — 원문 「3개 중에 2개 이상이 fail이면 최종 fail로 할려고」. 2026-09-28 회신
+ * 「1개 이상이 fail이면 fail」은 담당자가 「내가 잘못 얘기했다」며 정정했다. 담당자가 배포한 결과보고서
+ * 예시(`KODYS_G*_결과보고서.docx`: PASS·PASS·FAIL → 최종 PASS, 미통과 문구 「2개 이상의 영역에서」)와
+ * 일치한다. 교사 결과 화면(`lib/results.ts`)과 결과보고서 PDF(`lib/pdf/report.ts`)가 같이 쓴다.
+ */
+export function finalVerdict(v: Record<TaskKey, Verdict>): Verdict {
+  return TASK_KEYS.filter(k => v[k] === 'fail').length >= 2 ? 'fail' : 'pass'
+}
 
 export interface FormScoring {
   /** 과제별 만점(검사지) */
@@ -105,7 +119,7 @@ export interface PdfGate {
 }
 
 /**
- * 검사지 PDF를 지금 내려받아도 되는지. `null`이면 받아도 된다.
+ * 결과보고서 PDF를 지금 내려받아도 되는지. `null`이면 받아도 된다.
  *
  * 학교로 나가는 공식 문서라 채점이 끝나기 전에 실수로 내려받는 것을 막는다
  * (사용자 확정 2026-08-12: 버튼 비활성화가 아니라 눌렀을 때 이유를 모달로 알린다).
@@ -163,12 +177,12 @@ export function scoreInputFrom(f: FormItems, rows: {
  * 검사지 명문: "제한시간 내 읽지 못한 낱말은 0점으로 채점합니다" — 미녹음도 같은 취급.
  *
  * 아동이 읽지 않고 넘긴 페이지(「모르겠어요」)는 정반응이 있을 수 없는데, 채점자가 X를
- * 하나하나 찍어 주지 않으면 그 과제가 영원히 "채점 전"으로 남아 결과지·검사지 PDF의 점수
+ * 하나하나 찍어 주지 않으면 그 과제가 영원히 "채점 전"으로 남아 결과지·결과보고서 PDF의 점수
  * 칸이 통째로 비어 나갔다(사용자 보고 항목 9).
  *
  * **저장된 채점이 언제나 우선한다** — 채점자가 녹음 없이 O를 준 판단을 덮지 않는다.
  *
- * 화면(관리자 결과지)과 검사지 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
+ * 화면(관리자 결과지)과 결과보고서 PDF가 같은 함수를 거쳐 같은 값을 쓴다 — 한쪽만 적용하면
  * 저장 버튼을 누르기 전까지 두 출력이 어긋난다.
  */
 export function withUnrecordedDefaults(

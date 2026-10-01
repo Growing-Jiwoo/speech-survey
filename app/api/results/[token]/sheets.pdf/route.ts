@@ -1,5 +1,5 @@
-// GET /api/results/[token]/sheets.pdf?ids=a,b,c — 교사용 병합 결과지.
-// 세션마다 관리자와 **같은** `stampSheet`를 돌려 한 문서에 이어 붙인다(pdf-lib copyPages).
+// GET /api/results/[token]/sheets.pdf?ids=a,b,c — 교사용 병합 결과보고서.
+// 세션마다 관리자와 **같은** `renderReport`를 돌려 한 문서에 이어 붙인다(pdf-lib copyPages).
 //   ids 없음 → 채점 완료 세션 전부, 아이당 최신 1장, 번호순 (25명 반 = 한 파일)
 //   ids 있음 → 그 세션들만(옛 차수도 가능). **전부 이 토큰의 학급 소속인지 검증** — 아니면 403.
 // 채점 완료(lib/results의 scored)가 아닌 세션은 400 — 빈 결과지가 교사에게 나가면 오해한다.
@@ -9,14 +9,14 @@ import { verifyResultsToken } from '@/lib/auth'
 import { classResults, findClassCodeById, type ClassResultsRow } from '@/lib/db'
 import { env } from '@/lib/env'
 import { kstDateKey } from '@/lib/adminStats'
-import { stampSheet } from '@/lib/pdf/stamp-sheet'
+import { renderReport } from '@/lib/pdf/report'
 import { buildChildren, latestScored, scoreInputFor, sheetsFileName } from '@/lib/results'
 import { jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
 // 프로덕션은 Vercel **무료(Hobby) 플랜**이다 — 함수 제한시간 기본 10초. maxDuration 상한이 플랜마다
-// 달라 이 값에 기대지 않는다: 아래에서 stampSheet를 **병렬**로 돌려 작업 자체를 짧게 만든다.
-// (stampSheet는 매 호출 원본 PDF·폰트를 읽고 임베드해 100~300ms — 순서대로 25장이면 10초에 빠듯하다.)
+// 달라 이 값에 기대지 않는다: 아래에서 renderReport를 **병렬**로 돌려 작업 자체를 짧게 만든다.
+// (renderReport는 매 호출 폰트를 읽고 임베드해 100~300ms — 순서대로 25장이면 10초에 빠듯하다.)
 export const maxDuration = 60
 
 /** 한 번에 병합할 수 있는 결과지 장수 상한 — 학급 정원보다 넉넉하다. */
@@ -65,18 +65,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     if (picked.length > MAX_SHEETS)
       return jsonError(`한 번에 ${MAX_SHEETS}장까지 받을 수 있어요. 나눠서 받아 주세요.`, 400)
 
-    // 스탬핑은 **병렬**(I/O 바운드 — 원본 PDF·폰트 읽기), 병합만 순서대로(페이지 순서 = 번호순 보장).
-    const stamped = await Promise.all(picked.map(r => {
+    // 생성은 **병렬**(I/O 바운드 — 폰트·학교 목록 읽기), 병합만 순서대로(페이지 순서 = 번호순 보장).
+    const pages = await Promise.all(picked.map(r => {
       const { form, input } = scoreInputFor(r)
-      return stampSheet({
+      return renderReport({
         form, ...input,
-        // 관리자 PDF와 **같은 문서**여야 한다 — 생년월일·체크리스트도 그대로 찍는다.
-        session: { school_name: row.school_name, grade: r.grade, class_no: row.class_no, child_name: r.child_name,
+        // 관리자 PDF와 **같은 문서**여야 한다 — 성별·생년월일·체크리스트도 그대로 찍는다.
+        session: { school_region: row.school_region, school_id: row.school_id, school_name: row.school_name,
+          grade: r.grade, gender: r.gender, child_name: r.child_name,
           birth_ymd: r.birth_ymd, started_at: r.started_at, checklist: r.checklist },
       })
     }))
     const merged = await PDFDocument.create()
-    for (const bytes of stamped) {
+    for (const bytes of pages) {
       const one = await PDFDocument.load(bytes)
       for (const p of await merged.copyPages(one, one.getPageIndices())) merged.addPage(p)
     }
@@ -95,6 +96,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     })
   } catch (e) {
     console.error('[results/:token/sheets.pdf] 생성 실패', e)
-    return jsonError('결과지를 만들지 못했습니다.', 500)
+    return jsonError('결과보고서를 만들지 못했습니다.', 500)
   }
 }
