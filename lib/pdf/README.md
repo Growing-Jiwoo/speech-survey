@@ -74,3 +74,11 @@
   `outputFileTracingIncludes`에 등록돼 있다.
 
 테스트: `tests/report.test.ts`(pdfjs로 글자를 뽑아 대조), `tests/sheet-input-parity.test.ts`.
+
+## 빈 칸의 줄 높이
+
+채점 전 과제의 빈 판정 칸과 최종결과가 없을 때의 빈 해석 상자도 **그 칸의 글꼴 크기**(12·14pt 굵게, 해석은 본문 크기 2줄)로
+높이를 잡는다(`wrap`의 `lineOf`, 2026-10-01). Word는 빈 칸을 문단 기호 글꼴로 줄을 잡는데, 기본 10pt로 떨어뜨리면 채점 전
+결과보고서만 아래가 위로 당겨져 한 반을 한 파일로 받았을 때 아이마다 세로 배치가 달라진다. `tests/report.test.ts`가
+「추가 관찰 정보」 제목의 y를 채점 완료본과 대조한다.
+
