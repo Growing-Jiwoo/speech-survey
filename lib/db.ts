@@ -130,13 +130,6 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
   }
-  // 스캔본 방식이면 앞선 제출 시도가 남긴 쓰기 답을 지운다 — 화면 방식으로 제출하다 확정 직전에 실패하고
-  // 방식을 바꿔 다시 제출하면, 「저장하지 않음」만으로는 그 답이 남아 담당자가 넣은 점수처럼 보이고(「스캔」 표시)
-  // 스캔본 올리기도 「채점이 시작됨」으로 막힌다.
-  // (이 삭제는 「미제출」 조건 없이 돈다 — 같은 검사를 두 탭이 서로 다른 방식으로 거의 동시에 제출하면, 먼저 확정된
-  // 화면 방식의 쓰기를 늦은 스캔본 제출이 지울 수 있다. 늦은 쪽의 확정은 아래 조건으로 막힌다. 극히 드물어 둔다.)
-  if (writingMode === 'scan' && writingTask) await saveWriting(sessionId, writingTask.kind, [], writingTask.codes)
-
   // `.is('submitted_at', null)`은 여기 남겨 둔다 — 위 상태 확인과 이 업데이트 사이에
   // 다른 기기가 제출했을 때 재제출을 막는 것은 이 조건뿐이다(경쟁 조건의 최종 방어).
   const { data, error } = await sb().from('sessions')
@@ -149,6 +142,12 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const after = await sessionState(sessionId)
     return after.state === 'submitted' ? 'already_submitted' : 'not_found'
   }
+  // 스캔본 방식이면 앞선 제출 시도가 남긴 쓰기 답을 지운다 — 화면 방식으로 제출하다 확정 직전에 실패하고
+  // 방식을 바꿔 다시 제출하면, 「저장하지 않음」만으로는 그 답이 남아 담당자가 넣은 점수처럼 보이고(「스캔」 표시)
+  // 스캔본 올리기도 「채점이 시작됨」으로 막힌다. **확정이 통과한 뒤에** 지운다 — 확정 전에 지우면 두 탭이 서로
+  // 다른 방식으로 거의 동시에 제출했을 때 먼저 확정된 화면 방식의 쓰기를 늦은 쪽이 지운다(늦은 쪽의 확정은
+  // 위 조건으로 막혀 여기까지 오지 않는다). 여기서 실패하면 담당자가 결과지의 「쓰기 채점 지우기」로 복구한다.
+  if (writingMode === 'scan' && writingTask) await saveWriting(sessionId, writingTask.kind, [], writingTask.codes)
   return 'ok'
 }
 

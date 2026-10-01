@@ -216,7 +216,8 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
   // (바깥 누르기도 같은 이유로 막았다). 다 올린 뒤에는 Esc로 닫아도 잃을 것이 없다.
   const onEscape = () => {
     if (zoom !== null) { setZoom(null); return }
-    if (phase === 'done') finish()
+    // 다 올린 뒤에는 잃을 것이 없을 때만 — 다시 올릴 쪽이 남았으면 Esc 한 번에 80쪽을 다시 읽게 된다
+    if (phase === 'done' && retryable.length === 0) finish()
   }
   /** 남은 쪽을 한꺼번에 「올리지 않음」 — 양면 스캔으로 빈 뒷면이 섞였을 때 쪽마다 드롭다운을 열지 않게 */
   const skipRest = () => {
@@ -462,7 +463,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
             {zoom !== null && pages[zoom] && (
               <div role="dialog" aria-modal="true" aria-label={`${zoom + 1}쪽 크게 보기`}
                 className="fixed inset-0 z-[60] flex flex-col bg-ink/80 p-3 sm:p-6" onClick={() => setZoom(null)}>
-                <div className="flex items-center justify-between text-[13px] font-bold text-white" onClick={e => e.stopPropagation()}>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-bold text-white" onClick={e => e.stopPropagation()}>
                   <span>{zoom + 1}쪽 / {pages.length}쪽</span>
                   <span className="flex gap-2">
                     <button type="button" disabled={zoom === 0} onClick={() => setZoom(zoom - 1)}

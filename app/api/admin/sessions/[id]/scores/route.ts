@@ -101,7 +101,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (writing) {
     const seen = typeof b.scanUploadedAt === 'string' ? b.scanUploadedAt : null
     try {
-      if ((await scanUploadedAt(id)) !== seen)
+      // 문자열이 아니라 **시각**으로 비교한다 — 한쪽이 날짜 형식을 바꾸면(toISOString 등) 모든 쓰기 저장이 409가 된다
+      // 날짜로 읽히지 않는 값은 글자 그대로 비교한다(NaN끼리는 같지 않다)
+      const asTime = (v: string | null) => { if (v === null) return null; const t = Date.parse(v); return Number.isNaN(t) ? v : t }
+      if (asTime(await scanUploadedAt(id)) !== asTime(seen))
         return jsonError('그사이 선생님이 스캔본을 올리거나 바꿨어요. 결과지를 새로 열어 주세요.', 409)
     } catch (e) {
       console.error('[admin/scores] 스캔본 조회 실패', e)

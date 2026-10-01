@@ -48,7 +48,7 @@ src/
 - 2026-09-30에 검사 진행 화면 4장(`t-10`·`t-14`·`t-15`·`t-16`)을 다시 찍었다 — 읽기판 안내 문장이 카드 밖으로
   나갔다. **운영 DB를 건드리지 않고** 찍었다: 실제 검사 화면 컴포넌트를 가짜 세션 상태와 가짜 양식 응답으로 띄우는
   임시 페이지를 만들어 찍고 지웠다(녹음 중 화면은 브라우저의 가짜 마이크 입력). PDF는 크롬 DevTools의 인쇄
-  (`Page.printToPDF`, 꼬리말 템플릿)로 다시 뽑았고, 19쪽 글자는 이전 판과 같다.
+  (`Page.printToPDF`, 꼬리말 템플릿)로 다시 뽑았고, 글자는 이전 판(당시 19쪽)과 같다.
 - 검사 진행 화면은 **데스크톱 폭(뷰포트 1024 이상)**에서 찍는다. 그보다 좁으면 좁은 화면 배치로 바뀌어
   앞뒤 캡처와 모양이 달라진다(`t-15`를 880으로 찍었다가 다시 찍었다). 자르는 틀은 `t-14`·`t-16`과 같은 880×884다.
 - 2026-10-01에 쓰기 스캔본 기능으로 9장을 찍었다 — 새로 7장(`t-19b`·`t-27b`·`t-29`~`t-32`·`fig-sheet-scan`),
@@ -88,7 +88,7 @@ src/
 
 | 코드가 바뀌면 | 설명서에서 고칠 곳 |
 |---|---|
-| `lib/scoring.ts`의 `PROVISIONAL_CRITERIA`·`passMark` | 관리자용 4장 「Pass 기준은 아직 임시 숫자입니다」 |
+| `lib/scoring.ts`의 `PROVISIONAL_CRITERIA`, `lib/forms/g*.ts`의 `passMark` | 관리자용 4장 「Pass 기준은 아직 임시 숫자입니다」 |
 | `lib/scoring.ts`의 문장 읽기유창성 산식(어절/초·`FLUENCY_DECIMALS`·미녹음 20초), `components/admin/sheet/SentenceRows.tsx`(시간 칸) | 관리자용 4장 Pass 기준 상자·단계 3·그림 `fig-sheet-sentence.png`·범례 표 「미녹음」·5장 PDF 관문, 총평 밴드가 찍힌 캡처(`fig-sheet-head`·`fig-sheet-word`·`fig-sheet-legend`), 선생님용 「제한 시간」 표·9장 표 아래 「문장 읽기」 설명·캡처 `t-26`·`t-27` |
 | `components/results/`·`/api/results/*`(교사 결과지) | 선생님용 9장 「검사 결과지 받기」, 관리자용 5장 「선생님은 이 PDF를 직접 받아 갑니다」 |
 | `components/admin/CodeIssuer.tsx`(발급 폼·이메일) | 관리자용 2장 발급 폼 캡션·「담임 이메일 수정」 |
@@ -102,7 +102,7 @@ src/
 | `lib/survey-flow.ts`의 `canAdvance`(쓰기 전부·체크리스트 1개 이상) | 선생님용 7장 |
 | `components/survey/FormStatus.tsx`·`lib/auth.ts`의 세션 토큰 24시간 | 선생님용 6장 조건 ①·11장 「이어서 할 수 없어요」 |
 | `components/admin/ResultSheet.tsx`(범례, PDF를 막는 창, 자동 저장 문구) | 관리자용 4장 범례 표·단계 5, 5장 「저장한 채점으로 만들어집니다」, 7장 저장 문답 |
-| `lib/pdf/report.ts`·`lib/forms/g*.ts`의 `report`(결과보고서 양식) | 관리자용 표지 「이 일의 결과물」·5장 전체·캡처 `fig-sheetpdf-1.png`(견본 PDF를 `pdftoppm -r 97`로 뽑는다), 선생님용 9장 |
+| `lib/pdf/report.ts`·`lib/forms/g*.ts`의 `report`(결과보고서 양식) | 관리자용 표지 「이 일의 결과물」·5장 전체·캡처 `fig-sheetpdf-1.png`(견본 PDF를 `pdftoppm -r 97`로 뽑는다 — poppler가 필요하다, `brew install poppler`), 선생님용 9장 |
 | `components/admin/AdminDetailView.tsx`(이전·다음 아동 순서) | 관리자용 4장 단계 6 |
 | `lib/forms/`에 3~6학년 검사지 추가 | 관리자용 5장 「1학년 양식으로 나갑니다」 삭제 |
 | `components/survey/WritingMode.tsx`·`lib/survey-state.ts`(쓰기 방식 두 가지·반마다 기억하는 기본값) | 선생님용 7장 「쓰기 방식 — 아이마다 고릅니다」·캡처 `t-19`·`t-19b`, 관리자용 4장 채점 단계 「쓰기」 |

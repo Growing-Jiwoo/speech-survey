@@ -1056,7 +1056,8 @@ describe('submitSession — 스캔본이면 앞선 시도가 남긴 쓰기 답�
     enqueue('writing_answers', { error: null })   // 지우기(보낸 것이 없음 = 쓰기 코드 전부)
     enqueue('sessions', { data: [{ id: SID }], error: null })
     expect(await submit({ writingMode: 'scan', writingTask: { kind: 'word', codes: ['ww01', 'ww02'] } })).toBe('ok')
-    expect(fromCalls).toEqual(['sessions', 'writing_answers', 'sessions'])
+    // 확정(sessions update)이 통과한 **뒤에** 지운다 — 두 탭 경쟁에서 화면 방식의 쓰기를 지우지 않게
+    expect(fromCalls).toEqual(['sessions', 'sessions', 'writing_answers'])
     expect(deleteCallsByTable.get('writing_answers')).toHaveLength(1)
     expect(inCallsByTable.get('writing_answers')).toEqual([['item_code', ['ww01', 'ww02']]])
   })
@@ -1065,7 +1066,7 @@ describe('submitSession — 스캔본이면 앞선 시도가 남긴 쓰기 답�
     enqueue('sentence_scores', { error: null })
     enqueue('sessions', { data: [{ id: SID }], error: null })
     expect(await submit({ writingMode: 'scan', writingTask: { kind: 'sentence', codes: ['sw01', 'sw02'] } })).toBe('ok')
-    expect(fromCalls).toEqual(['sessions', 'sentence_scores', 'sessions'])
+    expect(fromCalls).toEqual(['sessions', 'sessions', 'sentence_scores'])
     expect(deleteCallsByTable.get('sentence_scores')).toHaveLength(1)
     expect(inCallsByTable.get('sentence_scores')).toEqual([['item_code', ['sw01', 'sw02']]])
     expect(deleteCallsByTable.get('writing_answers')).toBeUndefined()

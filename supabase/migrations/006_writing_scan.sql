@@ -41,3 +41,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('writing-scans', 'writing-scans', false, 4194304, array['image/jpeg', 'image/png'])
 -- 상한 없이 먼저 만든 버킷(이 파일의 앞 판)에도 걸리게 — do nothing이면 다시 돌려도 상한이 빠진 채 남는다
 on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- PostgREST가 새 표·관계(sessions ↔ writing_scans)를 바로 알게 한다. 없으면 스키마 캐시가 갱신될 때까지(수 분)
+-- 목록·결과지가 「Could not find a relationship between 'sessions' and 'writing_scans'」 500을 낸다(2026-10-01 운영에서 확인).
+notify pgrst, 'reload schema';

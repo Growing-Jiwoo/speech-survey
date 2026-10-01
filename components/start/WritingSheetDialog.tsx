@@ -45,6 +45,8 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
   const [extraInput, setExtraInput] = useState('')
   const [rangeTo, setRangeTo] = useState('')
   const [printing, setPrinting] = useState(false)
+  /** 인쇄 창을 한 번 닫았다 — [취소]를 [닫기]로 바꾸고 안내를 띄운다 */
+  const [printed, setPrinted] = useState(false)
   // 명단 번호를 「번호만」에 넣으면 이름이 찍힌 기록지로 돌렸다고 알린다(칩이 안 생겨 무시된 것처럼 보이지 않게)
   const [extraNote, setExtraNote] = useState('')
   const trapRef = useFocusTrap(true, onClose)
@@ -60,8 +62,9 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
   }, [hasRoster, roster, picked, extra, rangeTo])
 
   // 인쇄 — 기록지를 인쇄 전용 뿌리(화면에는 안 보인다)에 그린 다음 인쇄 창을 띄운다. 그동안 이 창을 포함한
-  // 다른 요소는 인쇄에서 숨긴다(globals.css의 body.printing-sheets). 인쇄 창이 닫히면(afterprint) 이 창도 닫는다.
-  // afterprint가 오지 않는 브라우저여도 갇히지 않는다 — 이 창은 화면에 그대로 있어 [취소]로 닫을 수 있다.
+  // 다른 요소는 인쇄에서 숨긴다(globals.css의 body.printing-sheets). 인쇄 창이 닫히면(afterprint) 인쇄 상태만 푼다 —
+  // **이 창은 남긴다.** 크롬은 인쇄를 취소해도 afterprint가 와서, 닫아 버리면 프린터를 잘못 골라 취소한 선생님이
+  // 고른 학생을 다시 골라야 한다(2026-10-01). 끝났으면 [닫기]를 누른다. afterprint가 오지 않는 브라우저여도 같다.
   useEffect(() => {
     if (!printing) return
     document.body.classList.add('printing-sheets')
@@ -75,7 +78,7 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
     // 인쇄 설정에 따라 제목이 찍히는 브라우저가 있다 — 아이 종이이니 중립적인 이름으로 잠시 바꾼다
     const title = document.title
     document.title = '쓰기 기록지'
-    const done = () => { setPrinting(false); onCloseRef.current() }
+    const done = () => { setPrinting(false); setPrinted(true) }
     window.addEventListener('afterprint', done, { once: true })
     let cancelled = false
     // 한 프레임 뒤 — 기록지가 DOM에 그려진 뒤, 그리고 **이름 글자의 한글 글꼴 조각을 받은 뒤** 인쇄 창을 연다.
@@ -212,9 +215,14 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
             <p className="mt-3 flex items-start gap-1.5 text-[12px] text-ink-mute">
               <span aria-hidden className="mt-px">ⓘ</span>기록지는 담당자 채점이 끝날 때까지 보관해 주세요.
             </p>
+            {printed && (
+              <p aria-live="polite" className="mt-2 rounded-lg bg-well px-3 py-2 text-[12.5px] text-ink-soft">
+                인쇄 창을 닫았어요. 더 뽑을 게 없으면 <b>[닫기]</b>, 빠진 학생이 있으면 골라서 다시 <b>[인쇄하기]</b>.
+              </p>
+            )}
           </div>
           <div className="flex gap-2.5 p-6 pt-3">
-            <button type="button" onClick={() => { setPrinting(false); onClose() }} className="btn-ghost h-[50px] flex-1">취소</button>
+            <button type="button" onClick={() => { setPrinting(false); onClose() }} className="btn-ghost h-[50px] flex-1">{printed ? '닫기' : '취소'}</button>
             <button type="button" onClick={() => setPrinting(true)} disabled={entries.length === 0 || printing}
               className="btn-primary h-[50px] flex-[2]">인쇄하기 ({entries.length}장)</button>
           </div>

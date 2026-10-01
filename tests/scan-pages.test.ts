@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 // 브라우저 작업(캔버스·pdfjs·jsQR)은 node에서 돌리지 않는다 — 함수 안에서만 불러오므로 import는 안전하다.
 import {
-  BLANK_INK_RATIO, MAX_SCAN_PAGES, ScanReadError, boxBlur3, fitScale, inkRatio, isBlankPage, qrSearchRegions,
-  scanFileKind, scanReadErrorText,
+  BLANK_INK_RATIO, MAX_SCAN_PAGES, ScanReadError, boxBlur3, ensurePdfjsPrereqs, fitScale, inkRatio, isBlankPage,
+  qrSearchRegions, scanFileKind, scanReadErrorText,
 } from '@/lib/scan-pages'
 
 describe('scanFileKind — 받는 파일', () => {
@@ -106,3 +106,42 @@ describe('MAX_SCAN_PAGES — 양면 스캔도 한 번에', () => {
     expect(scanReadErrorText(new ScanReadError('tooMany'))).toContain(`${MAX_SCAN_PAGES}쪽`)
   })
 })
+
+describe('ensurePdfjsPrereqs — pdf.js legacy가 네이티브로 기대하는 두 함수를 없는 브라우저에 채운다', () => {
+  // 실제 브라우저 전역을 흉내 낸 가짜 — 둘 다 없는 상태(Chrome 118·Safari 17.3 이하)
+  const fakeGlobal = () => {
+    const P = class extends Promise<unknown> {} as unknown as PromiseConstructor
+    const A = class extends AbortSignal {} as unknown as typeof AbortSignal
+    return { Promise: P, AbortSignal: A }
+  }
+  it('Promise.withResolvers — resolve·reject가 promise를 결정한다', async () => {
+    const g = fakeGlobal()
+    ensurePdfjsPrereqs(g)
+    const wr = (g.Promise as PromiseConstructor & { withResolvers: <T>() => { promise: Promise<T>; resolve: (v: T) => void; reject: (e: unknown) => void } }).withResolvers<number>()
+    wr.resolve(7)
+    await expect(wr.promise).resolves.toBe(7)
+    const wr2 = (g.Promise as unknown as { withResolvers: <T>() => { promise: Promise<T>; reject: (e: unknown) => void } }).withResolvers<number>()
+    wr2.reject(new Error('x'))
+    await expect(wr2.promise).rejects.toThrow('x')
+  })
+  it('AbortSignal.any — 하나라도 중단되면 중단되고, 이미 중단된 신호가 있으면 바로 중단', () => {
+    const g = fakeGlobal()
+    ensurePdfjsPrereqs(g)
+    const any = (g.AbortSignal as unknown as { any: (s: AbortSignal[]) => AbortSignal }).any
+    const a = new AbortController(), b = new AbortController()
+    const combined = any([a.signal, b.signal])
+    expect(combined.aborted).toBe(false)
+    b.abort('why')
+    expect(combined.aborted).toBe(true)
+    expect(combined.reason).toBe('why')
+    const done = new AbortController(); done.abort()
+    expect(any([new AbortController().signal, done.signal]).aborted).toBe(true)
+  })
+  it('이미 있는 브라우저에서는 건드리지 않는다(Node 22는 둘 다 있다)', () => {
+    const before = { w: Promise.withResolvers, a: AbortSignal.any }
+    ensurePdfjsPrereqs()
+    expect(Promise.withResolvers).toBe(before.w)
+    expect(AbortSignal.any).toBe(before.a)
+  })
+})
+

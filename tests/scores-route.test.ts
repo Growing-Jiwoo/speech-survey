@@ -258,6 +258,13 @@ describe('PUT scores — 스캔본 방식 검사의 쓰기', () => {
     const res2 = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: null }), ctx())
     expect(res2.status).toBe(409)
   })
+  it('[REGRESSION] 같은 시각을 다른 형식으로 보내도 같다고 본다(문자열이 아니라 시각 비교) — 형식 하나 바뀌면 모든 쓰기 저장이 409가 되지 않게', async () => {
+    scanSession()
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T05:00:00+00:00')
+    const res = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: '2026-09-30T05:00:00.000Z' }), ctx())
+    expect(res.status).toBe(200)
+    expect(db.saveWriting).toHaveBeenCalled()
+  })
   it('본 스캔본과 같으면 저장한다', async () => {
     scanSession()
     vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T05:00:00Z')

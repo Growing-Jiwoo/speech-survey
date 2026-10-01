@@ -331,6 +331,9 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
             desc: '제출은 됐지만 녹음이나 쓰기가 비어 있습니다.',
           },
           { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았습니다.' },
+          // 스캔본 방식의 쓰기 칸 — 막대 대신 이 두 배지가 보인다(ProgressCell)
+          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사 — 선생님이 아직 기록지 스캔본을 올리지 않았습니다.' },
+          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사 — 결과지에서 쓰기를 채점할 차례입니다.' },
           {
             badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
             desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',

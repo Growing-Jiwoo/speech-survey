@@ -9,6 +9,7 @@
 | 라우트 | 역할 · 방어 |
 |---|---|
 | `POST /api/sessions` | 세션 생성. zod 검증(`lib/schema`) + IP 레이트리밋(인메모리, best-effort) → **세션 스코프 HMAC 토큰**(24h) 발급. 이후 쓰기 요청은 이 토큰 필수. 직접 입력/명단 모드(`fromRoster:true`) 두 가지 — 명단 모드는 이름·생년월일을 서버가 명단에서 복사해 클라이언트가 아동 신원을 정하지 못하게 한다(Task 13). pending 코드는 두 모드 모두 미존재와 같은 404 |
+| `POST /api/sessions/form` | 진행 중인 세션의 검사지(문항·페이지) — 세션 토큰을 바디로 확인한 뒤 내려준다. 화면이 `lib/forms`를 import하면 문항이 공개 JS에 실리므로 양식은 이 라우트로만 얻는다(`hooks/useSurveyForm`). 401·404·409는 다시 시도해도 같다 |
 | `POST /api/sessions/verify-code` | 학급 코드 조회(검사 시작 전 확인 모달용). **인증 없음** — 코드를 아는 사람 누구나 호출 가능하고 응답에 담임 연락처가 실린다. IP 레이트리밋으로 코드 열거를 억제하되 **전용 상한**(`VERIFY_CODE_RATE_LIMIT`)을 쓴다 — 세션 생성(`PUBLIC_RATE_LIMIT`)과 위협 모델이 달라 **일부러 분리한 값이니 "일관성" 명목으로 합치지 말 것**(근거는 `lib/request.ts` 주석). `status !== 'active'`(pending·미승인)인 코드는 미존재 코드와 **같은 404**로 뭉뚱그린다 — 승인 여부를 구분해 알려주면 그 자체가 코드 열거에 새는 정보다. `childNo` 없이 부르면 드롭다운용 명단(`roster`, 번호별 검사 상태 포함)을, `childNo`와 함께 부르면(명단에 없는 학생 폴백) 그 번호 하나의 상태만(`alreadyTested`) 돌려준다. 명단과 함께 **쓰기 기록지 인쇄 재료**도 싣는다(2026-09-30) — 아이마다 쓰기 상태(`roster[].writing`), 스캔 대기 수(`scanPending`), 기록지 QR의 반 표시와 쓰는 칸의 종류·개수(`sheet`). 문항은 싣지 않는다 |
 | `POST /api/recordings` | 녹음 업로드. 검증 사슬: 형식 → 세션 토큰 → 5MB 상한 → MIME allowlist+매직바이트 → 미제출 세션인지(제출 후 변조 차단) → 세션당 총량 상한. DB 기록 실패 시 방금 올린 객체를 보상 정리(고아 파일 방지) |
 | `POST /api/sessions/submit` | 최종 제출. 낱말쓰기/체크리스트 형식 검증 → 토큰 검증 → 미제출 세션만 갱신(재제출 409). 쓰기 방식(`writingMode`: 없으면 `screen`, `scan`이면 쓰기 답을 저장하지 않고 앞선 시도가 남긴 쓰기 답도 지운다 — 담당자가 스캔본으로 채점)을 `submitted_at`과 같은 업데이트로 확정한다 |
@@ -32,6 +33,8 @@
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |
 | `GET /api/admin/codes/[id]/roster` | 신청 명단 조회(읽기 전용). **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단해야 해서 존재한다. 목록 라우트는 그래서 실명 대신 `roster_count`만 센다 |
 | `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
+| `PATCH /api/admin/sessions/[id]` | 아동 식별값(번호·이름·성별·생년월일) 수정 — `sessionEditSchema`가 정한 4개만, 학년·학급은 받지 않는다(원래 값은 `original_identity`로 남긴다) |
+| `GET /api/admin/sessions/[id]/sheet.pdf` | 관리자 결과보고서 PDF 한 장 — 저장된 채점으로 만든다(`lib/pdf/report.ts`), 파일명 `NN_이름_YYYY-MM-DD.pdf` |
 | `PATCH /api/admin/codes/[id]` | 담임 이메일 수정. **이메일 한 필드만** 받는다(`classCodeEmailSchema`) — 학급 정보를 여기서 바꾸면 세션에 이미 복사된 임상 기록과 어긋난다. 이 경로가 필요한 이유는 결과지 매직링크(`POST /api/results/request`)가 `class_codes.teacher_email`로**만** 나가서다: 주소에 오타가 있으면 그 학급은 결과지를 영영 못 받으므로, 바로잡을 길이 하나는 있어야 한다(「관리자 개입 없음」 원칙의 의도된 예외 — 오류 복구 경로, 사용자 확정 2026-09-22). 없는 행 404, 형식 오류·잘못된 id 400 |
 | `POST /api/admin/codes/[id]/approve` | 신청 승인(pending→active, 멱등) + 교사에게 코드 안내 메일. 메일 실패에도 승인은 유지하고, 응답은 `already`(행이 이미 active였는지)와 `mailed`(이번 호출이 실제로 보냈는지)를 분리해 돌려준다 — `already:true`는 메일 발송 여부를 증명하지 않으므로 재발송을 시도하지 않는다. 응답에는 항상 `code`와 `surveyUrl`(메일에 찍은 것과 같은 origin)이 실려(호출자가 인증된 관리자이므로) 화면의 [안내 문구 복사] 예비 경로가 늘 동작하고, 복사한 주소가 메일과 갈리지 않는다 |
 
