@@ -42,7 +42,10 @@ export const G1: SurveyForm = {
   // ⚠️ 담당자 확인 대기 — 확정 아님. 담당자에게 **실제 Pass 기준표**를 받아야 한다.
   // 현재 숫자는 만점의 약 65%로 잡은 개발 판단이다(사용자 확정 2026-08-11 "임시로 일단
   // 해두고 나중에 바꾼다"). 기준표가 오면 이 숫자만 바꾸면 되고 채점된 세션도 다시 계산된다.
-  passMark: { wordReading: 9, sentenceReading: 23, writing: 6 },
+  // 문장 읽기유창성은 단위가 **어절/초**다(총점이 비율로 바뀜, lib/scoring `CountTaskKey` 주석) —
+  // 만점이 없어 65% 규칙을 쓸 수 없고, 1.0은 기준표(2026-10-02 예정) 전까지의 개발 판단이다
+  // (사용자 확정 2026-09-29). 담당자에게 이 과제의 cut-off를 어절/초로 받을 것.
+  passMark: { wordReading: 9, sentenceReading: 1.0, writing: 6 },
   // KODYS_G1_결과보고서_양식.docx(담당자 배포 2026-09-28) 실측값. 남색 계열.
   report: {
     accent: '16335A', accentTint: 'CFE0F0',

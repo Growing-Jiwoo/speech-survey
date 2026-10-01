@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   if (!UUID_RE.test(id)) return badId()
   try {
-    const { session, recordings, writing, marks, sentences } = await sessionDetail(id)
+    const { session, recordings, writing, marks, sentences, times } = await sessionDetail(id)
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다
     // (sheet.pdf 라우트와 같은 판정 — 그쪽 가드는 sessionDetail이 throw해서 도달하지 못했다).
     if (!session) return jsonError('세션을 찾을 수 없습니다.', 404)
@@ -26,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       url: await signedAudioUrl(r.audio_path),
       duration_sec: r.duration_sec,
     })))
-    return NextResponse.json({ session, recordings: withUrls, writing, marks, sentences, form: formForGrade(session.grade) })
+    return NextResponse.json({ session, recordings: withUrls, writing, marks, sentences, times, form: formForGrade(session.grade) })
   } catch (e) {
     console.error('[admin/sessions/:id] 조회 실패', e)
     return jsonError('결과지를 불러오지 못했습니다.', 500)

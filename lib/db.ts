@@ -71,6 +71,9 @@ export interface ReadingMark { itemCode: string; correct: boolean }
 /** 어절 수 점수 — 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 같은 테이블을 쓴다 */
 export interface SentenceScore { itemCode: string; words: number }
 
+/** 문장 읽기유창성(rs..)의 읽은 시간(초, 0.1초 단위) — 관리자 채점(saveScores)이 쓴다 */
+export interface SentenceTime { itemCode: string; seconds: number }
+
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
 export interface SubmitInput {
@@ -133,7 +136,8 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
 }
 
 /**
- * 관리자 채점 저장. 낱말 O/X는 reading_marks에, 문장 어절 수는 sentence_scores에 upsert한다.
+ * 관리자 채점 저장. 낱말 O/X는 reading_marks에, 문장 어절 수는 sentence_scores에, 문장 읽은
+ * 시간은 sentence_times에 upsert한다.
  * reading_marks는 원래 검사자 현장 채점의 착지점이자 관리자 최종 채점의 저장소로 공유됐으나,
  * 현장 채점 자체가 폐기되어(담당자 확정 2026-08-13) 이제 이 함수만 쓴다.
  * 제출 여부와 무관하게 언제든 다시 채점할 수 있다.
@@ -144,26 +148,42 @@ export async function saveScores(
    *  같은 테이블에 검사 중 수집된 문장 쓰기 점수(sw..)가 함께 들어 있어, 범위를 두지 않으면
    *  관리자가 채점을 저장할 때마다 아동의 문장 쓰기 점수가 통째로 지워진다. */
   ownedCodes: string[],
+  /** 문장 읽은 시간. **`undefined`면 시간을 건드리지 않는다** — 빈 배열(= 전부 지움)과 다르다.
+   *  시간 칸이 생기기 전의 화면은 이 필드 없이 자동 저장하므로, 배포 순간 열려 있던 탭 하나가
+   *  채점자가 넣은 시간을 전부 지우지 않게 한다. */
+  times?: SentenceTime[],
 ): Promise<void> {
   if (marks.length > 0) {
     const rows = marks.map(m => ({ session_id: sessionId, item_code: m.itemCode, correct: m.correct }))
     const { error } = await sb().from('reading_marks').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(error)
   }
-  // 문장 점수는 "보낸 것이 전부"(PUT 의미)로 취급해 세션의 문장 점수를 교체한다.
-  // upsert만 하면 채점자가 화면에서 지운 칸의 옛 값이 DB에 남아, 화면 총점과 저장된 총점이
-  // 어긋난 채로 결과지가 나간다.
-  // 순서가 중요하다: 먼저 지우고 넣으면, 넣기가 실패했을 때(네트워크·제약 위반) 이미 지워진
-  // 기존 점수가 복구되지 않는다 — 채점자의 작업이 통째로 사라진다. 그래서 넣기를 먼저 하고
-  // 이번에 보내지 않은 행만 지운다. 중간에 실패해도 기존 값은 남는다.
-  // (낱말 O/X는 화면에 "해제" 동작이 없어 이런 삭제 경로가 필요 없다 — 그래서 위는 upsert만 한다.)
-  if (sentences.length > 0) {
-    const rows = sentences.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
-    const { error } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
+  // (낱말 O/X는 화면에 "해제" 동작이 없어 교체(삭제 경로)가 필요 없다 — 그래서 위는 upsert만 한다.)
+  await replaceOwnedRows('sentence_scores', sessionId,
+    sentences.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words })), ownedCodes)
+  if (times !== undefined)
+    await replaceOwnedRows('sentence_times', sessionId,
+      times.map(t => ({ session_id: sessionId, item_code: t.itemCode, seconds: t.seconds })), ownedCodes)
+}
+
+/**
+ * 세션의 `ownedCodes` 행을 `rows`로 **교체**한다 — "보낸 것이 전부"(PUT 의미).
+ * upsert만 하면 채점자가 화면에서 지운 칸의 옛 값이 DB에 남아, 화면 총점과 저장된 총점이
+ * 어긋난 채로 결과지가 나간다.
+ * 순서가 중요하다: 먼저 지우고 넣으면, 넣기가 실패했을 때(네트워크·제약 위반) 이미 지워진
+ * 기존 점수가 복구되지 않는다 — 채점자의 작업이 통째로 사라진다. 그래서 넣기를 먼저 하고
+ * 이번에 보내지 않은 행만 지운다. 중간에 실패해도 기존 값은 남는다.
+ */
+async function replaceOwnedRows(
+  table: 'sentence_scores' | 'sentence_times', sessionId: string,
+  rows: { item_code: string }[], ownedCodes: string[],
+): Promise<void> {
+  if (rows.length > 0) {
+    const { error } = await sb().from(table).upsert(rows, { onConflict: 'session_id,item_code' })
     fail(error)
   }
-  const keep = sentences.map(s => s.itemCode)
-  const stale = sb().from('sentence_scores').delete()
+  const keep = rows.map(r => r.item_code)
+  const stale = sb().from(table).delete()
     .eq('session_id', sessionId)
     .in('item_code', ownedCodes)
   const { error: delErr } = await (keep.length > 0
@@ -474,19 +494,21 @@ export type ClassResultsRow = Pick<SessionRow,
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_scores: { item_code: string; words: number }[]
+  sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
 }
 
 /**
  * 한 학급의 세션 전부 + 채점 행을 관계 select로 **한 번에**. 교사 결과지 목록·PDF가 쓴다.
  * started_at 오름차순 — 재검사 차수(1차·2차…)가 이 순서에서 나온다(lib/results.ts).
- * 세션당 4번 따로 읽으면 25명 반에서 100회가 된다.
+ * 세션당 5번 따로 읽으면 25명 반에서 125회가 된다.
  */
 export async function classResults(classCodeId: string): Promise<ClassResultsRow[]> {
   const { data, error } = await sb().from('sessions')
     .select('id, child_no, child_name, gender, grade, birth_ymd, checklist, started_at, submitted_at, '
       + 'recordings(item_code), reading_marks(item_code, correct), '
-      + 'sentence_scores(item_code, words), writing_answers(item_code, can_write)')
+      + 'sentence_scores(item_code, words), sentence_times(item_code, seconds), '
+      + 'writing_answers(item_code, can_write)')
     .eq('class_code_id', classCodeId)
     .order('started_at')
   fail(error)
@@ -611,28 +633,32 @@ export interface MarkRow { item_code: string; correct: boolean }
 
 export interface SentenceScoreRow { item_code: string; words: number }
 
+export interface SentenceTimeRow { item_code: string; seconds: number }
+
 /** 세션이 없으면 `session`이 null이다 — 호출부가 404와 500(장애)을 구분할 수 있게 한다.
  *  `.single()`을 쓰면 행이 0개일 때 throw해서 삭제된 세션이 장애와 같은 500으로 뭉뚱그려진다
  *  (실제로 그랬다 — E2E 2026-08-14에서 확인). 조회 계열은 `.maybeSingle()`로 통일한다. */
 export async function sessionDetail(sessionId: string): Promise<{
   session: SessionRow | null; recordings: RecordingRow[]; writing: WritingRow[]
-  marks: MarkRow[]; sentences: SentenceScoreRow[]
+  marks: MarkRow[]; sentences: SentenceScoreRow[]; times: SentenceTimeRow[]
 }> {
   const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 },
-    { data: mk, error: e4 }, { data: ss, error: e5 }] = await Promise.all([
+    { data: mk, error: e4 }, { data: ss, error: e5 }, { data: st, error: e6 }] = await Promise.all([
       sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).maybeSingle(),
       sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
         .eq('session_id', sessionId).order('item_code').order('attempt_no'),
       sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
       sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
       sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
+      sb().from('sentence_times').select('item_code, seconds').eq('session_id', sessionId),
     ])
-  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5)
+  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5); fail(e6)
   return {
     session: (s as unknown as SessionRow) ?? null,
     recordings: (recs ?? []) as RecordingRow[],
     writing: (ans ?? []) as WritingRow[],
     marks: (mk ?? []) as MarkRow[],
     sentences: (ss ?? []) as SentenceScoreRow[],
+    times: (st ?? []) as SentenceTimeRow[],
   }
 }

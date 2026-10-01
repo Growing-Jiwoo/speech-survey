@@ -20,7 +20,8 @@ export interface ResultsSession {
   submittedAt: string | null
   status: SessionStatus
   /** scored일 때만. **채점되지 않은 과제도 0이 들어간다** — 그 0은 「0점을 받았다」가 아니므로
-   *  `complete`가 false인 과제의 숫자는 화면에 그대로 찍으면 안 된다(아래 complete 주석). */
+   *  `complete`가 false인 과제의 숫자는 화면에 그대로 찍으면 안 된다(아래 complete 주석).
+   *  `sentenceReading`은 점수가 아니라 어절/초다(만점이 없다 — lib/scoring `CountTaskKey`). */
   scores: Record<TaskKey, number> | null
   /** scored일 때만, 그리고 **세 과제가 모두 채점됐을 때만.** 하나라도 채점 전이면 null —
    *  치르지도 않은 과제의 0점으로 아동을 낙제시키지 않는다(아래 complete 주석). */

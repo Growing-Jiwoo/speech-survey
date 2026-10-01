@@ -16,6 +16,9 @@ Supabase CLI를 쓰지 않는다 — **SQL Editor에서 직접 실행**한다(�
   문장 쓰기(`sw..`, G2에서 검사 중 수집). 모양이 `(item_code, words)`로 같아 테이블을 공유한다.
   관리자 채점 저장(`saveScores`)의 "이번에 안 보낸 행 삭제"는 반드시 `rs..`로 범위를 한정해야 한다
   — 범위를 두지 않으면 채점을 저장할 때마다 아동의 문장 쓰기 점수가 지워진다(테스트로 고정돼 있다).
+- **문장 읽기유창성의 읽은 시간은 `sentence_times`에 따로 있다**(`005`) — 총점이 어절/초라 문장마다
+  시간이 필요한데, 어절과 따로 입력되므로 `sentence_scores`(`words` NOT NULL)에 붙일 수 없었다.
+  저장 요청에 `times`가 **없으면** 이 테이블을 건드리지 않는다(시간 칸 이전 화면의 자동 저장이 지우지 않게).
 - 쓰기 답의 저장 위치는 과제 종류에 따라 갈린다: 낱말 쓰기(G1) → `writing_answers.can_write`(boolean),
   문장 쓰기(G2) → `sentence_scores.words`(정수). 읽는 쪽은 `lib/scoring.ts`의 `scoreInputFrom`이 합친다.
 - 스키마를 바꾸면 `lib/db.ts`의 행 타입(SessionRow 등)도 함께 갱신할 것.

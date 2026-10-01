@@ -28,6 +28,12 @@ export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`
 }
 
+/** 결과지 머리글용 풀어 쓴 학급 표기 — `1학년 2반`, 단일학급은 `1학년 단일학급`.
+ *  목록 표의 좁은 칸은 `gradeClassLabel`(`1-2`)을 그대로 쓴다. */
+export function classLabel(grade: number, classNo: number): string {
+  return classNo === 0 ? `${grade}학년 단일학급` : `${grade}학년 ${classNo}반`
+}
+
 /** 담임 연락처 표기. 전화·이메일 중 있는 값만 이어붙이고, 둘 다 없으면 안내 문구를 낸다. */
 export function contactLabel(
   phone: string | null | undefined,

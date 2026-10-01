@@ -139,7 +139,7 @@ describe('POST /api/results/request', () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
       id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
       started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
-      recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     }])
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
@@ -151,7 +151,7 @@ describe('GET /api/results/[token]', () => {
   const SESSION = {
     id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
-    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
   }
   beforeEach(() => {
     vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
@@ -166,7 +166,8 @@ describe('GET /api/results/[token]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.cls).toEqual({ schoolName: '대구가창초등학교', grade: 1, classNo: 2, teacherName: '김서연' })
-    expect(json.taskMax).toEqual({ wordReading: 14, sentenceReading: 36, writing: 10 })
+    // 문장 읽기는 만점이 없는 비율(어절/초)이라 taskMax에 없다(lib/scoring CountTaskKey)
+    expect(json.taskMax).toEqual({ wordReading: 14, writing: 10 })
     expect(typeof json.provisional).toBe('boolean')
     expect(json.children).toHaveLength(2)
     const [tested, untested] = json.children
@@ -218,7 +219,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
   const scored = (id: string, child_no: number, started_at: string) => ({
     id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: ['none'],
     started_at, submitted_at: started_at,
-    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
   })
   const ROWS = [
     scored('a1', 1, '2026-09-21T01:00:00.000Z'),
@@ -302,6 +303,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(input.form.id).toBe('KODYS-G1')
     expect(input.marks.rw01).toBe(false)
     expect(input.sentences.rs01).toBe(0)
+    expect(input.times.rs01).toBe(20)   // 녹음 없는 문장의 읽은 시간 = 제한 시간 — 관리자 PDF와 같은 기본값
     expect(input.session).toMatchObject({ school_name: '대구가창초등학교', grade: 1, child_name: '아이3',
       birth_ymd: '190312', checklist: ['none'] })   // 관리자 PDF와 같은 문서 — 머리글·체크리스트도 찍힌다
   })

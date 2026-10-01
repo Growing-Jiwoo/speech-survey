@@ -25,13 +25,15 @@ const baseSession = {
   checklist: ['none'],
 }
 const sessionFor = (form: SurveyForm) => ({ ...baseSession, grade: form.grades[0] })
-const blank = { marks: {}, sentences: {}, writing: {} }
-/** 세 과제를 전부 채점한 입력. ok면 만점, 아니면 0점. */
+const blank = { marks: {}, sentences: {}, times: {}, writing: {} }
+/** 세 과제를 전부 채점한 입력. ok면 만점, 아니면 0점. 문장은 문장마다 1초 —
+ *  만점이면 어절/초가 기준보다 훨씬 크고(G1 36 ÷ 4 = 9.00), 0어절이면 0.00이다. */
 function scored(form: SurveyForm, ok: { read: boolean; sentence: boolean; write: boolean }) {
   const f = itemsFor(form)
   return {
     marks: Object.fromEntries(f.readItems.map(i => [i.code, ok.read])),
     sentences: Object.fromEntries(f.sentenceItems.map(i => [i.code, ok.sentence ? 99 : 0])),
+    times: Object.fromEntries(f.sentenceItems.map(i => [i.code, 1])),
     writing: Object.fromEntries(f.writingItems.map(i => [i.code, ok.write ? 99 : 0])),
   }
 }
@@ -79,9 +81,17 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     expect(twoFail).toEqual(['FAIL', 'FAIL', 'PASS', 'FAIL'])
   })
 
+  it('[REGRESSION] 읽기유창성 판정은 어절 수가 아니라 어절/초로 한다 — 다 맞게 읽어도 오래 걸리면 FAIL', async () => {
+    // 기준을 1.0으로 고정한 양식 사본 — 임시 기준(passMark)이 바뀌어도 이 테스트의 뜻은 그대로다.
+    const at1 = { ...form, passMark: { ...form.passMark, sentenceReading: 1 } }
+    const all = scored(at1, { read: true, sentence: true, write: true })
+    const slow = { ...all, times: Object.fromEntries(Object.keys(all.times).map(c => [c, 20])) }  // 만점 ÷ 80초 < 0.5
+    expect(await verdictRow(await renderReport({ form: at1, session, ...slow }))).toEqual(['PASS', 'FAIL', 'PASS', 'PASS'])
+  })
+
   it('[REGRESSION] 채점이 끝나지 않은 과제의 판정 칸은 비고, 최종결과·해석 문단도 비운다 — 미채점은 FAIL이 아니다', async () => {
     const half = scored(form, { read: true, sentence: true, write: true })
-    const bytes = await renderReport({ form, session, marks: half.marks, sentences: half.sentences, writing: {} })
+    const bytes = await renderReport({ form, session, marks: half.marks, sentences: half.sentences, times: half.times, writing: {} })
     expect(await verdictRow(bytes)).toEqual(['PASS', 'PASS'])
     const text = await textOf(bytes)
     expect(text).not.toContain('통과하였습니다')
