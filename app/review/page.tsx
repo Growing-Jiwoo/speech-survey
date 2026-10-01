@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
 import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
+import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
@@ -40,8 +41,10 @@ export default function ReviewPage() {
 
   // 검사지는 서버가 내려준다(hooks/useSurveyForm) — 검사 화면에서 이미 받았으면 캐시로 즉시 뜬다.
   const formQ = useSurveyForm(st)
+  const otherTab = useOtherTabGuard(st?.sessionId)
 
   if (!st) return null
+  if (otherTab) return <OtherTabNotice />
   if (!formQ.data) return <FormStatus error={formQ.error} onRetry={() => void formQ.refetch()} />
   const state = st
 
@@ -132,7 +135,10 @@ export default function ReviewPage() {
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">검사 검토</span>
       </div>
-      <h1 className="mt-6 text-xl font-bold">단계별 완료 여부를 확인해 주세요</h1>
+      {/* 누구의 검사를 검토하는지 — 같은 컴퓨터에서 탭을 두 개 쓰면 마지막에 저장된 아이가 여기 올라온다.
+          이름이 없으면 선생님은 A를 검토한다고 믿고 B를 제출할 수 있다 */}
+      <p className="mt-6 text-sm font-bold text-blue">{st.childNo}번 {st.childName} 학생</p>
+      <h1 className="mt-1 text-xl font-bold">단계별 완료 여부를 확인해 주세요</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-soft">
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}

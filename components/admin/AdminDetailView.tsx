@@ -142,6 +142,9 @@ export function AdminDetailView() {
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
             onDirtyChange={setDirty}
+            // 떠나며 보낸 저장의 응답은 받을 수 없다 — 그 아이의 캐시를 비워 다시 열 때 서버에서 받게 한다
+            // (이미 언마운트된 뒤라 아래 removeQueries 경고의 「로딩으로 떨어져 채점이 사라지는」 경우가 아니다)
+            onUnmountFlush={sid => queryClient.removeQueries({ queryKey: adminKeys.session(sid) })}
             initialMarks={input.marks}
             initialSentences={input.sentences}
             attemptsOf={attemptsOf}

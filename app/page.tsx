@@ -606,7 +606,9 @@ export default function StartPage() {
           title={confirm.tested
             ? `${confirm.childNo}번은 이미 검사했어요`
             : '이 정보가 맞나요?'}
-          confirmLabel={confirm.tested ? '네, 다시 검사할게요' : '맞아요, 시작하기'}
+          confirmLabel={confirm.tested
+            ? (resume?.childNo === confirm.childNo ? '그래도 새로 검사' : '네, 다시 검사할게요')
+            : '맞아요, 시작하기'}
           cancelLabel="아니에요"
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
@@ -635,10 +637,24 @@ export default function StartPage() {
             {confirm.identity && (
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
-            {confirm.tested === 'inProgress' && (
+            {/* 진행 중인 검사가 **이 컴퓨터의 것**이면(이어하기 카드의 그 아이) 「다른 기기」 안내는 틀리다 — 이어하기를 가리킨다 */}
+            {confirm.tested === 'inProgress' && resume?.childNo === confirm.childNo && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                이 컴퓨터에서 진행 중인 검사예요. 이어서 하려면 이 창을 닫고 위의 <b>[이어서 하기]</b>를 눌러 주세요.<br />
+                새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.
+              </p>
+            )}
+            {confirm.tested === 'inProgress' && resume?.childNo !== confirm.childNo && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
                 다른 기기에서 검사 중일 수 있어요.
+              </p>
+            )}
+            {/* 다른 아이를 시작하면 이 컴퓨터에서 진행 중이던 아이의 검사는 이어갈 수 없게 된다 — 확인 없이 사라지지 않게 */}
+            {resume && resume.childNo !== confirm.childNo && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                진행 중인 <b>{resume.childNo}번{resume.childName ? ` ${resume.childName}` : ''}</b> 학생의 검사는 새로 시작하면
+                이어갈 수 없게 돼요.
               </p>
             )}
             {confirm.tested === 'submitted' && (
