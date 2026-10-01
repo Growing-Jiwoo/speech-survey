@@ -41,7 +41,10 @@ describe('proxy — 인증 실패', () => {
 
   it('서명이 변조된 토큰 거부', async () => {
     const token = await createToken(SECRET)
-    const res = await proxy(mkReq('/admin', token.slice(0, -2) + 'ff'))
+    // 마지막 16진수 한 자리를 **반드시 다른 값으로** 바꾼다 — 끝 두 자리를 'ff'로 덮으면 서명이 원래 'ff'로 끝날 때
+    // (1/256) 변조가 아니게 돼 가끔 실패했다(서명에 시각·난수가 들어가 실행마다 바뀐다)
+    const tampered = token.slice(0, -1) + (token.endsWith('0') ? '1' : '0')
+    const res = await proxy(mkReq('/admin', tampered))
     expect(res.status).toBe(307)
   })
 

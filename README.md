@@ -180,7 +180,14 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
 - `npm run lint` — ESLint(eslint-config-next). react-hooks 규칙 포함 — PR 전 필수.
 - `npm run typecheck` — 타입체크. **빌드 성공만으로 타입 에러가 없다고 판단하지 말 것** — 빌드 속도를 위해
   Next 빌드 내장 타입체크를 꺼두었다(`next.config.ts`의 `typescript.ignoreBuildErrors`).
-  (참고: 초기엔 TypeScript 7 tsgo를 썼으나 Next 16 빌드 워커와 호환 문제로 크래시가 나 5.9로 되돌렸다.)
+  (참고: 초기엔 TypeScript 7 tsgo를 썼으나 Next 16 빌드 워커와 호환 문제로 크래시가 나 5.9로 되돌렸다.
+  지금은 6.0이다 — 아래 「최신에서 일부러 묶어 둔 의존성」.)
+- **최신에서 일부러 묶어 둔 의존성**(2026-10-01, 나머지는 전부 최신 — 다음에 올릴 때 이 이유부터 다시 볼 것):
+  - `typescript` 6.x — 7은 `tsc`·`next build`는 통과하지만 **typescript-eslint가 7을 지원하지 않아** `npm run lint`가 멈춘다.
+  - `eslint` 9.x — 10은 eslint-config-next가 끌어오는 eslint-plugin-react(최신 7.37)가 지원하지 않는다(`context.getFilename` 제거로 lint가 멈춘다).
+  - `@types/node` 22.x — 실행 환경(Vercel·로컬)이 Node 22다. 타입은 실행 환경과 맞춘다(올리면 없는 API를 써도 타입이 통과한다).
+  - `pdfjs-dist` 4.x — 검사지 좌표 추출(`scripts/extract-form-layout.mjs`)의 재현성 때문에 고정했다. 그 스크립트를 지우는
+    변경(결과보고서 양식 전환)과 함께 다시 본다.
 - 마이크는 HTTPS 또는 localhost에서만 동작한다. 같은 네트워크의 폰으로 테스트하려면
   `npx next dev --experimental-https` 또는 터널(예: `cloudflared tunnel --url localhost:3000`) 사용.
   ⚠️ 터널은 로컬 서버를 인터넷에 공개로 노출한다 — 로컬 관리자 비번이 약하다면 터널을 쓰는
