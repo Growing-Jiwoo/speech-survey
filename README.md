@@ -264,10 +264,14 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
   Next 빌드 내장 타입체크를 꺼두었다(`next.config.ts`의 `typescript.ignoreBuildErrors`).
   (참고: 초기엔 TypeScript 7 tsgo를 썼으나 Next 16 빌드 워커와 호환 문제로 크래시가 나 5.9로 되돌렸다.
   지금은 6.0이다 — 아래 「최신에서 일부러 묶어 둔 의존성」.)
-- **최신에서 일부러 묶어 둔 의존성**(2026-10-01, 나머지는 전부 최신 — 다음에 올릴 때 이 이유부터 다시 볼 것):
-  - `typescript` 6.x — 7은 `tsc`·`next build`는 통과하지만 **typescript-eslint가 7을 지원하지 않아** `npm run lint`가 멈춘다.
+- **최신에서 일부러 묶어 둔 의존성**(2026-10-07 재확인, 나머지는 전부 최신 — 다음에 올릴 때 이 이유부터 다시 볼 것):
+  - `typescript` 6.x — 7은 `tsc`·`next build`는 통과하지만 **typescript-eslint가 7을 지원하지 않아** `npm run lint`가 멈춘다
+    (typescript-eslint 8.71의 지원 범위 `<6.1.0`).
   - `eslint` 9.x — 10은 eslint-config-next가 끌어오는 eslint-plugin-react(최신 7.37)가 지원하지 않는다(`context.getFilename` 제거로 lint가 멈춘다).
   - `@types/node` 22.x — 실행 환경(Vercel·로컬)이 Node 22다. 타입은 실행 환경과 맞춘다(올리면 없는 API를 써도 타입이 통과한다).
+- **`npm audit`에 남는 high 5건은 한 건이다**(2026-10-07): `braces`(GHSA-vfj7-8cjw-p6xm)는 최신 3.0.3까지 전부 해당하고 고친 판이
+  아직 없다. 나머지 넷(`micromatch`·`fast-glob`·`@next/eslint-plugin-next`·`eslint-config-next`)은 그것을 끌어오는 경로다. lint 도구
+  안에서만 쓰여 배포물에 실리지 않는다. `npm audit fix --force`가 제안하는 eslint-config-next 14는 Next 16과 맞지 않으니 따르지 말 것.
 - 마이크는 HTTPS 또는 localhost에서만 동작한다. 같은 네트워크의 폰으로 테스트하려면
   `npx next dev --experimental-https` 또는 터널(예: `cloudflared tunnel --url localhost:3000`) 사용.
   ⚠️ 터널은 로컬 서버를 인터넷에 공개로 노출한다 — 로컬 관리자 비번이 약하다면 터널을 쓰는
