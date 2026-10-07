@@ -27,6 +27,8 @@ export function CodeIssuer() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [err, setErr] = useState('')
+  /** 같은 학급의 코드가 이미 있다고 한 번 알린 학급(학교·학년·반) — 한 번 더 누르면 그대로 발급한다 */
+  const [dupAck, setDupAck] = useState('')
   const [busy, setBusy] = useState(false)
   // 발급 직후 1건만 붙잡아 둔다 — 교사에게 그 자리에서 불러 줘야 하는데, 아래 목록에서
   // 방금 만든 코드를 눈으로 찾게 하면 다른 학급 코드를 잘못 읽어 줄 수 있다.
@@ -71,6 +73,18 @@ export function CodeIssuer() {
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
     if (!validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
 
+    // 같은 학급(학교·학년·반)에 코드가 이미 있으면 한 번 알린다 — 발급 직후 [코드 발급]을 한 번 더 누르거나 이미 신청된 반을
+    // 직접 발급하면 한 반의 결과지·스캔본 올리기(반 표시가 코드마다 다르다)가 둘로 쪼개졌다(2026-10-08 야간 점검).
+    // 막지는 않는다 — 담임이 바뀌어 새로 받는 경우도 있다.
+    const classKey = `${school.schoolId}:${grade}:${classNo}`
+    const dup = (codes ?? []).find(c => c.school_id === school.schoolId && c.grade === Number(grade) && c.class_no === Number(classNo))
+    if (dup && dupAck !== classKey) {
+      setDupAck(classKey)
+      setErr(`이 학급의 코드가 이미 있어요(${dup.code}${dup.status === 'pending' ? ' · 신청 대기' : ''}, 담임 ${dup.teacher_name}). `
+        + '같은 반에 코드가 둘이면 결과지가 나뉩니다. 그래도 새로 발급하려면 [코드 발급]을 한 번 더 누르세요.')
+      return
+    }
+
     setErr(''); setBusy(true)
     const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count' | 'roster_count'> }>('/api/admin/codes', {
       region: school.region, schoolId: school.schoolId, schoolName: school.schoolName,
@@ -81,6 +95,8 @@ export function CodeIssuer() {
     if (!r.ok) { setErr(r.error); return }
     setIssued({ ...r.data.code, session_count: 0, roster_count: 0 })
     setCopied(false)
+    setDupAck('')
+    setClassNo('')   // 같은 반을 실수로 한 번 더 발급하지 않게 — 다음 반은 학교·학년을 그대로 두고 반만 고르면 된다
     await queryClient.invalidateQueries({ queryKey: adminKeys.codes })
   }
 

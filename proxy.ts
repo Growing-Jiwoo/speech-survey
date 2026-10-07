@@ -37,6 +37,9 @@ function buildCsp(nonce: string | null): string {
   ].join('; ')
 }
 
+/** 관리자 API의 401 문구 — 화면이 그대로 보여 준다 */
+const ADMIN_EXPIRED_MSG = '로그인이 끝났어요. 새 탭에서 관리자 화면에 다시 로그인한 뒤 이 화면에서 다시 시도해 주세요.'
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -68,9 +71,14 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get(ADMIN_COOKIE)?.value ?? ''
   const authed = secret && token && (await verifyToken(token, secret))
   if (authed) return pass()
+  // 문구는 화면에 그대로 나간다(채점 자동 저장 실패 줄 등) — 무엇을 하면 되는지까지 말한다. 로그인은 8시간이라
+  // 하루 채점 중에 끝날 수 있다(2026-10-08 야간 점검: 「인증 필요」만 떠 무엇을 할지 몰랐다).
   if (pathname.startsWith('/api/'))
-    return withCsp(NextResponse.json({ error: '인증 필요' }, { status: 401 }))
-  return withCsp(NextResponse.redirect(new URL('/admin/login', req.url)))
+    return withCsp(NextResponse.json({ error: ADMIN_EXPIRED_MSG }, { status: 401 }))
+  // 로그인 뒤 원래 화면으로 돌아오게 경로를 싣는다(같은 출처의 /admin 경로만 — 로그인 화면이 다시 검사한다)
+  const login = new URL('/admin/login', req.url)
+  login.searchParams.set('next', pathname + req.nextUrl.search)
+  return withCsp(NextResponse.redirect(login))
 }
 
 // 정적 자산·학교 JSON을 제외한 모든 경로에서 실행(CSP를 전 페이지에 부여하기 위함).

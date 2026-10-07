@@ -1,10 +1,13 @@
-// app/admin/login/page.tsx — 관리자 로그인. 성공 시 HttpOnly 쿠키가 심어지고 /admin으로 이동한다.
+// app/admin/login/page.tsx — 관리자 로그인. 성공 시 HttpOnly 쿠키가 심어지고 원래 보던 관리자 화면(?next=)으로,
+// 없으면 /admin으로 이동한다. 로그인은 8시간이라 채점 중에 끝날 수 있다 — 결과지에서 만료돼 다시 로그인하면 그
+// 결과지로 돌아와야 한다(2026-10-08 야간 점검: 늘 필터 없는 목록으로 가서 찾던 아이를 다시 찾아야 했다).
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
+import { safeNext } from '@/lib/admin-next'
 
 export default function AdminLogin() {
   const router = useRouter()
@@ -16,7 +19,7 @@ export default function AdminLogin() {
     setErr(''); setBusy(true)
     const r = await postJson('/api/admin/login', { password: pw }, '로그인 실패')
     setBusy(false)
-    if (r.ok) { router.push('/admin'); return }
+    if (r.ok) { router.push(safeNext(new URLSearchParams(window.location.search).get('next'))); return }
     setErr(r.error)
   }
 

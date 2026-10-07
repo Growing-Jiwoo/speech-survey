@@ -81,10 +81,15 @@ export function AdminDashboard() {
     router.replace('/admin/login')
   }
 
+  const errMsg = (error as Error | undefined)?.message ?? ''
+  const expired = isError && /\(401\)/.test(errMsg)
   if (isLoading) return <LoadingOverlay show />
-  if (isError || !sessions) return (
+  // 목록을 이미 받았으면 다시 받기 실패로 표를 내리지 않는다(결과지와 같은 규칙 — 2026-10-08 야간 점검).
+  // 새로고침·로그아웃 버튼까지 사라져 빠져나갈 길이 없었다.
+  if (!sessions) return (
     <div className="rounded-[20px] border border-line bg-white p-10 text-center text-sm text-ink-soft shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-      데이터를 불러오지 못했어요. {(error as Error | undefined)?.message ?? ''}
+      {expired ? <>로그인이 끝났어요(8시간). <Link href="/admin/login?next=%2Fadmin" className="font-bold text-blue underline">다시 로그인</Link></>
+        : <>데이터를 불러오지 못했어요. {errMsg} <button type="button" onClick={refresh} className="font-bold underline">다시 시도</button></>}
     </div>
   )
 
@@ -118,6 +123,12 @@ export function AdminDashboard() {
           로그아웃
         </button>
       </div>
+      {isError && (
+        <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">
+          {expired ? <>로그인이 끝났어요(8시간). <Link href="/admin/login?next=%2Fadmin" className="font-bold underline">다시 로그인</Link>하면 목록이 갱신돼요.</>
+            : <>목록을 다시 받지 못했어요(연결 확인). 아래는 마지막으로 받은 목록이에요.</>}
+        </p>
+      )}
       <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />

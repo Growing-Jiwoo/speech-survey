@@ -21,10 +21,15 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다
     // (sheet.pdf 라우트와 같은 판정 — 그쪽 가드는 sessionDetail이 throw해서 도달하지 못했다).
     if (!session) return jsonError('세션을 찾을 수 없습니다.', 404)
+    // 녹음 하나의 서명이 실패해도 결과지 전체를 500으로 막지 않는다 — 그 녹음만 url 없이 내린다(화면이 「불러오지
+    // 못했어요」). 막으면 파일 하나가 없는 검사는 결과지가 안 열리고 [검사 기록 삭제]에도 닿을 수 없었다(2026-10-08 야간 점검).
     const withUrls = await Promise.all(recordings.map(async r => ({
       item_code: r.item_code,
       attempt_no: r.attempt_no,
-      url: await signedAudioUrl(r.audio_path),
+      url: await signedAudioUrl(r.audio_path).catch((e: unknown) => {
+        console.error('[admin/sessions/:id] 녹음 서명 실패', r.item_code, r.attempt_no, e)
+        return null
+      }),
       duration_sec: r.duration_sec,
     })))
     // 서명이 실패해도 결과지 전체를 막지 않는다 — url 없이 내리고, **파일이 없는 것**(행만 남음 — 정리가 중간에
