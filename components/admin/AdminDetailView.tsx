@@ -254,8 +254,9 @@ export function AdminDetailView() {
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            {/* 스캔본도 함께 지워진다(DELETE 라우트가 녹음·스캔본 두 저장소를 모두 비운다) — 종전 문구는 녹음만 말했다 */}
             <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
-            녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
+            녹음·스캔본 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
           </p>
         </ConfirmDialog>
         <LoadingOverlay show={deleting} />

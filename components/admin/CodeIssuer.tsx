@@ -63,6 +63,10 @@ export function CodeIssuer() {
   const cleanPhone = phone.trim()
   const cleanEmail = email.trim()
 
+  // 칸을 고치면 오류 문구를 지운다 — 「학교를 선택해 주세요」가 학교를 고른 뒤에도 [코드 발급]을 다시 누를
+  // 때까지 남아 있었다(2026-10-08 야간 점검). 중복 학급 경고도 학급을 바꾸면 더는 맞지 않으므로 함께 지운다.
+  const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setErr('') }
+
   async function issue() {
     // 서버 스키마(classCodeCreateSchema)와 같은 규칙으로 선검증한다.
     if (!school) { setErr('학교를 선택해 주세요.'); return }
@@ -135,12 +139,12 @@ export function CodeIssuer() {
       {/* 발급 폼 */}
       <div className="border-b border-line p-5">
         <label className="text-[13px] font-bold text-ink-soft">학교명</label>
-        <SchoolPicker value={school} onSelect={setSchool} />
+        <SchoolPicker value={school} onSelect={edit(setSchool)} />
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-grade">학년</label>
             <div className="mt-1.5">
-              <Select id="cc-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
+              <Select id="cc-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={edit(setGrade)}
                 options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
             </div>
           </div>
@@ -148,23 +152,23 @@ export function CodeIssuer() {
             <label className={labelCls} htmlFor="cc-class">반</label>
             <div className="mt-1.5">
               <Select id="cc-class" ariaLabel="반" placeholder="반 선택" value={classNo}
-                onChange={setClassNo} options={CLASS_OPTIONS} />
+                onChange={edit(setClassNo)} options={CLASS_OPTIONS} />
             </div>
           </div>
         </div>
         <label className={labelCls} htmlFor="cc-teacher">담임교사명</label>
         <input id="cc-teacher" value={teacherName} maxLength={30}
-          onChange={e => setTeacherName(e.target.value)} className={inputCls} />
+          onChange={e => edit(setTeacherName)(e.target.value)} className={inputCls} />
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-phone">담임 전화번호 (선택)</label>
             <input id="cc-phone" value={phone} maxLength={60} inputMode="tel" placeholder="01012345678"
-              onChange={e => setPhone(e.target.value)} className={inputCls} />
+              onChange={e => edit(setPhone)(e.target.value)} className={inputCls} />
           </div>
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-email">담임 이메일</label>
             <input id="cc-email" value={email} maxLength={60} inputMode="email" placeholder="name@example.com"
-              onChange={e => setEmail(e.target.value)} className={inputCls} />
+              onChange={e => edit(setEmail)(e.target.value)} className={inputCls} />
           </div>
         </div>
         {/* 이메일 필수 안내(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 teacher_email로만 간다. */}
