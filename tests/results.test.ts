@@ -50,7 +50,7 @@ describe('maskEmail — 시작 화면에 주소를 통째로 내지 않는다', 
 describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 같은 기준, 사용자 확정 A안)', () => {
   it('미제출은 unsubmitted, 점수·판정 없음', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, submitted_at: null, ...READ_SCORED }))
-    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null, complete: null, writingMode: 'screen', scanState: 'unsubmitted' })
+    expect(r).toEqual({ status: 'unsubmitted', scores: null, verdict: null, complete: null, taskVerdict: null, writingMode: 'screen', scanState: 'unsubmitted' })
   })
   it('제출됐지만 낱말 채점이 비면 scoring', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, sentence_scores: READ_SCORED.sentence_scores,
@@ -100,6 +100,12 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     // 읽기 두 과제가 미녹음(X·0점)이면 FAIL 2개 → 최종 FAIL
     const failReading = evaluateSession(row({ id: 's', child_no: 1, recordings: [], ...WRITE_SCORED }))
     expect(failReading.verdict).toBe('fail')
+  })
+  it('과제별 판정(taskVerdict)을 함께 싣는다 — 교사 화면이 기준 미달 점수만 붉게 칠하는 근거', () => {
+    const failWriting = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED,
+      writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })) }))
+    expect(failWriting.taskVerdict).toEqual({ wordReading: 'pass', sentenceReading: 'pass', writing: 'fail' })
+    expect(evaluateSession(row({ id: 's', child_no: 1, submitted_at: null })).taskVerdict).toBeNull()
   })
 })
 

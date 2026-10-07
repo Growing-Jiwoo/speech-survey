@@ -71,13 +71,13 @@ export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: 
   return { form, input: withUnrecordedFixed(f, raw, c => recorded.has(c)) }
 }
 
-type Evaluated = Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete' | 'writingMode' | 'scanState'>
+type Evaluated = Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete' | 'taskVerdict' | 'writingMode' | 'scanState'>
 
 export function evaluateSession(r: ResultsSessionRow): Evaluated {
   // 컬럼은 not null default 'screen' — scan이 아닌 값은 화면 방식으로 읽는다(lib/db rosterWithTested와 같다)
   const writingMode = r.writing_mode === 'scan' ? 'scan' : 'screen'
   if (!r.submitted_at)
-    return { status: 'unsubmitted', scores: null, verdict: null, complete: null, writingMode, scanState: 'unsubmitted' }
+    return { status: 'unsubmitted', scores: null, verdict: null, complete: null, taskVerdict: null, writingMode, scanState: 'unsubmitted' }
   const { form, input } = scoreInputFor(r)
   const result = scoreSession(form, input)
   // 쓰기 상태 — 담당자가 쓰기를 하나라도 넣었으면 「채점됨」(그 뒤로 선생님이 스캔본을 바꾸지 못한다)
@@ -87,7 +87,7 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
   // 관리자 PDF와 같은 게이트 — 읽기 두 과제가 남으면 막고, 쓰기만 남으면(overridable) 통과.
   const gate = sheetPdfGate(result, false)
   if (gate !== null && !gate.overridable)
-    return { status: 'scoring', scores: null, verdict: null, complete: null, writingMode, scanState }
+    return { status: 'scoring', scores: null, verdict: null, complete: null, taskVerdict: null, writingMode, scanState }
   // **모든 과제가 채점됐을 때만 판정한다**(사용자 확정 2026-09-22 A안 — 관리자 화면과 동일).
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
@@ -99,6 +99,7 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },
     verdict,
     complete: result.complete,
+    taskVerdict: result.verdict,
     writingMode,
     scanState,
   }
