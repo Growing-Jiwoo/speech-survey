@@ -16,7 +16,8 @@ import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
-import { clearState, loadState, resolveWritingMode, type SurveyState } from '@/lib/survey-state'
+import { clearState, loadState, resolveWritingMode, saveState, settleLostUploads, type SurveyState } from '@/lib/survey-state'
+import { isUploading, subscribeUploads, uploadsInFlight } from '@/lib/upload-flight'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
@@ -29,15 +30,45 @@ export default function ReviewPage() {
   const [modal, setModal] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  /** 이 탭에서 아직 올리고 있는 녹음 수 — 있으면 제출을 막는다(lib/upload-flight 머리 주석) */
+  const [uploading, setUploading] = useState(0)
+  /** 끊긴 업로드로 「녹음 완료」 표시를 거둔 페이지 — 검사 화면과 같은 판정·같은 안내 */
+  const [lostUploads, setLostUploads] = useState<string[]>([])
 
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
+    // 검사 화면과 같이 끊긴 업로드를 거둔다 — 올리는 중에 이 화면에서 새로고침하면 파일은 사라지고
+    // 「녹음 완료」만 남아 그대로 제출된다. 같은 탭에서 아직 올리고 있는 것은 그대로 둔다.
+    const settled = settleLostUploads(s, (code, no) => isUploading(s.sessionId, code, no))
+    if (settled.lost.length > 0) saveState(settled.state)
     // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
     // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSt(s)
+    setSt(settled.state)
+    setLostUploads(settled.lost)
+    setUploading(uploadsInFlight(s.sessionId))
   }, [router])
+
+  // 검사 화면에서 넘어올 때 남은 업로드를 따라간다 — 끝날 때마다 저장 상태를 다시 읽는다. 실패한 녹음은 검사 화면이
+  // 저장 상태에서 「녹음 완료」를 거두므로(undoSaved) 다시 읽으면 여기서도 미녹음으로 보인다.
+  const sessionId = st?.sessionId
+  useEffect(() => {
+    if (!sessionId) return
+    return subscribeUploads(() => {
+      setUploading(uploadsInFlight(sessionId))
+      const s = loadState()
+      if (s?.sessionId === sessionId) setSt(s)
+    })
+  }, [sessionId])
+
+  // 올리는 중 새로고침·탭 닫기 실수 방지(검사 화면과 같다 — 그 녹음이 사라진다)
+  useEffect(() => {
+    if (uploading === 0) return
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [uploading])
 
   // 검사지는 서버가 내려준다(hooks/useSurveyForm) — 검사 화면에서 이미 받았으면 캐시로 즉시 뜬다.
   const formQ = useSurveyForm(st)
@@ -120,7 +151,7 @@ export default function ReviewPage() {
   }
 
   async function submit() {
-    if (!st) return
+    if (!st || uploadsInFlight(st.sessionId) > 0) return
     setBusy(true); setErr('')
     // 스캔본 방식이면 화면에 남아 있는 예/아니오를 보내지 않는다 — 쓰기 채점은 담당자가 스캔본으로 한다.
     const writingMode = resolveWritingMode(st)
@@ -148,6 +179,12 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
+      {lostUploads.length > 0 && (
+        <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">
+          <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음이 저장되기 전에 화면이 닫혀 저장되지 않았어요.
+          번호를 눌러 그 화면에서 다시 녹음해 주세요.
+        </p>
+      )}
 
       {/* 데스크톱(lg+): 2열로 좌우 높이를 맞춘다. 좌=낱말 해독(14문항), 우=문장(4)+낱말 쓰기(10).
           검사자 체크리스트(1문항)는 아래 전폭 밴드로 빼 좌우 불균형을 만들지 않는다.
@@ -167,10 +204,15 @@ export default function ReviewPage() {
         <button onClick={() => router.push(`/survey?p=${pages.length}`)} className="btn-ghost h-[52px] flex-1">
           이전
         </button>
-        <button onClick={() => setModal(true)} className="btn-primary h-[52px] flex-[2]">
-          제출
+        <button onClick={() => setModal(true)} disabled={uploading > 0} className="btn-primary h-[52px] flex-[2]">
+          {uploading > 0 ? '녹음 저장 중…' : '제출'}
         </button>
       </div>
+      {uploading > 0 && (
+        <p role="status" className="text-center text-xs text-ink-soft">
+          방금 녹음 {uploading}개를 저장하고 있어요. 끝나면 제출할 수 있어요.
+        </p>
+      )}
 
       <ConfirmDialog open={modal} busy={busy} error={err}
         title={<>녹음이 잘 되었는지<br />모두 확인하셨습니까?</>}
