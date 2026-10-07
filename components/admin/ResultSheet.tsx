@@ -37,7 +37,7 @@ const SCAN_CHANGED_NOTICE = '그사이 선생님이 스캔본을 올리거나 �
 
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
-  incomplete, attemptsOf, onAudioError, onDirtyChange, scan, onScanUnlinked, onScanStale, onSaved,
+  incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave, scan, onScanUnlinked, onScanStale, onSaved,
 }: {
   sessionId: string
   session: SessionRow
@@ -58,6 +58,10 @@ export function ResultSheet({
   onAudioError: () => void
   /** 저장하지 않은 채점이 있는지 — 상위가 아동 이동·이탈을 막는 데 쓴다 */
   onDirtyChange?: (dirty: boolean) => void
+  /** 저장하지 않은 채점을 떠나는 순간 보냈다 — 상위가 그 아이의 상세 캐시를 비운다(아래 언마운트 효과) */
+  onUnmountFlush?: (sessionId: string) => void
+  /** 떠날 때 저장하지 않은 채점을 **버리기로** 했는지(「저장하지 않고 이동」) — 그러면 위 즉시 저장을 건너뛴다 */
+  discardOnLeave?: (sessionId: string) => boolean
   /** 쓰기 기록지 스캔본(스캔본 방식이고 선생님이 올렸을 때만) — 서명 URL. 서명에 실패하면 url이 null
    *  (파일이 없으면 missing) */
   scan?: { url: string | null; missing?: boolean; uploadedAt: string } | null
@@ -151,6 +155,42 @@ export function ResultSheet({
   // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
   // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+
+  /**
+   * 떠나는 순간 저장하지 않은 채점을 **바로 보낸다.** 자동 저장은 1.5초 디바운스라, 찍고 1.5초 안에 브라우저
+   * 뒤로가기(popstate — 확인 모달도 beforeunload도 못 막는다)를 하면 타이머만 취소되고 그 채점은 사라졌다.
+   * `keepalive`라 페이지가 사라져도 요청은 끝까지 간다. 응답은 받을 수 없으니 상위가 그 아이의 상세 캐시를
+   * 비워(onUnmountFlush), 다시 열면 서버에서 새로 받게 한다 — 옛 캐시로 초기화된 화면이 방금 보낸 값을 되덮지
+   * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다.
+   * 단 채점자가 「저장하지 않고 이동」을 골랐으면 보내지 않는다(`discardOnLeave`) — 확인 창이 「사라집니다」라고
+   * 말한 값을 몰래 저장하면 버리려던 O/X가 임상 기록에 남는다(사용자 확정 2026-10-07).
+   * 본문은 아래 `save`와 **같은 규칙**이어야 한다 — 읽은 시간(`times`)을 빠뜨리면 시간을 넣고 바로 떠날 때 그 값만
+   * 사라지고, 스캔본 쓰기는 고쳤을 때만 본 스캔본의 올린 시각과 함께 싣는다. 연결 해제 창이 열려 있거나 해제 중이면
+   * 쓰기는 싣지 않는다 — 자동 저장을 멈추는 것과 같은 이유(해제가 지운 쓰기 채점을 되살리지 않게).
+   * 응답이 오면(앱 안에서 화면만 옮긴 경우) 저장 성공과 똑같이 `onSaved`를 부른다 — 쓰기를 보냈으면 목록의
+   * 「스캔본 채점」 표시가 바뀌어야 한다. 비운 상세 캐시에는 패치가 아무것도 하지 않고, 그사이 다시 열었으면 새 캐시를 맞춘다.
+   */
+  type FlushBody = Parameters<NonNullable<typeof onSaved>>[0] & { scanUploadedAt?: string | null }
+  const flushBody = (): FlushBody => {
+    const writingDirty = scanMode && !unlinking && !unlinkOpen && JSON.stringify(written) !== JSON.stringify(savedWritten)
+    return { marks, sentences, times, ...(writingDirty ? { writing: written, scanUploadedAt: seenScanAt } : {}) }
+  }
+  const latestRef = useRef({ dirty: false, body: flushBody() })
+  useEffect(() => { latestRef.current = { dirty, body: flushBody() } })
+  const onUnmountFlushRef = useRef(onUnmountFlush)
+  useEffect(() => { onUnmountFlushRef.current = onUnmountFlush })
+  const discardOnLeaveRef = useRef(discardOnLeave)
+  useEffect(() => { discardOnLeaveRef.current = discardOnLeave })
+  useEffect(() => () => {
+    const l = latestRef.current
+    const discard = discardOnLeaveRef.current?.(sessionId) ?? false
+    if (!l.dirty || discard) return
+    const { scanUploadedAt: _seen, ...saved } = l.body
+    void fetch(`/api/admin/sessions/${sessionId}/scores`, {
+      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l.body),
+    }).then(r => { if (r.ok) onSavedRef.current?.(saved) }).catch(() => undefined)
+    onUnmountFlushRef.current?.(sessionId)
+  }, [sessionId])
 
   // 탭 닫기·새로고침은 앱이 막을 수 없으므로 브라우저 기본 경고에 맡긴다(검사 화면과 같은 방식).
   useEffect(() => {

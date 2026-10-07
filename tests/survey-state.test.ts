@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk,
+  updateSavedState, withPendingUpload, withoutPendingUpload, settleLostUploads, LAST_KEY,
   saveWritingModePref, writingModePref, resolveWritingMode, type SurveyState,
 } from '@/lib/survey-state'
 
@@ -263,6 +264,66 @@ describe('쓰기 방식 — 기기 기본값(마지막으로 고른 것, 사용�
     expect(back.writingMode).toBeUndefined()
     saveState({ ...back, writingMode: 'scan' })
     expect(loadState()!.writingMode).toBe('scan')
+  })
+})
+
+describe('끊긴 업로드 — pendingUploads·settleLostUploads (사용자 확정 2026-10-01)', () => {
+  const base = () => ({ ...newState('sid-1', '홍길동', 3, 'tok', 1), recorded: { p_rw_meaning: 1, p_rs01: 2 } })
+  it('올리는 중 표시를 넣고 뺀다', () => {
+    const s = withPendingUpload(base(), 'p_rs01', 2)
+    expect(s.pendingUploads).toEqual({ p_rs01: [2] })
+    expect(withoutPendingUpload(s, 'p_rs01', 2).pendingUploads).toEqual({})
+  })
+  it('[REGRESSION] 먼저 끝난 1회차가 아직 올라가는 2회차 표시를 지우지 않는다 (2026-10-07)', () => {
+    const s = withPendingUpload(withPendingUpload(base(), 'p_rs01', 1), 'p_rs01', 2)   // 1회차가 느린 사이 다시 녹음
+    expect(s.pendingUploads).toEqual({ p_rs01: [1, 2] })
+    const after1 = withoutPendingUpload(s, 'p_rs01', 1)
+    expect(after1.pendingUploads).toEqual({ p_rs01: [2] })
+    // 그 뒤 새로고침 — 2회차는 끊겼다
+    const { state, lost } = settleLostUploads(after1, () => false)
+    expect(lost).toEqual(['p_rs01'])
+    expect(state.recorded.p_rs01).toBe(1)                                  // 올라간 1회차만 남는다
+  })
+  it('[REGRESSION] 두 시도가 함께 끊기면 둘 다 거둔다 — 서버에 없는 녹음이 「녹음 완료」로 남지 않게 (2026-10-07)', () => {
+    const s = withPendingUpload(withPendingUpload(base(), 'p_rs01', 1), 'p_rs01', 2)   // recorded.p_rs01 = 2
+    const { state } = settleLostUploads(s, () => false)
+    expect(state.recorded.p_rs01).toBe(0)
+    expect(state.pendingUploads).toEqual({})
+  })
+  it('같은 시도를 두 번 넣어도 한 번, 없는 시도를 빼면 그대로', () => {
+    const s = withPendingUpload(withPendingUpload(base(), 'p_rs01', 2), 'p_rs01', 2)
+    expect(s.pendingUploads).toEqual({ p_rs01: [2] })
+    expect(withoutPendingUpload(s, 'p_rs01', 1)).toBe(s)
+  })
+  it('미리보기 배포에서 남은 옛 모양(시도 번호 하나)도 읽는다', () => {
+    const old = { ...base(), pendingUploads: { p_rs01: 2 } } as unknown as SurveyState
+    expect(withoutPendingUpload(old, 'p_rs01', 2).pendingUploads).toEqual({})
+    const { state, lost } = settleLostUploads(old, () => false)
+    expect(lost).toEqual(['p_rs01'])
+    expect(state.recorded.p_rs01).toBe(1)
+  })
+  it('[핵심] 다시 열었을 때 이 탭에서 올리고 있지 않은 것은 끊긴 업로드 — 그 시도의 「녹음 완료」를 거둔다', () => {
+    const s = withPendingUpload(withPendingUpload(base(), 'p_rs01', 2), 'p_rw_meaning', 1)
+    const { state, lost } = settleLostUploads(s, (code, no) => code === 'p_rw_meaning' && no === 1)   // 의미 낱말만 아직 올리는 중
+    expect(lost).toEqual(['p_rs01'])
+    expect(state.recorded).toEqual({ p_rw_meaning: 1, p_rs01: 1 })       // 끊긴 시도 1회만 거둔다
+    expect(state.pendingUploads).toEqual({ p_rw_meaning: [1] })          // 올리는 중인 것은 그대로
+  })
+  it('올리는 중인 것이 없으면 상태를 그대로 돌려준다(옛 상태 — 필드 없음 포함)', () => {
+    const s = base()
+    expect(settleLostUploads(s, () => false)).toEqual({ state: s, lost: [] })
+  })
+  it('updateSavedState는 세션 id로 찾아 그 세션만 고치고 LAST_KEY는 건드리지 않는다', () => {
+    saveState(base())
+    saveState({ ...newState('sid-2', '김영희', 4, 'tok2', 1) })   // 다른 탭이 다른 아이를 시작
+    const out = updateSavedState('sid-1', s => ({ ...s, recorded: { ...s.recorded, p_rs01: 1 } }))
+    expect(out?.recorded.p_rs01).toBe(1)
+    expect(localStorage.getItem(LAST_KEY)).toBe('sid-2')
+    expect(loadState()?.sessionId).toBe('sid-2')
+    expect(JSON.parse(localStorage.getItem('kodys-survey:sid-1')!).recorded.p_rs01).toBe(1)
+  })
+  it('updateSavedState는 지워진 세션(제출·새 검사)이면 아무것도 안 한다', () => {
+    expect(updateSavedState('sid-9', s => s)).toBeNull()
   })
 })
 

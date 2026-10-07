@@ -139,7 +139,10 @@ export default function StartPage() {
   // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(번호+이름) 함께 보여 이어하기를 돕는다.
   // 번호를 같이 밝히는 이유: 이 흐름은 아동을 코드+번호로 지목하므로 이름만으로는
   // 검사자가 "지금 부른 아이"와 같은 아이인지 대조할 근거가 한 칸 부족하다.
-  const [resume, setResume] = useState<{ childName: string; childNo: number } | null>(null)
+  /** 이 컴퓨터에서 진행 중인 검사. classCode는 그 세션을 만들 때 저장된 학급 코드다(`saveClassCode`는 세션 생성
+   *  성공 직후에만 부른다) — 「같은 아이인가」는 번호만으로 가릴 수 없다: 컴퓨터실 PC에서 1반 3번이 진행 중일 때
+   *  2반 3번을 고르면 번호가 같다(사용자 확정 2026-10-07). */
+  const [resume, setResume] = useState<{ childName: string; childNo: number; classCode: string | null } | null>(null)
   // [새로 시작] 확인 모달 — 진행 상태를 지우면 그 검사를 **이어갈 수단이 사라진다**
   // (세션 토큰이 이 기기의 localStorage에만 있고 서버가 다시 발급해 주는 경로가 없다).
   // 이미 올라간 녹음은 서버에 남아 관리자가 볼 수 있지만, 아동은 처음부터 다시 검사해야
@@ -203,7 +206,7 @@ export default function StartPage() {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
     const s = loadState()
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (s) setResume({ childName: s.childName, childNo: s.childNo })
+    if (s) setResume({ childName: s.childName, childNo: s.childNo, classCode: loadClassCode() })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
     // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
     // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
@@ -229,6 +232,8 @@ export default function StartPage() {
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   const cleanCode = code.trim().toUpperCase()
+  /** 확인 중인 아이가 이 컴퓨터에서 진행 중인 바로 그 아이인가 — 학급과 번호가 모두 같아야 한다(위 `resume`) */
+  const isResumeChild = (childNo: number) => resume !== null && resume.classCode === cleanCode && resume.childNo === childNo
   const cleanName = name.trim().replace(/\s+/g, ' ')
   const childNoNum = Number(childNo)
   const birthYmd = year && month && day
@@ -643,7 +648,9 @@ export default function StartPage() {
           title={confirm.tested
             ? `${confirm.childNo}번은 이미 검사했어요`
             : '이 정보가 맞나요?'}
-          confirmLabel={confirm.tested ? '네, 다시 검사할게요' : '맞아요, 시작하기'}
+          confirmLabel={confirm.tested
+            ? (isResumeChild(confirm.childNo) ? '그래도 새로 검사' : '네, 다시 검사할게요')
+            : '맞아요, 시작하기'}
           cancelLabel="아니에요"
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
@@ -672,10 +679,24 @@ export default function StartPage() {
             {confirm.identity && (
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
-            {confirm.tested === 'inProgress' && (
+            {/* 진행 중인 검사가 **이 컴퓨터의 것**이면(이어하기 카드의 그 아이) 「다른 기기」 안내는 틀리다 — 이어하기를 가리킨다 */}
+            {confirm.tested === 'inProgress' && isResumeChild(confirm.childNo) && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                이 컴퓨터에서 진행 중인 검사예요. 이어서 하려면 이 창을 닫고 위의 <b>[이어서 하기]</b>를 눌러 주세요.<br />
+                새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.
+              </p>
+            )}
+            {confirm.tested === 'inProgress' && !isResumeChild(confirm.childNo) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
                 다른 기기에서 검사 중일 수 있어요.
+              </p>
+            )}
+            {/* 다른 아이를 시작하면 이 컴퓨터에서 진행 중이던 아이의 검사는 이어갈 수 없게 된다 — 확인 없이 사라지지 않게 */}
+            {resume && !isResumeChild(confirm.childNo) && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                진행 중인 <b>{resume.childNo}번{resume.childName ? ` ${resume.childName}` : ''}</b> 학생의 검사는 새로 시작하면
+                이어갈 수 없게 돼요.
               </p>
             )}
             {confirm.tested === 'submitted' && (
