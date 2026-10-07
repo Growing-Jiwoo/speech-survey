@@ -9,22 +9,28 @@ function row(over: Partial<ResultsSessionRow> & { id: string; child_no: number }
   return {
     child_name: `아이${over.child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
-    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     ...over,
   }
 }
-/** 낱말 14 O/X + 문장 4 어절 = 읽기 두 과제 채점 완료. 쓰기는 비움. */
+/** 낱말 14 O/X + 문장 4 어절·시간 = 읽기 두 과제 채점 완료. 쓰기는 비움.
+ *  문장은 36어절 ÷ 18초 = 2.00 어절/초. 녹음도 전부 있다 — 녹음 없는 페이지는 저장값과 무관하게
+ *  X·0어절·20초로 고정되므로(lib/scoring withUnrecordedFixed) 녹음 없이는 채점한 값이 계산에 들어가지 않는다. */
 const READ_SCORED = {
+  recordings: ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code })),
   reading_marks: Array.from({ length: 14 }, (_, i) => ({ item_code: `rw${String(i + 1).padStart(2, '0')}`, correct: i < 10 })),
   sentence_scores: [{ item_code: 'rs01', words: 7 }, { item_code: 'rs02', words: 7 }, { item_code: 'rs03', words: 8 }, { item_code: 'rs04', words: 14 }],
+  sentence_times: [{ item_code: 'rs01', seconds: 4 }, { item_code: 'rs02', seconds: 4 }, { item_code: 'rs03', seconds: 4.5 }, { item_code: 'rs04', seconds: 5.5 }],
 }
 const WRITE_SCORED = {
   writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: i < 8 })),
 }
-/** 세 과제 모두 채점됐고 쓰기가 기준 미달 = 판정이 실제로 나오는 Fail. A안에서 Fail은
- *  **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는 쓰기까지 채워야 한다. */
+/** 세 과제 모두 채점됐고 낱말 해독·쓰기가 기준 미달 = 판정이 실제로 나오는 Fail(FAIL 2개 이상,
+ *  담당자 확정 2026-09-29). A안에서 Fail은 **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는
+ *  쓰기까지 채워야 한다. */
 const ALL_SCORED_FAIL = {
   ...READ_SCORED,
+  reading_marks: READ_SCORED.reading_marks.map(m => ({ ...m, correct: false })),
   writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })),
 }
 
@@ -53,7 +59,13 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
   it('읽기 두 과제가 채점되면 쓰기가 비어도 scored — 쓰기는 관리자가 채울 수 없어 막으면 영원히 못 받는다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED }))
     expect(r.status).toBe('scored')
-    expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 36, writing: 0 })
+    expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 2, writing: 0 })
+  })
+  it('[REGRESSION] 녹음이 있는 문장에 읽은 시간이 없으면 scoring — 시간 없이는 어절/초를 낼 수 없다', () => {
+    const recorded = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, recordings: recorded, sentence_times: [] }))
+    expect(r.status).toBe('scoring')
+    expect(r.scores).toBeNull()
   })
   // 이 0은 「0점을 받았다」가 아니라 「아직 채점 전」이다. 관리자 결과지가 채점 전 과제의 판정을
   // 감추는 것과 같아야 한다 — 두 화면이 같은 아이를 다르게 말하면 안 된다(사용자 확정 2026-09-22 A안).
@@ -76,12 +88,47 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
     expect(r.verdict).toBeNull()
   })
-  it('판정: 세 과제 모두 pass여야 pass, 하나라도 fail이면 fail (G1 임시 기준 9/23/6)', () => {
+  // 담당자 확정(2026-09-29) 「3개 중에 2개 이상이 fail이면 최종 fail」 — lib/scoring의 finalVerdict.
+  it('판정: fail이 2개 이상일 때만 fail — 쓰기 하나만 fail이면 pass (G1 임시 기준 9점 · 1.0 어절/초 · 6점)', () => {
     const pass = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
     expect(pass.verdict).toBe('pass')
     const failWriting = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED,
       writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })) }))
-    expect(failWriting.verdict).toBe('fail')
+    expect(failWriting.verdict).toBe('pass')
+    // 읽기 두 과제가 미녹음(X·0점)이면 FAIL 2개 → 최종 FAIL
+    const failReading = evaluateSession(row({ id: 's', child_no: 1, recordings: [], ...WRITE_SCORED }))
+    expect(failReading.verdict).toBe('fail')
+  })
+})
+
+describe('evaluateSession — 문장 읽기유창성(어절/초)', () => {
+  const recordedAll = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
+  it('교사 결과표의 문장 읽기 점수는 관리자 결과지와 같은 어절/초다', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, recordings: recordedAll, ...WRITE_SCORED }))
+    expect(r.scores?.sentenceReading).toBe(2)
+  })
+  it('녹음 없는 문장이 섞이면 그 문장은 20초·0어절로 들어간다 — 교사 쪽도 같은 기본값', () => {
+    // 1번 문장만 녹음·채점(7어절 5초), 2~4번 미녹음 → 7 ÷ 65 = 0.11
+    const r = evaluateSession(row({ id: 's', child_no: 1,
+      recordings: recordedAll.filter(x => !['p_rs02', 'p_rs03', 'p_rs04'].includes(x.item_code)),
+      reading_marks: READ_SCORED.reading_marks,
+      sentence_scores: [{ item_code: 'rs01', words: 7 }], sentence_times: [{ item_code: 'rs01', seconds: 5 }] }))
+    expect(r.status).toBe('scored')
+    expect(r.scores?.sentenceReading).toBe(0.11)
+  })
+  it('[REGRESSION] 녹음 없는 문장에 예전에 저장한 값이 남아 있어도 20초·0어절로 계산한다 — 관리자 화면이 그 칸을 잠근다', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1,
+      recordings: recordedAll.filter(x => !['p_rs02', 'p_rs03', 'p_rs04'].includes(x.item_code)),
+      reading_marks: READ_SCORED.reading_marks,
+      sentence_scores: READ_SCORED.sentence_scores, sentence_times: READ_SCORED.sentence_times }))
+    expect(r.scores?.sentenceReading).toBe(0.11)   // rs02~04의 7·8·14어절, 4·4.5·5.5초는 보지 않는다
+  })
+  it('G2 세션도 같다 — 정확 어절 35 ÷ 20초 = 1.75', () => {
+    const r = evaluateSession(row({ id: 's', child_no: 1, grade: 2, recordings: recordedAll,
+      reading_marks: READ_SCORED.reading_marks,
+      sentence_scores: [{ item_code: 'rs01', words: 7 }, { item_code: 'rs02', words: 8 }, { item_code: 'rs03', words: 9 }, { item_code: 'rs04', words: 11 }],
+      sentence_times: ['rs01', 'rs02', 'rs03', 'rs04'].map(item_code => ({ item_code, seconds: 5 })) }))
+    expect(r.scores?.sentenceReading).toBe(1.75)
   })
 })
 
@@ -91,6 +138,7 @@ describe('scoreInputFor — PDF가 관리자와 같은 입력을 쓴다', () => 
     expect(form.id).toBe('KODYS-G1')
     expect(input.marks.rw01).toBe(false)
     expect(input.sentences.rs01).toBe(0)
+    expect(input.times.rs01).toBe(20)   // 녹음 없는 문장의 읽은 시간 = 제한 시간(lib/scoring unrecordedTimes)
   })
   it('미제출 세션은 기본값을 적용하지 않는다 — 아직 안 한 것이지 오반응이 아니다', () => {
     const { input } = scoreInputFor(row({ id: 's', child_no: 1, submitted_at: null, recordings: [] }))

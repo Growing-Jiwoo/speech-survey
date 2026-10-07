@@ -28,7 +28,7 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
     expect(res.status).toBe(200)
     expect(db.saveScores).toHaveBeenCalledWith(SID,
       [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw14', correct: false }],
-      [{ itemCode: 'rs01', words: 7 }], RS)
+      [{ itemCode: 'rs01', words: 7 }], RS, undefined)
   })
 
   it('낱말 해독 14개 코드를 모두 허용한다 (무의미 낱말 포함)', async () => {
@@ -72,7 +72,7 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
   it('둘 다 비어 있으면 200 (변경 없는 저장)', async () => {
     const res = await PUT(req({ marks: {}, sentences: {} }), ctx())
     expect(res.status).toBe(200)
-    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [], RS)
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [], RS, undefined)
   })
 
   it('세션 id가 UUID가 아니면 400', async () => {
@@ -90,6 +90,83 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
   it('존재하지 않는 세션은 404 (조용한 no-op 금지)', async () => {
     vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
     expect((await PUT(req({ marks: {}, sentences: {} }), ctx())).status).toBe(404)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+})
+
+describe('PUT …/scores — 문장 읽은 시간(times)', () => {
+  const put = (times: unknown) => PUT(req({ marks: {}, sentences: {}, times }), ctx())
+
+  it('문장별 초를 저장한다 (0.1초 단위)', async () => {
+    const res = await put({ rs01: 4.5, rs04: 12 })
+    expect(res.status).toBe(200)
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [],
+      RS, [{ itemCode: 'rs01', seconds: 4.5 }, { itemCode: 'rs04', seconds: 12 }])
+  })
+
+  it('[REGRESSION] times가 없는 요청은 시간을 건드리지 않는다 — 시간 칸 이전 화면의 자동 저장이 시간을 지우지 않게', async () => {
+    await PUT(req({ marks: {}, sentences: { rs01: 7 } }), ctx())
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toBeUndefined()
+  })
+
+  it('빈 객체는 「전부 지움」이다 — times 없음과 다르다', async () => {
+    await put({})
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toEqual([])
+  })
+
+  it('부동소수 꼬리는 0.1초로 정리해 저장한다', async () => {
+    await put({ rs01: 0.1 + 0.2 })
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toEqual([{ itemCode: 'rs01', seconds: 0.3 }])
+  })
+
+  it('0초·음수·0.1초보다 잘게 쪼갠 값·문자열은 400', async () => {
+    for (const bad of [0, -1, 4.55, '4.5', null, Number.NaN]) {
+      expect((await put({ rs01: bad })).status).toBe(400)
+    }
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('상한은 녹음 최대 길이(제한 20초 + 여유 5초) — 25초까지 받고 넘으면 400', async () => {
+    expect((await put({ rs01: 25 })).status).toBe(200)
+    expect((await put({ rs01: 25.1 })).status).toBe(400)
+  })
+
+  it('문장 읽기 코드가 아니면 400 (낱말·문장 쓰기 코드)', async () => {
+    expect((await put({ rw01: 3 })).status).toBe(400)
+    expect((await put({ sw01: 3 })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('불리언·아주 작은 수·Infinity 문자열은 400', async () => {
+    for (const bad of [true, 1e-7, 'Infinity']) expect((await put({ rs01: bad })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('하나라도 틀리면 전체를 거부한다 — 맞는 문장만 골라 저장하지 않는다(부분 저장 금지)', async () => {
+    expect((await put({ rs01: 4, rs02: 99 })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('낱말·어절·시간을 한 요청에 함께 저장한다', async () => {
+    await PUT(req({ marks: { rw01: true }, sentences: { rs01: 7 }, times: { rs01: 4.5 } }), ctx())
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [{ itemCode: 'rw01', correct: true }],
+      [{ itemCode: 'rs01', words: 7 }], RS, [{ itemCode: 'rs01', seconds: 4.5 }])
+  })
+
+  it('G2 세션도 문장 읽기 코드(rs..)만 받고 상한은 같은 25초', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
+    expect((await put({ rs04: 25 })).status).toBe(200)
+    expect((await put({ sw01: 3 })).status).toBe(400)
+  })
+
+  it('담당 양식이 없는 학년(3학년 → G1 폴백)도 같은 규칙', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3 })
+    expect((await put({ rs01: 4 })).status).toBe(200)
+  })
+
+  it('times가 배열·null이면 400 (typeof "object" 함정)', async () => {
+    expect((await put([])).status).toBe(400)
+    expect((await put(null)).status).toBe(400)
     expect(db.saveScores).not.toHaveBeenCalled()
   })
 })

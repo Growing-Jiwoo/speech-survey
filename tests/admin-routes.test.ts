@@ -24,7 +24,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.listSessions).mockResolvedValue([])
   vi.mocked(db.sessionDetail).mockResolvedValue({
-    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [],
+    session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [], times: [],
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
 })
@@ -54,6 +54,7 @@ describe('GET /api/admin/sessions/[id]', () => {
       ],
       writing: [{ item_code: 'ww01', can_write: true }],
       marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+      times: [{ item_code: 'rs01', seconds: 4.5 }],
     })
     vi.mocked(db.signedAudioUrl).mockImplementation(async p => `https://signed/${p}`)
 
@@ -69,11 +70,18 @@ describe('GET /api/admin/sessions/[id]', () => {
     expect(body.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(body.marks).toEqual([{ item_code: 'rw01', correct: true }])
     expect(body.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
+    expect(body.times).toEqual([{ item_code: 'rs01', seconds: 4.5 }])
   })
   it('UUID가 아닌 id 400 (DB 오류 경로 진입 차단)', async () => {
     const res = await DETAIL(req(), ctx('not-a-uuid'))
     expect(res.status).toBe(400)
     expect(db.sessionDetail).not.toHaveBeenCalled()
+  })
+  it('테이블이 없어 조회가 실패해도(마이그레이션 미실행) 500 + 내부 오류 원문을 싣지 않는다', async () => {
+    vi.mocked(db.sessionDetail).mockRejectedValueOnce(new Error("Could not find the table 'public.sentence_times'"))
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).not.toMatch(/sentence_times/)
   })
   it('DB 오류 시 500 + 일반화된 메시지', async () => {
     vi.mocked(db.sessionDetail).mockRejectedValueOnce(new Error('JSON object requested, multiple rows'))
@@ -86,7 +94,7 @@ describe('GET /api/admin/sessions/[id]', () => {
   // sheet.pdf의 `if (!session)` 가드는 도달조차 못 했다.
   it('[REGRESSION] 없는 세션은 404 — 장애(500)와 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
     })
     const res = await DETAIL(req(), ctx(SID))
     expect(res.status).toBe(404)
@@ -116,19 +124,21 @@ describe('DELETE /api/admin/sessions/[id]', () => {
 describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
   const detail = (started_at: string, submitted_at: string | null = null) => ({
     session: {
-      id: SID, school_name: '경기초등학교', grade: 1, class_no: 3, child_no: 3, child_name: '홍길동',
+      id: SID, school_region: '경기도교육청', school_id: 'B000000000', school_name: '경기초등학교',
+      grade: 1, class_no: 3, child_no: 3, child_name: '홍길동', gender: '남',
       birth_ymd: '170310', started_at, submitted_at,
       checklist: [],
     } as never,
     recordings: [], writing: [{ item_code: 'ww01', can_write: true }],
     marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }],
+    times: [{ item_code: 'rs01', seconds: 4.5 }],
   })
 
   // 이 라우트의 `if (!session)` 가드는 sessionDetail이 `.single()`이던 동안 도달조차 못 했다
   // (행 0개에 throw → catch → 500). maybeSingle로 바꾼 뒤 가드가 실제로 동작하는지 고정한다.
   it('[REGRESSION] 없는 세션은 404 — 삭제된 세션과 장애를 구분한다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({
-      session: null, recordings: [], writing: [], marks: [], sentences: [],
+      session: null, recordings: [], writing: [], marks: [], sentences: [], times: [],
     })
     const res = await SHEET(req(), ctx(SID))
     expect(res.status).toBe(404)
@@ -166,7 +176,7 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     expect(res.headers.get('content-disposition')).not.toContain('2026-08-06')
   })
   // 항목 8·9 — 녹음이 없는 과제를 채점자가 손으로 X 찍어 저장하기 전까지 검사지 점수 칸이
-  // 통째로 비어 나갔다. 라우트가 화면과 같은 기본값(withUnrecordedDefaults)을 적용한다.
+  // 통째로 비어 나갔다. 라우트가 화면과 같은 고정값(withUnrecordedFixed)을 적용한다.
   it('미녹음 페이지는 오반응(X·0점)으로 채워 찍는다 — 녹음이 다 있는 세션과 출력이 다르다', async () => {
     const d = detail('2026-08-07T06:25:08.000Z', '2026-08-07T07:00:00.000Z')
     vi.mocked(db.sessionDetail).mockResolvedValueOnce(d)

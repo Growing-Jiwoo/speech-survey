@@ -12,6 +12,7 @@ import type { SessionListRow } from '@/lib/db'
 import { filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
+import { StatusBadge } from './StatusBadge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
@@ -342,13 +343,6 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       )}
     </>
   )
-}
-
-/** 상태 배지 3단계: 제출 완료(mint) / 제출·미완료 있음(amber) / 진행 중(회색) */
-function StatusBadge({ submitted, incomplete }: { submitted: boolean; incomplete: boolean }) {
-  if (!submitted) return <Badge tone="mute">진행 중</Badge>
-  if (incomplete) return <Badge tone="amber">제출 · 미완료 있음</Badge>
-  return <Badge tone="mint">제출 완료</Badge>
 }
 
 function ProgressCell({ recorded, written, totals }: { recorded: number; written: number; totals: Totals }) {

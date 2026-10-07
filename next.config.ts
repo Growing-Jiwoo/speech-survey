@@ -13,10 +13,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // 타입체크는 `npm run typecheck`(tsc --noEmit)로 분리 실행하고, 빌드 시에는 생략해 배포를 빠르게 한다.
   typescript: { ignoreBuildErrors: true },
-  // 결과지 PDF 라우트가 런타임에 원본 검사지·폰트를 파일로 읽는다.
-  // 서버리스 번들에 명시적으로 포함시키지 않으면 로컬만 되고 배포에서 ENOENT가 난다.
+  // 결과보고서 PDF 라우트(lib/pdf/report.ts)가 런타임에 폰트(assets/fonts)와 학교 목록(public/schools)을
+  // 파일로 읽는다. 서버리스 번들에 명시적으로 포함시키지 않으면 로컬만 되고 배포에서 ENOENT가 난다.
   outputFileTracingIncludes: {
-    '/api/admin/sessions/[id]/sheet.pdf': ['./assets/**'],
+    '/api/admin/sessions/[id]/sheet.pdf': ['./assets/fonts/**', './public/schools/*.json'],
+    '/api/results/[token]/sheets.pdf': ['./assets/fonts/**', './public/schools/*.json'],
   },
   async headers() {
     return [

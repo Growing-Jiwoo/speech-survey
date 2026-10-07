@@ -33,12 +33,16 @@ const selectCallsByTable = new Map<string, unknown[]>()
  *  돌려주므로 `.order()`를 지워도 반환값은 같다. 명단 순서는 관리자가 교사 명렬표와 눈으로
  *  맞춰 보는 근거라, 인자로 못 박지 않으면 정렬이 사라진 것을 아무도 모른다. */
 const orderCallsByTable = new Map<string, unknown[]>()
+/** upsert() 페이로드·in() 인자 캡처. 채점 저장은 upsert 한 방이라 결과로는 **어느 열에 어떤 값이
+ *  갔는지**(sentence_times.seconds)가 안 드러나고, 교체 삭제의 범위(in)도 인자로만 보인다. */
+const upsertCallsByTable = new Map<string, unknown[]>()
+const inCallsByTable = new Map<string, unknown[]>()
 
-type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select' | 'order'
+type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select' | 'order' | 'upsert' | 'in'
 const BUCKETS: Record<Captured, Map<string, unknown[]>> = {
   insert: insertCallsByTable, update: updateCallsByTable,
   delete: deleteCallsByTable, eq: eqCallsByTable, select: selectCallsByTable,
-  order: orderCallsByTable,
+  order: orderCallsByTable, upsert: upsertCallsByTable, in: inCallsByTable,
 }
 
 function chain(result: unknown, capture?: (kind: Captured, args: unknown[]) => void) {
@@ -65,8 +69,8 @@ vi.mock('@/lib/supabase', () => ({
       return chain(result, (kind, args) => {
         const bucket = BUCKETS[kind]
         const calls = bucket.get(table) ?? []
-        // insert/update는 payload 한 덩이가 관심사, 나머지(delete/eq/select/order)는 인자 자체가 관심사다.
-        calls.push(kind === 'insert' || kind === 'update' ? args[0] : args)
+        // insert/update/upsert는 payload 한 덩이가 관심사, 나머지(delete/eq/select/order/in)는 인자 자체가 관심사다.
+        calls.push(kind === 'insert' || kind === 'update' || kind === 'upsert' ? args[0] : args)
         bucket.set(table, calls)
       })
     },
@@ -102,6 +106,8 @@ beforeEach(() => {
   eqCallsByTable.clear()
   selectCallsByTable.clear()
   orderCallsByTable.clear()
+  upsertCallsByTable.clear()
+  inCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -172,22 +178,34 @@ describe('submitSession — 쓰기 답을 먼저 넣고 submitted_at을 마지�
   })
 })
 
-describe('sessionDetail — 5개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
-  it('sessions/recordings/writing_answers/reading_marks/sentence_scores 응답이 교차되지 않고 그대로 매핑된다', async () => {
+describe('sessionDetail — 6개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
+  it('sessions/recordings/writing_answers/reading_marks/sentence_scores/sentence_times 응답이 교차되지 않고 그대로 매핑된다', async () => {
     enqueue('sessions', { data: { id: SID, child_name: '세션전용이름' }, error: null })
     enqueue('recordings', { data: [{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }], error: null })
     enqueue('writing_answers', { data: [{ item_code: 'ww01', can_write: true }], error: null })
     enqueue('reading_marks', { data: [{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }], error: null })
     enqueue('sentence_scores', { data: [{ item_code: 'rs01', words: 7 }], error: null })
+    enqueue('sentence_times', { data: [{ item_code: 'rs01', seconds: 4.5 }], error: null })
 
     const result = await sessionDetail(SID)
 
-    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks', 'sentence_scores'])
+    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks', 'sentence_scores', 'sentence_times'])
     expect(result.session).toEqual({ id: SID, child_name: '세션전용이름' })
     expect(result.recordings).toEqual([{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }])
     expect(result.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(result.marks).toEqual([{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }])
     expect(result.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
+    expect(result.times).toEqual([{ item_code: 'rs01', seconds: 4.5 }])
+    expect(selectCallsByTable.get('sentence_times')).toEqual([['item_code, seconds']])
+  })
+})
+
+describe('sessionDetail — 읽은 시간 조회 실패', () => {
+  it('[REGRESSION] sentence_times 조회가 실패하면(마이그레이션 005 미실행 등) 던진다 — 「시간 없음」으로 조용히 넘기지 않는다', async () => {
+    // 조용히 빈 배열로 넘기면 모든 검사가 「채점 전」으로 보이고, 채점자가 넣은 시간은 저장에서 사라진다.
+    enqueue('sessions', { data: { id: SID }, error: null })
+    enqueue('sentence_times', { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.sentence_times'" } })
+    await expect(sessionDetail(SID)).rejects.toThrow()
   })
 })
 
@@ -645,6 +663,24 @@ describe('saveScores — 관리자 채점 저장', () => {
     expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(2)
   })
 
+  it('times를 넘기면 sentence_times에 seconds 열로 upsert하고, 안 보낸 문장만 문장 읽기 범위 안에서 지운다', async () => {
+    await saveScores(SID, [], [], RS, [{ itemCode: 'rs01', seconds: 4.5 }])
+    expect(upsertCallsByTable.get('sentence_times')).toEqual([[{ session_id: SID, item_code: 'rs01', seconds: 4.5 }]])
+    expect(deleteCallsByTable.get('sentence_times')).toHaveLength(1)
+    expect(inCallsByTable.get('sentence_times')).toEqual([['item_code', RS]])
+  })
+
+  it('times가 빈 배열이면 기존 시간을 지우기만 한다', async () => {
+    await saveScores(SID, [], [], RS, [])
+    expect(upsertCallsByTable.get('sentence_times')).toBeUndefined()
+    expect(deleteCallsByTable.get('sentence_times')).toHaveLength(1)
+  })
+
+  it('[REGRESSION] times가 undefined면 sentence_times를 아예 건드리지 않는다 — 옛 화면의 저장이 시간을 지우지 않게', async () => {
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }], RS)
+    expect(fromCalls).not.toContain('sentence_times')
+  })
+
   it('저장 실패는 삼키지 않고 throw한다 (채점 결과의 조용한 손실 방지)', async () => {
     enqueue('reading_marks', { error: { message: 'boom' } })
     await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], [], RS))
@@ -725,6 +761,7 @@ describe('findClassCodeById · classResults · updateClassCodeEmail (교사 결�
     expect(sel[0]).toContain('recordings(item_code)')
     expect(sel[0]).toContain('reading_marks(item_code, correct)')
     expect(sel[0]).toContain('sentence_scores(item_code, words)')
+    expect(sel[0]).toContain('sentence_times(item_code, seconds)')
     expect(sel[0]).toContain('writing_answers(item_code, can_write)')
     expect(eqCallsByTable.get('sessions')).toEqual([['class_code_id', CID]])
     expect(orderCallsByTable.get('sessions')).toEqual([['started_at']])

@@ -1,12 +1,12 @@
 // lib/results.ts — 교사 결과지 표의 순수 로직. DB·HTTP를 모른다(행 모양만 받는다).
 // 목록 라우트·PDF 라우트·테스트가 공유한다. 채점은 관리자 결과지와 **같은 함수 사슬**을 쓴다 —
-// scoreInputFrom → (제출됨이면) withUnrecordedDefaults → scoreSession → sheetPdfGate.
+// scoreInputFrom → (제출됨이면) withUnrecordedFixed → scoreSession → sheetPdfGate.
 // 여기서 규칙을 새로 만들지 않는다: 관리자와 교사가 다른 점수를 보면 그 자체가 사고다.
 import { formForGrade, type SurveyForm } from './forms'
 import { itemsFor } from './items'
 import { pad2 } from './format'
 import {
-  TASK_KEYS, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
+  TASK_KEYS, finalVerdict, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedFixed,
   type ScoreInput, type Verdict,
 } from './scoring'
 import { childVerdict, type ResultsChild, type ResultsSession } from './results-view'
@@ -24,13 +24,14 @@ export interface ResultsSessionRow {
   grade: number
   started_at: string
   submitted_at: string | null
-  /** 결과지 PDF 머리글이 찍는다(stampSheet). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
+  /** 결과보고서 PDF 머리글이 찍는다(renderReport). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
   birth_ymd: string
   /** 검사자 체크리스트 — 결과지 PDF가 체크 표시를 찍는다(관리자 PDF와 같은 문서여야 한다) */
   checklist: string[]
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_scores: { item_code: string; words: number }[]
+  sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
 }
 
@@ -52,15 +53,17 @@ export function maskEmail(email: string): string {
 
 /**
  * 채점 입력 조립 — 관리자 결과지·PDF 라우트(`app/api/admin/sessions/[id]/sheet.pdf`)와 같다.
- * 제출된 세션만 미녹음 기본값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
+ * 제출된 세션만 미녹음 고정값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
  */
 export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: ScoreInput } {
   const form = formForGrade(r.grade)
   const f = itemsFor(form)
-  const raw = scoreInputFrom(f, { marks: r.reading_marks, sentences: r.sentence_scores, writing: r.writing_answers })
+  const raw = scoreInputFrom(f, {
+    marks: r.reading_marks, sentences: r.sentence_scores, times: r.sentence_times, writing: r.writing_answers,
+  })
   if (!r.submitted_at) return { form, input: raw }
   const recorded = new Set(r.recordings.map(x => x.item_code))
-  return { form, input: withUnrecordedDefaults(f, raw, c => recorded.has(c)) }
+  return { form, input: withUnrecordedFixed(f, raw, c => recorded.has(c)) }
 }
 
 export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete'> {
@@ -75,9 +78,8 @@ export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'sta
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
   const allScored = TASK_KEYS.every(k => result.complete[k])
-  const verdict: Verdict | null = allScored
-    ? (TASK_KEYS.every(k => result.verdict[k] === 'pass') ? 'pass' : 'fail')
-    : null
+  // 최종 판정 규칙(FAIL 2개 이상 → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
+  const verdict: Verdict | null = allScored ? finalVerdict(result.verdict) : null
   return {
     status: 'scored',
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },

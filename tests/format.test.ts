@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { approvalNoticeText, contactLabel, fmtDuration, gradeClassLabel, pad2, sheetDateLabel, gradeClassLines } from '@/lib/format'
+import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel } from '@/lib/format'
 import { APPLY_CHECKS, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
@@ -22,6 +22,13 @@ describe('pad2', () => {
   it('두 자리 0 패딩', () => {
     expect(pad2(3)).toBe('03')
     expect(pad2(12)).toBe('12')
+  })
+})
+
+describe('classLabel (결과지 머리글의 풀어 쓴 학급)', () => {
+  it('일반 학급은 「1학년 2반」, 단일학급은 「1학년 단일학급」', () => {
+    expect(classLabel(1, 2)).toBe('1학년 2반')
+    expect(classLabel(2, 0)).toBe('2학년 단일학급')
   })
 })
 
@@ -60,21 +67,24 @@ describe('sheetDateLabel (검사일 표기)', () => {
   })
 })
 
-// 검사지의 「학년」 칸은 원래 학년만 적는 자리인데 이 앱은 반까지 함께 찍는다.
-// 한 줄로 뭉치면 인쇄물만 보고는 무엇이 학년이고 무엇이 반인지 알 수 없다.
-describe('gradeClassLines — 검사지 학년 칸(두 줄)', () => {
-  it('학년을 온전히 적고 반을 괄호로 덧붙인다', () => {
-    expect(gradeClassLines(1, 2)).toEqual(['1학년', '(2반)'])
-    expect(gradeClassLines(6, 12)).toEqual(['6학년', '(12반)'])
+describe('reportDateLabel / birthLabel / semesterOf — 결과보고서 표기', () => {
+  it('검사일은 KST 기준, 월·일 두 자리 (담당자 양식 2026-09-28)', () => {
+    expect(reportDateLabel('2026-09-19T01:00:00.000Z')).toBe('2026. 09. 19.')
+    // KST 자정 직전·직후 — UTC로 자르면 하루가 밀린다
+    expect(reportDateLabel('2026-08-07T14:59:00.000Z')).toBe('2026. 08. 07.')
+    expect(reportDateLabel('2026-08-07T15:00:00.000Z')).toBe('2026. 08. 08.')
   })
-  it('반 0은 학년당 한 학급인 학교 — 번호 대신 단일학급으로 적는다', () => {
-    expect(gradeClassLines(1, 0)).toEqual(['1학년', '(단일학급)'])
+  it('생년월일 YYMMDD → 2019. 03. 15. (세기는 20으로 고정)', () => {
+    expect(birthLabel('190315')).toBe('2019. 03. 15.')
+    expect(birthLabel('2019-03-15')).toBe('2019-03-15')   // 저장형이 아니면 손대지 않는다
   })
-  // 화면은 좁은 표 칸에 들어가야 해 한 줄 표기를 그대로 쓴다. 둘을 같은 함수로 합치면
-  // 한쪽 요구가 다른 쪽을 망가뜨린다.
-  it('화면용 한 줄 표기(gradeClassLabel)와 별개다', () => {
-    expect(gradeClassLabel(1, 2)).toBe('1-2')
-    expect(gradeClassLines(1, 2).join('')).not.toBe(gradeClassLabel(1, 2))
+  // 사용자 확정(2026-09-28) — 담당자 회신 아님. 학기별 양식이 생기면 이 규칙은 없어져야 한다.
+  it('학기: 3~8월 → 1학기, 9~2월 → 2학기 (KST)', () => {
+    expect(semesterOf('2026-03-02T01:00:00.000Z')).toBe(1)
+    expect(semesterOf('2026-08-31T01:00:00.000Z')).toBe(1)
+    expect(semesterOf('2026-09-01T01:00:00.000Z')).toBe(2)
+    expect(semesterOf('2027-02-27T01:00:00.000Z')).toBe(2)
+    expect(semesterOf('2026-08-31T15:00:00.000Z')).toBe(2)   // KST 9월 1일 00:00
   })
 })
 

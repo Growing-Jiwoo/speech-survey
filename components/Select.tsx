@@ -23,7 +23,7 @@ const EST_OPTION_H = 41
  * 키보드: 포커스는 항상 트리거에 두고 aria-activedescendant로 활성 옵션만 옮기는
  * ARIA listbox 패턴 — ↑/↓(열기·이동) · Home/End · Enter/Space(선택) · Esc(닫기).
  */
-export function Select({ id, value, options, placeholder, onChange, ariaLabel, ariaDescribedby, ariaInvalid, disabled, className = '', size = 'lg' }: {
+export function Select({ id, value, options, placeholder, onChange, ariaLabel, ariaDescribedby, ariaInvalid, disabled, className = '', size = 'lg', triggerPrefix }: {
   id?: string
   value: string
   options: SelectOption[]
@@ -38,6 +38,9 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
   /** 'lg'(기본, 검사 화면용 큰 터치 타깃) | 'sm'(관리자 툴바 등 밀도 높은 화면용)
    *  | 'grid'(표 한 칸 — 옆 input과 높이·모서리를 맞춘다) */
   size?: 'lg' | 'sm' | 'grid'
+  /** 트리거(선택된 값)에만 붙는 앞말(예: 「배속」). 목록의 옵션마다 같은 말을 되풀이하지 않고
+   *  무엇을 고르는 칸인지는 트리거가 말하게 한다 — 목록은 트리거 바로 밑에 열려 문맥이 이어진다. */
+  triggerPrefix?: string
 }) {
   const [open, setOpen] = useState(false)
   // 키보드 하이라이트 위치(마우스 hover와 공유). 목록을 열 때 현재 선택값으로 초기화된다.
@@ -149,7 +152,9 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
         disabled={disabled} onClick={() => (isOpen ? setOpen(false) : openList())} onKeyDown={onTriggerKeyDown}
         className={`flex w-full items-center justify-between border-[1.5px] transition disabled:opacity-50 ${trigger} ${tone}`}>
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>{selected ? selected.label : placeholder}</span>
+          <span className={`truncate ${selected ? '' : 'text-ink-mute'}`}>
+            {selected ? (triggerPrefix ? `${triggerPrefix} ${selected.label}` : selected.label) : placeholder}
+          </span>
           {selected?.badge && <Badge text={selected.badge} />}
         </span>
         <svg className={`ml-2 h-4 w-4 flex-none text-ink-mute transition-transform ${isOpen ? 'rotate-180' : ''}`}

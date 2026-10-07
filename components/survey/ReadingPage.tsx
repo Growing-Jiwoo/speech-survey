@@ -74,16 +74,22 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
 
   return (
     <>
+      {/* 안내 문장은 읽기판(카드) **밖, 위에 연한 글씨로** 둔다 — 카드 안에는 읽을 낱말·문장만 있다.
+          담당자 제안(2026-09-30, 교수 논의) 「아이들이 읽는 읽기판(하얀 부분)은 목표 단어만」이 근거이고,
+          제안된 두 안(연한 글자 / 읽기판 위에 기재) 중 그 원칙을 온전히 지키는 쪽을 고른 것은
+          사용자 확정(2026-09-30)이다 — 연한 글자로만 바꾸면 여전히 카드 안에 남는다.
+          아이가 안내문까지 소리 내어 읽으면 녹음과 읽은 시간에 섞인다(문장 페이지는 안내문도 문장이다).
+          같은 말은 과제 시작 전 안내 화면(SectionIntro)이 이미 크게 보여 주므로 잃는 정보는 없다. */}
+      <p className={`mb-2 px-1 text-xs font-bold lg:text-sm ${page.practice ? 'text-amber/80' : 'text-ink-mute'}`}>
+        {page.practice ? '연습이에요. 아래 낱말을 소리 내어 읽어 주세요'
+          : words ? '아래 낱말을 모두 소리 내어 읽어 주세요'
+            : '아래 문장을 소리 내어 읽어 주세요'}
+      </p>
       {/* 연습 페이지는 카드 테두리부터 다르게 둔다 — 본 검사와 같은 모양이면 "지금이 연습"이
           화면에 드러나지 않는다(사용자 피드백 2026-08-12).
           `!`(important)가 필요한 이유: .card는 globals.css의 레이어 없는 규칙이라 같은
           특이도의 Tailwind 유틸리티(레이어 안)보다 나중에 적용된다 — 없으면 흰 카드로 남는다. */}
       <div className={`card p-5 lg:p-6 ${page.practice ? 'border-amber/50! bg-amber/[0.06]!' : ''}`}>
-        <p className={`text-xs font-bold lg:text-sm ${page.practice ? 'text-amber' : 'text-blue'}`}>
-          {page.practice ? '연습이에요. 아래 낱말을 소리 내어 읽어 주세요'
-            : words ? '아래 낱말을 모두 소리 내어 읽어 주세요'
-              : '아래 문장을 소리 내어 읽어 주세요'}
-        </p>
         {/* 낱말 페이지는 검사지처럼 두 줄 격자(4+3)로 배치하고, 문장은 원문 그대로 보인다.
             제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치 방지). */}
         {/* 최소 높이는 "낱말 페이지와 문장 페이지의 카드 높이를 비슷하게 맞춰 녹음 버튼이 위아래로
