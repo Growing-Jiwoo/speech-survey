@@ -279,18 +279,27 @@ export function CodeIssuer() {
         </div>
       )}
 
+      {/* pending 삭제 = 신청 반려 — 승인 전이라 「이 코드로는 더 이상 검사를 시작할 수 없습니다」는 맞지 않는 말이었고,
+          반려 메일이 없다는 것을 창이 말하지 않았다(2026-10-08 야간 점검, 사용자 확정 같은 날). 버튼 이름 「삭제」는
+          관리자 설명서(「반려하는 방법은 삭제뿐」)와 맞추려고 그대로 둔다. */}
       <ConfirmDialog open={toDelete !== null} busy={deleting} error={delErr} danger
-        title="이 코드를 삭제할까요?"
+        title={toDelete?.status === 'pending' ? '이 신청을 삭제할까요?' : '이 코드를 삭제할까요?'}
         confirmLabel={deleting ? '삭제 중…' : '삭제'}
         onConfirm={remove} onClose={() => setToDelete(null)}>
-        <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-          <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
-          코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
-          {/* pending 삭제 = 신청 반려. cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
-          {toDelete?.status === 'pending' && (
-            <> 신청한 <b>학생 명단 {toDelete.roster_count}명</b>도 함께 삭제되며, 되돌릴 수 없습니다.</>
-          )}
-        </p>
+        {toDelete?.status === 'pending' ? (
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            {toDelete.school_name} {gradeClassLabel(toDelete.grade, toDelete.class_no)} <b>{toDelete.teacher_name}</b> 선생님의
+            신청과 <b>학생 명단 {toDelete.roster_count}명</b>이 지워지며, 되돌릴 수 없습니다.
+            {/* cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
+            <br /><b className="text-rec-deep">선생님께는 메일이 가지 않습니다</b> — 반려 사실은 따로 알려 주세요
+            {toDelete.teacher_email ? <>({toDelete.teacher_email})</> : null}.
+          </p>
+        ) : (
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
+            코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
+          </p>
+        )}
       </ConfirmDialog>
     </div>
   )

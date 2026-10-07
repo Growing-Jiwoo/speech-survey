@@ -112,7 +112,9 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       }),
       col.accessor('birth_ymd', {
         id: 'birth', header: '생년월일',
-        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },
+        // 생년월일·제출일·체크리스트는 1280px 미만에서 숨긴다 — 1024px 노트북·태블릿에서 표가 화면보다 넓어 맨 끝
+        // 「상태」 열이 가로 스크롤 뒤에 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). 셋 다 결과지 화면에 있다.
+        meta: { thClassName: 'hidden whitespace-nowrap px-3 xl:table-cell', tdClassName: 'hidden whitespace-nowrap px-3 text-ink-soft xl:table-cell' },
         cell: ({ row }) => row.original.birth_ymd,
       }),
       col.display({
@@ -122,7 +124,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       }),
       col.display({
         id: 'submitted', header: '제출일',
-        meta: { sortKey: 'submitted', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 text-ink-soft' },
+        meta: { sortKey: 'submitted', thClassName: 'hidden whitespace-nowrap px-3 xl:table-cell', tdClassName: 'hidden whitespace-nowrap px-3 text-ink-soft xl:table-cell' },
         cell: ({ row }) => row.original.submitted_at ? new Date(row.original.submitted_at).toLocaleDateString('ko-KR') : '—',
       }),
       col.display({
@@ -136,7 +138,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       }),
       col.display({
         id: 'checklist', header: '체크리스트',
-        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
+        meta: { thClassName: 'hidden whitespace-nowrap px-3 xl:table-cell', tdClassName: 'hidden whitespace-nowrap px-3 xl:table-cell' },
         cell: ({ row }) => row.original.checklist.length > 0
           // 체크리스트 선택은 경고가 아니다 — amber는 '제출 · 미완료 있음'에만 남긴다.
           ? <Badge tone="mute" size="sm">{row.original.checklist.length}개 영역</Badge>
