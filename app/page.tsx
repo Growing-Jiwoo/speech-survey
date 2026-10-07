@@ -364,6 +364,9 @@ export default function StartPage() {
   }
 
   const filled = code.trim() && childNo !== '' && name.trim() && gender && year && month && day && consent
+  // 직접 입력에서 [확인]이 꺼져 있을 때 무엇이 비었는지 — 아래 안내 줄이 쓴다
+  const missing = [childNo === '' && '아동 번호', !name.trim() && '이름', !gender && '성별',
+    !(year && month && day) && '생년월일'].filter(Boolean) as string[]
   const canSubmit = step === 'code' ? !!code.trim()
     : step === 'roster' ? !!(pick && consent)
       : !!filled
@@ -629,6 +632,11 @@ export default function StartPage() {
         <button type="submit" disabled={busy || !canSubmit} className="cta mt-5">확인</button>
         {step !== 'code' && !consent && (
           <p className="mt-2 text-center text-[12px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
+        )}
+        {/* 동의는 했는데 칸이 비어 [확인]이 꺼져 있으면 무엇이 빠졌는지 알린다 — 종전에는 버튼만 회색이라 성별·생년월일을
+            안 고른 줄 모르고 멈춰 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
+        {step === 'direct' && consent && missing.length > 0 && (
+          <p className="mt-2 text-center text-[12px] text-ink-mute">아직 비어 있는 칸이 있어요: {missing.join(', ')}</p>
         )}
       </form>
       <p className="mt-auto pt-6 text-center text-[12px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
