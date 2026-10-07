@@ -13,6 +13,7 @@ import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery, type SessionDetailData } from '@/hooks/useAdminQueries'
 import { patchDetail } from '@/lib/sheet-cache'
+import { saveThenLeave } from '@/lib/sheet-leave'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -37,7 +38,18 @@ export function AdminDetailView() {
   // 「저장하지 않고 이동」으로 떠나는 아이 — 결과지가 언마운트될 때 즉시 저장을 건너뛰게 한다(ResultSheet discardOnLeave).
   // 아이 id로 적고 한 번 묻고 나면 지운다 — 같은 아이로 돌아와 다른 경로로 떠날 때까지 남지 않게.
   const discardRef = useRef<string | null>(null)
-  const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
+  // 「저장하고 이동」 — 결과지의 일반 저장을 기다려 성공했을 때만 떠난다(lib/sheet-leave). 실패하면 창에 문구를 띄우고 머문다.
+  const saveRef = useRef<(() => Promise<string | null>) | null>(null)
+  const [navSaving, setNavSaving] = useState(false)
+  const [navErr, setNavErr] = useState('')
+  async function saveAndGo() {
+    const to = pendingNav!
+    setNavSaving(true); setNavErr('')
+    const err = await saveThenLeave(saveRef.current, () => { setPendingNav(null); router.push(to) })
+    setNavSaving(false)
+    if (err) setNavErr(err)
+  }
+  const go =(href: string) => (dirty ? setPendingNav(href) : router.push(href))
 
   const [editOpen, setEditOpen] = useState(false)
   const [delModal, setDelModal] = useState(false)
@@ -190,6 +202,7 @@ export function AdminDetailView() {
             // (이미 언마운트된 뒤라 아래 removeQueries 경고의 「로딩으로 떨어져 채점이 사라지는」 경우가 아니다)
             onUnmountFlush={sid => queryClient.removeQueries({ queryKey: adminKeys.session(sid) })}
             discardOnLeave={sid => { const yes = discardRef.current === sid; if (yes) discardRef.current = null; return yes }}
+            saveRef={saveRef}
             initialMarks={input.marks}
             initialSentences={input.sentences}
             initialTimes={input.times}
@@ -233,16 +246,18 @@ export function AdminDetailView() {
             void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
           }} />
 
-        {/* 주 버튼은 「저장하고 이동」 — 떠날 때 즉시 저장(ResultSheet 언마운트의 keepalive)이 그대로 보낸다. 전에는 주 버튼이
-            「저장하지 않고 이동」뿐이라 마지막 O/X 직후 [다음 아동]을 누르면 파란 버튼 한 번에 채점이 사라졌다(2026-10-08 야간 점검).
+        {/* 주 버튼은 「저장하고 이동」. 전에는 주 버튼이 「저장하지 않고 이동」뿐이라 마지막 O/X 직후 [다음 아동]을 누르면
+            파란 버튼 한 번에 채점이 사라졌다(2026-10-08 야간 점검). 저장은 결과지의 일반 저장을 **기다려** 성공했을 때만 떠난다
+            (saveAndGo) — 떠날 때 즉시 저장(keepalive)에 맡기면 401·409 실패가 삼켜져 채점이 알림 없이 사라졌다(개발 판단
+            2026-10-08, 담당자 회신 아님). 실패하면 창에 문구를 띄우고 머문다 — 401이면 서버 문구가 「새 탭에서 다시 로그인한 뒤 다시 시도」를 안내한다(proxy).
             버리기는 둘째 버튼으로 남긴다(사용자 확정 2026-10-07 「정말 버린다」). */}
-        <ConfirmDialog open={pendingNav !== null}
+        <ConfirmDialog open={pendingNav !== null} busy={navSaving} error={navErr}
           title="아직 저장되지 않은 채점이 있어요"
-          confirmLabel="저장하고 이동"
-          onConfirm={() => { const to = pendingNav!; setPendingNav(null); router.push(to) }}
+          confirmLabel={navSaving ? '저장 중…' : '저장하고 이동'}
+          onConfirm={() => void saveAndGo()}
           secondary={{ label: '저장하지 않고 이동',
-            onClick: () => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setDirty(false); router.push(to) } }}
-          onClose={() => setPendingNav(null)}>
+            onClick: () => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setNavErr(''); setDirty(false); router.push(to) } }}
+          onClose={() => { setPendingNav(null); setNavErr('') }}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             방금 고친 채점을 저장하고 이동할까요?<br />
             「저장하지 않고 이동」을 고르면 고친 채점이 <b className="text-rec-deep">사라집니다</b>.
