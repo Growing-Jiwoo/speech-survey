@@ -212,7 +212,7 @@ describe('채점 완료 여부 (채점 전을 0점 Fail로 표시하지 않기 �
     expect(r.sentenceReading).toBe(0)
   })
 
-  it('쓰기 완료는 전 문항 입력 기준이다 (중단 규칙 폐기 — 담당자 확정 2026-08-13)', () => {
+  it('쓰기 완료는 전 문항 입력 기준이다 (중단 규칙 ② 폐기 — 담당자 확정 2026-08-22)', () => {
     expect(score({ writing: { sw01: 0 } }, G2).complete.writing).toBe(false)
     const all = Object.fromEntries(g2.writingItems.map(i => [i.code, 0]))
     expect(score({ writing: all }, G2).complete.writing).toBe(true)

@@ -34,7 +34,7 @@ const NO_CODES: ReadonlySet<string> = new Set()
 
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
-  incomplete, attemptsOf, onAudioError, onDirtyChange,
+  incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave,
 }: {
   sessionId: string
   session: SessionRow
@@ -54,6 +54,10 @@ export function ResultSheet({
   onAudioError: () => void
   /** 저장하지 않은 채점이 있는지 — 상위가 아동 이동·이탈을 막는 데 쓴다 */
   onDirtyChange?: (dirty: boolean) => void
+  /** 저장하지 않은 채점을 떠나는 순간 보냈다 — 상위가 그 아이의 상세 캐시를 비운다(아래 언마운트 효과) */
+  onUnmountFlush?: (sessionId: string) => void
+  /** 떠날 때 저장하지 않은 채점을 **버리기로** 했는지(「저장하지 않고 이동」) — 그러면 위 즉시 저장을 건너뛴다 */
+  discardOnLeave?: (sessionId: string) => boolean
 }) {
   const f = itemsFor(form)
   // 미녹음 문항은 잠근다 — 들을 녹음이 없어 채점자가 판단할 것이 없다(lib/scoring withUnrecordedFixed).
@@ -113,6 +117,32 @@ export function ResultSheet({
   // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
   // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
+
+  /**
+   * 떠나는 순간 저장하지 않은 채점을 **바로 보낸다.** 자동 저장은 1.5초 디바운스라, 찍고 1.5초 안에 브라우저
+   * 뒤로가기(popstate — 확인 모달도 beforeunload도 못 막는다)를 하면 타이머만 취소되고 그 채점은 사라졌다.
+   * `keepalive`라 페이지가 사라져도 요청은 끝까지 간다. 응답은 받을 수 없으니 상위가 그 아이의 상세 캐시를
+   * 비워(onUnmountFlush), 다시 열면 서버에서 새로 받게 한다 — 옛 캐시로 초기화된 화면이 방금 보낸 값을 되덮지
+   * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다.
+   * 단 채점자가 「저장하지 않고 이동」을 골랐으면 보내지 않는다(`discardOnLeave`) — 확인 창이 「사라집니다」라고
+   * 말한 값을 몰래 저장하면 버리려던 O/X가 임상 기록에 남는다(사용자 확정 2026-10-07).
+   * 본문은 아래 `save`와 **같은 모양**이어야 한다 — 읽은 시간(`times`)을 빠뜨리면 시간을 넣고 바로 떠날 때 그 값만 사라진다.
+   */
+  const latestRef = useRef({ dirty: false, body: { marks, sentences, times } })
+  useEffect(() => { latestRef.current = { dirty, body: { marks, sentences, times } } })
+  const onUnmountFlushRef = useRef(onUnmountFlush)
+  useEffect(() => { onUnmountFlushRef.current = onUnmountFlush })
+  const discardOnLeaveRef = useRef(discardOnLeave)
+  useEffect(() => { discardOnLeaveRef.current = discardOnLeave })
+  useEffect(() => () => {
+    const l = latestRef.current
+    const discard = discardOnLeaveRef.current?.(sessionId) ?? false
+    if (!l.dirty || discard) return
+    void fetch(`/api/admin/sessions/${sessionId}/scores`, {
+      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l.body),
+    }).catch(() => undefined)
+    onUnmountFlushRef.current?.(sessionId)
+  }, [sessionId])
 
   // 탭 닫기·새로고침은 앱이 막을 수 없으므로 브라우저 기본 경고에 맡긴다(검사 화면과 같은 방식).
   useEffect(() => {

@@ -1,49 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { uploadRecording } from '@/lib/upload'
-import type { Recording } from '@/hooks/useRecorder'
+import { describe, it, expect } from 'vitest'
+import { classifyUpload } from '@/lib/upload'
 
-// 클라이언트 업로드 공통 경로(정상 업로드·재시도 배너가 함께 사용). Node 22의 네이티브
-// fetch/FormData/Blob으로 jsdom 없이 검증한다.
-
-const rec: Recording = {
-  blob: new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/webm' }),
-  durationSec: 1.2345,
-  mime: 'audio/webm',
-  peak: 0.42,
-}
-const params = { sessionId: 'sid-1', sessionToken: 'tok', itemCode: 'rw01', attemptNo: 2, rec }
-
-const fetchMock = vi.fn()
-beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset() })
-afterEach(() => { vi.unstubAllGlobals() })
-
-describe('uploadRecording (클라이언트)', () => {
-  it('성공 응답이면 true', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 200 }))
-    expect(await uploadRecording(params)).toBe(true)
+// 녹음 업로드 실패를 「다시 보내면 될 수도 있는 것」과 「다시 보내도 같은 것」으로 가른다 —
+// 4xx에 재시도 버튼을 보이면 선생님이 끝없이 누른다(2026-10-01).
+describe('classifyUpload', () => {
+  it('2xx는 성공', () => {
+    expect(classifyUpload(200)).toEqual({ ok: true, status: 200, retry: false, fatal: null })
   })
-
-  it('서버 오류(5xx)면 false — 예외를 던지지 않는다', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 502 }))
-    expect(await uploadRecording(params)).toBe(false)
+  it('연결 실패(0)·429·5xx만 재시도', () => {
+    for (const s of [0, 429, 500, 502, 503]) expect(classifyUpload(s).retry).toBe(true)
+    for (const s of [400, 401, 403, 404, 409, 413]) expect(classifyUpload(s).retry).toBe(false)
   })
-
-  it('네트워크 단절(fetch reject)이면 false', async () => {
-    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
-    expect(await uploadRecording(params)).toBe(false)
-  })
-
-  it('FormData 필드 조립: durationSec은 소수 2자리, attemptNo는 문자열, 파일명은 audio', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 200 }))
-    await uploadRecording(params)
-    const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('/api/recordings')
-    const fd = init.body as FormData
-    expect(fd.get('sessionId')).toBe('sid-1')
-    expect(fd.get('sessionToken')).toBe('tok')
-    expect(fd.get('itemCode')).toBe('rw01')
-    expect(fd.get('attemptNo')).toBe('2')
-    expect(fd.get('durationSec')).toBe('1.23')
-    expect((fd.get('audio') as File).name).toBe('audio')
+  it('401은 세션 만료, 409는 이미 제출 — 이 검사를 더 진행할 수 없다', () => {
+    expect(classifyUpload(401).fatal).toBe('expired')
+    expect(classifyUpload(409).fatal).toBe('submitted')
+    expect(classifyUpload(400).fatal).toBeNull()
   })
 })

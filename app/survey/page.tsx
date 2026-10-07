@@ -7,12 +7,17 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import type { Recording } from '@/hooks/useRecorder'
 import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { canAdvance, visiblePages } from '@/lib/survey-flow'
-import { loadState, saveState, type SurveyState } from '@/lib/survey-state'
-import { uploadRecording } from '@/lib/upload'
+import {
+  clearState, loadState, saveState, settleLostUploads, updateSavedState, withPendingUpload, withoutPendingUpload,
+  type SurveyState,
+} from '@/lib/survey-state'
+import { uploadRecording, type UploadResult } from '@/lib/upload'
+import { pageLabel } from '@/lib/items'
 import { Blip } from '@/components/Blip'
 import { ProgressBar } from '@/components/ProgressBar'
 import { ChecklistItem } from '@/components/survey/ChecklistItem'
@@ -26,6 +31,11 @@ import { SectionIntro } from '@/components/survey/SectionIntro'
 import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
 
+/** 이 탭에서 지금 올리고 있는 녹음(`세션:페이지:시도`). 모듈 범위라 검사 ↔ 검토 화면을 오가도 남고, 새로고침이면
+ *  비어 있다 — 저장 상태의 「올리는 중」 가운데 여기 없는 것이 끊긴 업로드다(lib/survey-state settleLostUploads). */
+const inFlight = new Set<string>()
+const flightKey = (sessionId: string, code: string, attemptNo: number) => `${sessionId}:${code}:${attemptNo}`
+
 function SurveyInner() {
   const router = useRouter()
   const params = useSearchParams()
@@ -38,8 +48,9 @@ function SurveyInner() {
   // 연습 종료 안내 화면(연습 페이지에서 [다음]을 누른 직후 한 번). 페이지를 옮기면 초기화된다.
   const [practiceEnd, setPracticeEnd] = useState(false)
   // 검사자가 직접 누르는 일시정지(화면을 덮어 아동의 오터치도 막는다).
-  // **녹음 중에도 누를 수 있다** — 담당자 확정(2026-09-21): 신청 화면 안내가 「학생이
-  // 힘들어하면 일시정지 버튼을 눌러 언제든 멈출 수 있습니다」라고 말한다. 종전에는
+  // **녹음 중에도 누를 수 있다** — 신청 화면 안내 「학생이 힘들어하면 일시정지 버튼을 눌러 언제든
+  // 멈출 수 있습니다」는 담당자 확정(2026-09-21)이고, 그 문구에 화면을 맞춰 녹음 중에도 눌리게 한
+  // 동작은 사용자 확정(2026-09-22 — 담당자 회신 아님)이다. 종전에는
   // `disabled={busy}`로 잠가 두어, 아이가 힘들어하는 바로 그 순간(대개 녹음 중)에
   // 안내가 가리키는 버튼이 눌리지 않았다.
   const [paused, setPaused] = useState(false)
@@ -54,15 +65,26 @@ function SurveyInner() {
   // `{sessionId}/{itemCode}_{attemptNo}`). 실패한 시도의 번호는 그때 고정된 값이다.
   const [pendingRetries, setPendingRetries] =
     useState<Record<string, { rec: Recording; attemptNo: number }>>({})
+  /** 끊긴 업로드로 「녹음 완료」 표시를 거둔 페이지 — 다시 녹음할 때까지 알린다 */
+  const [lostUploads, setLostUploads] = useState<string[]>([])
+  /** 그 녹음만 저장할 수 없었던 경우(한 화면 10번 상한·파일 문제)의 안내 */
+  const [uploadNotice, setUploadNotice] = useState('')
+  /** 이 검사를 더 진행할 수 없다(세션 만료·이미 제출) — 처음 화면으로 보낸다 */
+  const [fatal, setFatal] = useState<UploadResult['fatal']>(null)
   const fromReview = params.get('from') === 'review'
+  const otherTab = useOtherTabGuard(st?.sessionId)
 
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
+    // 새로고침·탭 닫기로 끊긴 업로드의 「녹음 완료」 표시를 거둔다 — 같은 탭에서 화면만 옮겼다 온 것(inFlight)은 그대로
+    const settled = settleLostUploads(s, (code, no) => inFlight.has(flightKey(s.sessionId, code, no)))
+    if (settled.lost.length > 0) saveState(settled.state)
     // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
     // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSt(s)
+    setSt(settled.state)
+    setLostUploads(settled.lost)
   }, [router])
 
   // 검사지는 서버가 세션 토큰을 확인하고 내려준다(문항을 공개 JS에 싣지 않으려고 — hooks/useSurveyForm).
@@ -144,19 +166,35 @@ function SurveyInner() {
     })
   }, [])
 
-  const markSaved = useCallback((code: string) => {
+  const markSaved = useCallback((code: string, attemptNo: number, uploads: boolean) => {
     // 「모르겠어요」로 넘겼던 페이지에 돌아와 녹음했으면 그 표시를 거둔다 — 녹음이 있는데
     // 검토 화면이 「모르겠어요」라고 말하면 안 된다(둘은 상호 배타다).
-    patch(prev => ({
-      recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
-      skipped: prev.skipped.filter(c => c !== code),
-    }))
+    // 올리는 녹음이면 올리는 중 표시도 함께 적는다 — 끝나면 settleUpload가 지운다(끊기면 다음에 열 때 거둔다).
+    // 연습은 올리지 않으므로 적지 않는다 — 적었다 바로 지우면 지우는 쪽(저장 상태 직접 수정)이 이 업데이터보다
+    // 먼저 돌아 표시가 저장 상태에 남고, 그 사이 새로고침하면 연습 녹음에 「저장되지 않았어요」가 뜬다.
+    patch(prev => {
+      const next = {
+        ...prev,
+        recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
+        skipped: prev.skipped.filter(c => c !== code),
+      }
+      return uploads ? withPendingUpload(next, code, attemptNo) : next
+    })
     setPendingRetries(prev => {
       if (!(code in prev)) return prev
       const { [code]: _removed, ...rest } = prev
       return rest
     })
+    setLostUploads(prev => prev.filter(c => c !== code))
+    setUploadNotice('')
   }, [patch])
+
+  /** 업로드가 끝났다(성공이든 실패든) — 「올리는 중」 표시를 저장 상태에서 직접 지운다(컴포넌트 생존과 무관). */
+  const settleUpload = useCallback((sessionId: string, code: string, attemptNo: number) => {
+    inFlight.delete(flightKey(sessionId, code, attemptNo))
+    updateSavedState(sessionId, s => withoutPendingUpload(s, code, attemptNo))
+    setSt(prev => prev && prev.sessionId === sessionId ? withoutPendingUpload(prev, code, attemptNo) : prev)
+  }, [])
 
   /**
    * 낙관적 완료 표시를 되돌린다 — 업로드가 실패했으면 그 녹음은 실제로 없다.
@@ -172,15 +210,35 @@ function SurveyInner() {
    * 때만 따라 갱신한다. 둘은 각자의 현재 값에서 1을 빼므로 이중 차감이 되지 않는다.
    * (사용자 확정 2026-08-21 — 임상 규칙 아님, 개발 판단)
    */
-  const undoSaved = useCallback((code: string, rec: Recording, attemptNo: number) => {
+  const undoSaved = useCallback((sessionId: string, code: string, rec: Recording, attemptNo: number, r: UploadResult) => {
     const dec = (n: number | undefined) => Math.max(0, (n ?? 1) - 1)
-    const saved = loadState()
-    if (saved) saveState({ ...saved, recorded: { ...saved.recorded, [code]: dec(saved.recorded[code]) } })
-    setSt(prev => prev && ({ ...prev, recorded: { ...prev.recorded, [code]: dec(prev.recorded[code]) } }))
-    setPendingRetries(prev => ({ ...prev, [code]: { rec, attemptNo } }))
+    // 세션 id로 찾는다(`loadState`는 다른 탭이 다른 아이를 시작했으면 그 아이를 돌려준다)
+    updateSavedState(sessionId, s => ({ ...s, recorded: { ...s.recorded, [code]: dec(s.recorded[code]) } }))
+    setSt(prev => prev && prev.sessionId === sessionId ? ({ ...prev, recorded: { ...prev.recorded, [code]: dec(prev.recorded[code]) } }) : prev)
+    if (r.fatal) { setFatal(r.fatal); return }
+    // 다시 보내면 될 수도 있는 실패만 재시도 배너로 — 4xx는 눌러도 영원히 실패한다
+    if (r.retry) setPendingRetries(prev => ({ ...prev, [code]: { rec, attemptNo } }))
+    else setUploadNotice(r.status === 400 && attemptNo > 10
+      ? '이 화면은 10번까지만 저장돼요 — 마지막 녹음이 저장돼 있어요.'
+      : '이 녹음은 저장할 수 없었어요. 다시 녹음해 주세요.')
   }, [])
 
   if (!st) return null
+  if (otherTab) return <OtherTabNotice />
+  // 세션 만료(24시간)·이미 제출된 검사는 더 올릴 수 없다 — 양식 조회의 같은 오류(FormStatus)와 같이 진행 상태를 지우고
+  // 처음 화면으로. 남겨 두면 시작 화면이 「이어서 하기」를 다시 권해 같은 오류로 돌아온다.
+  if (fatal) return (
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+      <Blip variant="idle" className="h-24 w-[100px]" />
+      <h1 className="text-xl font-bold">{fatal === 'expired' ? '검사를 시작한 지 오래되어 이어서 할 수 없어요' : '이미 제출된 검사예요'}</h1>
+      <p className="text-sm leading-relaxed text-ink-soft">
+        {fatal === 'expired'
+          ? <>방금 녹음은 저장되지 않았어요. 처음 화면에서 이 학생을 다시 골라 <b>처음부터</b> 검사해 주세요.</>
+          : <>다른 탭이나 기기에서 이 검사가 제출됐어요. 방금 녹음은 저장되지 않았어요.</>}
+      </p>
+      <button type="button" className="cta mt-2 max-w-60" onClick={() => { clearState(); router.replace('/') }}>처음 화면으로</button>
+    </main>
+  )
 
   if (st.phase === 'mic')
     return <MicCheck onOk={() => patch({ micDone: true, phase: 'practiceAsk' })} />
@@ -220,11 +278,13 @@ function SurveyInner() {
   function handleRecorded(rec: Recording) {
     const code = page.code
     const attemptNo = (st!.recorded[code] ?? 0) + 1
-    markSaved(code)
-    if (page.practice) return   // 연습은 서버에 남기지 않는다
+    const { sessionId, sessionToken } = st!
+    if (page.practice) { markSaved(code, attemptNo, false); return }   // 연습은 서버에 남기지 않는다
+    inFlight.add(flightKey(sessionId, code, attemptNo))
+    markSaved(code, attemptNo, true)
     setUploading(n => n + 1)
-    void uploadRecording({ sessionId: st!.sessionId, sessionToken: st!.sessionToken, itemCode: code, attemptNo, rec })
-      .then(ok => { if (!ok) undoSaved(code, rec, attemptNo) })
+    void uploadRecording({ sessionId, sessionToken, itemCode: code, attemptNo, rec })
+      .then(r => { settleUpload(sessionId, code, attemptNo); if (!r.ok) undoSaved(sessionId, code, rec, attemptNo, r) })
       .finally(() => setUploading(n => n - 1))
   }
 
@@ -247,9 +307,16 @@ function SurveyInner() {
     // attemptNo를 다시 계산하지 않고 실패 시점 값을 그대로 쓴다(pendingRetries 주석 참고).
     const pending = pendingRetries[code]
     if (!pending || !st) return
-    const ok = await uploadRecording({ sessionId: st.sessionId, sessionToken: st.sessionToken,
+    const { sessionId } = st
+    const r = await uploadRecording({ sessionId, sessionToken: st.sessionToken,
       itemCode: code, attemptNo: pending.attemptNo, rec: pending.rec })
-    if (ok) markSaved(code)
+    if (r.ok) { markSaved(code, pending.attemptNo, false); return }   // 이미 올라갔다 — 올리는 중 표시가 필요 없다
+    if (r.fatal) { setFatal(r.fatal); return }
+    // 재시도도 4xx면 배너를 거둔다 — 더 눌러도 같다
+    if (!r.retry) {
+      setPendingRetries(prev => { const { [code]: _removed, ...rest } = prev; return rest })
+      setUploadNotice('이 녹음은 저장할 수 없었어요. 다시 녹음해 주세요.')
+    }
   }
 
   // 다음으로 넘어갈 수 있는 조건(페이지 종류별)은 survey-flow의 canAdvance가 판정한다.
@@ -347,6 +414,16 @@ function SurveyInner() {
               )}
 
               <RetryBanner form={f} codes={Object.keys(pendingRetries)} onRetry={retryUpload} />
+              {/* 끊긴 업로드(새로고침·탭 닫기) — 파일이 없으니 재시도가 아니라 다시 녹음이다 */}
+              {lostUploads.length > 0 && (
+                <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">
+                  <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음이 저장되기 전에 화면이 닫혀 저장되지 않았어요.
+                  그 화면에서 다시 녹음해 주세요.
+                </p>
+              )}
+              {uploadNotice && (
+                <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">{uploadNotice}</p>
+              )}
 
               {page.section === 'word_writing' && (
                 <WritingPage items={page.items} value={st.writing}

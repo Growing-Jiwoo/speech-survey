@@ -250,6 +250,12 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
       .toEqual(['2026-09-21T01:00:00.000Z', '2026-09-22T02:00:00.000Z'])
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_결과지_2명_')
   })
+  it('[REGRESSION] 같은 id를 두 번 주면 한 장만 — 같은 장이 두 번 붙고 「2명」이 되지 않게', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,a1')
+    expect(res.status).toBe(200)
+    // 한 장이면 관리자 규약 파일명(「N명」이 아니다) — 렌더 함수가 바뀌어도 응답만으로 판정한다
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('01_아이1_1차_2026-09-21.pdf')
+  })
   it('한 장이면 관리자 규약 파일명 + 재검사가 있으면 차수', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1')
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('01_아이1_1차_2026-09-21.pdf')
@@ -292,8 +298,10 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(vi.mocked(pdf.renderReport).mock.calls).toHaveLength(2)
   })
   it('장수 상한을 넘으면 400 — 유효 토큰 하나로 함수 제한시간을 넘기지 못하게', async () => {
-    const many = Array.from({ length: 61 }, () => 'a1').join(',')
-    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${many}`)
+    // 서로 다른 세션 61개 — 같은 id를 되풀이하면 중복 제거로 한 장이 돼 상한을 시험하지 못한다
+    const rows = Array.from({ length: 61 }, (_, i) => scored(`m${i}`, i + 1, '2026-09-22T01:00:00.000Z'))
+    vi.mocked(db.classResults).mockResolvedValue(rows)
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${rows.map(r => r.id).join(',')}`)
     expect(res.status).toBe(400)
     expect(pdf.renderReport).not.toHaveBeenCalled()
   })

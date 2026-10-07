@@ -50,7 +50,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       // 중단된 재검사인 아이를 통째로 빼지 않는다.
       picked = children.map(latestScored).filter(s => s !== null).map(s => byId.get(s.id)!)
     } else {
-      const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean)
+      // 같은 id가 두 번 오면 한 장만 — 중복이면 같은 장이 두 번 붙고 파일명 「N명」도 틀린다
+      const ids = [...new Set(idsParam.split(',').map(s => s.trim()).filter(Boolean))]
       // 학급 소속 검증 — 이 토큰이 여는 학급의 세션이 아니면 하나라도 거부한다.
       if (ids.some(id => !byId.has(id))) return jsonError('이 학급의 검사가 아닙니다.', 403)
       if (ids.some(id => meta.get(id)!.status !== 'scored')) return jsonError('채점이 끝나지 않은 검사가 있습니다.', 400)
