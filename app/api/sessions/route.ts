@@ -32,7 +32,7 @@ const rateLimited = createRateLimiter(PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS)
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))
-    return jsonError('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+    return jsonError('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429)
 
   const body = await req.json().catch(() => null)
   const parsed = sessionCreateSchema.safeParse(body)

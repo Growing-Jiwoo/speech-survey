@@ -13,12 +13,12 @@ export const runtime = 'nodejs'
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id입니다.', 400)
+  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id예요.', 400)
   try {
     const s = await sessionState(id)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없습니다.', 404)
+    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
     // 화면에서 표시한 검사의 쓰기는 검사 중 입력이 유일한 채점 경로다 — 여기서 지우면 되돌릴 길이 없다.
-    if (s.writingMode !== 'scan') return jsonError('스캔본으로 채점하는 검사가 아닙니다.', 409)
+    if (s.writingMode !== 'scan') return jsonError('스캔본으로 채점하는 검사가 아니에요.', 409)
     const f = itemsFor(formForGrade(s.grade))
     await unlinkWritingScan(id, f.writingSection === 'word_writing' ? 'word' : 'sentence', f.writingItems.map(i => i.code))
     // 채점 근거가 사라지는 사건이라 최소 기록을 남긴다(아동 정보 수정·세션 삭제와 같은 방침).
@@ -26,6 +26,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[admin/sessions/:id/scan] 연결 해제 실패', e)
-    return jsonError('연결 해제에 실패했습니다.', 500)
+    return jsonError('연결 해제에 실패했어요.', 500)
   }
 }

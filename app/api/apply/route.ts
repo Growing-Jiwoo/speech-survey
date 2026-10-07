@@ -23,7 +23,7 @@ let lastNotifiedAt = 0
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))
-    return jsonError('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+    return jsonError('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429)
 
   const body = await req.json().catch(() => null)
   const parsed = applySchema.safeParse(body)
@@ -61,9 +61,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true }, { status: 201 })
     }
     console.error('[apply] 코드 unique 충돌 재시도 상한 도달')
-    return jsonError('접수에 실패했습니다. 다시 시도해 주세요.', 502)
+    return jsonError('접수에 실패했어요. 다시 시도해 주세요.', 502)
   } catch (e) {
     console.error('[apply] 접수 실패', e)
-    return jsonError('접수에 실패했습니다. 다시 시도해 주세요.', 502)
+    return jsonError('접수에 실패했어요. 다시 시도해 주세요.', 502)
   }
 }

@@ -27,7 +27,7 @@ const lastSentAt = new Map<string, number>()
 
 export async function POST(req: Request) {
   if (ipLimited(clientIp(req)))
-    return jsonError('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+    return jsonError('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429)
   const body = await req.json().catch(() => null)
   const parsed = resultsRequestSchema.safeParse(body)
   if (!parsed.success) return jsonError('코드를 확인해 주세요.', 400)
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     // pending도 미존재와 같은 404 — 승인 여부가 새면 코드 열거에 쓰인다(verify-code 방침).
     if (!row || row.status !== 'active') return jsonError('코드를 확인해 주세요.', 404)
     // 발급 이메일 필수화(2026-09-22) 뒤로는 도달하지 않는 방어선. 안내 UI는 두지 않는다(사용자 확정).
-    if (!row.teacher_email) return jsonError('이 학급은 이메일이 등록돼 있지 않습니다. 담당자에게 문의해 주세요.', 400)
+    if (!row.teacher_email) return jsonError('이 학급은 이메일이 등록돼 있지 않아요. 담당자에게 문의해 주세요.', 400)
 
     const [token, rows] = await Promise.all([
       createResultsToken(row.id, env('SESSION_SECRET')),
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const sent = await sendMail({ ...m, to: row.teacher_email })
     if (!sent.ok) {
       console.error('[results/request] 메일 발송 실패', sent.error)
-      return jsonError('메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.', 502)
+      return jsonError('메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.', 502)
     }
     lastSentAt.set(code, Date.now())
 

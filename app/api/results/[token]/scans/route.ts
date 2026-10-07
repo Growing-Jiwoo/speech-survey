@@ -31,28 +31,28 @@ const rateLimited = createRateLimiter(300, 60 * 60 * 1000)
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const classCodeId = await verifyResultsToken(token, env('SESSION_SECRET'))
-  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않습니다.', 401)
-  if (rateLimited(classCodeId)) return jsonError('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않아요.', 401)
+  if (rateLimited(classCodeId)) return jsonError('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429)
 
   const fd = await req.formData().catch(() => null)
   const file = fd?.get('file')
   const sessionId = String(fd?.get('sessionId') ?? '')
   if (!(file instanceof File) || !UUID_RE.test(sessionId)) return jsonError('필수 항목 누락', 400)
-  if (file.size > MAX_BYTES) return jsonError('스캔본이 너무 큽니다.', 413)
+  if (file.size > MAX_BYTES) return jsonError('스캔본이 너무 커요.', 413)
   const bytes = new Uint8Array(await file.arrayBuffer())
   const mime = sniffImage(bytes)
-  if (!mime) return jsonError('이미지 파일만 올릴 수 있습니다.', 400)
+  if (!mime) return jsonError('이미지 파일만 올릴 수 있어요.', 400)
 
   try {
     const t = await scanUploadTarget(sessionId)
     // 다른 학급의 검사는 없는 검사와 같은 404 — 있다는 사실도 알려 주지 않는다.
-    if (!t || t.class_code_id !== classCodeId) return jsonError('검사를 찾을 수 없습니다.', 404)
-    if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사입니다.', 409)
-    if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사입니다.', 409)
+    if (!t || t.class_code_id !== classCodeId) return jsonError('검사를 찾을 수 없어요.', 404)
+    if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사예요.', 409)
+    if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사예요.', 409)
     const writingCodes = new Set(itemsFor(formForGrade(t.grade)).writingItems.map(i => i.code))
     const scored = (x: { writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[] }) =>
       x.writing_answers.some(w => writingCodes.has(w.item_code)) || x.sentence_scores.some(s => writingCodes.has(s.item_code))
-    if (scored(t)) return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없습니다.', 409)
+    if (scored(t)) return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없어요.', 409)
     // 스캔본은 그 아이의 가장 최근 제출 검사에만 붙는다(화면의 짝짓기와 같은 규칙) — 다르면 화면이 옛 목록으로 짝지은 것이다
     if ((await latestSubmittedSessionId(t.class_code_id, t.child_no)) !== sessionId)
       return jsonError('이 학생은 더 최근에 제출한 검사가 있어요. 결과지를 새로고침한 뒤 다시 올려 주세요.', 409)
@@ -78,10 +78,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         // 되돌리지 못했다 — 행이 새 그림을 가리킨 채 남으므로 새 파일은 지우지 않는다. 점수와 그림이 어긋났을 수 있어
         // 찾을 수 있게 남긴다(담당자가 결과지에서 보고 「연결 해제」할 수 있다). 채점이 시작됐으니 다시 보내도 409다.
         console.error(`[results/scans] 되돌리기 실패 — 점수와 근거 그림이 어긋났을 수 있음 session=${sessionId}`, err)
-        return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없습니다.', 409)
+        return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없어요.', 409)
       }
       await removeScanObjects([path]).catch(err => console.error('[results/scans] 되돌린 스캔본 정리 실패', err))
-      return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없습니다.', 409)
+      return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없어요.', 409)
     }
     // 바꾼 경우 옛 파일 — 행은 이미 새 파일을 가리키므로 정리 실패는 로그만(검사를 지울 때 폴더째 지워진다).
     if (t.scan) await removeScanObjects([t.scan.path]).catch(err => console.error('[results/scans] 옛 스캔본 정리 실패', err))
@@ -90,6 +90,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[results/scans] 저장 실패', e)
-    return jsonError('스캔본을 올리지 못했습니다.', 502)
+    return jsonError('스캔본을 올리지 못했어요.', 502)
   }
 }

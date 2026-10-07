@@ -13,11 +13,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id입니다.', 400)
+  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
   try {
     return NextResponse.json({ roster: await listRoster(id) })
   } catch (e) {
     console.error('[admin/codes/:id/roster] 명단 조회 실패', e)
-    return jsonError('명단을 불러오지 못했습니다.', 502)
+    return jsonError('명단을 불러오지 못했어요.', 502)
   }
 }

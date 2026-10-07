@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const ip = clientIp(req)
   // (1) per-IP 하드 잠금: 이 IP만 잠그므로 다른 IP의 정상 관리자는 영향받지 않는다.
   if (await isLoginLocked(ip, IP_MAX_FAILS))
-    return NextResponse.json({ error: '시도가 너무 많습니다. 잠시 후 다시 시도하세요.' }, { status: 429 })
+    return NextResponse.json({ error: '시도가 너무 많아요. 잠시 후 다시 시도해 주세요.' }, { status: 429 })
 
   // (2) 글로벌 백오프: 예전엔 전역 50회 도달 시 모든 로그인을 하드 잠금(정상 관리자까지 봉쇄)했으나,
   //     이제 전역 실패 누적에 비례한 지연(상한 2s)만 준다 — IP 로테이션 공격엔 마찰을 주되 봉쇄는 안 한다.
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   if (!ok) {
     await recordLoginFailure(ip, LOCK_MS)
     await recordLoginFailure(GLOBAL_KEY, LOCK_MS)
-    return NextResponse.json({ error: '비밀번호가 올바르지 않습니다' }, { status: 401 })
+    return NextResponse.json({ error: '비밀번호가 올바르지 않아요' }, { status: 401 })
   }
   await clearLoginFailures(ip)
   await clearLoginFailures(GLOBAL_KEY)
