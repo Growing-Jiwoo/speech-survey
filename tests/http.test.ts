@@ -32,9 +32,9 @@ describe('postJson / requestJson — 던지지 않는 클라이언트 요청 헬
   })
 
   it('실패 응답의 { error } 문구를 그대로 전달한다 (서버가 준 사용자용 메시지)', async () => {
-    fetchMock.mockResolvedValueOnce(json({ error: '이미 제출된 검사입니다.' }, 409))
+    fetchMock.mockResolvedValueOnce(json({ error: '이미 제출된 검사예요.' }, 409))
     const r = await postJson('/api/sessions/submit', {})
-    expect(r).toEqual({ ok: false, status: 409, error: '이미 제출된 검사입니다.' })
+    expect(r).toEqual({ ok: false, status: 409, error: '이미 제출된 검사예요.' })
   })
 
   it('실패 응답에 error가 없으면 fallback 문구', async () => {

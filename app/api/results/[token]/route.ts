@@ -20,12 +20,12 @@ export const dynamic = 'force-dynamic'
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const classCodeId = await verifyResultsToken(token, env('SESSION_SECRET'))
-  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않습니다.', 401)
+  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않아요.', 401)
   try {
     const [row, roster, rows, sheetTag] = await Promise.all([
       findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
     ])
-    if (!row) return jsonError('학급을 찾을 수 없습니다.', 404)
+    if (!row) return jsonError('학급을 찾을 수 없어요.', 404)
     const form = formForGrade(row.grade)
     // 아동 실명·점수·판정이 담긴 응답이다 — 중간 캐시·뒤로가기 복원에 남기지 않는다
     // (PDF 라우트와 같은 방침). 새로고침이 곧 최신 상태여야 한다는 이 라우트의 약속도 이것이 지킨다.
@@ -41,6 +41,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     }, { headers: { 'cache-control': 'no-store' } })
   } catch (e) {
     console.error('[results/:token] 조회 실패', e)
-    return jsonError('결과를 불러오지 못했습니다.', 500)
+    return jsonError('결과를 불러오지 못했어요.', 500)
   }
 }

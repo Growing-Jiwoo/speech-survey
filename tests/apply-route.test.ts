@@ -75,7 +75,7 @@ describe('POST /api/apply', () => {
     const json = await res.json()
     // 두 문자열을 블랙리스트하는 대신 고정 문구와 정확히 같은지 확인한다 —
     // 원본 에러의 어떤 조각도 새지 않아야 한다는 것을 한 번에 못박는다.
-    expect(json.error).toBe('접수에 실패했습니다. 다시 시도해 주세요.')
+    expect(json.error).toBe('접수에 실패했어요. 다시 시도해 주세요.')
   })
   it('재시도 상한(5회) 소진 시 502', async () => {
     vi.mocked(insertApplication).mockResolvedValue('duplicate')

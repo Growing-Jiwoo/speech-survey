@@ -27,11 +27,11 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id입니다.', 400)
+  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
 
   try {
     const result = await approveClassCode(id)
-    if (!result) return jsonError('존재하지 않는 코드입니다.', 404)
+    if (!result) return jsonError('존재하지 않는 코드예요.', 404)
     const { row, already } = result
 
     // 메일을 보내지 않는 경로(already·이메일 없음)에서도 응답에 실어야 하므로 밖에서 정한다.
@@ -52,6 +52,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, already, mailed, code: row.code, surveyUrl: origin })
   } catch (e) {
     console.error('[admin/codes/:id/approve] 승인 실패', e)
-    return jsonError('승인 처리에 실패했습니다.', 502)
+    return jsonError('승인 처리에 실패했어요.', 502)
   }
 }

@@ -34,7 +34,7 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id입니다.', 400)
+  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id예요.', 400)
 
   const b = await req.json().catch(() => ({}))
   const rawMarks = asRecord(b.marks)
@@ -46,12 +46,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   let grade: number
   try {
     const s = await sessionState(id)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없습니다.', 404)
-    if (rawWriting && s.writingMode !== 'scan') return jsonError('화면에서 표시한 쓰기는 고칠 수 없습니다.', 409)
+    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (rawWriting && s.writingMode !== 'scan') return jsonError('화면에서 표시한 쓰기는 고칠 수 없어요.', 409)
     grade = s.grade
   } catch (e) {
     console.error('[admin/scores] 세션 조회 실패', e)
-    return jsonError('채점 저장에 실패했습니다.', 502)
+    return jsonError('채점 저장에 실패했어요.', 502)
   }
 
   const form = formForGrade(grade)
@@ -108,7 +108,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return jsonError('그사이 선생님이 스캔본을 올리거나 바꿨어요. 결과지를 새로 열어 주세요.', 409)
     } catch (e) {
       console.error('[admin/scores] 스캔본 조회 실패', e)
-      return jsonError('채점 저장에 실패했습니다.', 502)
+      return jsonError('채점 저장에 실패했어요.', 502)
     }
   }
 
@@ -120,7 +120,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await saveScores(id, marks, sentences, sentenceCodes, times)
   } catch (e) {
     console.error('[admin/scores] 저장 실패', e)
-    return jsonError('채점 저장에 실패했습니다.', 502)
+    return jsonError('채점 저장에 실패했어요.', 502)
   }
   return NextResponse.json({ ok: true })
 }

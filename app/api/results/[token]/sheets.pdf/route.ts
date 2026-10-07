@@ -25,10 +25,10 @@ const MAX_SHEETS = 60
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const classCodeId = await verifyResultsToken(token, env('SESSION_SECRET'))
-  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않습니다.', 401)
+  if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않아요.', 401)
   try {
     const [row, rows] = await Promise.all([findClassCodeById(classCodeId), classResults(classCodeId)])
-    if (!row) return jsonError('학급을 찾을 수 없습니다.', 404)
+    if (!row) return jsonError('학급을 찾을 수 없어요.', 404)
 
     // 상태·차수는 lib/results가 정한다 — 화면과 같은 판정이어야 화면에서 잠긴 것이 여기서 열리지 않는다.
     const children = buildChildren([], rows)
@@ -53,14 +53,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       // 같은 id가 두 번 오면 한 장만 — 중복이면 같은 장이 두 번 붙고 파일명 「N명」도 틀린다
       const ids = [...new Set(idsParam.split(',').map(s => s.trim()).filter(Boolean))]
       // 학급 소속 검증 — 이 토큰이 여는 학급의 세션이 아니면 하나라도 거부한다.
-      if (ids.some(id => !byId.has(id))) return jsonError('이 학급의 검사가 아닙니다.', 403)
-      if (ids.some(id => meta.get(id)!.status !== 'scored')) return jsonError('채점이 끝나지 않은 검사가 있습니다.', 400)
+      if (ids.some(id => !byId.has(id))) return jsonError('이 학급의 검사가 아니에요.', 403)
+      if (ids.some(id => meta.get(id)!.status !== 'scored')) return jsonError('채점이 끝나지 않은 검사가 있어요.', 400)
       picked = ids.map(id => byId.get(id)!)
     }
     if (picked.length === 0)
       return jsonError(all
-        ? '내려받을 수 있는 결과지가 없습니다. 채점이 끝나면 다시 시도해 주세요.'
-        : '선택한 검사가 없습니다.', 400)
+        ? '내려받을 수 있는 결과지가 없어요. 채점이 끝나면 다시 시도해 주세요.'
+        : '선택한 검사가 없어요.', 400)
     // 한 학급이 이 수를 넘길 일은 없다(학급 정원). 상한이 없으면 유효 토큰 하나로 수백 장을
     // 요청해 함수 제한시간을 넘길 수 있다 — 장당 약 50ms라 190장쯤에서 10초에 닿는다.
     if (picked.length > MAX_SHEETS)
@@ -97,6 +97,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     })
   } catch (e) {
     console.error('[results/:token/sheets.pdf] 생성 실패', e)
-    return jsonError('결과보고서를 만들지 못했습니다.', 500)
+    return jsonError('결과보고서를 만들지 못했어요.', 500)
   }
 }

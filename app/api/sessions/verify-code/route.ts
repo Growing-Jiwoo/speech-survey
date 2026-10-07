@@ -30,7 +30,7 @@ const rateLimited = createRateLimiter(VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_W
 
 export async function POST(req: Request) {
   if (rateLimited(clientIp(req)))
-    return jsonError('요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 429)
+    return jsonError('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429)
   const body = await req.json().catch(() => null)
   const parsed = verifyCodeSchema.safeParse(body)
   if (!parsed.success) return jsonError('코드를 확인해 주세요.', 400)
@@ -56,6 +56,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ...base, alreadyTested })
   } catch (e) {
     console.error('[verify-code] 조회 실패', e)
-    return jsonError('확인에 실패했습니다. 잠시 후 다시 시도해 주세요.', 502)
+    return jsonError('확인에 실패했어요. 잠시 후 다시 시도해 주세요.', 502)
   }
 }

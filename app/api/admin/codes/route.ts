@@ -27,10 +27,10 @@ export async function POST(req: Request) {
       if (row !== 'duplicate') return NextResponse.json({ code: row })
     }
     console.error('[admin/codes] 코드 unique 충돌 재시도 상한 도달')
-    return jsonError('코드 발급에 실패했습니다. 다시 시도해 주세요.', 502)
+    return jsonError('코드 발급에 실패했어요. 다시 시도해 주세요.', 502)
   } catch (e) {
     console.error('[admin/codes] 발급 실패', e)
-    return jsonError('코드 발급에 실패했습니다.', 502)
+    return jsonError('코드 발급에 실패했어요.', 502)
   }
 }
 
@@ -46,6 +46,6 @@ export async function GET() {
     })
   } catch (e) {
     console.error('[admin/codes] 목록 조회 실패', e)
-    return jsonError('목록을 불러오지 못했습니다.', 500)
+    return jsonError('목록을 불러오지 못했어요.', 500)
   }
 }

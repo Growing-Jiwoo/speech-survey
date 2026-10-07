@@ -10,6 +10,6 @@ export async function GET() {
     return NextResponse.json({ sessions })
   } catch (e) {
     console.error('[admin/sessions] 목록 조회 실패', e)
-    return NextResponse.json({ error: '목록을 불러오지 못했습니다.' }, { status: 500 })
+    return NextResponse.json({ error: '목록을 불러오지 못했어요.' }, { status: 500 })
   }
 }

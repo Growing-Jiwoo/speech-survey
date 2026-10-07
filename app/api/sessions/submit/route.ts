@@ -24,7 +24,7 @@ const asRecord = (v: unknown): Record<string, unknown> | null =>
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}))
-  if (typeof b.sessionId !== 'string' || !b.sessionId) return bad('세션 정보가 없습니다.')
+  if (typeof b.sessionId !== 'string' || !b.sessionId) return bad('세션 정보가 없어요.')
 
   const rawWriting = asRecord(b.writing)
   if (!rawWriting) return bad('쓰기 답 형식 오류')
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
 
-  const invalidToken = () => jsonError('유효하지 않은 세션입니다.', 401)
+  const invalidToken = () => jsonError('유효하지 않은 세션이에요.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
@@ -44,12 +44,12 @@ export async function POST(req: Request) {
   let grade: number
   try {
     const s = await sessionState(b.sessionId)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없습니다.', 404)
-    if (s.state === 'submitted') return jsonError('이미 제출된 검사입니다.', 409)
+    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (s.state === 'submitted') return jsonError('이미 제출된 검사예요.', 409)
     grade = s.grade
   } catch (e) {
     console.error('[submit] 세션 조회 실패', e)
-    return jsonError('제출에 실패했습니다.', 502)
+    return jsonError('제출에 실패했어요.', 502)
   }
 
   const f = itemsFor(formForGrade(grade))
@@ -80,12 +80,12 @@ export async function POST(req: Request) {
       writingTask: { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', codes: f.writingItems.map(i => i.code) },
     })
     if (result === 'not_found')
-      return jsonError('세션을 찾을 수 없습니다.', 404)
+      return jsonError('세션을 찾을 수 없어요.', 404)
     if (result === 'already_submitted')
-      return jsonError('이미 제출된 검사입니다.', 409)
+      return jsonError('이미 제출된 검사예요.', 409)
   } catch (e) {
     console.error('[submit] 제출 실패', e)
-    return jsonError('제출에 실패했습니다.', 502)
+    return jsonError('제출에 실패했어요.', 502)
   }
   return NextResponse.json({ ok: true })
 }

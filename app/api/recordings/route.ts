@@ -34,15 +34,15 @@ export async function POST(req: Request) {
     return jsonError('필수 항목 누락', 400)
 
   if (!(await verifySessionToken(sessionId, sessionToken, env('SESSION_SECRET'))))
-    return jsonError('유효하지 않은 세션입니다.', 401)
+    return jsonError('유효하지 않은 세션이에요.', 401)
 
   if (audio.size > MAX_BYTES)
-    return jsonError('녹음 파일이 너무 큽니다.', 413)
+    return jsonError('녹음 파일이 너무 커요.', 413)
 
   const bytes = new Uint8Array(await audio.arrayBuffer())
   const sniffed = sniffAudio(bytes)
   if (!isAllowedAudioMime(audio.type || '') || !sniffed)
-    return jsonError('오디오 파일만 업로드할 수 있습니다.', 400)
+    return jsonError('오디오 파일만 업로드할 수 있어요.', 400)
 
   const mime = safeContentType(sniffed)  // 클라이언트 MIME 불신 → 서버 고정값 저장(저장형 XSS 차단)
   const audioPath = `${sessionId}/${itemCode}_${attemptNo}.${audioExt(mime)}`
@@ -51,9 +51,9 @@ export async function POST(req: Request) {
     // 제출 완료 후 업로드 차단(검사 증적 사후 변조 방지). 세션 미존재도 여기서 걸러낸다.
     const { state, grade } = await sessionState(sessionId)
     if (state === 'missing')
-      return jsonError('세션을 찾을 수 없습니다.', 404)
+      return jsonError('세션을 찾을 수 없어요.', 404)
     if (state === 'submitted')
-      return jsonError('이미 제출된 검사입니다.', 409)
+      return jsonError('이미 제출된 검사예요.', 409)
     // 녹음 단위는 페이지다(검사지: 한 페이지 전체를 제한 시간 안에 읽는다).
     // 어떤 페이지가 존재하는지는 **세션의 학년(검사지)** 이 정한다 — 다른 학년의 페이지 코드로
     // 올라온 녹음은 어느 화면에서도 읽히지 않는 고아 파일이 된다.
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     if (!page || !isRecordingPage(page) || page.practice)
       return jsonError('필수 항목 누락', 400)
     if ((await countSessionRecordings(sessionId)) >= MAX_PER_SESSION)
-      return jsonError('녹음 개수 상한을 초과했습니다.', 429)
+      return jsonError('녹음 개수 상한을 넘었어요.', 429)
     await uploadRecording(audioPath, Buffer.from(bytes), mime)
     try {
       await insertRecording({ sessionId, itemCode, attemptNo, audioPath, durationSec })
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     }
   } catch (e) {
     console.error('[recordings] 저장 실패', e)
-    return jsonError('녹음 저장에 실패했습니다.', 502)
+    return jsonError('녹음 저장에 실패했어요.', 502)
   }
   return NextResponse.json({ ok: true })
 }
