@@ -7,8 +7,9 @@
 
 ```
 /            시작 — ① 학급 코드 입력 → POST /api/sessions/verify-code(childNo 없이)
-             ② 명단이 있으면 **명단 모드**: 드롭다운에서 아동 선택(「1번 유해림 (여)」, 검사한
-                번호는 「· 검사함」 표시 — 그래도 고를 수 있다) → 확인 모달 → POST /api/sessions
+             ② 명단이 있으면 **명단 모드**: 드롭다운에서 아동 선택(「1번 유해림 (여)」, 제출한
+                번호는 「검사함」, 시작만 하고 제출 전인 번호는 「진행 중」 표시 — 그래도 고를 수 있다)
+                → 확인 모달 → POST /api/sessions
                 (`fromRoster:true` + 번호만. 이름·성별·생년월일은 서버가 명단에서 복사)
              ③ 명단이 비면(관리자 직접 발급 코드) **직접 입력 모드**: 번호·이름·성별·생년월일
                 입력 → verify-code(childNo 포함) → 확인 모달 → POST /api/sessions(직접 입력 바디)
@@ -118,5 +119,6 @@
 | `layout.tsx` | 전역 레이아웃 — 폰트(Noto/Lexend)·메타데이터·라이트 전용 `viewport` |
 | `providers.tsx` | react-query 클라이언트(관리자 데이터 캐싱 설정) |
 | `globals.css` | 디자인 토큰(@theme)·공용 버튼/카드 클래스·접근성 전역 규칙(포커스 링·터치·모션) |
+| `not-found.tsx` | 없는 주소 — 한국어 안내와 [처음 화면으로]. Next 기본 404(영어·OS 다크 모드)를 대신한다 |
 | `apply/` | 교사 신청 화면(공개) — [apply/README.md](apply/README.md) |
 | `api/` | 서버 라우트 — [api/README.md](api/README.md) 참고 |

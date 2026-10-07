@@ -502,7 +502,9 @@ export default function StartPage() {
                 // 이미 검사한 아동도 그대로 고를 수 있다 — 재검사는 허용이고(스펙 "중복 검사
                 // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
                 // 라벨에 이어 붙이지 않고 배지로 내보내는 이유는 Select의 badge 주석 참고.
-                badge: r.tested ? '검사함' : undefined,
+                // 진행 중(제출 전)과 제출을 가른다 — 둘 다 「검사함」이면 중간에 멈춘 아이를 끝난 아이로 보고
+                // 넘어가게 된다(위 배너의 「검사 완료 N명」도 제출만 센다).
+                badge: r.tested === 'submitted' ? '검사함' : r.tested === 'inProgress' ? '진행 중' : undefined,
               }))} />
             {/* 명단에서 고른 아동과 직접 입력할 아동은 서로 다른 아이다 — 코드 수정 때와 같은
                 이유로 보호자 동의 체크를 함께 푼다(위 onChange 주석 참고). 안 풀면 명단 아동으로
@@ -651,9 +653,9 @@ export default function StartPage() {
           명단 모드와 직접 입력 모드가 이 모달을 공유하므로 중복 검사 경고 문구도 한 벌뿐이다. */}
       {confirm && (
         <ConfirmDialog open busy={busy} error={confirmErr}
-          title={confirm.tested
-            ? `${confirm.childNo}번은 이미 검사했어요`
-            : '이 정보가 맞나요?'}
+          title={confirm.tested === 'inProgress'
+            ? `${confirm.childNo}번은 진행 중인 검사가 있어요`
+            : confirm.tested ? `${confirm.childNo}번은 이미 검사했어요` : '이 정보가 맞나요?'}
           confirmLabel={confirm.tested
             ? (isResumeChild(confirm.childNo) ? '그래도 새로 검사' : '네, 다시 검사할게요')
             : '맞아요, 시작하기'}
@@ -669,10 +671,14 @@ export default function StartPage() {
               <p className="mt-0.5 font-bold text-ink">
                 {confirm.cls.schoolName} {gradeClassLabel(confirm.cls.grade, confirm.cls.classNo)}
               </p>
-              <p className="mt-0.5 break-all text-[12.5px]">
+              {/* 이메일은 한 덩어리(inline-block)로 둔다 — 줄 전체에 break-all을 걸었을 때는 주소가 글자 중간에서
+                  잘렸고(「…@example.c / om」), 그냥 접으면 하이픈에서 잘렸다(「e2e- / teacher@…」, 2026-10-08 야간
+                  점검). 덩어리는 통째로 다음 줄로 가고, 칸보다 긴 주소만 그 안에서 접힌다(break-all). */}
+              <p className="mt-0.5 text-[12.5px]">
                 담임 {confirm.cls.teacherName}
-                {(confirm.cls.teacherPhone || confirm.cls.teacherEmail) && (
-                  <> · {[confirm.cls.teacherPhone, confirm.cls.teacherEmail].filter(Boolean).join(' · ')}</>
+                {confirm.cls.teacherPhone && <> · {confirm.cls.teacherPhone}</>}
+                {confirm.cls.teacherEmail && (
+                  <> · <span className="inline-block max-w-full break-all">{confirm.cls.teacherEmail}</span></>
                 )}
               </p>
             </div>
