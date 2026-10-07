@@ -5,7 +5,8 @@ import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
 import nextTypescript from 'eslint-config-next/typescript'
 
 const config = [
-  { ignores: ['.next/**', 'node_modules/**', '.claude/**', '.superpowers/**', 'next-env.d.ts'] },
+  // public/pdfjs-wasm/은 node_modules에서 복사한 pdf.js 해독기(생성물 — scripts/copy-pdfjs-wasm.mjs)
+  { ignores: ['.next/**', 'node_modules/**', '.claude/**', '.superpowers/**', 'next-env.d.ts', 'public/pdfjs-wasm/**'] },
   ...nextCoreWebVitals,
   ...nextTypescript,
   {

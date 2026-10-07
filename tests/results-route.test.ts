@@ -36,6 +36,8 @@ import { GET as LIST } from '@/app/api/results/[token]/route'
 import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
 import { classSheetTag } from '@/lib/writing-sheet'
+import { buildChildren } from '@/lib/results'
+import { childVerdict } from '@/lib/results-view'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
 import * as pdf from '@/lib/pdf/report'
@@ -330,6 +332,24 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${rows.map(r => r.id).join(',')}`)
     expect(res.status).toBe(400)
     expect(pdf.renderReport).not.toHaveBeenCalled()
+  })
+  it('[REGRESSION] 쪽 순서는 번호순·차수순 — 화면의 「Fail 먼저」나 선생님이 체크한 순서를 따르지 않는다', async () => {
+    // 5번은 Fail — 읽기는 전부 미녹음(X·0어절), 쓰기는 전부 「못 씀」
+    const fail5 = { ...scored('f5', 5, '2026-09-22T04:00:00.000Z'),
+      writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: false })) }
+    const rows = [...ROWS.slice(0, 3), fail5]
+    vi.mocked(db.classResults).mockResolvedValue(rows)
+    const children = buildChildren([], rows)
+    expect(childVerdict(children[0])).toBe('fail')   // 전제: 화면 목록에서는 5번이 맨 위다
+    expect(children[0].childNo).toBe(5)
+    const names = () => vi.mocked(pdf.renderReport).mock.calls.map(c => `${c[0].session.child_name}@${c[0].session.started_at.slice(8, 10)}`)
+
+    await sheetsReq(await createResultsToken(CID, 'test-secret'))
+    expect(names()).toEqual(['아이1@22', '아이3@22', '아이5@22'])
+
+    vi.mocked(pdf.renderReport).mockClear()
+    await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=f5,b1,a2,a1')
+    expect(names()).toEqual(['아이1@21', '아이1@22', '아이3@22', '아이5@22'])
   })
   it('renderReport 입력은 관리자 PDF와 같다 — 제출된 세션은 미녹음 X·0점이 채워진다', async () => {
     await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=b1')

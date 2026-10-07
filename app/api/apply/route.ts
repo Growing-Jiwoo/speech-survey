@@ -1,6 +1,6 @@
 // POST /api/apply — 교사 신청 접수(공개). pending 코드 + 명단을 만들고 관리자에게 알린다.
 // 응답에 코드를 넣지 않는다 — 승인 메일이 유일한 전달 경로여야 승인이 실제 관문이 된다(스펙).
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { insertApplication } from '@/lib/db'
 import { generateClassCode } from '@/lib/class-code'
 import { applyNoticeMail, sendMail } from '@/lib/mail'
@@ -43,6 +43,8 @@ export async function POST(req: Request) {
 
       // 관리자 알림 — 실패해도 신청은 성공(관리자 화면의 대기 배지가 예비 채널)
       // 합치기 창 안이면 이번 신청은 조용히 접수만 되고 메일은 다음 창에서 나간다(NOTIFY_COALESCE_MS 주석 참고).
+      // 발송은 응답 **뒤**(after)로 미룬다 — 교사에게는 결과가 보이지 않는 메일인데, 기다리면 메일 서버가
+      // 느릴 때 이미 접수된 신청이 시간 초과로 "실패"처럼 보이고, 다시 누르면 같은 학급이 두 번 접수된다.
       const adminTo = process.env.ADMIN_NOTIFY_EMAIL?.trim()
       const now = Date.now()
       if (adminTo && now - lastNotifiedAt >= NOTIFY_COALESCE_MS) {
@@ -55,8 +57,10 @@ export async function POST(req: Request) {
           teacherName: d.teacherName, childCount: d.roster.length,
           adminUrl: `${origin}/admin/codes`,
         })
-        const sent = await sendMail({ ...mail, to: adminTo })
-        if (!sent.ok) console.error('[apply] 관리자 알림 메일 실패', sent.error)
+        after(async () => {
+          const sent = await sendMail({ ...mail, to: adminTo })
+          if (!sent.ok) console.error('[apply] 관리자 알림 메일 실패', sent.error)
+        })
       }
       return NextResponse.json({ ok: true }, { status: 201 })
     }

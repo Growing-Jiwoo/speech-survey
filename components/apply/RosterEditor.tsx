@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { normBirth } from '@/lib/birth'
 import {
-  badCells, cutText, dupChildNos, parseRosterGrid, toChild,
+  badCells, cutText, decodeCsv, dupChildNos, parseRosterGrid, toChild,
   type RosterCells, type RosterChild,
 } from '@/lib/roster'
 import { readXlsx } from '@/lib/xlsx'
@@ -107,7 +107,7 @@ export function RosterEditor({ onChange }: {
     const name = file.name.toLowerCase()
     try {
       const grid = name.endsWith('.xlsx') ? await readXlsx(await file.arrayBuffer())
-        : name.endsWith('.csv') ? cutText(await file.text())
+        : name.endsWith('.csv') ? cutText(decodeCsv(await file.arrayBuffer()))
           : null
       if (!grid) { setErr(FILE_ERR); return }
       const parsed = parseRosterGrid(grid)

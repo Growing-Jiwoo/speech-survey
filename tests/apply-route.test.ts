@@ -6,6 +6,13 @@ vi.mock('@/lib/mail', () => ({
   sendMail: vi.fn(), applyNoticeMail: vi.fn(() => ({ to: '', subject: 's', html: 'h' })),
 }))
 vi.mock('@/lib/class-code', () => ({ generateClassCode: vi.fn(() => 'ABCDEF') }))
+// after()는 요청 스코프 밖(테스트)에서 부르면 던진다 — 미뤄 둔 일을 모아 두고 테스트가 직접 돌린다.
+const deferred = vi.hoisted(() => [] as (() => unknown)[])
+vi.mock('next/server', async orig => ({
+  ...(await orig<typeof import('next/server')>()),
+  after: (fn: () => unknown) => { deferred.push(fn) },
+}))
+const flushAfter = async () => { for (const fn of deferred.splice(0)) await fn() }
 
 import { POST } from '@/app/api/apply/route'
 import { insertApplication } from '@/lib/db'
@@ -23,6 +30,7 @@ const post = (body: unknown, ip = '1.2.3.4') => POST(new Request('http://t/api/a
 
 beforeEach(() => {
   vi.clearAllMocks()
+  deferred.length = 0
   vi.mocked(insertApplication).mockResolvedValue({ id: 'cc-1', code: 'ABCDEF', status: 'pending' } as never)
   vi.mocked(sendMail).mockResolvedValue({ ok: true, id: 'm1' })
   vi.stubEnv('ADMIN_NOTIFY_EMAIL', 'admin@t.kr')
@@ -47,6 +55,7 @@ describe('POST /api/apply', () => {
   it('ADMIN_NOTIFY_EMAIL이 없으면 메일을 보내지 않는다', async () => {
     vi.stubEnv('ADMIN_NOTIFY_EMAIL', '')
     await post(BODY)
+    await flushAfter()
     expect(sendMail).not.toHaveBeenCalled()
   })
   it('duplicate면 새 코드로 재시도한다 — 매 시도 새 코드를 뽑아 쓴다', async () => {
@@ -100,6 +109,7 @@ describe('관리자 알림 합치기 — 신청 폭주가 메일 발송기가 �
     vi.setSystemTime(nextDay())
     await post(BODY)
     await post(BODY)
+    await flushAfter()
     expect(sendMail).toHaveBeenCalledTimes(1)
   })
 
@@ -109,6 +119,19 @@ describe('관리자 알림 합치기 — 신청 폭주가 메일 발송기가 �
     await post(BODY)
     vi.setSystemTime(base + 11 * 60_000)
     await post(BODY)
+    await flushAfter()
     expect(sendMail).toHaveBeenCalledTimes(2)
+  })
+
+  it('[REGRESSION] 응답은 알림 발송을 기다리지 않는다 — 메일은 응답 뒤(after)에 나간다', async () => {
+    // 메일 서버가 멈춰도 교사는 접수 완료를 본다. 종전에는 발송을 await해서, 느린 발송이
+    // 이미 접수된 신청을 시간 초과 "실패"로 보이게 했고 다시 누르면 같은 학급이 두 번 접수됐다.
+    vi.setSystemTime(nextDay())
+    vi.mocked(sendMail).mockReturnValue(new Promise(() => {}))
+    expect((await post(BODY)).status).toBe(201)
+    expect(sendMail).not.toHaveBeenCalled()
+    expect(deferred).toHaveLength(1)
+    void deferred[0]()
+    expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'admin@t.kr' }))
   })
 })

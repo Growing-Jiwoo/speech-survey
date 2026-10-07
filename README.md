@@ -204,7 +204,7 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
 
 - **Next.js 16 (App Router) + React 19 + Tailwind 4** — 프런트·API 라우트 단일 앱
 - **Supabase** — Postgres(RLS로 anon 전면 차단, 서버 라우트의 service role만 접근) + Storage(`recordings`·`writing-scans` 비공개 버킷, 관리자에게만 1시간 서명 URL 발급)
-- **QR** — 기록지 QR은 직접 만든 부호기(`lib/qr.ts`), 올린 스캔본의 QR 판독은 jsQR, PDF 쪽 그리기는 pdfjs(6.x **legacy 빌드** — 오래된 브라우저에 없는 기능을 채워 넣는다) — 둘 다 파일을 고를 때만 브라우저에서 불러온다. pdfjs는 이 기능 때문에 실행 의존성이 됐다(예전에는 지금은 없는 검사지 좌표 추출 스크립트만 썼다)
+- **QR** — 기록지 QR은 직접 만든 부호기(`lib/qr.ts`), 올린 스캔본의 QR 판독은 jsQR, PDF 쪽 그리기는 pdfjs(6.x **legacy 빌드** — 오래된 브라우저에 없는 기능을 채워 넣는다) — 둘 다 파일을 고를 때만 브라우저에서 불러온다. pdfjs는 이 기능 때문에 실행 의존성이 됐다(예전에는 지금은 없는 검사지 좌표 추출 스크립트만 썼다). 흑백 스캔 PDF(CCITT G4·JBIG2)를 그리는 wasm 해독기는 `npm run dev`·`build`가 `public/pdfjs-wasm/`로 복사한다(`scripts/copy-pdfjs-wasm.mjs`)
 - **인증**: 관리자는 argon2id 비밀번호 + HMAC 쿠키(8시간), 참여자는 세션 생성 시 발급되는 HMAC 세션 토큰(24시간, 해당 세션에만 쓰기 가능), 교사 결과지는 **학급 스코프 HMAC 토큰**(14일, 주체 내장 — 등록된 담임 메일로만 발송)
 - **제출 후 잠금**: 최종 제출된 세션은 녹음 업로드·재제출이 차단된다(검사 증적 사후 변조 방지)
 - **웹폰트는 저장소에 넣는다** — `next/font/google`은 **빌드마다** 구글에서 폰트를 받아, 그 요청
