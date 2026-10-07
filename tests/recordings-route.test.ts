@@ -6,7 +6,7 @@ vi.mock('@/lib/db', () => ({
   insertRecording: vi.fn().mockResolvedValue(undefined),
   countSessionRecordings: vi.fn().mockResolvedValue(0),
   removeStorageObject: vi.fn().mockResolvedValue(undefined),
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1 }),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
 }))
 
 import { POST } from '@/app/api/recordings/route'
@@ -32,7 +32,7 @@ function makeReq(over: Record<string, string | Blob> = {}) {
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(db.countSessionRecordings).mockResolvedValue(0)
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -97,12 +97,12 @@ describe('POST /api/recordings', () => {
     expect(db.uploadRecording).not.toHaveBeenCalled()
   })
   it('이미 제출된 세션 업로드 409 (제출 후 변조 차단)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
     expect((await POST(makeReq())).status).toBe(409)
     expect(db.uploadRecording).not.toHaveBeenCalled()
   })
   it('존재하지 않는 세션 업로드 404', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
     expect((await POST(makeReq())).status).toBe(404)
     expect(db.uploadRecording).not.toHaveBeenCalled()
   })

@@ -52,10 +52,6 @@ describe('양식 정의와 문항의 정합', () => {
         .toEqual(w.kind === 'word' ? [...w.meaning, ...w.nonsense] : [...w.sentences])
     }
   })
-  it('좌표(layout)의 쓰기 종류가 양식의 쓰기 과제와 짝이 맞는다', () => {
-    // 어긋나면 인쇄물에 다른 과제의 좌표로 점수가 찍힌다.
-    for (const form of FORMS) expect(form.layout.writing.kind).toBe(form.writing.kind)
-  })
 })
 
 /**

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
   saveScores: vi.fn().mockResolvedValue(undefined),
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1 }),
+  saveWriting: vi.fn().mockResolvedValue(undefined),
+  scanUploadedAt: vi.fn().mockResolvedValue(null),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
 }))
 
 import { PUT } from '@/app/api/admin/sessions/[id]/scores/route'
@@ -19,7 +21,8 @@ const RS = ['rs01', 'rs02', 'rs03', 'rs04']
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.saveScores).mockResolvedValue(undefined)
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
+  vi.mocked(db.scanUploadedAt).mockResolvedValue(null)
 })
 
 describe('PUT /api/admin/sessions/[id]/scores', () => {
@@ -28,7 +31,7 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
     expect(res.status).toBe(200)
     expect(db.saveScores).toHaveBeenCalledWith(SID,
       [{ itemCode: 'rw01', correct: true }, { itemCode: 'rw14', correct: false }],
-      [{ itemCode: 'rs01', words: 7 }], RS)
+      [{ itemCode: 'rs01', words: 7 }], RS, undefined)
   })
 
   it('낱말 해독 14개 코드를 모두 허용한다 (무의미 낱말 포함)', async () => {
@@ -72,7 +75,7 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
   it('둘 다 비어 있으면 200 (변경 없는 저장)', async () => {
     const res = await PUT(req({ marks: {}, sentences: {} }), ctx())
     expect(res.status).toBe(200)
-    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [], RS)
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [], RS, undefined)
   })
 
   it('세션 id가 UUID가 아니면 400', async () => {
@@ -88,14 +91,91 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
   })
 
   it('존재하지 않는 세션은 404 (조용한 no-op 금지)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
     expect((await PUT(req({ marks: {}, sentences: {} }), ctx())).status).toBe(404)
     expect(db.saveScores).not.toHaveBeenCalled()
   })
 })
 
+describe('PUT …/scores — 문장 읽은 시간(times)', () => {
+  const put = (times: unknown) => PUT(req({ marks: {}, sentences: {}, times }), ctx())
+
+  it('문장별 초를 저장한다 (0.1초 단위)', async () => {
+    const res = await put({ rs01: 4.5, rs04: 12 })
+    expect(res.status).toBe(200)
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [],
+      RS, [{ itemCode: 'rs01', seconds: 4.5 }, { itemCode: 'rs04', seconds: 12 }])
+  })
+
+  it('[REGRESSION] times가 없는 요청은 시간을 건드리지 않는다 — 시간 칸 이전 화면의 자동 저장이 시간을 지우지 않게', async () => {
+    await PUT(req({ marks: {}, sentences: { rs01: 7 } }), ctx())
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toBeUndefined()
+  })
+
+  it('빈 객체는 「전부 지움」이다 — times 없음과 다르다', async () => {
+    await put({})
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toEqual([])
+  })
+
+  it('부동소수 꼬리는 0.1초로 정리해 저장한다', async () => {
+    await put({ rs01: 0.1 + 0.2 })
+    expect(vi.mocked(db.saveScores).mock.calls[0][4]).toEqual([{ itemCode: 'rs01', seconds: 0.3 }])
+  })
+
+  it('0초·음수·0.1초보다 잘게 쪼갠 값·문자열은 400', async () => {
+    for (const bad of [0, -1, 4.55, '4.5', null, Number.NaN]) {
+      expect((await put({ rs01: bad })).status).toBe(400)
+    }
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('상한은 녹음 최대 길이(제한 20초 + 여유 5초) — 25초까지 받고 넘으면 400', async () => {
+    expect((await put({ rs01: 25 })).status).toBe(200)
+    expect((await put({ rs01: 25.1 })).status).toBe(400)
+  })
+
+  it('문장 읽기 코드가 아니면 400 (낱말·문장 쓰기 코드)', async () => {
+    expect((await put({ rw01: 3 })).status).toBe(400)
+    expect((await put({ sw01: 3 })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('불리언·아주 작은 수·Infinity 문자열은 400', async () => {
+    for (const bad of [true, 1e-7, 'Infinity']) expect((await put({ rs01: bad })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('하나라도 틀리면 전체를 거부한다 — 맞는 문장만 골라 저장하지 않는다(부분 저장 금지)', async () => {
+    expect((await put({ rs01: 4, rs02: 99 })).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('낱말·어절·시간을 한 요청에 함께 저장한다', async () => {
+    await PUT(req({ marks: { rw01: true }, sentences: { rs01: 7 }, times: { rs01: 4.5 } }), ctx())
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [{ itemCode: 'rw01', correct: true }],
+      [{ itemCode: 'rs01', words: 7 }], RS, [{ itemCode: 'rs01', seconds: 4.5 }])
+  })
+
+  it('G2 세션도 문장 읽기 코드(rs..)만 받고 상한은 같은 25초', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' })
+    expect((await put({ rs04: 25 })).status).toBe(200)
+    expect((await put({ sw01: 3 })).status).toBe(400)
+  })
+
+  it('담당 양식이 없는 학년(3학년 → G1 폴백)도 같은 규칙', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3, writingMode: 'screen' })
+    expect((await put({ rs01: 4 })).status).toBe(200)
+  })
+
+  it('times가 배열·null이면 400 (typeof "object" 함정)', async () => {
+    expect((await put([])).status).toBe(400)
+    expect((await put(null)).status).toBe(400)
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+})
+
 describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', () => {
-  beforeEach(() => vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 }))
+  beforeEach(() => vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' }))
 
   it('G2 문장은 만점이 다르다 (rs01은 7어절, rs03은 9어절)', async () => {
     expect((await PUT(req({ marks: {}, sentences: { rs03: 9 } }), ctx())).status).toBe(200)
@@ -115,3 +195,91 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
     expect(owned).not.toContain('sw01')
   })
 })
+
+// 쓰기 스캔본(사용자 확정 2026-09-30) — 담당자가 스캔본을 보고 쓰기를 채점한다. **스캔본 방식 검사만.**
+describe('PUT scores — 스캔본 방식 검사의 쓰기', () => {
+  const scanSession = (grade = 1) =>
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade, writingMode: 'scan' })
+  const WW = Array.from({ length: 10 }, (_, i) => `ww${String(i + 1).padStart(2, '0')}`)
+
+  it('낱말 쓰기(G1) 0/1을 저장한다 — 소유 범위는 쓰기 문항 코드 전부', async () => {
+    scanSession()
+    const res = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1, ww06: 0 } }), ctx())
+    expect(res.status).toBe(200)
+    expect(db.saveWriting).toHaveBeenCalledWith(SID, 'word', [{ itemCode: 'ww01', words: 1 }, { itemCode: 'ww06', words: 0 }], WW)
+    // 쓰기를 읽기보다 먼저 저장한다 — 스캔본 대조와 쓰기 저장 사이를 짧게(그사이 교체되는 창을 좁힌다)
+    expect(vi.mocked(db.saveWriting).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(db.saveScores).mock.invocationCallOrder[0])
+  })
+  it('문장 쓰기(G2)는 문항 어절 수까지 — 넘으면 400', async () => {
+    scanSession(2)
+    expect((await PUT(req({ marks: {}, sentences: {}, writing: { sw01: 2 } }), ctx())).status).toBe(200)
+    expect(vi.mocked(db.saveWriting).mock.calls[0][1]).toBe('sentence')
+    vi.mocked(db.saveWriting).mockClear()
+    expect((await PUT(req({ marks: {}, sentences: {}, writing: { sw01: 9 } }), ctx())).status).toBe(400)
+    expect(db.saveWriting).not.toHaveBeenCalled()
+  })
+  it('낱말 쓰기에 1보다 큰 값·소수·음수·문자열·다른 과제 코드는 400(아무것도 저장하지 않는다)', async () => {
+    scanSession()
+    for (const writing of [{ ww01: 2 }, { ww01: 0.5 }, { ww01: -1 }, { ww01: '1' }, { rw01: 1 }, { sw01: 1 }]) {
+      expect((await PUT(req({ marks: {}, sentences: {}, writing }), ctx())).status).toBe(400)
+    }
+    expect(db.saveScores).not.toHaveBeenCalled()
+    expect(db.saveWriting).not.toHaveBeenCalled()
+  })
+  it('[핵심] 화면 방식 검사에 쓰기를 실으면 409 — 검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    const res = await PUT(req({ marks: { rw01: true }, sentences: {}, writing: { ww01: 1 } }), ctx())
+    expect(res.status).toBe(409)
+    expect(db.saveScores).not.toHaveBeenCalled()
+    expect(db.saveWriting).not.toHaveBeenCalled()
+  })
+  it('writing이 없으면 쓰기를 건드리지 않는다 — 스캔본 검사여도(옛 화면·읽기만 고친 저장)', async () => {
+    scanSession()
+    expect((await PUT(req({ marks: { rw01: true }, sentences: {} }), ctx())).status).toBe(200)
+    expect(db.saveWriting).not.toHaveBeenCalled()
+  })
+  it('빈 객체는 「쓰기 전부 지움」이다(PUT 의미) — 담당자가 칸을 비운 채 저장', async () => {
+    scanSession()
+    expect((await PUT(req({ marks: {}, sentences: {}, writing: {} }), ctx())).status).toBe(200)
+    expect(db.saveWriting).toHaveBeenCalledWith(SID, 'word', [], WW)
+  })
+  it('writing이 객체가 아니면(배열·null) 400', async () => {
+    scanSession()
+    for (const writing of [[], null, 'x']) expect((await PUT(req({ marks: {}, sentences: {}, writing }), ctx())).status).toBe(400)
+  })
+  it('[핵심] 본 스캔본과 지금 붙은 스캔본이 다르면 409 — 그사이 선생님이 바꾼 그림을 옛 그림 점수와 짝짓지 않는다', async () => {
+    scanSession()
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T06:00:00Z')
+    const res = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: '2026-09-30T05:00:00Z' }), ctx())
+    expect(res.status).toBe(409)
+    expect(db.saveScores).not.toHaveBeenCalled()
+    expect(db.saveWriting).not.toHaveBeenCalled()
+    // 스캔본 없이 열었는데 그사이 올라온 경우도 같다(null ≠ 시각)
+    const res2 = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: null }), ctx())
+    expect(res2.status).toBe(409)
+  })
+  it('[REGRESSION] 같은 시각을 다른 형식으로 보내도 같다고 본다(문자열이 아니라 시각 비교) — 형식 하나 바뀌면 모든 쓰기 저장이 409가 되지 않게', async () => {
+    scanSession()
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T05:00:00+00:00')
+    const res = await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: '2026-09-30T05:00:00.000Z' }), ctx())
+    expect(res.status).toBe(200)
+    expect(db.saveWriting).toHaveBeenCalled()
+  })
+  it('본 스캔본과 같으면 저장한다', async () => {
+    scanSession()
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T05:00:00Z')
+    expect((await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: '2026-09-30T05:00:00Z' }), ctx())).status).toBe(200)
+  })
+  it('쓰기가 없으면 스캔본을 대조하지 않는다(읽기만 고친 저장)', async () => {
+    scanSession()
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-09-30T06:00:00Z')
+    expect((await PUT(req({ marks: { rw01: true }, sentences: {} }), ctx())).status).toBe(200)
+    expect(db.scanUploadedAt).not.toHaveBeenCalled()
+  })
+  it('쓰기 저장 실패는 502', async () => {
+    scanSession()
+    vi.mocked(db.saveWriting).mockRejectedValueOnce(new Error('boom'))
+    expect((await PUT(req({ marks: {}, sentences: {}, writing: { ww01: 1 } }), ctx())).status).toBe(502)
+  })
+})
+

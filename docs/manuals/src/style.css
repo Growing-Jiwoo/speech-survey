@@ -35,6 +35,7 @@ code,.mono{ font-family:'SF Mono',Menlo,monospace; font-size:.88em;
   border-bottom:1px solid var(--line); padding:2.6mm 1mm; color:var(--ink); }
 .toc .n{ font-weight:800; color:var(--blue); width:5mm; font-size:9.6pt; }
 .toc .t{ font-size:10.4pt; }
+.toc.toc-tight div.row{ padding-top:2.2mm; padding-bottom:2.2mm; } /* 선생님용 차례가 11줄이 되며 한 쪽을 넘었다 */
 
 /* 섹션 */
 h2.sec{ display:flex; align-items:center; gap:4mm; font-size:18pt; font-weight:800;
@@ -98,6 +99,8 @@ td{ padding:2.4mm 3mm 2.4mm 0; border-bottom:1px solid var(--line);
   vertical-align:top; line-height:1.62; }
 td:last-child, th:last-child{ padding-right:0; }
 tr{ break-inside:avoid; }
+/* 머리줄(th)만 쪽 끝에 남지 않게 — 첫 칸 줄과 함께 넘긴다(h3의 break-after:avoid와 이어져 제목도 따라간다) */
+tr:first-child{ break-after:avoid; }
 table.tight td{ padding:1.8mm 3mm 1.8mm 0; }
 
 .bg{ display:inline-block; border-radius:2mm; padding:.12em .55em; font-size:8.4pt;

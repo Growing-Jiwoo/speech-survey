@@ -1,4 +1,4 @@
-# app/api/admin/codes/ — 학급 코드 발급 · 목록 · 삭제 · 승인
+# app/api/admin/codes/ — 학급 코드 발급 · 목록 · 삭제 · 승인 · 담임 이메일 수정
 
 관리자가 학급 하나에 대해 6자리 코드를 만들고, 그 코드로 검사 현장이 세션을 연다.
 학교·학년·반·담임·연락처가 **처음이자 마지막으로 입력되는 지점**이라, 여기서 만든 행이
@@ -9,7 +9,7 @@
 | 파일 | 역할 |
 |---|---|
 | `route.ts` | `POST` 발급(zod `classCodeCreateSchema` 검증 → `generateClassCode()` → insert), `GET` 목록 |
-| `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` |
+| `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` · `PATCH` 담임 이메일 수정(`classCodeEmailSchema` → `updateClassCodeEmail`, 없는 행 404) — 결과지 링크가 이 주소로만 가므로 잘못 등록된 주소를 바로잡는 유일한 길 |
 | `[id]/roster/route.ts` | `GET` 신청 명단 조회. UUID 형식 검증 후 `listRoster` — 승인 검토 전용(아래 PII 절) |
 | `[id]/approve/route.ts` | `POST` 신청 승인. UUID 형식 검증 후 `approveClassCode` → (조건부) 교사에게 안내 메일 |
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 vi.mock('@/lib/db', () => ({
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1 }),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
 }))
 
 import { POST } from '@/app/api/sessions/form/route'
@@ -20,7 +20,7 @@ const makeReq = (body: unknown) => new Request('http://x/api/sessions/form', {
 
 beforeEach(async () => {
   vi.clearAllMocks()
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -31,7 +31,7 @@ describe('POST /api/sessions/form', () => {
     expect(r1.headers.get('Cache-Control')).toBe('no-store')
     expect((await r1.json()).form).toEqual(JSON.parse(JSON.stringify(G1)))
 
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' })
     const r2 = await POST(makeReq({ sessionId: SID, sessionToken: TOKEN }))
     expect((await r2.json()).form.id).toBe(G2.id)
   })
@@ -44,9 +44,9 @@ describe('POST /api/sessions/form', () => {
     expect(db.sessionState).not.toHaveBeenCalled()
   })
   it('없는 세션 404, 제출된 세션 409', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
     expect((await POST(makeReq({ sessionId: SID, sessionToken: TOKEN }))).status).toBe(404)
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
     expect((await POST(makeReq({ sessionId: SID, sessionToken: TOKEN }))).status).toBe(409)
   })
   it('DB 오류는 502 + 일반화된 문구', async () => {

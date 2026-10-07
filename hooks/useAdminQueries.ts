@@ -2,7 +2,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '@/lib/http'
-import type { MarkRow, RosterRow, SentenceScoreRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
+import type { MarkRow, RosterRow, SentenceScoreRow, SentenceTimeRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
 import type { SurveyForm } from '@/lib/forms'
 
 /** 관리자 쿼리 키 — 무효화/제거 호출부가 리터럴을 복사하다 어긋나지 않도록 한 곳에 정의. */
@@ -46,6 +46,12 @@ export interface SessionDetailData {
   marks: MarkRow[]
   /** 문장 읽기유창성 채점(어절 수) */
   sentences: SentenceScoreRow[]
+  /** 문장 읽기유창성의 읽은 시간(초) — 채점자가 넣은 값만. 미녹음 기본값은 화면이 파생한다 */
+  times: SentenceTimeRow[]
+  /** 쓰기 기록지 스캔본(스캔본 방식이고 선생님이 올렸을 때만) — 서명 URL(1시간). 스토리지 경로는 싣지 않는다.
+   *  서명에 실패하면 url이 null — 파일이 없으면(정리가 중간에 끊긴 행) `missing`이고 화면이 연결 해제를 권한다.
+   *  일시 오류면 다시 열어 보라고만 한다 */
+  scan: { url: string | null; missing: boolean; uploadedAt: string } | null
   /** 세션 학년의 검사지 — 서버가 싣는다(문항을 공개 JS에 넣지 않으려고, API 라우트 주석 참고) */
   form: SurveyForm
 }

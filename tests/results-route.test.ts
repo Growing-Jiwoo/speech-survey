@@ -11,8 +11,8 @@ vi.mock('@/lib/mail', () => ({
   sendMail: vi.fn(),
 }))
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
-vi.mock('@/lib/pdf/stamp-sheet', () => ({
-  stampSheet: vi.fn(),
+vi.mock('@/lib/pdf/report', () => ({
+  renderReport: vi.fn(),
 }))
 vi.mock('pdf-lib', async () => {
   // 실제 병합은 pdf-lib이 하고 여기서는 "세션 수만큼 페이지가 붙었는가"만 본다.
@@ -35,9 +35,10 @@ import { POST as REQUEST } from '@/app/api/results/request/route'
 import { GET as LIST } from '@/app/api/results/[token]/route'
 import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
+import { classSheetTag } from '@/lib/writing-sheet'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
-import * as pdf from '@/lib/pdf/stamp-sheet'
+import * as pdf from '@/lib/pdf/report'
 
 const CID = '755316e7-fe7c-43f9-a5c5-5c2d39da59d7'
 const CODE_ROW = {
@@ -65,7 +66,8 @@ beforeEach(() => {
 describe('POST /api/results/request', () => {
   // 코드당 쿨다운은 모듈 상태라 테스트마다 다른 코드를 쓴다.
   // CODE_ALPHABET(lib/schema.ts)이 0·1·I·L·O를 뺀 집합이라 2~9만으로 만들어야 서로도, 형식 검증과도 부딪히지 않는다.
-  const codeOf = (n: number) => `RQ${2222 + n}`
+  // 2222 + n으로 만들면 테스트가 늘어 n이 8을 넘는 순간 0이 섞여(2230) 형식 오류 400이 난다 — 8진수 자리를 2~9로 옮긴다.
+  const codeOf = (n: number) => `RQ${n.toString(8).padStart(4, '0').replace(/[0-7]/g, d => String(Number(d) + 2))}`
   let n = 0
   const fresh = () => {
     const code = codeOf(++n)
@@ -135,11 +137,22 @@ describe('POST /api/results/request', () => {
     vi.mocked(db.findClassCode).mockResolvedValue({ ...CODE_ROW, code })
     expect((await REQUEST(reqFor({ code }))).status).toBe(200)
   })
+  it('scoredCount는 **받을 수 있는** 수 — 쓰기 스캔본을 기다리는 아이도 읽기 점수는 링크에서 볼 수 있다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([{
+      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+      started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'scan' as const, writing_scan: null,
+    }])
+    const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
+    expect(json.scoredCount).toBe(1)
+  })
   it('채점 완료 수를 함께 돌려준다 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거', async () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
       id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
       started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
-      recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'screen' as const, writing_scan: null,
     }])
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
@@ -151,7 +164,8 @@ describe('GET /api/results/[token]', () => {
   const SESSION = {
     id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
-    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen' as const, writing_scan: null,
   }
   beforeEach(() => {
     vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
@@ -166,7 +180,8 @@ describe('GET /api/results/[token]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.cls).toEqual({ schoolName: '대구가창초등학교', grade: 1, classNo: 2, teacherName: '김서연' })
-    expect(json.taskMax).toEqual({ wordReading: 14, sentenceReading: 36, writing: 10 })
+    // 문장 읽기는 만점이 없는 비율(어절/초)이라 taskMax에 없다(lib/scoring CountTaskKey)
+    expect(json.taskMax).toEqual({ wordReading: 14, writing: 10 })
     expect(typeof json.provisional).toBe('boolean')
     expect(json.children).toHaveLength(2)
     const [tested, untested] = json.children
@@ -176,6 +191,17 @@ describe('GET /api/results/[token]', () => {
     expect(untested).toMatchObject({ childNo: 2, sessions: [] })
     expect(db.findClassCodeById).toHaveBeenCalledWith(CID)
     expect(db.classResults).toHaveBeenCalledWith(CID)
+  })
+  it('쓰기 기록지 QR의 반 표시(sheetTag)와 세션마다 쓰기 방식·스캔 상태를 싣는다 — 스캔본 경로·그림은 싣지 않는다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([{
+      ...SESSION, writing_mode: 'scan', writing_scan: { uploaded_at: '2026-09-30T05:00:00.000Z' },
+    }])
+    const json = await (await listReq(await createResultsToken(CID, 'test-secret'))).json()
+    expect(json.sheetTag).toBe(await classSheetTag(CID))
+    expect(json.children[0].sessions[0]).toMatchObject({ writingMode: 'scan', scanState: 'uploaded' })
+    const text = JSON.stringify(json)
+    expect(text).not.toContain('uploaded_at')
+    expect(text).not.toContain('writing_scan')
   })
   it('[REGRESSION] 아동 정보가 담긴 응답을 캐시에 남기지 않는다(no-store)', async () => {
     const res = await listReq(await createResultsToken(CID, 'test-secret'))
@@ -218,7 +244,8 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
   const scored = (id: string, child_no: number, started_at: string) => ({
     id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: ['none'],
     started_at, submitted_at: started_at,
-    recordings: [], reading_marks: [], sentence_scores: [], writing_answers: [],
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen' as const, writing_scan: null,
   })
   const ROWS = [
     scored('a1', 1, '2026-09-21T01:00:00.000Z'),
@@ -229,7 +256,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
   beforeEach(() => {
     vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
     vi.mocked(db.classResults).mockResolvedValue(ROWS)
-    vi.mocked(pdf.stampSheet).mockResolvedValue(new Uint8Array([1]))
+    vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
   })
   it('ids 없음 → 채점 완료 전부, 아이당 최신 1장, 번호순. 파일명 「1-2_결과지_전체_날짜.pdf」', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'))
@@ -238,16 +265,22 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(res.headers.get('cache-control')).toBe('no-store')
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_결과지_전체_\d{4}-\d{2}-\d{2}\.pdf/)
     // a2(1번 최신)·b1(3번) 두 장 — a1(옛 차수)·c1(미제출)은 빠진다
-    const stamped = vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.child_name)
-    expect(stamped).toEqual(['아이1', '아이3'])
-    expect(vi.mocked(pdf.stampSheet).mock.calls[0][0].session).toMatchObject({ started_at: '2026-09-22T01:00:00.000Z' })
+    const printed = vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.child_name)
+    expect(printed).toEqual(['아이1', '아이3'])
+    expect(vi.mocked(pdf.renderReport).mock.calls[0][0].session).toMatchObject({ started_at: '2026-09-22T01:00:00.000Z' })
   })
   it('ids로 고르면 그 세션만 — 옛 차수도 고를 수 있다. 여럿이면 「N명」', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,b1')
     expect(res.status).toBe(200)
-    expect(vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.started_at))
+    expect(vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.started_at))
       .toEqual(['2026-09-21T01:00:00.000Z', '2026-09-22T02:00:00.000Z'])
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_결과지_2명_')
+  })
+  it('[REGRESSION] 같은 id를 두 번 주면 한 장만 — 같은 장이 두 번 붙고 「2명」이 되지 않게', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,a1')
+    expect(res.status).toBe(200)
+    // 한 장이면 관리자 규약 파일명(「N명」이 아니다) — 렌더 함수가 바뀌어도 응답만으로 판정한다
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('01_아이1_1차_2026-09-21.pdf')
   })
   it('한 장이면 관리자 규약 파일명 + 재검사가 있으면 차수', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1')
@@ -256,7 +289,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
   it('[REGRESSION] 다른 학급 세션 id를 끼워 넣으면 403 — 토큰 하나로 다른 반을 열 수 없다', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,zz-other-class')
     expect(res.status).toBe(403)
-    expect(pdf.stampSheet).not.toHaveBeenCalled()
+    expect(pdf.renderReport).not.toHaveBeenCalled()
   })
   it('채점 완료가 아닌 세션(미제출)을 고르면 400', async () => {
     expect((await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=c1')).status).toBe(400)
@@ -278,31 +311,34 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     ])
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'))
     expect(res.status).toBe(200)
-    expect(vi.mocked(pdf.stampSheet).mock.calls.map(c => c[0].session.started_at)).toEqual(['2026-09-21T01:00:00.000Z'])
+    expect(vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.started_at)).toEqual(['2026-09-21T01:00:00.000Z'])
   })
   it('[REGRESSION] `?ids=`(빈 값)은 「아무도 고르지 않음」이다 — 전체로 해석해 반 전체를 내보내지 않는다', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=')
     expect(res.status).toBe(400)
-    expect(pdf.stampSheet).not.toHaveBeenCalled()
+    expect(pdf.renderReport).not.toHaveBeenCalled()
   })
   it('[REGRESSION] ids를 여러 번 실어도 전부 받는다 — 첫 값만 쓰면 나머지 아이가 조용히 빠진다', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1&ids=b1')
     expect(res.status).toBe(200)
-    expect(vi.mocked(pdf.stampSheet).mock.calls).toHaveLength(2)
+    expect(vi.mocked(pdf.renderReport).mock.calls).toHaveLength(2)
   })
   it('장수 상한을 넘으면 400 — 유효 토큰 하나로 함수 제한시간을 넘기지 못하게', async () => {
-    const many = Array.from({ length: 61 }, () => 'a1').join(',')
-    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${many}`)
+    // 서로 다른 세션 61개 — 같은 id를 되풀이하면 중복 제거로 한 장이 돼 상한을 시험하지 못한다
+    const rows = Array.from({ length: 61 }, (_, i) => scored(`m${i}`, i + 1, '2026-09-22T01:00:00.000Z'))
+    vi.mocked(db.classResults).mockResolvedValue(rows)
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), `?ids=${rows.map(r => r.id).join(',')}`)
     expect(res.status).toBe(400)
-    expect(pdf.stampSheet).not.toHaveBeenCalled()
+    expect(pdf.renderReport).not.toHaveBeenCalled()
   })
-  it('stampSheet 입력은 관리자 PDF와 같다 — 제출된 세션은 미녹음 X·0점이 채워진다', async () => {
+  it('renderReport 입력은 관리자 PDF와 같다 — 제출된 세션은 미녹음 X·0점이 채워진다', async () => {
     await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=b1')
-    const input = vi.mocked(pdf.stampSheet).mock.calls[0][0]
+    const input = vi.mocked(pdf.renderReport).mock.calls[0][0]
     expect(input.form.id).toBe('KODYS-G1')
     expect(input.marks.rw01).toBe(false)
     expect(input.sentences.rs01).toBe(0)
-    expect(input.session).toMatchObject({ school_name: '대구가창초등학교', grade: 1, class_no: 2, child_name: '아이3',
+    expect(input.times.rs01).toBe(20)   // 녹음 없는 문장의 읽은 시간 = 제한 시간 — 관리자 PDF와 같은 기본값
+    expect(input.session).toMatchObject({ school_name: '대구가창초등학교', grade: 1, child_name: '아이3',
       birth_ymd: '190312', checklist: ['none'] })   // 관리자 PDF와 같은 문서 — 머리글·체크리스트도 찍힌다
   })
 })

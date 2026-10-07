@@ -2,16 +2,17 @@
 // 목록 캐시를 재활용해 이전/다음 아동 내비를 제공하고, 녹음 청취·낱말쓰기·체크리스트를
 // 채점자가 한 화면에서 볼 수 있게 구성한다. 세션 삭제(PII 파기)도 여기서 수행한다.
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
-import { scoreInputFrom, withUnrecordedDefaults } from '@/lib/scoring'
+import { scoreInputFrom } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
-import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { adminKeys, useSessionDetailQuery, useSessionsQuery, type SessionDetailData } from '@/hooks/useAdminQueries'
+import { patchDetail } from '@/lib/sheet-cache'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -33,6 +34,9 @@ export function AdminDetailView() {
   // 녹음을 처음부터 다시 들어야 하므로, 이동 전에 한 번 묻는다.
   const [dirty, setDirty] = useState(false)
   const [pendingNav, setPendingNav] = useState<string | null>(null)
+  // 「저장하지 않고 이동」으로 떠나는 아이 — 결과지가 언마운트될 때 즉시 저장을 건너뛰게 한다(ResultSheet discardOnLeave).
+  // 아이 id로 적고 한 번 묻고 나면 지운다 — 같은 아이로 돌아와 다른 경로로 떠날 때까지 남지 않게.
+  const discardRef = useRef<string | null>(null)
   const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
 
   const [editOpen, setEditOpen] = useState(false)
@@ -100,18 +104,16 @@ export function AdminDetailView() {
   // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다. 양식은 상세 API가 싣는다.
   const f = itemsFor(data.form)
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
-  // 녹음이 없는 페이지는 오반응(X·0점)으로 채워 넣는다 — 검사지 PDF 라우트도 같은 함수를
-  // 거치므로, 채점자가 [채점 저장]을 누르기 전에도 화면과 인쇄물의 값이 같다.
-  // **제출된 세션에만** 적용한다: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라
-  // "아직 안 했다"이므로, 그것까지 0점으로 채우면 검사 중인 아동이 0점으로 보인다.
-  const rawInput = scoreInputFrom(f, data)
-  const input = s.submitted_at
-    ? withUnrecordedDefaults(f, rawInput, code => byItem.has(code))
-    : rawInput
+  // 미녹음 문항의 고정(X·0어절·제한 시간)은 결과지가 한다 — 잠글 칸을 아는 곳이 거기라서다
+  // (결과보고서 PDF 라우트·교사 결과지도 같은 lib/scoring withUnrecordedFixed를 거친다).
+  const input = scoreInputFrom(f, data)
   const writtenCount = f.writingItems.filter(i => input.writing[i.code] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
   const expected = f.totals
-  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writtenCount)
+  // 스캔본 방식의 빈 쓰기는 「검사 중에 빠뜨린 것」이 아니라 담당자가 스캔본으로 채울 칸이다 — 미완료로 세지 않는다
+  // (목록의 lib/session-progress와 같은 판정).
+  const scanWriting = s.writing_mode === 'scan'
+  const missingCount = Math.max(0, expected.rec - recordedCount) + (scanWriting ? 0 : Math.max(0, expected.write - writtenCount))
 
   return (
     <AudioBusProvider>
@@ -122,10 +124,13 @@ export function AdminDetailView() {
             섞지 않고, [검사 기록 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <span className="kpi">녹음 <b>{recordedCount} / {expected.rec}</b></span>
-          <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {expected.write}</b></span>
+          {/* 스캔본 방식의 쓰기는 검사 중에 모으는 것이 아니라 스캔본이 올라오는지가 수집 상태다 */}
+          <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{scanWriting
+            ? (data.scan ? '스캔본 있음' : writtenCount > 0 ? '스캔본 없이 채점' : '스캔 대기')
+            : `${writtenCount} / ${expected.write}`}</b></span>
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
           {/* 수정된 세션은 원래 값을 함께 보여준다 — 잘못 고쳤을 때 되돌릴 근거가 된다.
-              ⚠️ 검사지 PDF에는 이 표시가 없다(양식은 절대 기준) — 인쇄물만 보면 알 수 없다. */}
+              ⚠️ 결과보고서 PDF에는 이 표시가 없다(담당자 양식 그대로) — 인쇄물만 보면 알 수 없다. */}
           {s.original_identity && (
             <Badge tone="mute" size="lg">
               정보 수정됨 · 원래 {s.original_identity.child_no}번 {s.original_identity.child_name}
@@ -141,9 +146,35 @@ export function AdminDetailView() {
             무력화된다 — clip은 같은 모서리 클리핑을 주되 스크롤 컨테이너를 만들지 않는다. */}
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
+            scan={data.scan}
+            // 저장한 값으로 캐시를 고친다 — 다시 열었을 때 옛 캐시로 초기화돼 자동 저장이 채점을 덮지 않게(lib/sheet-cache).
+            // 받은 시각(updatedAt)은 그대로 둔다 — 저장마다 「방금 받음」이 되면 캐시가 계속 새것으로 남아, 그사이 바뀐
+            // 스캔본을 다시 받을 기회가 사라진다(5분 뒤 다시 열어도 옛 정보). 쓰기를 저장했으면 목록의 진행 표시도 바뀐다.
+            onSaved={saved => {
+              const key = adminKeys.session(id)
+              queryClient.setQueryData<SessionDetailData>(key, old => old && patchDetail(old, saved, f),
+                { updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt })
+              if (saved.writing) void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
+            // 해제 뒤 스캔본이 사라진 상세를 다시 받는다 — 목록의 진행 표시도 바뀐다
+            onScanUnlinked={() => {
+              void queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })
+              void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
+            // 스캔본이 그사이 바뀌었거나(저장 409) 그림 링크가 만료됐다 — 새 스캔본·새 링크를 받는다
+            onScanStale={() => {
+              void queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })
+              void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
             onDirtyChange={setDirty}
+            // 떠나며 보낸 저장의 응답은 받을 수 없다 — 그 아이의 캐시를 비워 다시 열 때 서버에서 받게 한다
+            // (이미 언마운트된 뒤라 아래 removeQueries 경고의 「로딩으로 떨어져 채점이 사라지는」 경우가 아니다)
+            onUnmountFlush={sid => queryClient.removeQueries({ queryKey: adminKeys.session(sid) })}
+            discardOnLeave={sid => { const yes = discardRef.current === sid; if (yes) discardRef.current = null; return yes }}
             initialMarks={input.marks}
             initialSentences={input.sentences}
+            initialTimes={input.times}
+            incomplete={missingCount > 0}
             attemptsOf={attemptsOf}
             onAudioError={() => queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })} />
         </div>
@@ -186,7 +217,7 @@ export function AdminDetailView() {
         <ConfirmDialog open={pendingNav !== null}
           title="저장하지 않은 채점이 있어요"
           confirmLabel="저장하지 않고 이동"
-          onConfirm={() => { const to = pendingNav!; setPendingNav(null); setDirty(false); router.push(to) }}
+          onConfirm={() => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setDirty(false); router.push(to) }}
           onClose={() => setPendingNav(null)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             이동하면 지금 화면의 채점이 <b className="text-rec-deep">사라집니다</b>.

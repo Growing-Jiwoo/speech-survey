@@ -9,9 +9,10 @@ import {
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import { awaitsScanScoring, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
+import { StatusBadge } from './StatusBadge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
@@ -63,6 +64,8 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   // 회차는 **필터를 통과한 rows가 아니라 전체 목록**에서 센다 — "진행 중"만 걸러 본 화면에서
   // 2회차 세션만 남았다고 "1/1회차"로 보이면, 앞선 검사가 없는 것처럼 읽혀 거짓이 된다.
   const retest = useMemo(() => retestOrdinals(all), [all])
+  // 필터 이전 전체로 센다 — 다른 필터가 걸려 있어도 탭의 수는 「채점할 스캔본이 몇 건인가」를 말해야 한다
+  const scanReadyCount = useMemo(() => all.filter(awaitsScanScoring).length, [all])
 
   // ---- react-table 컬럼 정의 (셀 마크업·클래스는 기존 디자인 그대로 보존) ----
   const columns = useMemo(() => {
@@ -128,7 +131,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         cell: ({ row }) => {
           // 분모는 행마다 다르다 — 그 아동의 학년 검사지 문항 수다.
           const p = row.original.progress
-          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} />
+          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} scan={p.scan} />
         },
       }),
       col.display({
@@ -252,7 +255,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           아니게 되므로, 그 폭에서는 둘 다 붙이지 않는다(래퍼 주석 참고). */}
       <div ref={toolbarRef} className="bg-white lg:sticky lg:top-0 lg:z-20">
         <FilterToolbar filters={filters} schools={schools} grades={grades}
-          shownCount={rows.length} onFilters={onFilters} onReset={onReset} />
+          shownCount={rows.length} scanReadyCount={scanReadyCount} onFilters={onFilters} onReset={onReset} />
       </div>
       {/* 세로 스크롤은 페이지가 맡는다(위 주석) — 여기서는 좁은 화면의 가로 넘침만 처리한다.
           `overflow-x: auto`는 CSS 규칙상 세로도 auto로 계산시켜 **이 div를 스크롤 컨테이너로
@@ -328,6 +331,9 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
             desc: '제출은 됐지만 녹음이나 쓰기가 비어 있습니다.',
           },
           { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았습니다.' },
+          // 스캔본 방식의 쓰기 칸 — 막대 대신 이 두 배지가 보인다(ProgressCell)
+          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사 — 선생님이 아직 기록지 스캔본을 올리지 않았습니다.' },
+          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사 — 결과지에서 쓰기를 채점할 차례입니다.' },
           {
             badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
             desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',
@@ -344,18 +350,18 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   )
 }
 
-/** 상태 배지 3단계: 제출 완료(mint) / 제출·미완료 있음(amber) / 진행 중(회색) */
-function StatusBadge({ submitted, incomplete }: { submitted: boolean; incomplete: boolean }) {
-  if (!submitted) return <Badge tone="mute">진행 중</Badge>
-  if (incomplete) return <Badge tone="amber">제출 · 미완료 있음</Badge>
-  return <Badge tone="mint">제출 완료</Badge>
-}
-
-function ProgressCell({ recorded, written, totals }: { recorded: number; written: number; totals: Totals }) {
+function ProgressCell({ recorded, written, totals, scan }: {
+  recorded: number; written: number; totals: Totals; scan: 'wait' | 'uploaded' | null
+}) {
   return (
     <div className="flex min-w-[140px] flex-col gap-1 py-1.5">
       <Track label="녹음" value={recorded} max={totals.rec} />
-      <Track label="쓰기" value={written} max={totals.write} />
+      {/* 스캔본 방식은 쓰기가 비어 있는 것이 정상이다 — 빨갛게 그리지 않고, 담당자가 채점할 차례(스캔본 올라옴)인지
+          선생님이 올리기를 기다리는지를 가른다. 다 채점되면 다른 검사처럼 막대로 보인다 */}
+      {scan && written < totals.write
+        ? <div className="flex items-center gap-1.5"><span className="w-7 text-[12px] text-ink-mute">쓰기</span>
+            {scan === 'uploaded' ? <Badge tone="blue" size="sm">스캔본 채점</Badge> : <Badge tone="amber" size="sm">스캔 대기</Badge>}</div>
+        : <Track label="쓰기" value={written} max={totals.write} />}
     </div>
   )
 }

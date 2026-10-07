@@ -16,6 +16,9 @@ import type { FormItems } from './items'
 
 export interface FlowState {
   writing: Partial<Record<string, number>>
+  /** 쓰기 방식(호출부가 기기 기본값까지 반영해 넘긴다). scan이면 쓰기 화면은 표시 없이 넘어간다 —
+   *  아이가 기록지에 쓰고 담당자가 스캔본을 보고 채점한다. 없으면 screen으로 본다. */
+  writingMode?: 'screen' | 'scan'
   checklist: string[]
   /** 연습 페이지를 실시하는지(검사자가 마이크 확인 뒤에 고른다). 같은 아동이 반복 검사할 때
    *  매번 연습을 강요하지 않기 위한 선택이다 — false면 연습 페이지가 진행 목록에서 빠진다. */
@@ -33,14 +36,14 @@ export function visiblePages(f: FormItems, s: Partial<Pick<FlowState, 'practice'
 
 /**
  * 현재 페이지에서 [다음]을 누를 수 있는지 — 페이지 종류별 완료 조건.
- * 쓰기: 전 문항 입력. 체크리스트: 1개 이상 선택.
+ * 쓰기: 전 문항 입력(스캔본 방식이면 입력 없이 통과). 체크리스트: 1개 이상 선택.
  * (녹음 문항 자체의 완료 여부는 이 함수가 판단하지 않는다 — 호출부에서 busy로 이미 잠겨 있다.)
  */
 export function canAdvance(
   f: FormItems, page: FormItems['pages'][number],
   s: Omit<FlowState, 'practice'>,
 ): boolean {
-  const writingDone = page.items.every(i => s.writing[i.code] !== undefined)
+  const writingDone = s.writingMode === 'scan' || page.items.every(i => s.writing[i.code] !== undefined)
   return (page.section !== f.writingSection || writingDone)
     && (page.section !== 'checklist' || s.checklist.length > 0)
 }

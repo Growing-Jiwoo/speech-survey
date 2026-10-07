@@ -9,9 +9,10 @@ import { Spinner } from '@/components/Spinner'
 import { fmtDuration } from '@/lib/format'
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
-// '1×'의 ×가 채점 O/X의 X로 읽힌다(실사용 피드백) — 기호 대신 말로 쓴다.
+// '1×'의 ×가 채점 O/X의 X로 읽힌다(실사용 피드백) — 기호 대신 말로 쓴다. 「배속」은 트리거에만
+// 붙이고(triggerPrefix) 목록은 숫자만 둔다 — 옵션마다 같은 말이 되풀이되면 숫자가 묻힌다.
 const RATE_LABELS: Record<(typeof RATES)[number], string> = {
-  0.5: '배속 0.5', 0.75: '배속 0.75', 1: '배속 1.0', 1.25: '배속 1.25', 1.5: '배속 1.5',
+  0.5: '0.5', 0.75: '0.75', 1: '1.0', 1.25: '1.25', 1.5: '1.5',
 }
 const RATE_OPTIONS = RATES.map(r => ({ value: String(r), label: RATE_LABELS[r] }))
 
@@ -125,7 +126,7 @@ export function AudioPlayer({ src, durationSec, onError }: {
       <div ref={waveRef} aria-hidden="true"
         className={`h-8 min-w-0 flex-1 ${ready ? 'cursor-pointer' : ''}`} />
       <span className="flex-none font-read text-[12.5px] tabular-nums text-ink-mute">{fmtDuration(cur)}/{fmtDuration(dur)}</span>
-      <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" onChange={changeRate}
+      <Select value={String(rate)} options={RATE_OPTIONS} placeholder="배속" triggerPrefix="배속" onChange={changeRate}
         ariaLabel="재생 속도" disabled={!ready} size="sm" className="w-[104px] flex-none" />
     </div>
   )

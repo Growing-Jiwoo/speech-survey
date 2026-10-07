@@ -1,15 +1,16 @@
 // lib/results.ts — 교사 결과지 표의 순수 로직. DB·HTTP를 모른다(행 모양만 받는다).
 // 목록 라우트·PDF 라우트·테스트가 공유한다. 채점은 관리자 결과지와 **같은 함수 사슬**을 쓴다 —
-// scoreInputFrom → (제출됨이면) withUnrecordedDefaults → scoreSession → sheetPdfGate.
+// scoreInputFrom → (제출됨이면) withUnrecordedFixed → scoreSession → sheetPdfGate.
 // 여기서 규칙을 새로 만들지 않는다: 관리자와 교사가 다른 점수를 보면 그 자체가 사고다.
 import { formForGrade, type SurveyForm } from './forms'
 import { itemsFor } from './items'
 import { pad2 } from './format'
 import {
-  TASK_KEYS, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedDefaults,
+  TASK_KEYS, finalVerdict, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedFixed,
   type ScoreInput, type Verdict,
 } from './scoring'
 import { childVerdict, type ResultsChild, type ResultsSession } from './results-view'
+import { scanTargetState } from './scan-mapping'
 
 // 화면용 타입·헬퍼는 lib/results-view.ts에 있다(떼어 낸 이유는 그 파일 머리 주석). 서버 쪽 호출부가
 // 한 곳에서 import하도록 다시 내보낸다.
@@ -24,14 +25,19 @@ export interface ResultsSessionRow {
   grade: number
   started_at: string
   submitted_at: string | null
-  /** 결과지 PDF 머리글이 찍는다(stampSheet). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
+  /** 결과보고서 PDF 머리글이 찍는다(renderReport). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
   birth_ymd: string
   /** 검사자 체크리스트 — 결과지 PDF가 체크 표시를 찍는다(관리자 PDF와 같은 문서여야 한다) */
   checklist: string[]
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_scores: { item_code: string; words: number }[]
+  sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
+  /** 쓰기 방식(migration 006) */
+  writing_mode: 'screen' | 'scan'
+  /** 쓰기 기록지 스캔본이 올라왔으면 그 시각. **목록 API 응답에는 싣지 않는다**(상태 계산에만 쓴다) */
+  writing_scan: { uploaded_at: string } | null
 }
 
 /** 명단 한 줄 — `RosterRow`의 부분집합(생년월일은 결과 표에 싣지 않는다). */
@@ -52,37 +58,49 @@ export function maskEmail(email: string): string {
 
 /**
  * 채점 입력 조립 — 관리자 결과지·PDF 라우트(`app/api/admin/sessions/[id]/sheet.pdf`)와 같다.
- * 제출된 세션만 미녹음 기본값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
+ * 제출된 세션만 미녹음 고정값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
  */
 export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: ScoreInput } {
   const form = formForGrade(r.grade)
   const f = itemsFor(form)
-  const raw = scoreInputFrom(f, { marks: r.reading_marks, sentences: r.sentence_scores, writing: r.writing_answers })
+  const raw = scoreInputFrom(f, {
+    marks: r.reading_marks, sentences: r.sentence_scores, times: r.sentence_times, writing: r.writing_answers,
+  })
   if (!r.submitted_at) return { form, input: raw }
   const recorded = new Set(r.recordings.map(x => x.item_code))
-  return { form, input: withUnrecordedDefaults(f, raw, c => recorded.has(c)) }
+  return { form, input: withUnrecordedFixed(f, raw, c => recorded.has(c)) }
 }
 
-export function evaluateSession(r: ResultsSessionRow): Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete'> {
-  if (!r.submitted_at) return { status: 'unsubmitted', scores: null, verdict: null, complete: null }
+type Evaluated = Pick<ResultsSession, 'status' | 'scores' | 'verdict' | 'complete' | 'writingMode' | 'scanState'>
+
+export function evaluateSession(r: ResultsSessionRow): Evaluated {
+  // 컬럼은 not null default 'screen' — scan이 아닌 값은 화면 방식으로 읽는다(lib/db rosterWithTested와 같다)
+  const writingMode = r.writing_mode === 'scan' ? 'scan' : 'screen'
+  if (!r.submitted_at)
+    return { status: 'unsubmitted', scores: null, verdict: null, complete: null, writingMode, scanState: 'unsubmitted' }
   const { form, input } = scoreInputFor(r)
   const result = scoreSession(form, input)
+  // 쓰기 상태 — 담당자가 쓰기를 하나라도 넣었으면 「채점됨」(그 뒤로 선생님이 스캔본을 바꾸지 못한다)
+  const scanState = scanTargetState({
+    submitted: true, mode: writingMode, hasScan: r.writing_scan !== null, hasWriting: Object.keys(input.writing).length > 0,
+  })
   // 관리자 PDF와 같은 게이트 — 읽기 두 과제가 남으면 막고, 쓰기만 남으면(overridable) 통과.
   const gate = sheetPdfGate(result, false)
   if (gate !== null && !gate.overridable)
-    return { status: 'scoring', scores: null, verdict: null, complete: null }
+    return { status: 'scoring', scores: null, verdict: null, complete: null, writingMode, scanState }
   // **모든 과제가 채점됐을 때만 판정한다**(사용자 확정 2026-09-22 A안 — 관리자 화면과 동일).
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
   const allScored = TASK_KEYS.every(k => result.complete[k])
-  const verdict: Verdict | null = allScored
-    ? (TASK_KEYS.every(k => result.verdict[k] === 'pass') ? 'pass' : 'fail')
-    : null
+  // 최종 판정 규칙(FAIL 2개 이상 → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
+  const verdict: Verdict | null = allScored ? finalVerdict(result.verdict) : null
   return {
     status: 'scored',
     scores: { wordReading: result.wordReading, sentenceReading: result.sentenceReading, writing: result.writing },
     verdict,
     complete: result.complete,
+    writingMode,
+    scanState,
   }
 }
 

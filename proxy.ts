@@ -8,7 +8,8 @@ import { verifyToken, ADMIN_COOKIE } from '@/lib/auth'
 /**
  * 요청별 CSP를 만든다. 핵심은 script-src를 nonce + strict-dynamic으로 잠가(prod) 인라인/외부
  * 스크립트 주입(XSS)을 차단하는 것(F-13). style은 Tailwind·인라인 스타일 속성 때문에 unsafe-inline을
- * 유지하고, 녹음 재생용 Supabase 서명 URL을 media/connect-src에 허용한다.
+ * 유지하고, 녹음 재생용 Supabase 서명 URL을 media/connect-src에, 쓰기 기록지 스캔본(관리자 결과지)의
+ * 서명 URL을 img-src에 허용한다.
  * dev는 HMR(eval·인라인)이 필요해 완화한다 — 엄격 모드는 prod 빌드에서만 활성.
  */
 function buildCsp(nonce: string | null): string {
@@ -22,8 +23,11 @@ function buildCsp(nonce: string | null): string {
     "default-src 'self'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",                              // Tailwind 주입 스타일·style 속성(스크립트 아님)
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob: ${supabaseOrigin}`.trim(),          // 쓰기 기록지 스캔본(관리자 결과지, Supabase 서명 URL)
     "font-src 'self'",
+    // PDF 스캔본을 그리는 pdf.js 작업자(같은 출처 파일) — 없으면 script-src로 떨어지는데, strict-dynamic은 'self'를
+    // 무시해 브라우저마다 작업자 로드 판단이 갈릴 수 있다. 작업자만 따로 명시한다.
+    "worker-src 'self'",
     `media-src 'self' blob: data: ${supabaseOrigin}`.trim(),         // 녹음 재생(Supabase 서명 URL)
     `connect-src 'self' ${supabaseOrigin}`.trim(),                   // API 동일출처 + Supabase
     "frame-ancestors 'none'",

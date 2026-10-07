@@ -17,18 +17,21 @@
 // 학급 배너의 [결과지 받기 →]는 교사용이다(스펙 2026-09-22 teacher-results-download). 등록된 담임
 // 메일로 학급 결과 링크를 보낼 뿐 이 화면에서 결과가 열리지 않는다 — 아동 앞 공용 PC라 그래야 한다.
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Select } from '@/components/Select'
+import { WritingSheetDialog } from '@/components/start/WritingSheetDialog'
 import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
+import type { ScanTargetState } from '@/lib/scan-mapping'
+import type { SheetLayout } from '@/lib/writing-sheet'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
@@ -71,6 +74,17 @@ interface ClassInfo {
 interface RosterChild {
   childNo: number; name: string; gender: '남' | '여'; birthYmd: string
   tested: 'submitted' | 'inProgress' | null
+  /** 최신 검사의 쓰기 상태 — 기록지 인쇄 창의 배지 */
+  writing: ScanTargetState | null
+}
+
+/** verify-code(childNo 없이) 응답 — 명단과 쓰기 기록지 인쇄 재료(스캔본 방식, 2026-09-30) */
+interface CodeLookup extends ClassInfo {
+  roster: RosterChild[]
+  /** 스캔본을 기다리는 아이 수 — 배너가 「스캔 대기 N명」으로 알린다 */
+  scanPending: number
+  /** 기록지 QR의 반 표시와 쓰는 칸 모양(문항은 없다) */
+  sheet: { tag: string; layout: SheetLayout }
 }
 
 /** 확인 모달이 보여줄 내용. 두 모드가 신원을 얻는 경로는 다르지만(명단 복사 / 직접 입력)
@@ -101,6 +115,11 @@ export default function StartPage() {
    *  표시된 학급과 [결과지 받기 →]가 실제로 보내는 코드가 갈린다. */
   const [clsCode, setClsCode] = useState('')
   const [roster, setRoster] = useState<RosterChild[]>([])
+  // 쓰기 기록지 — 인쇄 창 재료와 스캔 대기 수. 코드 조회가 채우고 코드를 고치면 비운다(명단과 같은 수명).
+  const [sheet, setSheet] = useState<CodeLookup['sheet'] | null>(null)
+  const [scanPending, setScanPending] = useState(0)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const closeSheet = useCallback(() => setSheetOpen(false), [])
   const [pick, setPick] = useState('') // 드롭다운에서 고른 아동 번호(Select 계약이 문자열)
   const [childNo, setChildNo] = useState('')
   const [name, setName] = useState('')
@@ -120,7 +139,10 @@ export default function StartPage() {
   // 이 기기에 남아 있는 미제출 세션 — 누구의 검사인지(번호+이름) 함께 보여 이어하기를 돕는다.
   // 번호를 같이 밝히는 이유: 이 흐름은 아동을 코드+번호로 지목하므로 이름만으로는
   // 검사자가 "지금 부른 아이"와 같은 아이인지 대조할 근거가 한 칸 부족하다.
-  const [resume, setResume] = useState<{ childName: string; childNo: number } | null>(null)
+  /** 이 컴퓨터에서 진행 중인 검사. classCode는 그 세션을 만들 때 저장된 학급 코드다(`saveClassCode`는 세션 생성
+   *  성공 직후에만 부른다) — 「같은 아이인가」는 번호만으로 가릴 수 없다: 컴퓨터실 PC에서 1반 3번이 진행 중일 때
+   *  2반 3번을 고르면 번호가 같다(사용자 확정 2026-10-07). */
+  const [resume, setResume] = useState<{ childName: string; childNo: number; classCode: string | null } | null>(null)
   // [새로 시작] 확인 모달 — 진행 상태를 지우면 그 검사를 **이어갈 수단이 사라진다**
   // (세션 토큰이 이 기기의 localStorage에만 있고 서버가 다시 발급해 주는 경로가 없다).
   // 이미 올라간 녹음은 서버에 남아 관리자가 볼 수 있지만, 아동은 처음부터 다시 검사해야
@@ -184,7 +206,7 @@ export default function StartPage() {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
     const s = loadState()
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (s) setResume({ childName: s.childName, childNo: s.childNo })
+    if (s) setResume({ childName: s.childName, childNo: s.childNo, classCode: loadClassCode() })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
     // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
     // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
@@ -210,6 +232,8 @@ export default function StartPage() {
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   const cleanCode = code.trim().toUpperCase()
+  /** 확인 중인 아이가 이 컴퓨터에서 진행 중인 바로 그 아이인가 — 학급과 번호가 모두 같아야 한다(위 `resume`) */
+  const isResumeChild = (childNo: number) => resume !== null && resume.classCode === cleanCode && resume.childNo === childNo
   const cleanName = name.trim().replace(/\s+/g, ' ')
   const childNoNum = Number(childNo)
   const birthYmd = year && month && day
@@ -237,7 +261,7 @@ export default function StartPage() {
     // 고치려던 검사자가 그동안 아무것도 할 수 없다 — 바로 그 순간을 막으려고 codeTouched를
     // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
     if (!auto) setBusy(true)
-    const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
+    const r = await postJson<CodeLookup>('/api/sessions/verify-code',
       { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
     if (!auto) setBusy(false)
     // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
@@ -252,6 +276,8 @@ export default function StartPage() {
     setCls(r.data)
     setClsCode(target)
     setRoster(r.data.roster)
+    setSheet(r.data.sheet ?? null)
+    setScanPending(r.data.scanPending ?? 0)
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
 
@@ -343,6 +369,19 @@ export default function StartPage() {
       {resultsBusy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : '결과지 받기 →'}
     </button>
   )
+  /** 배너의 [쓰기 기록지 인쇄 →] — 「결과지 받기 →」와 같은 모양의 선생님용 링크(사용자 확정 2026-09-30). */
+  const sheetButton = sheet && (
+    <button type="button" onClick={() => setSheetOpen(true)}
+      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2">
+      쓰기 기록지 인쇄 →
+    </button>
+  )
+  /** 스캔 대기 안내 — 선생님이 아이마다 보는 화면이라 올리는 것을 잊지 않게 한다. 0명이면 줄이 없다. */
+  const scanWaitLine = scanPending > 0 && (
+    <p className="mt-1.5 flex w-fit rounded-lg bg-amber/10 px-2.5 py-1 text-[12.5px] font-bold text-amber">
+      스캔 대기 {scanPending}명 · 결과지 화면에서 올려 주세요
+    </p>
+  )
   /** 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색. */
   const resultsNotice = resultsErr
     ? <p role="alert" className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">{resultsErr}</p>
@@ -421,6 +460,7 @@ export default function StartPage() {
               setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
                 setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
+                setSheet(null); setScanPending(0)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
@@ -434,12 +474,13 @@ export default function StartPage() {
                 충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
             {/* 「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게
                 (사용자 확정 2026-09-22 ①). 오른쪽 [결과지 받기 →]는 위 requestResults 주석 참고. */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
+            <div className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
               <span>
                 {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명 ·
                 검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
               </span>
-              {resultsButton}
+              {scanWaitLine}
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
             </div>
             {resultsNotice}
             <label className={labelCls} htmlFor="pick">검사할 학생</label>
@@ -473,9 +514,10 @@ export default function StartPage() {
                 채로 남는다. 그 배너 옆 [결과지 받기 →]는 **입력된 코드**로 보내므로, 남겨 두면
                 화면이 가리키는 학급과 실제 동작 대상이 갈린다. */}
             {cls && clsCode === cleanCode && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
+              <div className="mt-4 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
                 <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
-                {resultsButton}
+                {scanWaitLine}
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
               </div>
             )}
             {resultsNotice}
@@ -606,7 +648,9 @@ export default function StartPage() {
           title={confirm.tested
             ? `${confirm.childNo}번은 이미 검사했어요`
             : '이 정보가 맞나요?'}
-          confirmLabel={confirm.tested ? '네, 다시 검사할게요' : '맞아요, 시작하기'}
+          confirmLabel={confirm.tested
+            ? (isResumeChild(confirm.childNo) ? '그래도 새로 검사' : '네, 다시 검사할게요')
+            : '맞아요, 시작하기'}
           cancelLabel="아니에요"
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
@@ -635,10 +679,24 @@ export default function StartPage() {
             {confirm.identity && (
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
-            {confirm.tested === 'inProgress' && (
+            {/* 진행 중인 검사가 **이 컴퓨터의 것**이면(이어하기 카드의 그 아이) 「다른 기기」 안내는 틀리다 — 이어하기를 가리킨다 */}
+            {confirm.tested === 'inProgress' && isResumeChild(confirm.childNo) && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                이 컴퓨터에서 진행 중인 검사예요. 이어서 하려면 이 창을 닫고 위의 <b>[이어서 하기]</b>를 눌러 주세요.<br />
+                새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.
+              </p>
+            )}
+            {confirm.tested === 'inProgress' && !isResumeChild(confirm.childNo) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
                 다른 기기에서 검사 중일 수 있어요.
+              </p>
+            )}
+            {/* 다른 아이를 시작하면 이 컴퓨터에서 진행 중이던 아이의 검사는 이어갈 수 없게 된다 — 확인 없이 사라지지 않게 */}
+            {resume && !isResumeChild(confirm.childNo) && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                진행 중인 <b>{resume.childNo}번{resume.childName ? ` ${resume.childName}` : ''}</b> 학생의 검사는 새로 시작하면
+                이어갈 수 없게 돼요.
               </p>
             )}
             {confirm.tested === 'submitted' && (
@@ -651,6 +709,12 @@ export default function StartPage() {
         </ConfirmDialog>
       )}
       <LoadingOverlay show={busy && !confirm} />
+      {sheetOpen && cls && sheet && (
+        <WritingSheetDialog onClose={closeSheet}
+          cls={{ schoolName: cls.schoolName, grade: cls.grade, classNo: cls.classNo }}
+          tag={sheet.tag} layout={sheet.layout}
+          roster={roster.map(r => ({ childNo: r.childNo, name: r.name, writing: r.writing }))} />
+      )}
     </main>
   )
 }

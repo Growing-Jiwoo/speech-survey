@@ -74,3 +74,19 @@ describe('canAdvance — 쓰기는 전 문항 입력이 완료 조건이다 (중
     expect(canAdvance(g2, wwPage(g2), { writing: all, checklist: [] })).toBe(true)
   })
 })
+
+describe('canAdvance — 쓰기 방식(스캔본, 2026-09-30)', () => {
+  const empty = { writing: {}, checklist: [] }
+  it('스캔본 방식이면 쓰기 페이지를 표시 없이 넘어간다 — 아이가 기록지에 쓰고 담당자가 채점한다', () => {
+    expect(canAdvance(g1, g1.pageByCode.get('p_ww')!, { ...empty, writingMode: 'scan' })).toBe(true)
+    expect(canAdvance(g2, g2.pageByCode.get('p_sw')!, { ...empty, writingMode: 'scan' })).toBe(true)
+  })
+  it('화면 방식(또는 값 없음)은 종전대로 전 문항 입력이 필요하다', () => {
+    expect(canAdvance(g1, g1.pageByCode.get('p_ww')!, { ...empty, writingMode: 'screen' })).toBe(false)
+    expect(canAdvance(g1, g1.pageByCode.get('p_ww')!, empty)).toBe(false)
+  })
+  it('스캔본 방식이어도 체크리스트 조건은 그대로다', () => {
+    expect(canAdvance(g1, g1.pageByCode.get('p_cl')!, { ...empty, writingMode: 'scan' })).toBe(false)
+  })
+})
+

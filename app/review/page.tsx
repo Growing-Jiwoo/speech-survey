@@ -12,10 +12,11 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { postJson } from '@/lib/http'
 import { SECTION_LABEL, isRecordingPage, areaLabel, itemsFor, pageLabel, type Section } from '@/lib/items'
+import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
-import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
+import { clearState, loadState, resolveWritingMode, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
@@ -40,8 +41,10 @@ export default function ReviewPage() {
 
   // 검사지는 서버가 내려준다(hooks/useSurveyForm) — 검사 화면에서 이미 받았으면 캐시로 즉시 뜬다.
   const formQ = useSurveyForm(st)
+  const otherTab = useOtherTabGuard(st?.sessionId)
 
   if (!st) return null
+  if (otherTab) return <OtherTabNotice />
   if (!formQ.data) return <FormStatus error={formQ.error} onRetry={() => void formQ.refetch()} />
   const state = st
 
@@ -53,10 +56,12 @@ export default function ReviewPage() {
   // 뜨면 검사자는 돌아가서 뭘 해야 하는 줄 알고, 진짜 빠뜨린 문항과도 섞여 버린다.
   const f = itemsFor(formQ.data)
   const pages = visiblePages(f, state)
+  // 스캔본 방식이면 쓰기는 「아직 못 한 것」이 아니다 — 담당자가 스캔본을 보고 채점한다(검사 화면과 같은 판정).
+  const scanWriting = resolveWritingMode(state) === 'scan'
   const skipped = (p: typeof pages[number]) => state.skipped.includes(p.code)
   const missingPages = pages.filter(p =>
     isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0) && !skipped(p)).length
-  const missingWriting = pages
+  const missingWriting = scanWriting ? 0 : pages
     .filter(p => p.section === f.writingSection)
     .flatMap(p => p.items)
     .filter(i => state.writing[i.code] === undefined).length
@@ -84,7 +89,8 @@ export default function ReviewPage() {
                   : <StatusPill done={false} label="미녹음" />
             } else if (p.section === f.writingSection) {
               const done = p.items.filter(i => state.writing[i.code] !== undefined).length
-              pill = <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
+              pill = scanWriting ? <Badge tone="blue">스캔 예정</Badge>
+                : <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
             } else {
               pill = (
                 <span className="text-right text-xs text-ink-soft">
@@ -116,9 +122,11 @@ export default function ReviewPage() {
   async function submit() {
     if (!st) return
     setBusy(true); setErr('')
+    // 스캔본 방식이면 화면에 남아 있는 예/아니오를 보내지 않는다 — 쓰기 채점은 담당자가 스캔본으로 한다.
+    const writingMode = resolveWritingMode(st)
     const r = await postJson('/api/sessions/submit', {
-      sessionId: st.sessionId, sessionToken: st.sessionToken,
-      writing: st.writing, checklist: st.checklist,
+      sessionId: st.sessionId, sessionToken: st.sessionToken, writingMode,
+      writing: writingMode === 'scan' ? {} : st.writing, checklist: st.checklist,
     }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
@@ -132,7 +140,10 @@ export default function ReviewPage() {
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">검사 검토</span>
       </div>
-      <h1 className="mt-6 text-xl font-bold">단계별 완료 여부를 확인해 주세요</h1>
+      {/* 누구의 검사를 검토하는지 — 같은 컴퓨터에서 탭을 두 개 쓰면 마지막에 저장된 아이가 여기 올라온다.
+          이름이 없으면 선생님은 A를 검토한다고 믿고 B를 제출할 수 있다 */}
+      <p className="mt-6 text-sm font-bold text-blue">{st.childNo}번 {st.childName} 학생</p>
+      <h1 className="mt-1 text-xl font-bold">단계별 완료 여부를 확인해 주세요</h1>
       <p className="mt-2 text-sm leading-relaxed text-ink-soft">
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}

@@ -13,8 +13,14 @@
 // 코드 소지가 이미 학급 접근을 의미하는 이상, 명단은 주면서 검사 여부만 감추는 것은
 // 의미가 없다(근거는 lib/db.ts의 rosterWithTested docblock). childNo와 함께 부르는 옛
 // 경로("명단에 없는 학생" 폴백)는 그대로 물어본 번호 하나의 상태(alreadyTested)만 답한다.
+// 쓰기 기록지(스캔본 방식, 2026-09-30): 명단과 함께 **기록지 인쇄에 필요한 것**을 싣는다 — 반 표시(QR용,
+// 학급 id의 해시라 비밀이 아니다)·쓰는 칸의 종류와 개수(문항은 싣지 않는다)·아이마다 쓰기 상태·스캔 대기 수.
+// 코드 소지가 곧 학급 접근이라는 전제는 그대로다 — 명단 외에 새로 드러나는 개인정보는 없다.
 import { NextResponse } from 'next/server'
 import { childTestState, findClassCode, rosterWithTested } from '@/lib/db'
+import { formForGrade } from '@/lib/forms'
+import { itemsFor } from '@/lib/items'
+import { classSheetTag, type SheetLayout } from '@/lib/writing-sheet'
 import { verifyCodeSchema } from '@/lib/schema'
 import { clientIp, createRateLimiter, jsonError, VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS } from '@/lib/request'
 
@@ -37,8 +43,15 @@ export async function POST(req: Request) {
       schoolName: row.school_name, grade: row.grade, classNo: row.class_no,
       teacherName: row.teacher_name, teacherPhone: row.teacher_phone, teacherEmail: row.teacher_email,
     }
-    if (parsed.data.childNo === undefined)
-      return NextResponse.json({ ...base, roster: await rosterWithTested(row.id) })
+    if (parsed.data.childNo === undefined) {
+      const f = itemsFor(formForGrade(row.grade))
+      const writingCodes = new Set(f.writingItems.map(i => i.code))
+      const [{ roster, scanPending }, tag] = await Promise.all([
+        rosterWithTested(row.id, c => writingCodes.has(c)), classSheetTag(row.id),
+      ])
+      const layout: SheetLayout = { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', count: f.writingItems.length }
+      return NextResponse.json({ ...base, roster, scanPending, sheet: { tag, layout } })
+    }
     const alreadyTested = await childTestState(row.id, parsed.data.childNo)
     return NextResponse.json({ ...base, alreadyTested })
   } catch (e) {

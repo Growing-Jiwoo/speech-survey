@@ -9,6 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const tableQueues = new Map<string, unknown[]>()
 const fromCalls: string[] = []
+/** storage.from(버킷) 호출 순서 — 녹음과 쓰기 기록지 스캔본이 다른 버킷이라 어느 쪽을 건드렸는지 가른다 */
+const storageBuckets: string[] = []
 const storage = {
   list: vi.fn(),
   remove: vi.fn(),
@@ -33,12 +35,16 @@ const selectCallsByTable = new Map<string, unknown[]>()
  *  돌려주므로 `.order()`를 지워도 반환값은 같다. 명단 순서는 관리자가 교사 명렬표와 눈으로
  *  맞춰 보는 근거라, 인자로 못 박지 않으면 정렬이 사라진 것을 아무도 모른다. */
 const orderCallsByTable = new Map<string, unknown[]>()
+/** upsert() 페이로드·in() 인자 캡처. 채점 저장은 upsert 한 방이라 결과로는 **어느 열에 어떤 값이
+ *  갔는지**(sentence_times.seconds)가 안 드러나고, 교체 삭제의 범위(in)도 인자로만 보인다. */
+const upsertCallsByTable = new Map<string, unknown[]>()
+const inCallsByTable = new Map<string, unknown[]>()
 
-type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select' | 'order'
+type Captured = 'insert' | 'update' | 'delete' | 'eq' | 'select' | 'order' | 'upsert' | 'in'
 const BUCKETS: Record<Captured, Map<string, unknown[]>> = {
   insert: insertCallsByTable, update: updateCallsByTable,
   delete: deleteCallsByTable, eq: eqCallsByTable, select: selectCallsByTable,
-  order: orderCallsByTable,
+  order: orderCallsByTable, upsert: upsertCallsByTable, in: inCallsByTable,
 }
 
 function chain(result: unknown, capture?: (kind: Captured, args: unknown[]) => void) {
@@ -65,25 +71,27 @@ vi.mock('@/lib/supabase', () => ({
       return chain(result, (kind, args) => {
         const bucket = BUCKETS[kind]
         const calls = bucket.get(table) ?? []
-        // insert/update는 payload 한 덩이가 관심사, 나머지(delete/eq/select/order)는 인자 자체가 관심사다.
-        calls.push(kind === 'insert' || kind === 'update' ? args[0] : args)
+        // insert/update/upsert는 payload 한 덩이가 관심사, 나머지(delete/eq/select/order/in)는 인자 자체가 관심사다.
+        calls.push(kind === 'insert' || kind === 'update' || kind === 'upsert' ? args[0] : args)
         bucket.set(table, calls)
       })
     },
-    storage: { from: () => storage },
+    storage: { from: (bucket: string) => { storageBuckets.push(bucket); return storage } },
     rpc: vi.fn().mockResolvedValue({ error: null }),
   }),
 }))
 
 import {
   approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
+  saveWriting, scanUploadTarget, latestSubmittedSessionId, uploadScanObject, upsertWritingScan, removeScanObjects, signedScanUrl, unlinkWritingScan,
+  restoreWritingScan, scanUploadedAt,
   type ClassCodeRow,
 } from '@/lib/db'
 
 const SID = '11111111-1111-4111-8111-111111111111'
 /** submitSession 호출 헬퍼 — 테스트가 신경 쓰는 필드만 넘긴다 */
 const submit = (over: Partial<Parameters<typeof submitSession>[0]> = {}) => submitSession({
-  sessionId: SID, writing: [], sentenceWriting: [], checklist: [],
+  sessionId: SID, writingMode: 'screen', writing: [], sentenceWriting: [], checklist: [],
   ...over,
 })
 
@@ -96,12 +104,15 @@ const enqueue = (table: string, result: unknown) => {
 beforeEach(() => {
   tableQueues.clear()
   fromCalls.length = 0
+  storageBuckets.length = 0
   insertCallsByTable.clear()
   updateCallsByTable.clear()
   deleteCallsByTable.clear()
   eqCallsByTable.clear()
   selectCallsByTable.clear()
   orderCallsByTable.clear()
+  upsertCallsByTable.clear()
+  inCallsByTable.clear()
   vi.clearAllMocks()
   storage.upload.mockResolvedValue({ error: null })
   storage.remove.mockResolvedValue({ error: null })
@@ -172,22 +183,41 @@ describe('submitSession — 쓰기 답을 먼저 넣고 submitted_at을 마지�
   })
 })
 
-describe('sessionDetail — 5개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
-  it('sessions/recordings/writing_answers/reading_marks/sentence_scores 응답이 교차되지 않고 그대로 매핑된다', async () => {
+describe('sessionDetail — 7개 병렬 조회 결과가 각자 올바른 필드로 배선된다', () => {
+  it('sessions/recordings/writing_answers/reading_marks/sentence_scores/sentence_times/writing_scans 응답이 교차되지 않고 그대로 매핑된다', async () => {
     enqueue('sessions', { data: { id: SID, child_name: '세션전용이름' }, error: null })
     enqueue('recordings', { data: [{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }], error: null })
     enqueue('writing_answers', { data: [{ item_code: 'ww01', can_write: true }], error: null })
     enqueue('reading_marks', { data: [{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }], error: null })
     enqueue('sentence_scores', { data: [{ item_code: 'rs01', words: 7 }], error: null })
+    enqueue('sentence_times', { data: [{ item_code: 'rs01', seconds: 4.5 }], error: null })
+    const SCAN = { session_id: SID, path: `${SID}/1.jpg`, content_type: 'image/jpeg', bytes: 10, uploaded_at: '2026-09-30T00:00:00Z' }
+    enqueue('writing_scans', { data: SCAN, error: null })
 
     const result = await sessionDetail(SID)
 
-    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks', 'sentence_scores'])
+    expect(fromCalls).toEqual(['sessions', 'recordings', 'writing_answers', 'reading_marks', 'sentence_scores', 'sentence_times', 'writing_scans'])
+    expect(result.scan).toEqual(SCAN)
     expect(result.session).toEqual({ id: SID, child_name: '세션전용이름' })
     expect(result.recordings).toEqual([{ item_code: 'rc01', attempt_no: 1, audio_path: 'p/rc01-1.webm', duration_sec: 3, created_at: '2026-08-01T00:00:00Z' }])
     expect(result.writing).toEqual([{ item_code: 'ww01', can_write: true }])
     expect(result.marks).toEqual([{ item_code: 'rw01', correct: true }, { item_code: 'rw02', correct: false }])
     expect(result.sentences).toEqual([{ item_code: 'rs01', words: 7 }])
+    expect(result.times).toEqual([{ item_code: 'rs01', seconds: 4.5 }])
+    expect(selectCallsByTable.get('sentence_times')).toEqual([['item_code, seconds']])
+  })
+  it('스캔본이 없으면 scan은 null(화면 방식이거나 아직 안 올렸다)', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    expect((await sessionDetail(SID)).scan).toBeNull()
+  })
+})
+
+describe('sessionDetail — 읽은 시간 조회 실패', () => {
+  it('[REGRESSION] sentence_times 조회가 실패하면(마이그레이션 005 미실행 등) 던진다 — 「시간 없음」으로 조용히 넘기지 않는다', async () => {
+    // 조용히 빈 배열로 넘기면 모든 검사가 「채점 전」으로 보이고, 채점자가 넣은 시간은 저장에서 사라진다.
+    enqueue('sessions', { data: { id: SID }, error: null })
+    enqueue('sentence_times', { data: null, error: { code: 'PGRST205', message: "Could not find the table 'public.sentence_times'" } })
+    await expect(sessionDetail(SID)).rejects.toThrow()
   })
 })
 
@@ -240,13 +270,36 @@ describe('deleteSession — PII 파기는 스토리지 전체 페이지네이션
 
     await deleteSession(SID)
 
-    expect(storage.list).toHaveBeenCalledTimes(2)
+    // 녹음 두 쪽 + 쓰기 기록지 스캔본 한 쪽(비어 있음)
+    expect(storage.list).toHaveBeenCalledTimes(3)
     expect(storage.list).toHaveBeenNthCalledWith(1, SID, { limit: 100, offset: 0 })
     expect(storage.list).toHaveBeenNthCalledWith(2, SID, { limit: 100, offset: 100 })
+    expect(storage.list).toHaveBeenNthCalledWith(3, SID, { limit: 100, offset: 0 })
+    expect(storageBuckets).toEqual(['recordings', 'recordings', 'recordings', 'writing-scans'])
     expect(storage.remove).toHaveBeenCalledTimes(1)
     expect(storage.remove.mock.calls[0][0]).toHaveLength(140)
     expect(storage.remove.mock.calls[0][0][0]).toBe(`${SID}/a0.webm`)
     expect(fromCalls).toEqual(['sessions'])
+  })
+
+  it('쓰기 기록지 스캔본(아이 필적)도 행보다 먼저 지운다 — 버킷이 달라 녹음만 지우면 남는다', async () => {
+    storage.list
+      .mockResolvedValueOnce({ data: [obj('p_rw_meaning_1.webm')], error: null })
+      .mockResolvedValueOnce({ data: [obj('1727650000000.jpg'), obj('1727651111111.jpg')], error: null })
+    enqueue('sessions', { data: null, error: null })
+    await deleteSession(SID)
+    expect(storage.remove).toHaveBeenCalledTimes(2)
+    expect(storage.remove.mock.calls[1][0]).toEqual([`${SID}/1727650000000.jpg`, `${SID}/1727651111111.jpg`])
+    expect(storageBuckets.at(-1)).toBe('writing-scans')
+    expect(fromCalls).toEqual(['sessions'])
+  })
+
+  it('스캔본 목록 조회가 실패해도 행 삭제로 진행하지 않는다(고아 필적 방지)', async () => {
+    storage.list
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'scan bucket down' } })
+    await expect(deleteSession(SID)).rejects.toThrow('scan bucket down')
+    expect(fromCalls).toEqual([])
   })
 
   it('녹음이 없으면 remove 없이 행만 삭제', async () => {
@@ -456,6 +509,9 @@ describe('listRoster', () => {
   })
 })
 
+/** 낱말 쓰기(G1) 문항 코드 판정 — rosterWithTested가 sentence_scores에서 쓰기 채점을 가려내는 데 쓴다 */
+const isWw = (c: string) => c.startsWith('ww')
+
 describe('rosterWithTested', () => {
   it('submitted가 있으면 행 순서와 무관하게 submitted가 이긴다 — childTestState와 같은 판정', async () => {
     const rows = [
@@ -474,9 +530,9 @@ describe('rosterWithTested', () => {
       error: null,
     })
 
-    expect(await rosterWithTested(CLASS_CODE.id)).toEqual([
-      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'submitted' },
-      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: 'submitted' },
+    expect((await rosterWithTested(CLASS_CODE.id, isWw)).roster).toEqual([
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'submitted', writing: 'screen' },
+      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: 'submitted', writing: 'screen' },
     ])
   })
 
@@ -488,10 +544,88 @@ describe('rosterWithTested', () => {
     enqueue('class_roster', { data: rows, error: null })
     enqueue('sessions', { data: [{ child_no: 1, submitted_at: null }], error: null })
 
-    expect(await rosterWithTested(CLASS_CODE.id)).toEqual([
-      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'inProgress' },
-      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: null },
+    expect((await rosterWithTested(CLASS_CODE.id, isWw)).roster).toEqual([
+      { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'inProgress', writing: 'unsubmitted' },
+      { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: null, writing: null },
     ])
+  })
+
+  // 쓰기 기록지 스캔본(2026-09-30) — 인쇄 창의 배지와 시작 화면 「스캔 대기 N명」의 근거
+  describe('쓰기 상태 · 스캔 대기 수', () => {
+    const ROSTER = [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
+      { child_no: 3, child_name: '이하윤', gender: '여', birth_ymd: '190901' },
+      { child_no: 4, child_name: '최지우', gender: '남', birth_ymd: '190505' },
+    ]
+    const S = '2026-09-30T01:00:00Z'
+    const sess = (child_no: number, over: Record<string, unknown> = {}) => ({
+      child_no, started_at: S, submitted_at: S, writing_mode: 'scan',
+      writing_answers: [], sentence_scores: [], writing_scans: null, ...over,
+    })
+    const stateOf = async (sessions: unknown[], pred = isWw) => {
+      enqueue('class_roster', { data: ROSTER, error: null })
+      enqueue('sessions', { data: sessions, error: null })
+      return rosterWithTested(CLASS_CODE.id, pred)
+    }
+
+    it('스캔 대기(안 올림) · 스캔 올림 · 담당자 채점 시작 · 화면 입력을 가른다', async () => {
+      const r = await stateOf([
+        sess(1),
+        sess(2, { writing_scans: { session_id: 'x' } }),
+        sess(3, { writing_scans: [{ session_id: 'y' }], writing_answers: [{ item_code: 'ww01' }] }),
+        sess(4, { writing_mode: 'screen' }),
+      ])
+      expect(r.roster.map(c => c.writing)).toEqual(['wait', 'uploaded', 'scored', 'screen'])
+      expect(r.scanPending).toBe(1)
+    })
+
+    it('문장 쓰기(G2)는 sentence_scores의 **쓰기 코드만** 채점으로 센다 — 읽기 점수(rs..)는 아니다', async () => {
+      const isSw = (c: string) => c.startsWith('sw')
+      const r = await stateOf([
+        sess(1, { sentence_scores: [{ item_code: 'rs01' }] }),
+        sess(2, { sentence_scores: [{ item_code: 'sw01' }] }),
+      ], isSw)
+      expect(r.roster.slice(0, 2).map(c => c.writing)).toEqual(['wait', 'scored'])
+    })
+
+    it('그만둔(제출 전) 재검사가 앞 차수의 스캔 대기를 가리지 않는다 — 가장 최근에 **제출된** 검사 기준', async () => {
+      const r = await stateOf([
+        sess(1),
+        sess(1, { started_at: '2026-09-30T02:00:00Z', submitted_at: null, writing_mode: 'screen' }),
+      ])
+      expect(r.roster[0]).toMatchObject({ tested: 'submitted', writing: 'wait' })
+      expect(r.scanPending).toBe(1)
+    })
+
+    it('더 나중에 제출된 재검사가 있으면 그 검사가 기준 — 앞 차수의 스캔 대기는 세지 않는다', async () => {
+      const r = await stateOf([
+        sess(1),
+        sess(1, { started_at: '2026-09-30T02:00:00Z', writing_mode: 'screen' }),
+      ])
+      expect(r.roster[0].writing).toBe('screen')
+      expect(r.scanPending).toBe(0)
+    })
+
+    it('명단 밖(직접 입력) 아이의 스캔 대기도 센다 — 시작 화면 배너는 반 전체 기준', async () => {
+      const r = await stateOf([sess(9)])
+      expect(r.roster.every(c => c.writing === null)).toBe(true)
+      expect(r.scanPending).toBe(1)
+    })
+
+    it('쓰기 방식이 비어 오면(옛 행) 화면 방식으로 읽는다 — 스캔 대기로 잘못 세지 않는다', async () => {
+      const r = await stateOf([sess(1, { writing_mode: undefined })])
+      expect(r.roster[0].writing).toBe('screen')
+      expect(r.scanPending).toBe(0)
+    })
+
+    it('쓰기 상태 재료를 한 번에 고르고 started_at 순으로 받는다(뒤에 올수록 최근 — 규칙이 이 순서에 기댄다)', async () => {
+      await stateOf([])
+      const [cols] = selectCallsByTable.get('sessions')!.at(-1) as [string]
+      for (const c of ['child_no', 'started_at', 'submitted_at', 'writing_mode', 'writing_answers(item_code)', 'sentence_scores(item_code)', 'writing_scans(session_id)'])
+        expect(cols).toContain(c)
+      expect(orderCallsByTable.get('sessions')!.at(-1)).toEqual(['started_at'])
+    })
   })
 })
 
@@ -645,6 +779,24 @@ describe('saveScores — 관리자 채점 저장', () => {
     expect(fromCalls.filter(t => t === 'sentence_scores')).toHaveLength(2)
   })
 
+  it('times를 넘기면 sentence_times에 seconds 열로 upsert하고, 안 보낸 문장만 문장 읽기 범위 안에서 지운다', async () => {
+    await saveScores(SID, [], [], RS, [{ itemCode: 'rs01', seconds: 4.5 }])
+    expect(upsertCallsByTable.get('sentence_times')).toEqual([[{ session_id: SID, item_code: 'rs01', seconds: 4.5 }]])
+    expect(deleteCallsByTable.get('sentence_times')).toHaveLength(1)
+    expect(inCallsByTable.get('sentence_times')).toEqual([['item_code', RS]])
+  })
+
+  it('times가 빈 배열이면 기존 시간을 지우기만 한다', async () => {
+    await saveScores(SID, [], [], RS, [])
+    expect(upsertCallsByTable.get('sentence_times')).toBeUndefined()
+    expect(deleteCallsByTable.get('sentence_times')).toHaveLength(1)
+  })
+
+  it('[REGRESSION] times가 undefined면 sentence_times를 아예 건드리지 않는다 — 옛 화면의 저장이 시간을 지우지 않게', async () => {
+    await saveScores(SID, [], [{ itemCode: 'rs01', words: 7 }], RS)
+    expect(fromCalls).not.toContain('sentence_times')
+  })
+
   it('저장 실패는 삼키지 않고 throw한다 (채점 결과의 조용한 손실 방지)', async () => {
     enqueue('reading_marks', { error: { message: 'boom' } })
     await expect(saveScores(SID, [{ itemCode: 'rw01', correct: true }], [], RS))
@@ -719,15 +871,30 @@ describe('findClassCodeById · classResults · updateClassCodeEmail (교사 결�
   it('classResults는 학급 세션을 관계 select로 한 번에 읽고 started_at 오름차순으로 정렬한다', async () => {
     enqueue('sessions', { data: [{ id: 's1' }], error: null })
     const rows = await classResults(CID)
-    expect(rows).toEqual([{ id: 's1' }])
+    expect(rows).toEqual([{ id: 's1', writing_scan: null }])
     const sel = (selectCallsByTable.get('sessions') ?? [])[0] as string[]
     expect(sel[0]).toContain('birth_ymd, checklist')   // PDF 머리글·체크리스트를 찍어야 관리자 PDF와 같은 문서다
     expect(sel[0]).toContain('recordings(item_code)')
     expect(sel[0]).toContain('reading_marks(item_code, correct)')
     expect(sel[0]).toContain('sentence_scores(item_code, words)')
+    expect(sel[0]).toContain('sentence_times(item_code, seconds)')
     expect(sel[0]).toContain('writing_answers(item_code, can_write)')
+    expect(sel[0]).toContain('writing_mode')
+    expect(sel[0]).toContain('writing_scans(uploaded_at)')
     expect(eqCallsByTable.get('sessions')).toEqual([['class_code_id', CID]])
     expect(orderCallsByTable.get('sessions')).toEqual([['started_at']])
+  })
+  it('classResults는 스캔본 관계(객체·배열 어느 쪽으로 와도)를 writing_scan 한 칸으로 맞춘다', async () => {
+    enqueue('sessions', { data: [
+      { id: 'a', writing_scans: { uploaded_at: 'T1' } },
+      { id: 'b', writing_scans: [{ uploaded_at: 'T2' }] },
+      { id: 'c', writing_scans: [] },
+    ], error: null })
+    expect(await classResults(CID)).toEqual([
+      { id: 'a', writing_scan: { uploaded_at: 'T1' } },
+      { id: 'b', writing_scan: { uploaded_at: 'T2' } },
+      { id: 'c', writing_scan: null },
+    ])
   })
   it('updateClassCodeEmail은 teacher_email 한 컬럼만 갱신하고 갱신된 행을 돌려준다', async () => {
     enqueue('class_codes', { data: { id: CID, teacher_email: 'new@school.kr' }, error: null })
@@ -741,3 +908,195 @@ describe('findClassCodeById · classResults · updateClassCodeEmail (교사 결�
     expect(await updateClassCodeEmail(CID, 'x@y.kr')).toBeNull()
   })
 })
+
+// ---------- 쓰기 기록지 스캔본(migration 006) ----------
+
+describe('sessionState — 쓰기 방식', () => {
+  it('writing_mode를 함께 읽는다 — 관리자 채점 라우트가 「스캔본 검사만 쓰기를 고친다」를 판정한다', async () => {
+    enqueue('sessions', { data: { submitted_at: 'T', grade: 1, writing_mode: 'scan' }, error: null })
+    expect((await sessionState(SID)).writingMode).toBe('scan')
+    expect((selectCallsByTable.get('sessions')![0] as string[])[0]).toContain('writing_mode')
+  })
+  it('scan이 아니면(비어 있거나 옛 행) screen — 쓰기를 고칠 수 있는 쪽으로 잘못 열지 않는다', async () => {
+    enqueue('sessions', { data: { submitted_at: 'T', grade: 1 }, error: null })
+    expect((await sessionState(SID)).writingMode).toBe('screen')
+    enqueue('sessions', { data: null, error: null })
+    expect((await sessionState(SID)).writingMode).toBe('screen')
+  })
+})
+
+describe('submitSession — 쓰기 방식 확정', () => {
+  it('writing_mode를 submitted_at과 **같은 업데이트**로 쓴다 — 따로 쓰면 둘 사이 실패에서 방식이 기본값으로 남는다', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ writingMode: 'scan' })).toBe('ok')
+    const upd = updateCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect(upd.writing_mode).toBe('scan')
+    expect(upd.submitted_at).toEqual(expect.any(String))
+  })
+})
+
+describe('saveWriting — 담당자의 스캔본 쓰기 채점', () => {
+  const WW = ['ww01', 'ww02', 'ww03']
+  it('낱말 쓰기(G1)는 writing_answers.can_write(1 이상 = 정반응)로 넣고, 안 보낸 칸은 지운다(보낸 것이 전부)', async () => {
+    await saveWriting(SID, 'word', [{ itemCode: 'ww01', words: 1 }, { itemCode: 'ww02', words: 0 }], WW)
+    expect(upsertCallsByTable.get('writing_answers')).toEqual([[
+      { session_id: SID, item_code: 'ww01', can_write: true },
+      { session_id: SID, item_code: 'ww02', can_write: false },
+    ]])
+    expect(deleteCallsByTable.get('writing_answers')).toHaveLength(1)
+    expect(inCallsByTable.get('writing_answers')).toEqual([['item_code', WW]])
+  })
+  it('문장 쓰기(G2)는 sentence_scores.words로 넣고, 지우는 범위는 **쓰기 코드만**이다(문장 읽기 점수는 남는다)', async () => {
+    const SW = ['sw01', 'sw02']
+    await saveWriting(SID, 'sentence', [{ itemCode: 'sw01', words: 2 }], SW)
+    expect(upsertCallsByTable.get('sentence_scores')).toEqual([[{ session_id: SID, item_code: 'sw01', words: 2 }]])
+    expect(inCallsByTable.get('sentence_scores')).toEqual([['item_code', SW]])
+  })
+  it('빈 목록이면 쓰기 칸을 지우기만 한다(연결 해제)', async () => {
+    await saveWriting(SID, 'word', [], WW)
+    expect(upsertCallsByTable.get('writing_answers')).toBeUndefined()
+    expect(deleteCallsByTable.get('writing_answers')).toHaveLength(1)
+  })
+  it('저장 실패는 던진다', async () => {
+    enqueue('writing_answers', { error: { message: 'boom' } })
+    await expect(saveWriting(SID, 'word', [{ itemCode: 'ww01', words: 1 }], WW)).rejects.toThrow('boom')
+  })
+})
+
+describe('scanUploadTarget — 올릴 수 있는지 판단할 재료', () => {
+  it('없는 세션이면 null', async () => {
+    enqueue('sessions', { data: null, error: null })
+    expect(await scanUploadTarget(SID)).toBeNull()
+  })
+  it('스캔본 관계가 배열로 와도 한 장으로 맞추고, 쓰기 채점 행을 함께 싣는다', async () => {
+    const scan = { session_id: SID, path: `${SID}/1.jpg`, content_type: 'image/jpeg', bytes: 3, uploaded_at: 'T' }
+    enqueue('sessions', { data: {
+      class_code_id: 'c1', child_no: 5, grade: 1, submitted_at: 'T', writing_mode: 'scan',
+      writing_answers: [{ item_code: 'ww01' }], sentence_scores: null, writing_scans: [scan],
+    }, error: null })
+    expect(await scanUploadTarget(SID)).toEqual({
+      class_code_id: 'c1', child_no: 5, grade: 1, submitted_at: 'T', writing_mode: 'scan',
+      writing_answers: [{ item_code: 'ww01' }], sentence_scores: [], scan,
+    })
+  })
+})
+
+describe('latestSubmittedSessionId — 스캔본이 붙을 검사(같은 학급·번호의 가장 최근 제출)', () => {
+  it('학급·번호로 걸러 started_at 내림차순 첫 행 — 화면의 scanTargetSession과 같은 규칙', async () => {
+    enqueue('sessions', { data: [{ id: 's-new' }], error: null })
+    expect(await latestSubmittedSessionId('c1', 5)).toBe('s-new')
+    expect(eqCallsByTable.get('sessions')).toEqual([['class_code_id', 'c1'], ['child_no', 5]])
+    expect(orderCallsByTable.get('sessions')).toEqual([['started_at', { ascending: false }]])
+  })
+  it('제출된 검사가 없으면 null', async () => {
+    enqueue('sessions', { data: [], error: null })
+    expect(await latestSubmittedSessionId('c1', 5)).toBeNull()
+  })
+  it('조회 실패는 던진다(라우트가 502)', async () => {
+    enqueue('sessions', { data: null, error: { message: 'boom' } })
+    await expect(latestSubmittedSessionId('c1', 5)).rejects.toThrow('boom')
+  })
+})
+
+describe('스캔본 스토리지·행', () => {
+  it('uploadScanObject는 writing-scans 버킷에 덮어쓰기 없이(upsert:false) 올리고, 일시 오류는 한 번 더 시도한다', async () => {
+    storage.upload.mockResolvedValueOnce({ error: { message: 'flaky' } }).mockResolvedValueOnce({ error: null })
+    await uploadScanObject(`${SID}/1.jpg`, Buffer.from([0xff, 0xd8, 0xff]), 'image/jpeg')
+    expect(storage.upload).toHaveBeenCalledTimes(2)
+    expect(storage.upload.mock.calls[0][2]).toEqual({ contentType: 'image/jpeg', upsert: false })
+    expect(storageBuckets).toEqual(['writing-scans', 'writing-scans'])
+  })
+  it('uploadScanObject는 두 번 다 실패하면 던진다', async () => {
+    storage.upload.mockResolvedValue({ error: { message: 'down' } })
+    await expect(uploadScanObject(`${SID}/1.jpg`, Buffer.from([1]), 'image/jpeg')).rejects.toThrow('down')
+  })
+  it('upsertWritingScan은 세션당 한 장(onConflict session_id)으로 넣거나 바꾼다', async () => {
+    await upsertWritingScan({ sessionId: SID, path: `${SID}/2.jpg`, contentType: 'image/jpeg', bytes: 99 })
+    const [row] = upsertCallsByTable.get('writing_scans')! as Record<string, unknown>[]
+    expect(row).toMatchObject({ session_id: SID, path: `${SID}/2.jpg`, content_type: 'image/jpeg', bytes: 99 })
+    expect(row.uploaded_at).toEqual(expect.any(String))
+  })
+  it('removeScanObjects는 빈 목록이면 스토리지를 부르지 않는다', async () => {
+    await removeScanObjects([])
+    expect(storage.remove).not.toHaveBeenCalled()
+  })
+  it('signedScanUrl은 1시간짜리 서명 URL', async () => {
+    storage.createSignedUrl.mockResolvedValueOnce({ data: { signedUrl: 'https://s/x' }, error: null })
+    expect(await signedScanUrl(`${SID}/1.jpg`)).toBe('https://s/x')
+    expect(storage.createSignedUrl).toHaveBeenCalledWith(`${SID}/1.jpg`, 3600)
+  })
+})
+
+describe('unlinkWritingScan — 담당자의 연결 해제', () => {
+  it('쓰기 채점 → 스캔본 행 → 파일 순서로 지운다 — 어디서 멈춰도 행이 가리키는 파일은 남는다', async () => {
+    storage.list.mockResolvedValueOnce({ data: [{ name: '1.jpg' }], error: null })
+    await unlinkWritingScan(SID, 'word', ['ww01', 'ww02'])
+    expect(fromCalls).toEqual(['writing_answers', 'writing_scans'])
+    expect(inCallsByTable.get('writing_answers')).toEqual([['item_code', ['ww01', 'ww02']]])
+    expect(eqCallsByTable.get('writing_scans')).toEqual([['session_id', SID]])
+    expect(storage.remove).toHaveBeenCalledWith([`${SID}/1.jpg`])
+  })
+  it('[REGRESSION] 행 삭제가 실패하면 파일을 지우지 않는다 — 행이 없는 파일을 가리키면 결과지가 서명 URL부터 실패했다', async () => {
+    enqueue('writing_answers', { error: null })
+    enqueue('writing_scans', { error: { message: 'row fail' } })
+    await expect(unlinkWritingScan(SID, 'word', ['ww01'])).rejects.toThrow('row fail')
+    expect(storage.remove).not.toHaveBeenCalled()
+  })
+  it('마지막 파일 정리가 실패해도 해제는 성공이다(고아 파일 — 검사를 지울 때 폴더째 정리된다)', async () => {
+    storage.list.mockResolvedValueOnce({ data: [{ name: '1.jpg' }], error: null })
+    storage.remove.mockResolvedValueOnce({ error: { message: 'rm fail' } })
+    await expect(unlinkWritingScan(SID, 'word', ['ww01'])).resolves.toBeUndefined()
+  })
+})
+
+describe('submitSession — 스캔본이면 앞선 시도가 남긴 쓰기 답을 지운다', () => {
+  it('[REGRESSION] 화면 방식 제출이 확정 직전에 실패한 뒤 스캔본으로 다시 제출해도 쓰기 답이 남지 않는다', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    enqueue('writing_answers', { error: null })   // 지우기(보낸 것이 없음 = 쓰기 코드 전부)
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ writingMode: 'scan', writingTask: { kind: 'word', codes: ['ww01', 'ww02'] } })).toBe('ok')
+    // 확정(sessions update)이 통과한 **뒤에** 지운다 — 두 탭 경쟁에서 화면 방식의 쓰기를 지우지 않게
+    expect(fromCalls).toEqual(['sessions', 'sessions', 'writing_answers'])
+    expect(deleteCallsByTable.get('writing_answers')).toHaveLength(1)
+    expect(inCallsByTable.get('writing_answers')).toEqual([['item_code', ['ww01', 'ww02']]])
+  })
+  it('문장 쓰기(G2)는 sentence_scores의 쓰기 코드(sw..)만 지운다 — 문장 읽기(rs..) 점수·낱말 쓰기 표는 건드리지 않는다', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 2 }, error: null })
+    enqueue('sentence_scores', { error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ writingMode: 'scan', writingTask: { kind: 'sentence', codes: ['sw01', 'sw02'] } })).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sessions', 'sentence_scores'])
+    expect(deleteCallsByTable.get('sentence_scores')).toHaveLength(1)
+    expect(inCallsByTable.get('sentence_scores')).toEqual([['item_code', ['sw01', 'sw02']]])
+    expect(deleteCallsByTable.get('writing_answers')).toBeUndefined()
+  })
+  it('화면 방식은 지우지 않는다(보낸 답만 upsert)', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    await submit({ writingMode: 'screen', writingTask: { kind: 'word', codes: ['ww01'] } })
+    expect(deleteCallsByTable.get('writing_answers')).toBeUndefined()
+  })
+})
+
+describe('스캔본 — 업로드 재시도·되돌리기·올린 시각', () => {
+  it('재시도가 「이미 있음」이면 첫 시도가 저장된 것이라 성공으로 본다(경로가 매번 새것)', async () => {
+    storage.upload.mockResolvedValueOnce({ error: { message: 'network' } })
+      .mockResolvedValueOnce({ error: { message: 'The resource already exists' } })
+    await expect(uploadScanObject(`${SID}/9.jpg`, Buffer.from([1]), 'image/jpeg')).resolves.toBeUndefined()
+  })
+  it('restoreWritingScan은 옛 행이 있으면 그 값으로 되돌리고, 없었으면 지운다', async () => {
+    const prev = { session_id: SID, path: `${SID}/1.jpg`, content_type: 'image/jpeg', bytes: 3, uploaded_at: 'T' }
+    await restoreWritingScan(SID, prev)
+    expect(upsertCallsByTable.get('writing_scans')).toEqual([prev])
+    await restoreWritingScan(SID, null)
+    expect(deleteCallsByTable.get('writing_scans')).toHaveLength(1)
+  })
+  it('scanUploadedAt — 붙어 있는 스캔본의 올린 시각, 없으면 null', async () => {
+    enqueue('writing_scans', { data: { uploaded_at: '2026-09-30T05:00:00Z' }, error: null })
+    expect(await scanUploadedAt(SID)).toBe('2026-09-30T05:00:00Z')
+    enqueue('writing_scans', { data: null, error: null })
+    expect(await scanUploadedAt(SID)).toBeNull()
+  })
+})
+

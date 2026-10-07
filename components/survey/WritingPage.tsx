@@ -5,8 +5,10 @@
 'use client'
 import { KIND_LABEL, type SurveyItem } from '@/lib/items'
 
-export function WritingPage({ items, value, onChange, onSetAll }: {
+export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
   items: SurveyItem[]
+  /** 쓰기 방식 고르기(WritingModeToggle) — 카드 맨 위에 둔다 */
+  toggle?: React.ReactNode
   /** itemCode → 정확히 쓴 어절 수(1=예 / 0=아니오 / 미선택은 키 없음) */
   value: Record<string, number>
   onChange: (code: string, v: number) => void
@@ -18,6 +20,7 @@ export function WritingPage({ items, value, onChange, onSetAll }: {
 
   return (
     <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
+      {toggle && <div className="mb-4">{toggle}</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 낱말을 정확하게 썼나요?</p>
         <div className="flex gap-1.5">

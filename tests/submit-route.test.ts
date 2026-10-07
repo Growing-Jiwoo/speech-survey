@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 vi.mock('@/lib/db', () => ({
   submitSession: vi.fn().mockResolvedValue('ok'),
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1 }),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
 }))
 
 import { POST } from '@/app/api/sessions/submit/route'
@@ -26,7 +26,7 @@ const submitArg = () => vi.mocked(db.submitSession).mock.calls[0][0]
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(db.submitSession).mockResolvedValue('ok')
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -47,7 +47,7 @@ describe('POST /api/sessions/submit', () => {
     expect(submitArg()).toMatchObject({ writing: [], sentenceWriting: [], checklist: [] })
   })
   it('존재하지 않는 세션 404 (허위 성공 제거)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
     expect((await POST(makeReq(VALID()))).status).toBe(404)
     expect(db.submitSession).not.toHaveBeenCalled()
   })
@@ -56,7 +56,7 @@ describe('POST /api/sessions/submit', () => {
     expect((await POST(makeReq(VALID()))).status).toBe(404)
   })
   it('이미 제출된 세션 재제출 409 (제출 후 변조 차단)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
     expect((await POST(makeReq(VALID()))).status).toBe(409)
     expect(db.submitSession).not.toHaveBeenCalled()
   })
@@ -133,7 +133,7 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
     makeReq({ sessionId: SID, sessionToken: TOKEN, writing, checklist: ['none'] })
 
   beforeEach(() => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' })
   })
 
   it('G2 세션의 문장 쓰기 점수는 sentence_scores 쪽으로 간다', async () => {
@@ -155,7 +155,7 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
   })
 
   it('G1 세션에 G2 문항 코드(sw01)를 보내면 400', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1 })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
     expect((await POST(g2Req({ sw01: 2 }))).status).toBe(400)
   })
 
@@ -166,6 +166,31 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
       writing: [],
       sentenceWriting: [{ itemCode: 'sw01', words: 0 }, { itemCode: 'sw02', words: 2 }],
     })
+  })
+})
+
+describe('POST submit — 쓰기 방식(스캔본, 2026-09-30)', () => {
+  it('writingMode가 없으면 screen — 방식이 생기기 전 화면의 요청과 같은 뜻', async () => {
+    expect((await POST(makeReq(VALID()))).status).toBe(200)
+    expect(submitArg().writingMode).toBe('screen')
+  })
+  it('scan이면 쓰기 답을 **버리고** 제출한다 — 담당자가 스캔본으로 채점한다(두 출처의 점수가 섞이지 않게)', async () => {
+    const res = await POST(makeReq({ ...VALID(), writingMode: 'scan' }))
+    expect(res.status).toBe(200)
+    expect(submitArg()).toMatchObject({ writingMode: 'scan', writing: [], sentenceWriting: [] })
+  })
+  it('쓰기 과제(종류·코드)를 넘긴다 — 스캔본이면 앞선 시도가 남긴 쓰기 답을 db가 지운다', async () => {
+    await POST(makeReq({ ...VALID(), writingMode: 'scan' }))
+    expect(submitArg().writingTask).toEqual({ kind: 'word', codes: Array.from({ length: 10 }, (_, i) => `ww${String(i + 1).padStart(2, '0')}`) })
+  })
+  it('scan이어도 쓰기 답의 형식 검사는 그대로 — 잘못된 코드면 400', async () => {
+    expect((await POST(makeReq({ ...VALID(), writingMode: 'scan', writing: { rw01: 1 } }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
+  it('그 밖의 값은 400', async () => {
+    for (const writingMode of ['paper', 1, null, true])
+      expect((await POST(makeReq({ ...VALID(), writingMode }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
   })
 })
 

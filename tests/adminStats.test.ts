@@ -3,6 +3,7 @@ import type { SessionListRow } from '@/lib/db'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
+  awaitsScanScoring,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -24,12 +25,36 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
-    edited_at: null, original_identity: null,
+    edited_at: null, original_identity: null, writing_mode: 'screen' as const,
     recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }
   return { ...row, progress: over.progress ?? sessionProgress(row) }
 }
+
+describe('sessionProgress — 쓰기 스캔본(2026-09-30)', () => {
+  const ALL_REC = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
+  it('스캔본 방식의 빈 쓰기는 「미완료」가 아니다 — 담당자가 스캔본으로 채울 칸이다', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC, writing_mode: 'scan' }))
+    expect(p).toMatchObject({ scan: 'wait', written: 0, incomplete: false })
+  })
+  it('화면 방식은 종전대로 쓰기가 비면 미완료', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC }))
+    expect(p).toMatchObject({ scan: null, incomplete: true })
+  })
+  it('스캔본이 올라왔으면 uploaded — 담당자가 채점할 차례(목록이 「스캔 대기」와 가른다). 관계는 객체·배열 어느 모양이든', () => {
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: { session_id: 'x' } })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [{ session_id: 'x' }] })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [] })).scan).toBe('wait')
+  })
+  it('[REGRESSION] 스캔본 없이 쓰기를 넣기 시작했으면(종이로 채점) 「스캔 대기」가 아니다 — 선생님은 이미 올릴 수 없다', () => {
+    const p = sessionProgress(mkSession({ recordings: ALL_REC, writing_mode: 'scan', writing_answers: [{ item_code: 'ww01', can_write: true }] }))
+    expect(p).toMatchObject({ scan: 'uploaded', written: 1, incomplete: false })
+  })
+  it('스캔본 방식이어도 녹음이 빠졌으면 미완료', () => {
+    expect(sessionProgress(mkSession({ recordings: ALL_REC.slice(1), writing_mode: 'scan' })).incomplete).toBe(true)
+  })
+})
 
 describe('sessionProgress', () => {
   it('중복 item_code 녹음(재녹음)은 1개로 집계한다', () => {
@@ -209,6 +234,19 @@ describe('filterSessions', () => {
     expect(filterSessions(base, f({ today: true }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(base, f({ today: true, grade: 2 }), kstDateKey(now))).toHaveLength(0)
   })
+  it('scanReady — 스캔본이 올라왔거나 종이로 채점을 시작했는데 쓰기가 남은 검사만(목록의 「스캔본 채점」 배지와 같은 조건)', () => {
+    const SUB = { submitted_at: '2026-07-14T02:00:00.000Z' }
+    const all10 = G1_WRITE.map(item_code => ({ item_code, can_write: true }))
+    const rows = [
+      mkSession({ ...SUB, child_no: 1, writing_mode: 'scan', writing_scans: { session_id: 'x' } }),                          // 올라옴 · 채점 전 → 대상
+      mkSession({ ...SUB, child_no: 2, writing_mode: 'scan', writing_answers: all10.slice(0, 3) }),                            // 종이로 채점 중 → 대상
+      mkSession({ ...SUB, child_no: 3, writing_mode: 'scan', writing_scans: { session_id: 'y' }, writing_answers: all10 }),     // 다 채점됨
+      mkSession({ ...SUB, child_no: 4, writing_mode: 'scan' }),                                                                // 스캔 대기(선생님 차례)
+      mkSession({ ...SUB, child_no: 5, writing_answers: all10.slice(0, 3) }),                                                  // 화면 방식
+    ]
+    expect(filterSessions(rows, f({ status: 'scanReady' }), kstDateKey(now)).map(s => s.child_no)).toEqual([1, 2])
+    expect(rows.filter(awaitsScanScoring).map(s => s.child_no)).toEqual([1, 2])
+  })
 })
 
 describe('sortSessions', () => {
@@ -302,6 +340,11 @@ describe('URL 직렬화', () => {
   it('parseFilters — 잘못된 값은 기본값으로 폴백', () => {
     const sp = new URLSearchParams('status=bogus&grade=abc&sort=nope&dir=sideways')
     expect(parseFilters(sp)).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
+  })
+  it('parseFilters — status=scanReady(스캔본 채점) 허용, 왕복 보존', () => {
+    expect(parseFilters(new URLSearchParams('status=scanReady')).filters.status).toBe('scanReady')
+    const filters = { ...DEFAULT_FILTERS, status: 'scanReady' as const }
+    expect(parseFilters(new URLSearchParams(filtersToQuery(filters, DEFAULT_SORT))).filters).toEqual(filters)
   })
   it('parseFilters — 신규 sort 키(grade/submitted) 허용', () => {
     expect(parseFilters(new URLSearchParams('sort=grade&dir=asc')).sort).toEqual({ key: 'grade', dir: 'asc' })
