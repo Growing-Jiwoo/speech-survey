@@ -249,7 +249,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
         <div className="min-w-0 flex-1">
           <p className="text-[14.5px] font-bold">쓰기 스캔본 올리기</p>
           <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-soft">반 전체를 한 파일로 올리면 아이마다 자동으로 나눠 붙어요.</p>
-          <p className="text-[12px] leading-relaxed text-ink-mute">스캔: 흑백 · 300dpi · 종이는 담당자 채점이 끝날 때까지 보관해 주세요.</p>
+          <p className="text-[12px] leading-relaxed text-ink-mute">종이는 담당자 채점이 끝날 때까지 보관해 주세요.</p>
         </div>
         {/* disabled로 막지 않는다 — 창이 뜨는 렌더에서 누른 버튼이 disabled가 되면 브라우저가 포커스를 body로 옮기고,
             트랩이 그 body를 「닫을 때 돌아갈 곳」으로 기억한다. 창이 떠 있는 동안은 창이 가리고 키보드도 창 안에 갇힌다 */}
