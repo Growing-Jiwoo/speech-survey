@@ -132,12 +132,14 @@ export function PendingApplications({
                   onClick={() => setOpenId(openId === c.id ? null : c.id)}>
                   {openId === c.id ? '명단 닫기' : '명단 보기'}
                 </button>
-                <button type="button" disabled={busyId === c.id}
+                {/* 승인 하나가 진행 중이면 **모든 행의** 승인·삭제를 잠근다 — 연달아 누르면 앞 학급의 결과(메일 실패 등)가 뒤 결과에
+                    덮여 사라지고, 앞 응답이 먼저 오면 아직 진행 중인 행의 [삭제]가 살아났다(2026-10-08 야간 점검). */}
+                <button type="button" disabled={busyId !== null}
                   onClick={() => void approve(c)}
                   className="rounded-lg bg-blue px-3 py-1 text-xs font-bold text-white transition disabled:opacity-40">
                   {busyId === c.id ? '승인 중…' : '승인'}
                 </button>
-                <button type="button" disabled={busyId === c.id} onClick={() => onDelete(c)}
+                <button type="button" disabled={busyId !== null} onClick={() => onDelete(c)}
                   className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40">
                   삭제
                 </button>

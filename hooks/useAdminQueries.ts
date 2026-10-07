@@ -34,7 +34,8 @@ export interface ClassCodeItem {
 export interface DetailRecording {
   item_code: string
   attempt_no: number
-  url: string
+  /** 서명 URL(1시간). 서명이 실패한 녹음은 null — 결과지 전체를 막지 않으려고 그 녹음만 비운다 */
+  url: string | null
   duration_sec: number | null
 }
 

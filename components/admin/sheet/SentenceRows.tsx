@@ -67,11 +67,13 @@ export function SentenceRows({
                   value={times[item.code]}
                   onChange={v => onTimeChange(item.code, v)} />
                 <span className="mr-3 text-[13px] text-ink-mute">초</span>
-                <input type="number" min={0} max={max} inputMode="numeric"
+                {/* type="number"가 아니다 — 포인터를 칸 위에 둔 채 휠로 화면을 내리면 값이 조용히 바뀌어 1.5초 뒤 저장됐다
+                    (Chrome·Edge, 2026-10-08 야간 점검). 시간 칸(SecondsInput)과 같이 글자 칸 + 숫자 키패드로 받는다. */}
+                <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={2}
                   aria-label={`${i + 1}번 문장 정확 어절 수 (최대 ${max})`}
                   value={sentences[item.code] ?? ''}
                   onChange={e => {
-                    const raw = e.target.value
+                    const raw = e.target.value.replace(/\D/g, '')
                     if (raw === '') { onChange(item.code, undefined); return }
                     const n = Number(raw)
                     if (Number.isNaN(n)) return

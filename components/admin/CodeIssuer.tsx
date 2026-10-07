@@ -27,6 +27,8 @@ export function CodeIssuer() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [err, setErr] = useState('')
+  /** 같은 학급의 코드가 이미 있다고 한 번 알린 학급(학교·학년·반) — 한 번 더 누르면 그대로 발급한다 */
+  const [dupAck, setDupAck] = useState('')
   const [busy, setBusy] = useState(false)
   // 발급 직후 1건만 붙잡아 둔다 — 교사에게 그 자리에서 불러 줘야 하는데, 아래 목록에서
   // 방금 만든 코드를 눈으로 찾게 하면 다른 학급 코드를 잘못 읽어 줄 수 있다.
@@ -61,6 +63,10 @@ export function CodeIssuer() {
   const cleanPhone = phone.trim()
   const cleanEmail = email.trim()
 
+  // 칸을 고치면 오류 문구를 지운다 — 「학교를 선택해 주세요」가 학교를 고른 뒤에도 [코드 발급]을 다시 누를
+  // 때까지 남아 있었다(2026-10-08 야간 점검). 중복 학급 경고도 학급을 바꾸면 더는 맞지 않으므로 함께 지운다.
+  const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setErr('') }
+
   async function issue() {
     // 서버 스키마(classCodeCreateSchema)와 같은 규칙으로 선검증한다.
     if (!school) { setErr('학교를 선택해 주세요.'); return }
@@ -70,6 +76,18 @@ export function CodeIssuer() {
     if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크가 이 주소로 발송돼요.'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
     if (!validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
+
+    // 같은 학급(학교·학년·반)에 코드가 이미 있으면 한 번 알린다 — 발급 직후 [코드 발급]을 한 번 더 누르거나 이미 신청된 반을
+    // 직접 발급하면 한 반의 결과지·스캔본 올리기(반 표시가 코드마다 다르다)가 둘로 쪼개졌다(2026-10-08 야간 점검).
+    // 막지는 않는다 — 담임이 바뀌어 새로 받는 경우도 있다.
+    const classKey = `${school.schoolId}:${grade}:${classNo}`
+    const dup = (codes ?? []).find(c => c.school_id === school.schoolId && c.grade === Number(grade) && c.class_no === Number(classNo))
+    if (dup && dupAck !== classKey) {
+      setDupAck(classKey)
+      setErr(`이 학급의 코드가 이미 있어요(${dup.code}${dup.status === 'pending' ? ' · 신청 대기' : ''}, 담임 ${dup.teacher_name}). `
+        + '같은 반에 코드가 둘이면 결과지가 나뉩니다. 그래도 새로 발급하려면 [코드 발급]을 한 번 더 누르세요.')
+      return
+    }
 
     setErr(''); setBusy(true)
     const r = await postJson<{ code: Omit<ClassCodeItem, 'session_count' | 'roster_count'> }>('/api/admin/codes', {
@@ -81,6 +99,8 @@ export function CodeIssuer() {
     if (!r.ok) { setErr(r.error); return }
     setIssued({ ...r.data.code, session_count: 0, roster_count: 0 })
     setCopied(false)
+    setDupAck('')
+    setClassNo('')   // 같은 반을 실수로 한 번 더 발급하지 않게 — 다음 반은 학교·학년을 그대로 두고 반만 고르면 된다
     await queryClient.invalidateQueries({ queryKey: adminKeys.codes })
   }
 
@@ -119,12 +139,12 @@ export function CodeIssuer() {
       {/* 발급 폼 */}
       <div className="border-b border-line p-5">
         <label className="text-[13px] font-bold text-ink-soft">학교명</label>
-        <SchoolPicker value={school} onSelect={setSchool} />
+        <SchoolPicker value={school} onSelect={edit(setSchool)} />
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-grade">학년</label>
             <div className="mt-1.5">
-              <Select id="cc-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
+              <Select id="cc-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={edit(setGrade)}
                 options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
             </div>
           </div>
@@ -132,23 +152,23 @@ export function CodeIssuer() {
             <label className={labelCls} htmlFor="cc-class">반</label>
             <div className="mt-1.5">
               <Select id="cc-class" ariaLabel="반" placeholder="반 선택" value={classNo}
-                onChange={setClassNo} options={CLASS_OPTIONS} />
+                onChange={edit(setClassNo)} options={CLASS_OPTIONS} />
             </div>
           </div>
         </div>
         <label className={labelCls} htmlFor="cc-teacher">담임교사명</label>
         <input id="cc-teacher" value={teacherName} maxLength={30}
-          onChange={e => setTeacherName(e.target.value)} className={inputCls} />
+          onChange={e => edit(setTeacherName)(e.target.value)} className={inputCls} />
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-phone">담임 전화번호 (선택)</label>
             <input id="cc-phone" value={phone} maxLength={60} inputMode="tel" placeholder="01012345678"
-              onChange={e => setPhone(e.target.value)} className={inputCls} />
+              onChange={e => edit(setPhone)(e.target.value)} className={inputCls} />
           </div>
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-email">담임 이메일</label>
             <input id="cc-email" value={email} maxLength={60} inputMode="email" placeholder="name@example.com"
-              onChange={e => setEmail(e.target.value)} className={inputCls} />
+              onChange={e => edit(setEmail)(e.target.value)} className={inputCls} />
           </div>
         </div>
         {/* 이메일 필수 안내(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 teacher_email로만 간다. */}
@@ -259,18 +279,27 @@ export function CodeIssuer() {
         </div>
       )}
 
+      {/* pending 삭제 = 신청 반려 — 승인 전이라 「이 코드로는 더 이상 검사를 시작할 수 없습니다」는 맞지 않는 말이었고,
+          반려 메일이 없다는 것을 창이 말하지 않았다(2026-10-08 야간 점검, 사용자 확정 같은 날). 버튼 이름 「삭제」는
+          관리자 설명서(「반려하는 방법은 삭제뿐」)와 맞추려고 그대로 둔다. */}
       <ConfirmDialog open={toDelete !== null} busy={deleting} error={delErr} danger
-        title="이 코드를 삭제할까요?"
+        title={toDelete?.status === 'pending' ? '이 신청을 삭제할까요?' : '이 코드를 삭제할까요?'}
         confirmLabel={deleting ? '삭제 중…' : '삭제'}
         onConfirm={remove} onClose={() => setToDelete(null)}>
-        <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-          <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
-          코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
-          {/* pending 삭제 = 신청 반려. cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
-          {toDelete?.status === 'pending' && (
-            <> 신청한 <b>학생 명단 {toDelete.roster_count}명</b>도 함께 삭제되며, 되돌릴 수 없습니다.</>
-          )}
-        </p>
+        {toDelete?.status === 'pending' ? (
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            {toDelete.school_name} {gradeClassLabel(toDelete.grade, toDelete.class_no)} <b>{toDelete.teacher_name}</b> 선생님의
+            신청과 <b>학생 명단 {toDelete.roster_count}명</b>이 지워지며, 되돌릴 수 없습니다.
+            {/* cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
+            <br /><b className="text-rec-deep">선생님께는 메일이 가지 않습니다</b> — 반려 사실은 따로 알려 주세요
+            {toDelete.teacher_email ? <>({toDelete.teacher_email})</> : null}.
+          </p>
+        ) : (
+          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
+            코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
+          </p>
+        )}
       </ConfirmDialog>
     </div>
   )

@@ -18,6 +18,9 @@ const AudioPlayer = dynamic(() => import('@/components/AudioPlayer').then(m => m
 
 export type Attempt = Pick<DetailRecording, 'attempt_no' | 'url' | 'duration_sec'>
 
+/** 재생 오류로 결과지를 자동으로 다시 받는 최대 횟수(아래 errCount) */
+const MAX_RELOAD = 2
+
 export function PageAudio({ label, attempts, limitSec, onAudioError }: {
   /** 무엇의 녹음인지 (예: '의미 낱말'). 문장처럼 바로 옆에 문항이 적혀 있으면 생략한다 */
   label?: string
@@ -31,6 +34,9 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
   // 칩을 안 누른 채 잘린 소리로 채점한다. "아직 고르지 않음"을 null로 두어 attempts가 나중에 늘어도
   // 최신을 가리키게 한다. 채점자가 고른 뒤에는 그 선택을 유지한다.
   const [idx, setIdx] = useState<number | null>(null)
+  // 재생 오류로 결과지를 다시 받은 횟수 — 2번까지만. 깨진 파일·못 여는 코덱이면 다시 받을 때마다 모든 재생기가 새로
+  // 만들어지고 또 오류가 나 약 1초 주기로 끝없이 반복됐다(듣던 녹음도 계속 끊김 — 2026-10-08 야간 점검).
+  const [errCount, setErrCount] = useState(0)
 
   if (attempts.length === 0) {
     return (
@@ -64,7 +70,15 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
           ))}
         </div>
       )}
-      <AudioPlayer src={cur.url} durationSec={cur.duration_sec} onError={onAudioError} />
+      {cur.url && errCount < MAX_RELOAD ? (
+        <AudioPlayer src={cur.url} durationSec={cur.duration_sec}
+          onError={() => { setErrCount(n => n + 1); if (errCount + 1 < MAX_RELOAD) onAudioError() }} />
+      ) : (
+        <span role="status" className="text-[13px] text-rec-deep">
+          {cur.url ? '이 녹음을 재생할 수 없어요.' : '이 녹음을 불러오지 못했어요.'}
+          <button type="button" onClick={() => { setErrCount(0); onAudioError() }} className="ml-1.5 font-bold underline">다시 받기</button>
+        </span>
+      )}
       {over && <Badge tone="amber" size="sm">{limitSec}초 초과</Badge>}
     </div>
   )

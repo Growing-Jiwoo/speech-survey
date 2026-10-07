@@ -41,6 +41,10 @@ export function postJson<T = unknown>(url: string, body?: unknown, fallbackError
 /** GET + JSON 파싱. react-query queryFn 등 "실패 시 throw" 관례가 필요한 곳에서 사용. */
 export async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`요청 실패 (${res.status})`)
+  // 서버 문구가 있으면 싣는다(401이면 「로그인이 끝났어요…」 — proxy). 상태 코드는 괄호로 남긴다(호출부가 404를 가른다).
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(`${data.error ?? '요청 실패'} (${res.status})`)
+  }
   return res.json() as Promise<T>
 }

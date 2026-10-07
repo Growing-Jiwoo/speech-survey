@@ -50,7 +50,7 @@ export function AdminDetailView() {
     if (!sessions) return { prev: null, next: null }
     const { filters, sort } = parseFilters(new URLSearchParams(back ?? ''))
     const rows = sortSessions(filterSessions(sessions, filters, kstDateKey(new Date())), sort)
-    return adjacentSessionIds(rows, id)
+    return adjacentSessionIds(rows, id, sortSessions(sessions, sort))
   }, [sessions, back, id])
 
   const goHref = (target: string) => back ? `/admin/${target}?back=${encodeURIComponent(back)}` : `/admin/${target}`
@@ -81,16 +81,24 @@ export function AdminDetailView() {
   if (isLoading) return <LoadingOverlay show />
   // 삭제된 세션(404)과 장애(그 외)를 구분한다 — 없는 세션에 "다시 시도"를 권하면 운영자가
   // 장애로 오인해 계속 누른다. 서버도 같은 판정으로 404를 낸다(app/api/admin/sessions/[id]).
-  const notFound = isError && /\(404\)/.test((error as Error | null)?.message ?? '')
-  if (isError || !data) return (
+  const errMsg = (error as Error | null)?.message ?? ''
+  const notFound = isError && /\(404\)/.test(errMsg)
+  const expired = isError && /\(401\)/.test(errMsg)
+  const loginHref = `/admin/login?next=${encodeURIComponent(`/admin/${id}${back ? `?back=${encodeURIComponent(back)}` : ''}`)}`
+  // **데이터가 이미 있으면 결과지를 내리지 않는다** — react-query는 다시 받기가 실패해도 이전 데이터를 들고 있는데,
+  // 여기서 오류 화면으로 바꾸면 결과지(저장 안 한 채점 포함)가 통째로 사라졌다(2026-10-08 야간 점검). 오류 화면은
+  // 처음부터 받지 못했을 때만 쓰고, 다시 받기 실패는 아래 배너로 알린다.
+  if (!data) return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
         <p className="text-sm text-ink-soft">
-          {notFound ? '이 검사 기록을 찾을 수 없어요. 이미 삭제되었을 수 있어요.' : '결과지를 불러오지 못했어요.'}
+          {notFound ? '이 검사 기록을 찾을 수 없어요. 이미 삭제되었을 수 있어요.'
+            : expired ? '로그인이 끝났어요(8시간). 다시 로그인하면 이 결과지로 돌아옵니다.' : '결과지를 불러오지 못했어요.'}
         </p>
+        {expired && <Link href={loginHref} className="text-sm font-bold text-blue underline">다시 로그인</Link>}
         {/* 없는 세션은 재시도해도 달라지지 않는다 — 목록으로 돌아가는 길만 남긴다. */}
-        {!notFound && (
+        {!notFound && !expired && (
           <button type="button" onClick={() => void refetch()}
             className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
             다시 시도
@@ -119,6 +127,17 @@ export function AdminDetailView() {
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
+        {/* 다시 받기가 실패했다 — 결과지는 그대로 두고(위 주석) 무엇이 문제인지만 알린다 */}
+        {isError && (
+          <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-[13px] text-amber print:hidden">
+            {expired ? <>로그인이 끝났어요(8시간). 지금 화면의 채점은 아직 남아 있어요 — <b>새 탭에서</b>{' '}
+                <a href={loginHref} target="_blank" rel="noopener" className="font-bold underline">다시 로그인</a>한 뒤
+                이 화면에서 <b>[채점 저장]</b>을 눌러 주세요.</>
+              : notFound ? <>이 검사 기록이 삭제됐을 수 있어요. 목록에서 다시 확인해 주세요.</>
+              : <>최신 결과지를 다시 받지 못했어요(연결 확인). 지금 화면은 그대로 쓸 수 있어요.
+                <button type="button" onClick={() => void refetch()} className="font-bold underline">다시 받기</button></>}
+          </div>
+        )}
         {/* 수집 상태(녹음·쓰기 진행률, 미완료 건수)는 채점 결과가 아니므로 결과지 밖에 둔다.
             [정보 수정]도 여기 둔다 — 결과지 본문은 검사지를 재현하는 영역이라 편집 컨트롤을
             섞지 않고, [검사 기록 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
@@ -214,14 +233,19 @@ export function AdminDetailView() {
             void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
           }} />
 
+        {/* 주 버튼은 「저장하고 이동」 — 떠날 때 즉시 저장(ResultSheet 언마운트의 keepalive)이 그대로 보낸다. 전에는 주 버튼이
+            「저장하지 않고 이동」뿐이라 마지막 O/X 직후 [다음 아동]을 누르면 파란 버튼 한 번에 채점이 사라졌다(2026-10-08 야간 점검).
+            버리기는 둘째 버튼으로 남긴다(사용자 확정 2026-10-07 「정말 버린다」). */}
         <ConfirmDialog open={pendingNav !== null}
-          title="저장하지 않은 채점이 있어요"
-          confirmLabel="저장하지 않고 이동"
-          onConfirm={() => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setDirty(false); router.push(to) }}
+          title="아직 저장되지 않은 채점이 있어요"
+          confirmLabel="저장하고 이동"
+          onConfirm={() => { const to = pendingNav!; setPendingNav(null); router.push(to) }}
+          secondary={{ label: '저장하지 않고 이동',
+            onClick: () => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setDirty(false); router.push(to) } }}
           onClose={() => setPendingNav(null)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-            이동하면 지금 화면의 채점이 <b className="text-rec-deep">사라집니다</b>.
-            녹음을 다시 들어야 하니, 먼저 <b>[채점 저장]</b>을 눌러 주세요.
+            방금 고친 채점을 저장하고 이동할까요?<br />
+            「저장하지 않고 이동」을 고르면 고친 채점이 <b className="text-rec-deep">사라집니다</b>.
           </p>
         </ConfirmDialog>
 
@@ -230,8 +254,9 @@ export function AdminDetailView() {
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
+            {/* 스캔본도 함께 지워진다(DELETE 라우트가 녹음·스캔본 두 저장소를 모두 비운다) — 종전 문구는 녹음만 말했다 */}
             <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
-            녹음 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
+            녹음·스캔본 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
           </p>
         </ConfirmDialog>
         <LoadingOverlay show={deleting} />

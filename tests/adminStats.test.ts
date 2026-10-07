@@ -324,6 +324,14 @@ describe('adjacentSessionIds', () => {
   it('빈 목록도 안전', () => {
     expect(adjacentSessionIds([], 'a')).toEqual({ prev: null, next: null })
   })
+  it('[REGRESSION] 지금 아이가 필터에서 빠져도 전체 순서에서 가장 가까운 남은 아이로 이동한다 (2026-10-08)', () => {
+    // 「스캔본 채점」 탭: c를 다 채점해 탭에서 빠졌다 — 전체 순서 a b c d e 중 탭에 남은 것은 a·e
+    const all = ['a', 'b', 'c', 'd', 'e'].map(id => mkSession({ id }))
+    const filtered = [all[0], all[4]]
+    expect(adjacentSessionIds(filtered, 'c', all)).toEqual({ prev: 'a', next: 'e' })
+    expect(adjacentSessionIds([all[4]], 'c', all)).toEqual({ prev: null, next: 'e' })
+    expect(adjacentSessionIds(filtered, 'zzz', all)).toEqual({ prev: null, next: null })
+  })
 })
 
 describe('URL 직렬화', () => {

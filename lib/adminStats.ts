@@ -178,14 +178,22 @@ export function sortSessions(rows: SessionListRow[], sort: Sort): SessionListRow
 /** 이미 필터·정렬된 rows에서 currentId의 앞/뒤 세션 id를 구한다.
  * 결과지의 「◀ 이전 아동 / 다음 아동 ▶」이 목록과 같은 순서로 이동하도록 한다(항목 17). */
 export function adjacentSessionIds(
-  rows: SessionListRow[], currentId: string,
+  rows: SessionListRow[], currentId: string, allSorted?: SessionListRow[],
 ): { prev: string | null; next: string | null } {
   const idx = rows.findIndex(r => r.id === currentId)
-  if (idx === -1) return { prev: null, next: null }
-  return {
+  if (idx !== -1) return {
     prev: idx > 0 ? rows[idx - 1].id : null,
     next: idx < rows.length - 1 ? rows[idx + 1].id : null,
   }
+  // 지금 아이가 필터에서 빠졌다 — 「스캔본 채점」 탭에서 쓰기를 다 채점하면 목록이 다시 받아지며 이 아이가 탭에서 빠져
+  // 이전/다음이 둘 다 꺼졌다(일괄 채점 동선이 끊김 — 2026-10-08 야간 점검). 같은 정렬의 전체 목록에서 앞뒤로 가장 가까운,
+  // 필터에 남은 아이를 고른다.
+  const pos = allSorted?.findIndex(r => r.id === currentId) ?? -1
+  if (!allSorted || pos === -1) return { prev: null, next: null }
+  const kept = new Set(rows.map(r => r.id))
+  const prev = allSorted.slice(0, pos).reverse().find(r => kept.has(r.id))?.id ?? null
+  const next = allSorted.slice(pos + 1).find(r => kept.has(r.id))?.id ?? null
+  return { prev, next }
 }
 
 // ---------- URL ↔ 상태 (searchParams 동기화) ----------
