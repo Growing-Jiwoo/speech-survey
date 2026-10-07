@@ -49,6 +49,7 @@
 | 파일 | 역할 |
 |---|---|
 | `http.ts` | `requestJson/postJson`(던지지 않는 결과형) + `fetchJson`(react-query용) + 네트워크 오류 카피 단일화 |
+| `upload-flight.ts` | 이 탭에서 올리고 있는 녹음(`세션:페이지:시도`) — 모듈 범위라 검사 ↔ 검토 화면을 오가도 남고 새로고침이면 빈다. 검사 화면이 올리기 시작·끝을 적고(`beginUpload`는 「녹음 완료」 표시보다 먼저, `endUpload`는 저장 상태를 다 고친 뒤), 검토 화면이 올리는 중이면 제출을 막고 끝날 때마다(`subscribeUploads`) 저장 상태를 다시 읽는다. 저장 상태의 올리는 중 표시 가운데 여기 없는 것이 끊긴 업로드다(`survey-state` `settleLostUploads`) |
 | `upload.ts` | 녹음 업로드 요청 조립(FormData) — 정상 업로드와 재시도 배너가 공유. 결과는 `UploadResult`로 나눈다(`classifyUpload`): 다시 보내면 될 수도 있는 실패(연결·5xx·429)만 `retry`, 401·409는 `fatal`(만료·이미 제출), 그 밖의 4xx는 그 녹음만 저장 불가 |
 | `audio.ts` | 녹음 공유 상수(`MIC_MIN_PEAK`)·남은 시간 계산·녹음 오류 분류(순수 단위) |
 | `format.ts` | `fmtDuration`(m:ss)·`pad2`·`gradeClassLabel`(목록 좁은 칸 `1-2`)·`classLabel`(결과지 머리말 `1학년 2반`)·`contactLabel`·`sheetDateLabel`(KST 고정)·`reportDateLabel`·`birthLabel`·`semesterOf`(결과보고서 표기 — 학기는 검사일 월로 정하는 개발 판단, 사용자 확정 2026-09-28)·`approvalNoticeText`(승인 안내 평문 — `lib/mail.ts`의 `approvedMail`과 **문구를 맞춰 유지할 것**. 검사 안내(소요 시간·준비물·보호자 동의)는 여전히 담지 않는다 — 신청 화면에서 교사가 이미 읽고 체크한 것이라 중복이기 때문이고, 한쪽에만 되살아나면 채널에 따라 안내가 갈리므로 `tests/mail.test.ts`가 **둘 다 없음**을 핀한다. 「결과지 받는 방법」은 이 원칙의 예외로 두 채널 모두에 담는다 — 교사가 결과지를 받을 유일한 경로이고 신청 화면에는 없던 정보라 중복이 아니기 때문이다(사용자 확정 2026-09-22). 그 문구의 단일 소스는 `RESULTS_GUIDE_LINES`) 등 표시 포맷. 학년/반 드롭다운 선택지(`CLASS_OPTIONS`·`MAX_CLASS_NO`)도 여기가 단일 소스 — 코드 발급 화면과 신청 화면이 공유한다 |

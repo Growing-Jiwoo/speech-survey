@@ -17,6 +17,7 @@ import {
   withPendingUpload, withoutPendingUpload, type SurveyState, type WritingMode,
 } from '@/lib/survey-state'
 import { uploadRecording, type UploadResult } from '@/lib/upload'
+import { beginUpload, endUpload, isUploading } from '@/lib/upload-flight'
 import { pageLabel } from '@/lib/items'
 import { Blip } from '@/components/Blip'
 import { ProgressBar } from '@/components/ProgressBar'
@@ -32,10 +33,6 @@ import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
 import { ScanWritingPanel, WritingModeToggle } from '@/components/survey/WritingMode'
 
-/** 이 탭에서 지금 올리고 있는 녹음(`세션:페이지:시도`). 모듈 범위라 검사 ↔ 검토 화면을 오가도 남고, 새로고침이면
- *  비어 있다 — 저장 상태의 「올리는 중」 가운데 여기 없는 것이 끊긴 업로드다(lib/survey-state settleLostUploads). */
-const inFlight = new Set<string>()
-const flightKey = (sessionId: string, code: string, attemptNo: number) => `${sessionId}:${code}:${attemptNo}`
 
 function SurveyInner() {
   const router = useRouter()
@@ -78,8 +75,8 @@ function SurveyInner() {
   useEffect(() => {
     const s = loadState()
     if (!s) { router.replace('/'); return }
-    // 새로고침·탭 닫기로 끊긴 업로드의 「녹음 완료」 표시를 거둔다 — 같은 탭에서 화면만 옮겼다 온 것(inFlight)은 그대로
-    const settled = settleLostUploads(s, (code, no) => inFlight.has(flightKey(s.sessionId, code, no)))
+    // 새로고침·탭 닫기로 끊긴 업로드의 「녹음 완료」 표시를 거둔다 — 같은 탭에서 화면만 옮겼다 온 것(lib/upload-flight)은 그대로
+    const settled = settleLostUploads(s, (code, no) => isUploading(s.sessionId, code, no))
     if (settled.lost.length > 0) saveState(settled.state)
     // 서버 프리렌더와 첫 페인트를 일치시키기 위해(하이드레이션 불일치 방지) localStorage는
     // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
@@ -192,7 +189,6 @@ function SurveyInner() {
 
   /** 업로드가 끝났다(성공이든 실패든) — 「올리는 중」 표시를 저장 상태에서 직접 지운다(컴포넌트 생존과 무관). */
   const settleUpload = useCallback((sessionId: string, code: string, attemptNo: number) => {
-    inFlight.delete(flightKey(sessionId, code, attemptNo))
     updateSavedState(sessionId, s => withoutPendingUpload(s, code, attemptNo))
     setSt(prev => prev && prev.sessionId === sessionId ? withoutPendingUpload(prev, code, attemptNo) : prev)
   }, [])
@@ -281,12 +277,13 @@ function SurveyInner() {
     const attemptNo = (st!.recorded[code] ?? 0) + 1
     const { sessionId, sessionToken } = st!
     if (page.practice) { markSaved(code, attemptNo, false); return }   // 연습은 서버에 남기지 않는다
-    inFlight.add(flightKey(sessionId, code, attemptNo))
+    beginUpload(sessionId, code, attemptNo)
     markSaved(code, attemptNo, true)
     setUploading(n => n + 1)
     void uploadRecording({ sessionId, sessionToken, itemCode: code, attemptNo, rec })
       .then(r => { settleUpload(sessionId, code, attemptNo); if (!r.ok) undoSaved(sessionId, code, rec, attemptNo, r) })
-      .finally(() => setUploading(n => n - 1))
+      // 저장 상태를 다 고친 뒤에 끝을 알린다 — 검토 화면이 알림을 받자마자 저장 상태를 다시 읽는다
+      .finally(() => { endUpload(sessionId, code, attemptNo); setUploading(n => n - 1) })
   }
 
   function tryNext() {
