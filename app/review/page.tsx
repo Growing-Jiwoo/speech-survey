@@ -3,7 +3,7 @@
 // 고칠 수 있게 한다. 미완료가 있어도 제출은 막지 않는다(현장에서 건너뛴 문항이 있을 수
 // 있으므로 검사자 판단에 맡기고, 확인 모달에서 한 번 더 경고만 한다).
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
@@ -16,7 +16,7 @@ import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
-import { clearState, loadState, resolveWritingMode, saveState, settleLostUploads, type SurveyState } from '@/lib/survey-state'
+import { clearState, loadState, markSubmitted, resolveWritingMode, saveState, settleLostUploads, type SurveyState } from '@/lib/survey-state'
 import { isUploading, subscribeUploads, uploadsInFlight } from '@/lib/upload-flight'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
@@ -30,8 +30,8 @@ export default function ReviewPage() {
   const [modal, setModal] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  /** 이 탭에서 아직 올리고 있는 녹음 수 — 있으면 제출을 막는다(lib/upload-flight 머리 주석) */
-  const [uploading, setUploading] = useState(0)
+  /** 제출이 서버에서 거절돼 더 진행할 수 없다(이미 제출·세션 만료·지워짐) — 처음 화면으로 보낸다 */
+  const [fatal, setFatal] = useState<'submitted' | 'expired' | null>(null)
   /** 끊긴 업로드로 「녹음 완료」 표시를 거둔 페이지 — 검사 화면과 같은 판정·같은 안내 */
   const [lostUploads, setLostUploads] = useState<string[]>([])
 
@@ -47,16 +47,18 @@ export default function ReviewPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSt(settled.state)
     setLostUploads(settled.lost)
-    setUploading(uploadsInFlight(s.sessionId))
   }, [router])
 
-  // 검사 화면에서 넘어올 때 남은 업로드를 따라간다 — 끝날 때마다 저장 상태를 다시 읽는다. 실패한 녹음은 검사 화면이
-  // 저장 상태에서 「녹음 완료」를 거두므로(undoSaved) 다시 읽으면 여기서도 미녹음으로 보인다.
+  // 이 탭에서 아직 올리고 있는 녹음 수 — 있으면 제출을 막는다(lib/upload-flight 머리 주석). 바깥 저장소라
+  // useSyncExternalStore로 읽는다 — 마운트와 구독 사이에 업로드가 끝나 알림을 놓치면 「녹음 저장 중…」에 갇혔다.
   const sessionId = st?.sessionId
+  const uploading = useSyncExternalStore(subscribeUploads,
+    () => (sessionId ? uploadsInFlight(sessionId) : 0), () => 0)
+  // 업로드가 끝날 때마다 저장 상태를 다시 읽는다. 실패한 녹음은 검사 화면이 저장 상태에서 「녹음 완료」를 거두므로
+  // (undoSaved) 다시 읽으면 여기서도 미녹음으로 보인다.
   useEffect(() => {
     if (!sessionId) return
     return subscribeUploads(() => {
-      setUploading(uploadsInFlight(sessionId))
       const s = loadState()
       if (s?.sessionId === sessionId) setSt(s)
     })
@@ -80,7 +82,8 @@ export default function ReviewPage() {
   const state = st
 
   // 미완료 판정: 녹음 페이지는 저장된 시도 0회, 쓰기 과제는 점수 미선택.
-  // (체크리스트는 진행 화면에서 최소 1개 선택을 강제하므로 여기서는 세지 않는다)
+  // 체크리스트는 진행 화면이 최소 1개를 강제하지만, 비어 있으면 **여기서도 미완료로 센다** — 비운 채 검토로 돌아오는
+  // 길이 있었고(헤더 링크, 2026-10-08 야간 점검) 서버는 빈 목록도 받는다.
   // 연습 페이지는 서버에 남기지 않으므로 완료 판정에서 제외한다.
   // **[모르겠어요]로 넘긴 페이지도 제외한다**(담당자 확정 2026-09-21) — 검사자가 의도적으로
   // 넘긴 것은 "아직 못 한 것"이 아니다. 모름 3개를 넘겼는데 "아직 3개가 완료되지 않았어요"가
@@ -96,7 +99,8 @@ export default function ReviewPage() {
     .filter(p => p.section === f.writingSection)
     .flatMap(p => p.items)
     .filter(i => state.writing[i.code] === undefined).length
-  const missing = missingPages + missingWriting
+  const missingChecklist = state.checklist.length === 0 ? 1 : 0
+  const missing = missingPages + missingWriting + missingChecklist
 
   /** 섹션 하나를 카드로 렌더 — 얇은 구분선 행 + 작은 상태 배지의 차분한 목록. */
   function renderSection(section: Section) {
@@ -123,11 +127,9 @@ export default function ReviewPage() {
               pill = scanWriting ? <Badge tone="blue">스캔 예정</Badge>
                 : <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
             } else {
-              pill = (
-                <span className="text-right text-xs text-ink-soft">
-                  {state.checklist.length > 0 ? state.checklist.map(areaLabel).join(', ') : '선택 없음'}
-                </span>
-              )
+              pill = state.checklist.length > 0 ? (
+                <span className="text-right text-xs text-ink-soft">{state.checklist.map(areaLabel).join(', ')}</span>
+              ) : <StatusPill done={false} label="선택 안 함" />
             }
             // 문장은 어느 문장이었는지가 곧 그 단계라 전문을 보여준다(두 줄까지). 나머지는 이름·개수만 —
             // 낱말 7개를 이어 붙이면 어느 폭에서도 뒤가 잘려 아무것도 알려주지 못한다.
@@ -160,10 +162,30 @@ export default function ReviewPage() {
       writing: writingMode === 'scan' ? {} : st.writing, checklist: st.checklist,
     }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
-    if (!r.ok) { setErr(r.error); return }
+    if (!r.ok) {
+      // 다시 눌러도 같은 답인 거절은 빠져나갈 길을 준다 — 409는 응답만 끊겼고 서버는 이미 받은 경우가 대부분이다
+      // (같은 오류가 계속 반복되고 시작 화면은 이 아이를 「이어서 하기」로 다시 권했다 — 2026-10-08 야간 점검)
+      if (r.status === 409) { setModal(false); setFatal('submitted'); return }
+      if (r.status === 401 || r.status === 404) { setModal(false); setFatal('expired'); return }
+      setErr(r.error); return
+    }
+    markSubmitted(st.sessionId)   // 종료 화면은 이 세션의 흔적만 치운다(lib/survey-state clearSessionState)
     clearState()
-    router.push('/done')
+    router.replace('/done')       // 뒤로가기로 이 검토 화면(제출된 검사)에 돌아오지 않게
   }
+
+  if (fatal) return (
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">
+      <Blip variant="idle" className="h-24 w-[100px]" />
+      <h1 className="text-xl font-bold">{fatal === 'submitted' ? '이미 제출된 검사예요' : '이 검사는 더 이어갈 수 없어요'}</h1>
+      <p className="text-sm leading-relaxed text-ink-soft">
+        {fatal === 'submitted'
+          ? <>{state.childNo}번 {state.childName} 학생의 검사는 제출이 끝났어요. 다음 학생을 검사해 주세요.</>
+          : <>검사를 시작한 지 오래됐거나 담당자가 기록을 정리했어요. 처음 화면에서 이 학생을 다시 골라 <b>처음부터</b> 검사해 주세요.</>}
+      </p>
+      <button type="button" className="cta mt-2 max-w-60" onClick={() => { clearState(); router.replace('/') }}>처음 화면으로</button>
+    </main>
+  )
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col p-6 pt-8 lg:max-w-4xl">

@@ -3,12 +3,12 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { Blip } from '@/components/Blip'
-import { clearState } from '@/lib/survey-state'
+import { clearSessionState, takeSubmitted } from '@/lib/survey-state'
 
 export default function DonePage() {
-  // 제출 성공 시 review에서 이미 지우지만, 여기서 한 번 더 파기해
-  // 공용 기기에 진행 상태(세션 id·토큰)가 남는 경로를 차단한다.
-  useEffect(() => { clearState() }, [])
+  // 제출 성공 시 review에서 이미 지운다. 여기서는 **방금 제출한 그 세션**의 흔적만 한 번 더 치운다 — 전체를 지우면
+  // 뒤로가기로 이 화면이 다시 열렸을 때 그 사이 시작한 다음 아이의 진행·토큰이 지워졌다(2026-10-08 야간 점검).
+  useEffect(() => { const id = takeSubmitted(); if (id) clearSessionState(id) }, [])
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 p-6 text-center">

@@ -93,6 +93,8 @@ interface Confirmed {
   cls: ClassInfo
   childNo: number
   name: string
+  /** 직접 입력한 번호가 명단의 다른 아이 번호와 같으면 그 아이 이름 — 확인 창이 알린다(아래 verify 주석) */
+  rosterClash?: string | null
   /** 이 확인 모달 한 번에 대응하는 멱등 키. **모달을 열 때 만들고 재시도 동안 유지한다** —
    *  `begin()` 안에서 만들면 실패 후 다시 누를 때마다 새 키가 나와 서버가 재시도를 구분할
    *  수 없다(연타·재전송이 그대로 세션 두 개가 된다). 모달을 닫고 다시 열면 새 키가 되므로
@@ -323,8 +325,12 @@ export default function StartPage() {
       return
     }
     setConfirmErr('')
+    // 명단 반에서 「명단에 없는 학생」으로 입력한 번호가 명단 아이의 번호와 같으면 알린다 — 전학생을 실수로 17번으로
+    // 넣으면 명단의 17번이 「검사함」이 되고 교사 결과지의 17번 줄 이름이 바뀌어, 진짜 17번을 빠뜨릴 수 있다
+    // (2026-10-08 야간 점검). 막지는 않는다 — 명단이 틀렸을 수도 있다.
+    const clash = roster.find(c => c.childNo === childNoNum && c.name !== cleanName)
     setConfirm({
-      cls: r.data, childNo: childNoNum, name: cleanName,
+      cls: r.data, childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
       identity: null, tested: r.data.alreadyTested,
       idemKey: crypto.randomUUID(),
     })
@@ -489,7 +495,7 @@ export default function StartPage() {
                 라벨에 생년월일은 넣지 않는다 — 선택 시점에 신원 대조에 가장 덜 필요한 칸이라
                 확인 모달에서만 보여준다. */}
             <Select id="pick" ariaLabel="검사할 학생" placeholder="학생을 선택해 주세요"
-              className="mt-1.5" value={pick} onChange={setPick}
+              className="mt-1.5" value={pick} onChange={v => { setPick(v); setConsent(false) }}
               options={roster.map(r => ({
                 value: String(r.childNo),
                 label: `${r.childNo}번 ${r.name} (${r.gender})`,
@@ -703,6 +709,12 @@ export default function StartPage() {
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 제출까지 끝난 검사가 있어요.<br />
                 다시 검사하면 새 결과가 추가로 남아요.
+              </p>
+            )}
+            {confirm.rosterClash && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                {confirm.childNo}번은 명단의 <b>{confirm.rosterClash}</b> 학생 번호예요.<br />
+                명단에 없는 학생이라면 번호를 다시 확인해 주세요.
               </p>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 | 파일 | 역할 |
 |---|---|
-| `useRecorder.ts` | MediaRecorder 녹음 훅 — 시작/정지·maxSec 자동 종료·레벨미터(peak)·경과 시계. 마이크 트랙 정리(cleanup)를 스트림 확보 직후 등록해 어떤 실패 경로에서도 마이크가 켜진 채 남지 않게 한다. iOS AudioContext resume 처리 포함 |
+| `useRecorder.ts` | MediaRecorder 녹음 훅 — 시작/정지·maxSec 자동 종료·레벨미터(peak)·경과 시계. 마이크 트랙 정리(cleanup)를 스트림 확보 직후 등록해 어떤 실패 경로에서도 마이크가 켜진 채 남지 않게 한다. iOS AudioContext resume 처리 포함. **연타 방어**(2026-10-08): 여는 중(`starting`)·녹음 중이면 `start()`를 무시하고, 버튼용 `stopByTap`은 시작 직후 0.5초 안의 누름을, `start()`는 멈춘 직후 0.5초 안의 누름을 무시한다(일시정지는 `stop`으로 언제든 멈춘다 — 여는 중이면 그 시작을 취소). **언마운트하면 녹음을 버린다**(`discardRef` — 잘린 녹음이 올라가지 않게) |
 | `useAdminQueries.ts` | 관리자 데이터 react-query 훅 + 쿼리 키 단일 소스(`adminKeys`) — 무효화 호출부가 키 리터럴을 복사하지 않게 한다. `useRosterQuery`는 아동 실명을 캐시하므로 로그아웃 시 함께 지워지도록 `adminKeys` 트리 안에 둔다 |
 | `useSurveyForm.ts` | 진행 중인 세션의 검사지를 서버에서 받는다(`POST /api/sessions/form`, 토큰은 바디로). 검사·검토 화면이 lib/forms를 import하면 문항이 공개 JS에 실리므로 **양식은 이 훅으로만 얻는다.** 세션 안에서 양식은 바뀌지 않아 `staleTime: Infinity` — 검사 화면에서 받은 것을 검토 화면이 캐시로 즉시 쓴다. 401·404·409는 다시 시도해도 같으므로 재시도하지 않는다(`isFatalFormError`) |
 | `useFocusTrap.ts` | 다이얼로그 포커스 트랩 — 초기 포커스·Tab 순환·Esc 콜백·해제 시 포커스 복귀. 안쪽 컴포넌트가 이미 처리한 Esc(`defaultPrevented` — 드롭다운 닫기)는 다이얼로그를 닫지 않고, `inert`로 막힌 부분(안쪽 겹창 뒤)은 Tab 순환에서 뺀다. ⚠️ 복귀할 곳은 **트랩이 켜질 때의 포커스**다 — 같은 렌더에서 창 안으로 포커스를 옮기는 효과는 이 훅 **뒤에** 둘 것(앞에 두면 닫을 때 사라진 요소로 돌아가려다 포커스가 body로 떨어진다, components/results/ScanUpload) |

@@ -186,6 +186,32 @@ export function clearState(): void {
   } catch { /* noop */ }
 }
 
+/** **그 세션의** 흔적만 지운다 — 마지막 세션이 그 세션일 때만 `LAST_KEY`도 지운다. 종료 화면(/done)이 쓴다:
+ *  종료 화면은 뒤로가기로 다시 열릴 수 있는데, 그때 `clearState()`를 부르면 **그 사이 시작한 다음 아이**의 진행과
+ *  토큰이 지워졌다(2026-10-08 야간 점검). 제출한 검사는 검토 화면이 이미 지웠으므로 여기서는 남은 것만 치운다. */
+export function clearSessionState(sessionId: string): void {
+  try {
+    localStorage.removeItem(keyOf(sessionId))
+    if (localStorage.getItem(LAST_KEY) === sessionId) localStorage.removeItem(LAST_KEY)
+  } catch { /* noop */ }
+}
+
+/** 검토 화면이 제출에 성공한 세션 — 종료 화면이 그 세션만 치우도록 넘긴다(탭 안에서만, sessionStorage). */
+const SUBMITTED_KEY = 'kodys-survey:submitted'
+
+export function markSubmitted(sessionId: string): void {
+  try { sessionStorage.setItem(SUBMITTED_KEY, sessionId) } catch { /* noop */ }
+}
+
+/** 표시를 꺼내고 지운다 — 같은 종료 화면을 다시 열어도 두 번 치우지 않는다. */
+export function takeSubmitted(): string | null {
+  try {
+    const id = sessionStorage.getItem(SUBMITTED_KEY)
+    sessionStorage.removeItem(SUBMITTED_KEY)
+    return id
+  } catch { return null }
+}
+
 /** 학급 코드 기억 — 진행 상태와 **별도 키**라 clearState가 지우지 않는다.
  *  한 학급을 연달아 검사할 때 코드 재입력을 덜기 위한 것으로, 세션 생성 성공 직후에만
  *  저장한다(오타·확인 모달 취소가 남지 않게 — 스펙 "연속 검사", 사용자 확정 2026-08-13).
