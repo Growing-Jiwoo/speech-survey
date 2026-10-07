@@ -305,7 +305,7 @@ describe('sheetPdfGate — 채점이 끝나기 전에는 공식 PDF를 내려받
     expect(gate!.tasks).toEqual(['wordReading', 'sentenceReading'])
   })
 
-  it('쓰기만 비어 있으면 경고만 하고 통과시킨다 — 결과지에서 채울 수 없는 값이다', () => {
+  it('쓰기만 비어 있으면 경고만 하고 통과시킨다 — (화면 방식) 결과지에서 채울 수 없는 값이다', () => {
     const gate = sheetPdfGate(score({ marks: ALL_MARKS, sentences: ALL_SENT, times: ALL_TIMES }), false)
     expect(gate).toMatchObject({ reason: 'unscored', tasks: ['writing'], overridable: true })
   })

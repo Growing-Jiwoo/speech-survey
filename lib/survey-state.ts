@@ -11,6 +11,9 @@
  *      담당자 확정(2026-09-21) */
 const SCHEMA_V = 9
 
+/** 쓰기 방식 — lib/db의 WritingMode와 같은 값(화면이 서버 모듈을 import하지 않게 여기 따로 둔다) */
+export type WritingMode = 'screen' | 'scan'
+
 export interface SurveyState {
   v: typeof SCHEMA_V
   sessionId: string
@@ -47,6 +50,15 @@ export interface SurveyState {
   /** 쓰기 과제 itemCode → 정확히 쓴 어절 수. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1,
    *  문장 쓰기(G2)는 0~2다 — 두 과제의 채점 규칙이 "어절당 1점"으로 같아 한 모양으로 담는다. */
   writing: Record<string, number>
+  /**
+   * 쓰기 방식 — 쓰기 단계에서 검사자가 고른다(담당자 확정 2026-09-30 — 두 방식 중 고르는 과정만, 회신은 사용자 전달). 고르기 전에는 없고,
+   * 그동안은 화면에 표시한 값이 있으면 화면 방식, 없으면 이 기기에서 **같은 학급이** 마지막으로 고른 방식
+   * (`writingModePref` — 학급 코드별)을 쓴다(`resolveWritingMode`).
+   * **스키마 버전을 올리지 않는다** — 없는 값이 곧 「아직 안 골랐다」라 옛 상태를 버릴 이유가 없고,
+   * 버전을 올리면 배포 순간 진행 중이던 검사가 전부 처음부터 다시 시작된다.
+   * scan이면 `writing`에 남은 값은 제출하지 않는다(화면 입력으로 되돌아오면 다시 쓰인다).
+   */
+  writingMode?: WritingMode
   checklist: string[]                // 선택된 영역 코드
   introsSeen: string[]               // 진입 안내를 이미 본 섹션 코드(새로고침·왕복에도 재노출 방지)
   /**
@@ -205,4 +217,34 @@ export function recentMicOk(maxAgeMs: number): boolean {
     const at = Number(localStorage.getItem(MIC_OK_KEY))
     return Number.isFinite(at) && at > 0 && Date.now() - at < maxAgeMs
   } catch { return false }
+}
+
+/** 마지막으로 고른 쓰기 방식 — **기기 키**(마이크 확인 기억과 같은 성격, clearState가 지우지 않는다).
+ *  한 반을 같은 방식으로 검사할 때 아이마다 다시 누르지 않게 한다(사용자 확정 2026-09-30).
+ *  **고른 학급에만** 기본값이 된다 — 컴퓨터실 PC를 여러 반이 쓰면, 1반이 고른 스캔본 방식이 기록지를 뽑지 않은
+ *  2반에 걸려 입력 없이 제출된다(스캔본을 기다리는 검사가 반 전체로 생긴다). 학급 코드는 세션을 만들 때 저장된
+ *  값(`loadClassCode`)이다. 방식과 코드만 담는다 — 아동 정보가 아니다. */
+const WRITING_MODE_KEY = 'kodys-survey:writingMode'
+
+export function saveWritingModePref(mode: WritingMode): void {
+  try { localStorage.setItem(WRITING_MODE_KEY, JSON.stringify({ code: loadClassCode(), mode })) } catch { /* noop */ }
+}
+
+/** 이 학급에서 마지막으로 고른 방식. 다른 학급이 골랐거나 없거나 손상됐으면 screen(지금까지의 방식) */
+export function writingModePref(): WritingMode {
+  try {
+    const v = JSON.parse(localStorage.getItem(WRITING_MODE_KEY) ?? 'null') as { code?: unknown; mode?: unknown } | null
+    return v?.mode === 'scan' && typeof v.code === 'string' && v.code === loadClassCode() ? 'scan' : 'screen'
+  } catch { return 'screen' }
+}
+
+/** 이 검사의 쓰기 방식 — 검사자가 고른 값이 있으면 그것. 없으면 **화면에 표시한 값이 있으면 화면 방식**,
+ *  그것도 없으면 이 학급의 기본값. 쓰기 화면·검토·제출이 공유한다.
+ *  표시한 값을 먼저 보는 이유: 표시하다가 [저장하고 나가기]로 멈춘 사이 같은 컴퓨터의 다른 아이가 스캔본을 고르면
+ *  기본값이 바뀐다 — 기본값을 따르면 이어서 할 때 표시한 값이 제출에서 조용히 버려진다(배포 전에 쓰기 단계를
+ *  지난 진행 중 검사도 방식 값이 없다).
+ *  저장된 값이 손상됐으면 고르지 않은 것으로 본다 — 그대로 보내면 제출 라우트가 400으로 막아 검사를 끝낼 수 없다. */
+export function resolveWritingMode(s: Pick<SurveyState, 'writingMode'> & Partial<Pick<SurveyState, 'writing'>>): WritingMode {
+  if (s.writingMode === 'scan' || s.writingMode === 'screen') return s.writingMode
+  return Object.keys(s.writing ?? {}).length > 0 ? 'screen' : writingModePref()
 }

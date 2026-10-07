@@ -6,9 +6,16 @@ import { formForGrade } from './forms'
 import { scoreInputFrom } from './scoring'
 import type { SessionListRow } from './db'
 
-export interface SessionProgress { recorded: number; written: number; expected: Totals; incomplete: boolean }
+export interface SessionProgress {
+  recorded: number; written: number; expected: Totals; incomplete: boolean
+  /** 스캔본 방식이면 담당자가 채점할 차례인지(`uploaded` — 스캔본이 올라왔거나 종이로 채점을 시작함) 선생님을
+   *  기다리는지(`wait`), 화면 방식이면 null. 스캔본 방식의 쓰기는
+   *  검사 중에 비는 것이 정상이다(담당자가 스캔본으로 채점) — 목록은 빨간 0/10 대신 이 상태로 보인다 */
+  scan: 'wait' | 'uploaded' | null
+}
 
 type ProgressInput = Pick<SessionListRow, 'grade' | 'recordings' | 'writing_answers' | 'sentence_scores'>
+  & Partial<Pick<SessionListRow, 'writing_mode' | 'writing_scans'>>
 
 /** 목록 행의 쓰기 답(itemCode → 어절 수). 쓰기 답이 두 테이블에 나뉘어 있는 사실은
  *  scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다. */
@@ -31,5 +38,10 @@ export function sessionProgress(s: ProgressInput): SessionProgress {
   const recorded = new Set(s.recordings.map(r => r.item_code).filter(c => recCodes.has(c))).size
   const written = f.writingItems.filter(i => writing[i.code] !== undefined).length
   const expected = f.totals
-  return { recorded, written, expected, incomplete: recorded < expected.rec || written < expected.write }
+  const hasScan = Array.isArray(s.writing_scans) ? s.writing_scans.length > 0 : !!s.writing_scans
+  // 스캔본 없이 쓰기를 넣기 시작했으면(종이로 채점) 선생님은 더 올릴 수 없다(lib/scan-mapping 「채점됨」) —
+  // 기다리는 상태가 아니라 담당자가 채점할 차례로 본다
+  const scan = s.writing_mode === 'scan' ? (hasScan || written > 0 ? 'uploaded' : 'wait') : null
+  // 「제출 · 미완료 있음」은 **검사 중에 빠뜨린 것**을 알리는 배지다 — 스캔본 방식의 빈 쓰기는 빠뜨린 것이 아니다.
+  return { recorded, written, expected, scan, incomplete: recorded < expected.rec || (!scan && written < expected.write) }
 }

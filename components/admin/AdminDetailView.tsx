@@ -11,7 +11,8 @@ import { scoreInputFrom } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
-import { adminKeys, useSessionDetailQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { adminKeys, useSessionDetailQuery, useSessionsQuery, type SessionDetailData } from '@/hooks/useAdminQueries'
+import { patchDetail } from '@/lib/sheet-cache'
 import { AudioBusProvider } from '@/components/AudioBus'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -109,7 +110,10 @@ export function AdminDetailView() {
   const writtenCount = f.writingItems.filter(i => input.writing[i.code] !== undefined).length
   const recordedCount = f.recordingPages.filter(p => byItem.has(p.code)).length
   const expected = f.totals
-  const missingCount = Math.max(0, expected.rec - recordedCount) + Math.max(0, expected.write - writtenCount)
+  // 스캔본 방식의 빈 쓰기는 「검사 중에 빠뜨린 것」이 아니라 담당자가 스캔본으로 채울 칸이다 — 미완료로 세지 않는다
+  // (목록의 lib/session-progress와 같은 판정).
+  const scanWriting = s.writing_mode === 'scan'
+  const missingCount = Math.max(0, expected.rec - recordedCount) + (scanWriting ? 0 : Math.max(0, expected.write - writtenCount))
 
   return (
     <AudioBusProvider>
@@ -120,7 +124,10 @@ export function AdminDetailView() {
             섞지 않고, [검사 기록 삭제] 옆은 오클릭이, [다음 아동] 옆은 고빈도 내비와 섞이는 게 걱정된다. */}
         <div className="mt-3 flex flex-wrap items-center gap-2 print:hidden">
           <span className="kpi">녹음 <b>{recordedCount} / {expected.rec}</b></span>
-          <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{writtenCount} / {expected.write}</b></span>
+          {/* 스캔본 방식의 쓰기는 검사 중에 모으는 것이 아니라 스캔본이 올라오는지가 수집 상태다 */}
+          <span className="kpi">{SECTION_LABEL[f.writingSection]} <b>{scanWriting
+            ? (data.scan ? '스캔본 있음' : writtenCount > 0 ? '스캔본 없이 채점' : '스캔 대기')
+            : `${writtenCount} / ${expected.write}`}</b></span>
           {missingCount > 0 && <Badge tone="rec" size="lg">미완료 {missingCount}건</Badge>}
           {/* 수정된 세션은 원래 값을 함께 보여준다 — 잘못 고쳤을 때 되돌릴 근거가 된다.
               ⚠️ 결과보고서 PDF에는 이 표시가 없다(담당자 양식 그대로) — 인쇄물만 보면 알 수 없다. */}
@@ -139,6 +146,26 @@ export function AdminDetailView() {
             무력화된다 — clip은 같은 모서리 클리핑을 주되 스크롤 컨테이너를 만들지 않는다. */}
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
+            scan={data.scan}
+            // 저장한 값으로 캐시를 고친다 — 다시 열었을 때 옛 캐시로 초기화돼 자동 저장이 채점을 덮지 않게(lib/sheet-cache).
+            // 받은 시각(updatedAt)은 그대로 둔다 — 저장마다 「방금 받음」이 되면 캐시가 계속 새것으로 남아, 그사이 바뀐
+            // 스캔본을 다시 받을 기회가 사라진다(5분 뒤 다시 열어도 옛 정보). 쓰기를 저장했으면 목록의 진행 표시도 바뀐다.
+            onSaved={saved => {
+              const key = adminKeys.session(id)
+              queryClient.setQueryData<SessionDetailData>(key, old => old && patchDetail(old, saved, f),
+                { updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt })
+              if (saved.writing) void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
+            // 해제 뒤 스캔본이 사라진 상세를 다시 받는다 — 목록의 진행 표시도 바뀐다
+            onScanUnlinked={() => {
+              void queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })
+              void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
+            // 스캔본이 그사이 바뀌었거나(저장 409) 그림 링크가 만료됐다 — 새 스캔본·새 링크를 받는다
+            onScanStale={() => {
+              void queryClient.invalidateQueries({ queryKey: adminKeys.session(id) })
+              void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+            }}
             onDirtyChange={setDirty}
             // 떠나며 보낸 저장의 응답은 받을 수 없다 — 그 아이의 캐시를 비워 다시 열 때 서버에서 받게 한다
             // (이미 언마운트된 뒤라 아래 removeQueries 경고의 「로딩으로 떨어져 채점이 사라지는」 경우가 아니다)

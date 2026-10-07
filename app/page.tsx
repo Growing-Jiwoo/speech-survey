@@ -17,18 +17,21 @@
 // 학급 배너의 [결과지 받기 →]는 교사용이다(스펙 2026-09-22 teacher-results-download). 등록된 담임
 // 메일로 학급 결과 링크를 보낼 뿐 이 화면에서 결과가 열리지 않는다 — 아동 앞 공용 PC라 그래야 한다.
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Select } from '@/components/Select'
+import { WritingSheetDialog } from '@/components/start/WritingSheetDialog'
 import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
+import type { ScanTargetState } from '@/lib/scan-mapping'
+import type { SheetLayout } from '@/lib/writing-sheet'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
@@ -71,6 +74,17 @@ interface ClassInfo {
 interface RosterChild {
   childNo: number; name: string; gender: '남' | '여'; birthYmd: string
   tested: 'submitted' | 'inProgress' | null
+  /** 최신 검사의 쓰기 상태 — 기록지 인쇄 창의 배지 */
+  writing: ScanTargetState | null
+}
+
+/** verify-code(childNo 없이) 응답 — 명단과 쓰기 기록지 인쇄 재료(스캔본 방식, 2026-09-30) */
+interface CodeLookup extends ClassInfo {
+  roster: RosterChild[]
+  /** 스캔본을 기다리는 아이 수 — 배너가 「스캔 대기 N명」으로 알린다 */
+  scanPending: number
+  /** 기록지 QR의 반 표시와 쓰는 칸 모양(문항은 없다) */
+  sheet: { tag: string; layout: SheetLayout }
 }
 
 /** 확인 모달이 보여줄 내용. 두 모드가 신원을 얻는 경로는 다르지만(명단 복사 / 직접 입력)
@@ -101,6 +115,11 @@ export default function StartPage() {
    *  표시된 학급과 [결과지 받기 →]가 실제로 보내는 코드가 갈린다. */
   const [clsCode, setClsCode] = useState('')
   const [roster, setRoster] = useState<RosterChild[]>([])
+  // 쓰기 기록지 — 인쇄 창 재료와 스캔 대기 수. 코드 조회가 채우고 코드를 고치면 비운다(명단과 같은 수명).
+  const [sheet, setSheet] = useState<CodeLookup['sheet'] | null>(null)
+  const [scanPending, setScanPending] = useState(0)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const closeSheet = useCallback(() => setSheetOpen(false), [])
   const [pick, setPick] = useState('') // 드롭다운에서 고른 아동 번호(Select 계약이 문자열)
   const [childNo, setChildNo] = useState('')
   const [name, setName] = useState('')
@@ -242,7 +261,7 @@ export default function StartPage() {
     // 고치려던 검사자가 그동안 아무것도 할 수 없다 — 바로 그 순간을 막으려고 codeTouched를
     // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
     if (!auto) setBusy(true)
-    const r = await postJson<ClassInfo & { roster: RosterChild[] }>('/api/sessions/verify-code',
+    const r = await postJson<CodeLookup>('/api/sessions/verify-code',
       { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
     if (!auto) setBusy(false)
     // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
@@ -257,6 +276,8 @@ export default function StartPage() {
     setCls(r.data)
     setClsCode(target)
     setRoster(r.data.roster)
+    setSheet(r.data.sheet ?? null)
+    setScanPending(r.data.scanPending ?? 0)
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
 
@@ -348,6 +369,19 @@ export default function StartPage() {
       {resultsBusy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : '결과지 받기 →'}
     </button>
   )
+  /** 배너의 [쓰기 기록지 인쇄 →] — 「결과지 받기 →」와 같은 모양의 선생님용 링크(사용자 확정 2026-09-30). */
+  const sheetButton = sheet && (
+    <button type="button" onClick={() => setSheetOpen(true)}
+      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2">
+      쓰기 기록지 인쇄 →
+    </button>
+  )
+  /** 스캔 대기 안내 — 선생님이 아이마다 보는 화면이라 올리는 것을 잊지 않게 한다. 0명이면 줄이 없다. */
+  const scanWaitLine = scanPending > 0 && (
+    <p className="mt-1.5 flex w-fit rounded-lg bg-amber/10 px-2.5 py-1 text-[12.5px] font-bold text-amber">
+      스캔 대기 {scanPending}명 · 결과지 화면에서 올려 주세요
+    </p>
+  )
   /** 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색. */
   const resultsNotice = resultsErr
     ? <p role="alert" className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">{resultsErr}</p>
@@ -426,6 +460,7 @@ export default function StartPage() {
               setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
                 setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
+                setSheet(null); setScanPending(0)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
@@ -439,12 +474,13 @@ export default function StartPage() {
                 충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
             {/* 「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게
                 (사용자 확정 2026-09-22 ①). 오른쪽 [결과지 받기 →]는 위 requestResults 주석 참고. */}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
+            <div className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
               <span>
                 {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명 ·
                 검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
               </span>
-              {resultsButton}
+              {scanWaitLine}
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
             </div>
             {resultsNotice}
             <label className={labelCls} htmlFor="pick">검사할 학생</label>
@@ -478,9 +514,10 @@ export default function StartPage() {
                 채로 남는다. 그 배너 옆 [결과지 받기 →]는 **입력된 코드**로 보내므로, 남겨 두면
                 화면이 가리키는 학급과 실제 동작 대상이 갈린다. */}
             {cls && clsCode === cleanCode && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
+              <div className="mt-4 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
                 <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
-                {resultsButton}
+                {scanWaitLine}
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
               </div>
             )}
             {resultsNotice}
@@ -672,6 +709,12 @@ export default function StartPage() {
         </ConfirmDialog>
       )}
       <LoadingOverlay show={busy && !confirm} />
+      {sheetOpen && cls && sheet && (
+        <WritingSheetDialog onClose={closeSheet}
+          cls={{ schoolName: cls.schoolName, grade: cls.grade, classNo: cls.classNo }}
+          tag={sheet.tag} layout={sheet.layout}
+          roster={roster.map(r => ({ childNo: r.childNo, name: r.name, writing: r.writing }))} />
+      )}
     </main>
   )
 }

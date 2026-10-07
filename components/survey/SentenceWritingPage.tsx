@@ -8,8 +8,10 @@
 import { itemMaxWords } from '@/lib/scoring'
 import type { SurveyItem } from '@/lib/items'
 
-export function SentenceWritingPage({ items, value, onChange }: {
+export function SentenceWritingPage({ items, value, onChange, toggle }: {
   items: SurveyItem[]
+  /** 쓰기 방식 고르기(WritingModeToggle) — 카드 맨 위에 둔다 */
+  toggle?: React.ReactNode
   /** itemCode → 정확히 쓴 어절 수(미선택은 키 없음) */
   value: Record<string, number>
   onChange: (code: string, v: number) => void
@@ -19,6 +21,7 @@ export function SentenceWritingPage({ items, value, onChange }: {
 
   return (
     <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
+      {toggle && <div className="mb-4">{toggle}</div>}
       <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 문장을 정확하게 썼나요?</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-mute">
         정확하게 쓴 어절의 개수를 골라 주세요. 어절 하나가 1점입니다.

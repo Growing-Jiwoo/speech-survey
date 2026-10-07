@@ -1,5 +1,6 @@
 import type { RosterChild } from './roster'
 import { sessionProgress, type SessionProgress } from './session-progress'
+import { scanTargetState, type ScanTargetState } from './scan-mapping'
 import { sb } from './supabase'
 
 const fail = (e: { message: string } | null) => { if (e) throw new Error(e.message) }
@@ -76,8 +77,16 @@ export interface SentenceTime { itemCode: string; seconds: number }
 
 export type SubmitResult = 'ok' | 'not_found' | 'already_submitted'
 
+/** 쓰기 방식 — 검사 중 쓰기 단계에서 고르고 제출할 때 확정한다(migration 006).
+ *  screen = 선생님이 화면에서 표시 · scan = 기록지 스캔본을 올리면 담당자가 채점 */
+export type WritingMode = 'screen' | 'scan'
+
 export interface SubmitInput {
   sessionId: string
+  /** scan이면 쓰기 답이 비어 온다(라우트가 비운다) — 담당자가 스캔본을 보고 채점한다 */
+  writingMode: WritingMode
+  /** 이 양식의 쓰기 과제 — scan이면 제출 전에 **남아 있는** 쓰기 답을 지운다(submitSession 안 주석) */
+  writingTask?: { kind: 'word' | 'sentence'; codes: string[] }
   /** 낱말 쓰기 양식(G1)에서만 채워진다 */
   writing: WritingAnswer[]
   /** 문장 쓰기 양식(G2)에서만 채워진다 */
@@ -92,7 +101,7 @@ export interface SubmitInput {
  * ⚠️ 순서를 되돌리지 말 것. 예전에는 `submitted_at`을 먼저 확정하고 쓰기 답을 나중에
  * 넣었는데, 그 사이에 일시 장애가 끼면 **쓰기 점수가 영구히 사라졌다**: 함수가 던져
  * 라우트가 502를 주고, 검사자가 다시 [제출]을 누르면 세션이 이미 제출 상태라 409로
- * 막힌다. 쓰기 채점(낱말 쓰기·문장 쓰기)은 녹음이 없어 **검사 중 검사자 입력이 유일한
+ * 막힌다. (화면 방식) 쓰기 채점(낱말 쓰기·문장 쓰기)은 녹음이 없어 **검사 중 검사자 입력이 유일한
  * 채점 경로**이므로(README "문항 구성") 관리자 결과지에서 채울 수도 없다 — 10점 만점
  * 과제가 기록에서 통째로 빈다. 검사자는 "제출 실패"와 "이미 제출됨"이 모순돼 갇힌다.
  *
@@ -101,7 +110,7 @@ export interface SubmitInput {
  * (사용자 확정 2026-08-21 — 임상 규칙 아님, 실패 모드 비교에 따른 개발 판단)
  */
 export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
-  const { sessionId, writing, sentenceWriting, checklist } = input
+  const { sessionId, writingMode, writingTask, writing, sentenceWriting, checklist } = input
 
   // 쓰기 답보다 먼저 상태를 본다: 미존재 세션에 답을 넣으면 FK 위반으로 던져
   // 404·409를 구분할 수 없고, 제출된 세션은 애초에 잠겨 있어야 한다.
@@ -121,17 +130,24 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
   }
-
   // `.is('submitted_at', null)`은 여기 남겨 둔다 — 위 상태 확인과 이 업데이트 사이에
   // 다른 기기가 제출했을 때 재제출을 막는 것은 이 조건뿐이다(경쟁 조건의 최종 방어).
   const { data, error } = await sb().from('sessions')
-    .update({ checklist, submitted_at: new Date().toISOString() })
+    // 쓰기 방식도 제출과 **같은 업데이트**로 확정한다 — 따로 쓰면 둘 사이 실패에서 「제출됐는데 방식이
+    // 기본값(screen)」인 검사가 생겨, 스캔본을 기다리는 아이가 「쓰기 채점 전」에 영영 머문다.
+    .update({ checklist, writing_mode: writingMode, submitted_at: new Date().toISOString() })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
     const after = await sessionState(sessionId)
     return after.state === 'submitted' ? 'already_submitted' : 'not_found'
   }
+  // 스캔본 방식이면 앞선 제출 시도가 남긴 쓰기 답을 지운다 — 화면 방식으로 제출하다 확정 직전에 실패하고
+  // 방식을 바꿔 다시 제출하면, 「저장하지 않음」만으로는 그 답이 남아 담당자가 넣은 점수처럼 보이고(「스캔」 표시)
+  // 스캔본 올리기도 「채점이 시작됨」으로 막힌다. **확정이 통과한 뒤에** 지운다 — 확정 전에 지우면 두 탭이 서로
+  // 다른 방식으로 거의 동시에 제출했을 때 먼저 확정된 화면 방식의 쓰기를 늦은 쪽이 지운다(늦은 쪽의 확정은
+  // 위 조건으로 막혀 여기까지 오지 않는다). 여기서 실패하면 담당자가 결과지의 「쓰기 채점 지우기」로 복구한다.
+  if (writingMode === 'scan' && writingTask) await saveWriting(sessionId, writingTask.kind, [], writingTask.codes)
   return 'ok'
 }
 
@@ -167,6 +183,24 @@ export async function saveScores(
 }
 
 /**
+ * 담당자의 쓰기 채점 저장 — **스캔본 방식 검사만**(라우트가 쓰기 방식을 확인한다).
+ * 화면에서 바로 표시한 검사의 쓰기는 여전히 검사 중 입력이 유일한 채점 경로이고 여기서 고치지 않는다
+ * (그 근거는 사용자 확정 2026-08-13 — 쓰기는 녹음이 없어 검사자 입력이 유일한 채점 경로). 저장 위치는 제출과 같다 — 낱말 쓰기(G1) writing_answers, 문장 쓰기(G2)
+ * sentence_scores의 sw.. 코드 — 그래야 채점·결과보고서가 방식과 무관하게 같은 경로로 읽는다.
+ * 「보낸 것이 전부」(PUT 의미)는 다른 채점과 같다: 지운 칸의 옛 값이 남지 않게 교체한다.
+ */
+export async function saveWriting(
+  sessionId: string, kind: 'word' | 'sentence', entries: SentenceScore[], ownedCodes: string[],
+): Promise<void> {
+  if (kind === 'word')
+    await replaceOwnedRows('writing_answers', sessionId,
+      entries.map(e => ({ session_id: sessionId, item_code: e.itemCode, can_write: e.words >= 1 })), ownedCodes)
+  else
+    await replaceOwnedRows('sentence_scores', sessionId,
+      entries.map(e => ({ session_id: sessionId, item_code: e.itemCode, words: e.words })), ownedCodes)
+}
+
+/**
  * 세션의 `ownedCodes` 행을 `rows`로 **교체**한다 — "보낸 것이 전부"(PUT 의미).
  * upsert만 하면 채점자가 화면에서 지운 칸의 옛 값이 DB에 남아, 화면 총점과 저장된 총점이
  * 어긋난 채로 결과지가 나간다.
@@ -175,7 +209,7 @@ export async function saveScores(
  * 이번에 보내지 않은 행만 지운다. 중간에 실패해도 기존 값은 남는다.
  */
 async function replaceOwnedRows(
-  table: 'sentence_scores' | 'sentence_times', sessionId: string,
+  table: 'sentence_scores' | 'sentence_times' | 'writing_answers', sessionId: string,
   rows: { item_code: string }[], ownedCodes: string[],
 ): Promise<void> {
   if (rows.length > 0) {
@@ -197,12 +231,17 @@ async function replaceOwnedRows(
  *  라우트가 세션의 양식으로 검증해야 한다. 어차피 같은 행을 읽으니 질의는 늘지 않는다. */
 export async function sessionState(sessionId: string): Promise<{
   state: 'missing' | 'open' | 'submitted'; grade: number
+  /** 쓰기 방식 — 관리자 채점 라우트가 「스캔본 검사만 쓰기를 고칠 수 있다」를 판정한다 */
+  writingMode: WritingMode
 }> {
   const { data, error } = await sb().from('sessions')
-    .select('submitted_at, grade').eq('id', sessionId).maybeSingle()
+    .select('submitted_at, grade, writing_mode').eq('id', sessionId).maybeSingle()
   fail(error)
-  if (!data) return { state: 'missing', grade: 0 }
-  return { state: data.submitted_at ? 'submitted' : 'open', grade: data.grade as number }
+  if (!data) return { state: 'missing', grade: 0, writingMode: 'screen' }
+  return {
+    state: data.submitted_at ? 'submitted' : 'open', grade: data.grade as number,
+    writingMode: data.writing_mode === 'scan' ? 'scan' : 'screen',
+  }
 }
 
 /** 세션당 녹음 행 수(업로드 총량 상한 검사용). */
@@ -231,21 +270,146 @@ const STORAGE_LIST_PAGE = 100
  * - 스토리지 → 행 순서 유지: 중간 실패 시 세션 행이 남아 관리자가 재시도할 수 있다.
  */
 export async function deleteSession(id: string): Promise<void> {
-  const paths: string[] = []
-  for (let offset = 0; ; offset += STORAGE_LIST_PAGE) {
-    const { data: objs, error: listErr } = await sb().storage.from('recordings')
-      .list(id, { limit: STORAGE_LIST_PAGE, offset })
-    fail(listErr)
-    if (!objs || objs.length === 0) break
-    paths.push(...objs.map(o => `${id}/${o.name}`))
-    if (objs.length < STORAGE_LIST_PAGE) break
-  }
-  if (paths.length > 0) {
-    const { error: rmErr } = await sb().storage.from('recordings').remove(paths)
-    fail(rmErr)
+  // 녹음과 쓰기 기록지 스캔본(아이 필적) 둘 다 {id}/ 아래에 있다 — 둘 다 지운 뒤에 행을 지운다.
+  for (const bucket of ['recordings', SCAN_BUCKET] as const) {
+    const paths = await listPrefix(bucket, id)
+    if (paths.length > 0) {
+      const { error: rmErr } = await sb().storage.from(bucket).remove(paths)
+      fail(rmErr)
+    }
   }
   const { error } = await sb().from('sessions').delete().eq('id', id)
   fail(error)
+}
+
+/** 버킷의 {prefix}/ 아래 객체 경로 전부 — list()는 한 번에 100개까지라 페이지를 넘기며 모은다. */
+async function listPrefix(bucket: string, prefix: string): Promise<string[]> {
+  const paths: string[] = []
+  for (let offset = 0; ; offset += STORAGE_LIST_PAGE) {
+    const { data: objs, error: listErr } = await sb().storage.from(bucket)
+      .list(prefix, { limit: STORAGE_LIST_PAGE, offset })
+    fail(listErr)
+    if (!objs || objs.length === 0) break
+    paths.push(...objs.map(o => `${prefix}/${o.name}`))
+    if (objs.length < STORAGE_LIST_PAGE) break
+  }
+  return paths
+}
+
+// ---------- 쓰기 기록지 스캔본 (migration 006) ----------
+
+/** 스캔본 버킷. 비공개 — 관리자에게만 서명 URL을 준다. 선생님은 올리기만 한다. */
+const SCAN_BUCKET = 'writing-scans'
+
+export interface WritingScanRow {
+  session_id: string; path: string; content_type: string; bytes: number; uploaded_at: string
+}
+
+/** 스캔본을 올릴 수 있는지 판단할 재료 — 한 번의 조회로 가져온다(라우트가 판정한다). */
+export interface ScanUploadTarget {
+  class_code_id: string; child_no: number; grade: number; submitted_at: string | null; writing_mode: WritingMode
+  writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[]
+  scan: WritingScanRow | null
+}
+
+/** 1:1 관계 select는 객체로, 아니면 배열로 온다 — 어느 쪽이든 행 하나(또는 null)로 맞춘다. */
+function one<T>(v: T | T[] | null | undefined): T | null {
+  return Array.isArray(v) ? (v[0] ?? null) : (v ?? null)
+}
+
+export async function scanUploadTarget(sessionId: string): Promise<ScanUploadTarget | null> {
+  const { data, error } = await sb().from('sessions')
+    .select('class_code_id, child_no, grade, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), '
+      + 'writing_scans(session_id, path, content_type, bytes, uploaded_at)')
+    .eq('id', sessionId).maybeSingle()
+  fail(error)
+  if (!data) return null
+  const r = data as unknown as Omit<ScanUploadTarget, 'scan'> & { writing_scans: WritingScanRow | WritingScanRow[] | null }
+  return {
+    class_code_id: r.class_code_id, child_no: r.child_no, grade: r.grade, submitted_at: r.submitted_at, writing_mode: r.writing_mode,
+    writing_answers: r.writing_answers ?? [], sentence_scores: r.sentence_scores ?? [], scan: one(r.writing_scans),
+  }
+}
+
+/**
+ * 같은 학급·같은 번호 아이의 **가장 최근에 제출된 검사** id — 스캔본이 붙을 검사(lib/results-view
+ * scanTargetSession과 같은 규칙, started_at 기준). 제출된 검사가 없으면 null.
+ * 올리기 라우트가 화면이 보낸 검사와 대조한다 — 열어 둔 지 오래된 결과지 탭은 그사이 제출된 재검사를 몰라,
+ * 새 기록지를 앞 차수 검사에 붙인다(QR에는 반과 번호만 있다).
+ */
+export async function latestSubmittedSessionId(classCodeId: string, childNo: number): Promise<string | null> {
+  const { data, error } = await sb().from('sessions').select('id')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo).not('submitted_at', 'is', null)
+    .order('started_at', { ascending: false }).limit(1)
+  fail(error)
+  return (data?.[0] as { id: string } | undefined)?.id ?? null
+}
+
+export async function uploadScanObject(path: string, bytes: Buffer, mime: string): Promise<void> {
+  const doUpload = () => sb().storage.from(SCAN_BUCKET).upload(path, bytes, { contentType: mime, upsert: false })
+  let { error } = await doUpload()
+  if (!error) return
+  ;({ error } = await doUpload())  // 일시 오류는 한 번 더(녹음 업로드와 같은 방침)
+  // 경로가 매번 새것이라 「이미 있음」은 첫 시도가 저장됐는데 응답만 끊긴 것이다 — 성공으로 본다
+  if (error && /exist|duplicate/i.test(error.message)) return
+  if (error) throw new Error(`스캔본 업로드 실패: ${error.message}`)
+}
+
+/** 스캔본 행을 넣거나 바꾼다(세션당 한 장). */
+export async function upsertWritingScan(r: { sessionId: string; path: string; contentType: string; bytes: number }): Promise<void> {
+  const { error } = await sb().from('writing_scans').upsert({
+    session_id: r.sessionId, path: r.path, content_type: r.contentType, bytes: r.bytes,
+    uploaded_at: new Date().toISOString(),
+  }, { onConflict: 'session_id' })
+  fail(error)
+}
+
+/** 스캔본 행을 앞 상태로 되돌린다 — 옛 행이 있었으면 그 값으로, 없었으면 지운다(업로드 경쟁의 보상). */
+export async function restoreWritingScan(sessionId: string, prev: WritingScanRow | null): Promise<void> {
+  const { error } = await (prev
+    ? sb().from('writing_scans').upsert(prev, { onConflict: 'session_id' })
+    : sb().from('writing_scans').delete().eq('session_id', sessionId))
+  fail(error)
+}
+
+/** 지금 붙어 있는 스캔본의 올린 시각 — 담당자가 **본 그림**으로 채점하는지 저장 라우트가 대조한다. 없으면 null. */
+export async function scanUploadedAt(sessionId: string): Promise<string | null> {
+  const { data, error } = await sb().from('writing_scans').select('uploaded_at').eq('session_id', sessionId).maybeSingle()
+  fail(error)
+  return (data as { uploaded_at: string } | null)?.uploaded_at ?? null
+}
+
+export async function removeScanObjects(paths: string[]): Promise<void> {
+  if (paths.length === 0) return
+  const { error } = await sb().storage.from(SCAN_BUCKET).remove(paths)
+  fail(error)
+}
+
+export async function signedScanUrl(path: string): Promise<string> {
+  const { data, error } = await sb().storage.from(SCAN_BUCKET).createSignedUrl(path, 3600)
+  fail(error)
+  return data!.signedUrl
+}
+
+/**
+ * 담당자의 「연결 해제」 — 다른 아이 기록지가 잘못 붙었을 때(또는 스캔본 없이 잘못 넣은 쓰기를 지울 때).
+ * 스캔본(파일·행)과 **그 스캔본으로 넣은 쓰기 채점**을 함께 지워 「스캔 대기」로 되돌린다. 채점만 남기면
+ * 근거 그림 없이 점수가 남는다.
+ * 채점 → 행 → 파일 순서: 어디서 실패해도 **행이 가리키는 파일은 남아 있다** — 결과지가 열리고 다시 누를 수
+ * 있다. 파일을 먼저 지우면 그 뒤가 실패했을 때 행이 없는 파일을 가리켜 서명 URL부터 실패한다. 마지막 파일
+ * 삭제가 실패하면 고아 파일일 뿐이고(가리키는 행이 없다) 검사를 지울 때 폴더째 정리된다 — 로그만 남긴다.
+ */
+export async function unlinkWritingScan(
+  sessionId: string, kind: 'word' | 'sentence', ownedCodes: string[],
+): Promise<void> {
+  await saveWriting(sessionId, kind, [], ownedCodes)
+  const { error } = await sb().from('writing_scans').delete().eq('session_id', sessionId)
+  fail(error)
+  try {
+    await removeScanObjects(await listPrefix(SCAN_BUCKET, sessionId))
+  } catch (e) {
+    console.error('[unlinkWritingScan] 스캔본 파일 정리 실패(행은 지웠다)', e)
+  }
 }
 
 /**
@@ -430,24 +594,54 @@ export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
  *  참고(advisory, 실제 고치지는 않음): 직접 입력 모드로 만든 세션의 child_no가 우연히 명단의
  *  번호와 같으면, 그 세션이 명단에 없는 아이 것이라도 이 함수는 명단의 그 번호를 "검사함"으로
  *  표시한다 — child_no만으로 매칭하고 명단 소속 여부까지 확인하지 않기 때문이다. */
-export async function rosterWithTested(classCodeId: string): Promise<{
-  childNo: number; name: string; gender: '남' | '여'; birthYmd: string
-  tested: 'submitted' | 'inProgress' | null
-}[]> {
+export async function rosterWithTested(
+  classCodeId: string,
+  /** 쓰기 문항 코드인지 — sentence_scores에 문장 읽기(rs..)와 문장 쓰기(sw..)가 섞여 있어 가려낸다(학년 양식이 정한다) */
+  isWritingCode: (code: string) => boolean,
+): Promise<{
+  roster: {
+    childNo: number; name: string; gender: '남' | '여'; birthYmd: string
+    tested: 'submitted' | 'inProgress' | null
+    /** 쓰기 상태(가장 최근에 제출된 검사 기준) — 기록지 인쇄 창이 「화면 입력함·스캔 올림·스캔 대기」를 보인다. 검사가 없으면 null */
+    writing: ScanTargetState | null
+  }[]
+  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, 위 쓰기 상태 기준) — 시작 화면 배너 */
+  scanPending: number
+}> {
   const roster = await listRoster(classCodeId)
-  const { data, error } = await sb().from('sessions').select('child_no, submitted_at')
-    .eq('class_code_id', classCodeId)
+  const { data, error } = await sb().from('sessions')
+    .select('child_no, started_at, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), writing_scans(session_id)')
+    .eq('class_code_id', classCodeId).order('started_at')
   fail(error)
   const state = new Map<number, 'submitted' | 'inProgress'>()
-  for (const s of data ?? []) {
+  // 쓰기 상태는 스캔본이 붙을 검사 기준 — **가장 최근에 제출된 검사**, 없으면 가장 최근 검사
+  // (lib/results-view scanTargetSession과 같은 규칙: 그만둔 재검사가 앞 차수의 스캔 대기를 가리지 않게).
+  // started_at 오름차순이라 뒤에 오는 값이 더 최근이다.
+  const writing = new Map<number, ScanTargetState>()
+  for (const s of (data ?? []) as unknown as ClassWritingRow[]) {
     const cur = state.get(s.child_no)
     if (s.submitted_at) state.set(s.child_no, 'submitted')
     else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
+    if (!s.submitted_at && cur === 'submitted') continue
+    writing.set(s.child_no, scanTargetState({
+      // 컬럼은 not null default 'screen'이다 — 그래도 scan이 아닌 값은 전부 화면 방식으로 읽는다(스캔 대기로 잘못 세지 않게)
+      submitted: !!s.submitted_at, mode: s.writing_mode === 'scan' ? 'scan' : 'screen', hasScan: one(s.writing_scans) !== null,
+      hasWriting: [...(s.writing_answers ?? []), ...(s.sentence_scores ?? [])].some(x => isWritingCode(x.item_code)),
+    }))
   }
-  return roster.map(r => ({
-    childNo: r.child_no, name: r.child_name, gender: r.gender, birthYmd: r.birth_ymd,
-    tested: state.get(r.child_no) ?? null,
-  }))
+  return {
+    roster: roster.map(r => ({
+      childNo: r.child_no, name: r.child_name, gender: r.gender, birthYmd: r.birth_ymd,
+      tested: state.get(r.child_no) ?? null, writing: writing.get(r.child_no) ?? null,
+    })),
+    scanPending: [...writing.values()].filter(w => w === 'wait').length,
+  }
+}
+
+interface ClassWritingRow {
+  child_no: number; started_at: string; submitted_at: string | null; writing_mode: WritingMode
+  writing_answers: { item_code: string }[] | null; sentence_scores: { item_code: string }[] | null
+  writing_scans: { session_id: string } | { session_id: string }[] | null
 }
 
 export type ClassCodeListRow = ClassCodeRow & {
@@ -490,12 +684,15 @@ export async function findClassCodeById(id: string): Promise<ClassCodeRow | null
 
 /** 교사 결과지용 세션 행 — `lib/results.ts`의 `ResultsSessionRow`와 모양을 맞춘다. */
 export type ClassResultsRow = Pick<SessionRow,
-  'id' | 'child_no' | 'child_name' | 'gender' | 'grade' | 'birth_ymd' | 'checklist' | 'started_at' | 'submitted_at'> & {
+  'id' | 'child_no' | 'child_name' | 'gender' | 'grade' | 'birth_ymd' | 'checklist' | 'started_at' | 'submitted_at'
+  | 'writing_mode'> & {
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_scores: { item_code: string; words: number }[]
   sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
+  /** 스캔본이 올라왔으면 그 시각 — 1:1이라 행 하나 또는 null(select가 배열로 줄 때도 맞춘다) */
+  writing_scan: { uploaded_at: string } | null
 }
 
 /**
@@ -505,14 +702,16 @@ export type ClassResultsRow = Pick<SessionRow,
  */
 export async function classResults(classCodeId: string): Promise<ClassResultsRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select('id, child_no, child_name, gender, grade, birth_ymd, checklist, started_at, submitted_at, '
+    .select('id, child_no, child_name, gender, grade, birth_ymd, checklist, started_at, submitted_at, writing_mode, '
       + 'recordings(item_code), reading_marks(item_code, correct), '
       + 'sentence_scores(item_code, words), sentence_times(item_code, seconds), '
-      + 'writing_answers(item_code, can_write)')
+      + 'writing_answers(item_code, can_write), writing_scans(uploaded_at)')
     .eq('class_code_id', classCodeId)
     .order('started_at')
   fail(error)
-  return (data ?? []) as unknown as ClassResultsRow[]
+  return ((data ?? []) as unknown as (Omit<ClassResultsRow, 'writing_scan'> & {
+    writing_scans: { uploaded_at: string } | { uploaded_at: string }[] | null
+  })[]).map(({ writing_scans, ...r }) => ({ ...r, writing_scan: one(writing_scans) }))
 }
 
 /** 담임 이메일 수정 — 잘못 등록된 주소를 관리자가 바로잡는 유일한 경로(결과지 링크가 이 주소로만
@@ -589,6 +788,8 @@ export interface SessionRow {
   /** 최초 수정 직전의 아동 식별값. 두 번째 수정부터는 덮어쓰지 않는다 —
    *  알고 싶은 것은 "처음 들어온 값"이지 중간 단계가 아니다 */
   original_identity: OriginalIdentity | null
+  /** 쓰기 방식(migration 006). 도입 전 검사는 기본값 screen — 그때는 화면 입력뿐이었다 */
+  writing_mode: WritingMode
 }
 
 /** 수정 전 아동 식별값 스냅샷(jsonb). 표시 전용이라 읽기만 한다. */
@@ -603,7 +804,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]
@@ -611,6 +812,8 @@ export type SessionListRow = SessionRow & {
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
   sentence_scores: { item_code: string; words: number }[]
+  /** 쓰기 기록지 스캔본이 올라왔는지(1:1이라 객체·배열·null 어느 모양으로도 온다 — sessionProgress가 흡수) */
+  writing_scans?: { session_id: string } | { session_id: string }[] | null
   /** 진행률 — listSessions가 서버에서 계산해 싣는다(화면이 lib/forms를 import하지 않도록) */
   progress: SessionProgress
 }
@@ -619,7 +822,7 @@ const MAX_LIST_ROWS = 5000
 
 export async function listSessions(): Promise<SessionListRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words)`)
+    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), writing_scans(session_id)`)
     .order('started_at', { ascending: false })
     .limit(MAX_LIST_ROWS)
   fail(error)
@@ -641,9 +844,11 @@ export interface SentenceTimeRow { item_code: string; seconds: number }
 export async function sessionDetail(sessionId: string): Promise<{
   session: SessionRow | null; recordings: RecordingRow[]; writing: WritingRow[]
   marks: MarkRow[]; sentences: SentenceScoreRow[]; times: SentenceTimeRow[]
+  /** 쓰기 기록지 스캔본(스캔 방식이고 올라왔을 때만) */
+  scan: WritingScanRow | null
 }> {
   const [{ data: s, error: e1 }, { data: recs, error: e2 }, { data: ans, error: e3 },
-    { data: mk, error: e4 }, { data: ss, error: e5 }, { data: st, error: e6 }] = await Promise.all([
+    { data: mk, error: e4 }, { data: ss, error: e5 }, { data: st, error: e6 }, { data: sc, error: e7 }] = await Promise.all([
       sb().from('sessions').select(SESSION_COLS).eq('id', sessionId).maybeSingle(),
       sb().from('recordings').select('item_code, attempt_no, audio_path, duration_sec, created_at')
         .eq('session_id', sessionId).order('item_code').order('attempt_no'),
@@ -651,8 +856,9 @@ export async function sessionDetail(sessionId: string): Promise<{
       sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
       sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
       sb().from('sentence_times').select('item_code, seconds').eq('session_id', sessionId),
+      sb().from('writing_scans').select('session_id, path, content_type, bytes, uploaded_at').eq('session_id', sessionId).maybeSingle(),
     ])
-  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5); fail(e6)
+  fail(e1); fail(e2); fail(e3); fail(e4); fail(e5); fail(e6); fail(e7)
   return {
     session: (s as unknown as SessionRow) ?? null,
     recordings: (recs ?? []) as RecordingRow[],
@@ -660,5 +866,6 @@ export async function sessionDetail(sessionId: string): Promise<{
     marks: (mk ?? []) as MarkRow[],
     sentences: (ss ?? []) as SentenceScoreRow[],
     times: (st ?? []) as SentenceTimeRow[],
+    scan: (sc as WritingScanRow | null) ?? null,
   }
 }

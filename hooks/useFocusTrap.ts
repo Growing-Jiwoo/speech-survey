@@ -15,11 +15,14 @@ export function useFocusTrap(active: boolean, onEscape?: () => void) {
     const container = ref.current
     if (!container) return
     const prevFocused = document.activeElement as HTMLElement | null
-    const focusables = () => Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE))
+    // inert로 막힌 부분(안쪽 겹창 뒤)은 셀 대상에서 뺀다 — 넣으면 순환의 끝이 포커스할 수 없는 칸이 돼 창 밖으로 샌다
+    const focusables = () => Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => !el.closest('[inert]'))
     focusables()[0]?.focus()
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onEscapeRef.current?.(); return }
+      // 안쪽 컴포넌트가 이미 Esc를 처리했으면(드롭다운 닫기 — preventDefault) 다이얼로그는 닫지 않는다.
+      // 안 가르면 드롭다운을 닫으려던 Esc 한 번에 다이얼로그까지 닫혀 그 안의 작업이 사라진다.
+      if (e.key === 'Escape') { if (!e.defaultPrevented) onEscapeRef.current?.(); return }
       if (e.key !== 'Tab') return
       const items = focusables()
       if (items.length === 0) return

@@ -16,7 +16,7 @@ import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
-import { clearState, loadState, type SurveyState } from '@/lib/survey-state'
+import { clearState, loadState, resolveWritingMode, type SurveyState } from '@/lib/survey-state'
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
@@ -56,10 +56,12 @@ export default function ReviewPage() {
   // 뜨면 검사자는 돌아가서 뭘 해야 하는 줄 알고, 진짜 빠뜨린 문항과도 섞여 버린다.
   const f = itemsFor(formQ.data)
   const pages = visiblePages(f, state)
+  // 스캔본 방식이면 쓰기는 「아직 못 한 것」이 아니다 — 담당자가 스캔본을 보고 채점한다(검사 화면과 같은 판정).
+  const scanWriting = resolveWritingMode(state) === 'scan'
   const skipped = (p: typeof pages[number]) => state.skipped.includes(p.code)
   const missingPages = pages.filter(p =>
     isRecordingPage(p) && !p.practice && !(state.recorded[p.code] > 0) && !skipped(p)).length
-  const missingWriting = pages
+  const missingWriting = scanWriting ? 0 : pages
     .filter(p => p.section === f.writingSection)
     .flatMap(p => p.items)
     .filter(i => state.writing[i.code] === undefined).length
@@ -87,7 +89,8 @@ export default function ReviewPage() {
                   : <StatusPill done={false} label="미녹음" />
             } else if (p.section === f.writingSection) {
               const done = p.items.filter(i => state.writing[i.code] !== undefined).length
-              pill = <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
+              pill = scanWriting ? <Badge tone="blue">스캔 예정</Badge>
+                : <StatusPill done={done === p.items.length} label={`${done} / ${p.items.length}`} />
             } else {
               pill = (
                 <span className="text-right text-xs text-ink-soft">
@@ -119,9 +122,11 @@ export default function ReviewPage() {
   async function submit() {
     if (!st) return
     setBusy(true); setErr('')
+    // 스캔본 방식이면 화면에 남아 있는 예/아니오를 보내지 않는다 — 쓰기 채점은 담당자가 스캔본으로 한다.
+    const writingMode = resolveWritingMode(st)
     const r = await postJson('/api/sessions/submit', {
-      sessionId: st.sessionId, sessionToken: st.sessionToken,
-      writing: st.writing, checklist: st.checklist,
+      sessionId: st.sessionId, sessionToken: st.sessionToken, writingMode,
+      writing: writingMode === 'scan' ? {} : st.writing, checklist: st.checklist,
     }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
