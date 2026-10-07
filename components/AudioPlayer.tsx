@@ -1,4 +1,4 @@
-// components/AudioPlayer.tsx — 채점용 오디오 플레이어(wavesurfer.js v7).
+// components/AudioPlayer.tsx — 채점용 오디오 플레이어(wavesurfer.js v8).
 // 파형 클릭/드래그 시크 · 배속(0.5~1.5×) · 키보드(Space/←/→) · 동시재생 1개 · onError 복구.
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -69,7 +69,7 @@ export function AudioPlayer({ src, durationSec, onError }: {
       barWidth: 2,
       barGap: 1,
       barRadius: 2,
-      dragToSeek: true, // v7 기본값은 false — 드래그 시크 요건 충족을 위해 명시적으로 켠다.
+      dragToSeek: true, // 기본값은 false(v7·v8 같다) — 드래그 시크 요건 충족을 위해 명시적으로 켠다.
     })
     wsRef.current = ws
     const stop = () => { ws.pause() }
