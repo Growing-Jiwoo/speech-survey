@@ -40,10 +40,7 @@ export function WritingSheet({ cls, tag, layout, entry }: {
           <h1 className="text-[24pt] font-bold leading-tight">{layout.kind === 'word' ? '낱말 쓰기' : '문장 쓰기'}</h1>
           <p className="mt-[1mm] text-[9pt] text-[#6e7994]">쓰기 기록지</p>
         </div>
-        <div className="flex flex-col items-center">
-          <SheetQr text={sheetQrText(tag, entry.childNo)} />
-          <span className="text-[7pt] text-[#6e7994]">가리지 마세요</span>
-        </div>
+        <SheetQr text={sheetQrText(tag, entry.childNo)} />
       </div>
       <table className="mt-[5mm] w-full border-collapse text-[11pt]">
         <tbody>
@@ -67,8 +64,7 @@ export function WritingSheet({ cls, tag, layout, entry }: {
           </div>
         ))}
       </div>
-      <div className="mt-auto flex justify-between border-t border-[#d6dbe5] pt-[2mm] text-[8pt] text-[#6e7994]">
-        <span>스캔: 흑백 · 300dpi · 오른쪽 위 네모를 가리지 마세요</span>
+      <div className="mt-auto flex justify-end border-t border-[#d6dbe5] pt-[2mm] text-[8pt] text-[#6e7994]">
         <span>채점이 끝날 때까지 보관해 주세요</span>
       </div>
     </section>
