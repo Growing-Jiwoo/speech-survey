@@ -93,6 +93,8 @@ interface Confirmed {
   cls: ClassInfo
   childNo: number
   name: string
+  /** 직접 입력한 번호가 명단의 다른 아이 번호와 같으면 그 아이 이름 — 확인 창이 알린다(아래 verify 주석) */
+  rosterClash?: string | null
   /** 이 확인 모달 한 번에 대응하는 멱등 키. **모달을 열 때 만들고 재시도 동안 유지한다** —
    *  `begin()` 안에서 만들면 실패 후 다시 누를 때마다 새 키가 나와 서버가 재시도를 구분할
    *  수 없다(연타·재전송이 그대로 세션 두 개가 된다). 모달을 닫고 다시 열면 새 키가 되므로
@@ -323,8 +325,12 @@ export default function StartPage() {
       return
     }
     setConfirmErr('')
+    // 명단 반에서 「명단에 없는 학생」으로 입력한 번호가 명단 아이의 번호와 같으면 알린다 — 전학생을 실수로 17번으로
+    // 넣으면 명단의 17번이 「검사함」이 되고 교사 결과지의 17번 줄 이름이 바뀌어, 진짜 17번을 빠뜨릴 수 있다
+    // (2026-10-08 야간 점검). 막지는 않는다 — 명단이 틀렸을 수도 있다.
+    const clash = roster.find(c => c.childNo === childNoNum && c.name !== cleanName)
     setConfirm({
-      cls: r.data, childNo: childNoNum, name: cleanName,
+      cls: r.data, childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
       identity: null, tested: r.data.alreadyTested,
       idemKey: crypto.randomUUID(),
     })
@@ -358,6 +364,9 @@ export default function StartPage() {
   }
 
   const filled = code.trim() && childNo !== '' && name.trim() && gender && year && month && day && consent
+  // 직접 입력에서 [확인]이 꺼져 있을 때 무엇이 비었는지 — 아래 안내 줄이 쓴다
+  const missing = [childNo === '' && '아동 번호', !name.trim() && '이름', !gender && '성별',
+    !(year && month && day) && '생년월일'].filter(Boolean) as string[]
   const canSubmit = step === 'code' ? !!code.trim()
     : step === 'roster' ? !!(pick && consent)
       : !!filled
@@ -489,14 +498,16 @@ export default function StartPage() {
                 라벨에 생년월일은 넣지 않는다 — 선택 시점에 신원 대조에 가장 덜 필요한 칸이라
                 확인 모달에서만 보여준다. */}
             <Select id="pick" ariaLabel="검사할 학생" placeholder="학생을 선택해 주세요"
-              className="mt-1.5" value={pick} onChange={setPick}
+              className="mt-1.5" value={pick} onChange={v => { setPick(v); setConsent(false) }}
               options={roster.map(r => ({
                 value: String(r.childNo),
                 label: `${r.childNo}번 ${r.name} (${r.gender})`,
                 // 이미 검사한 아동도 그대로 고를 수 있다 — 재검사는 허용이고(스펙 "중복 검사
                 // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
                 // 라벨에 이어 붙이지 않고 배지로 내보내는 이유는 Select의 badge 주석 참고.
-                badge: r.tested ? '검사함' : undefined,
+                // 진행 중(제출 전)과 제출을 가른다 — 둘 다 「검사함」이면 중간에 멈춘 아이를 끝난 아이로 보고
+                // 넘어가게 된다(위 배너의 「검사 완료 N명」도 제출만 센다).
+                badge: r.tested === 'submitted' ? '검사함' : r.tested === 'inProgress' ? '진행 중' : undefined,
               }))} />
             {/* 명단에서 고른 아동과 직접 입력할 아동은 서로 다른 아이다 — 코드 수정 때와 같은
                 이유로 보호자 동의 체크를 함께 푼다(위 onChange 주석 참고). 안 풀면 명단 아동으로
@@ -622,6 +633,11 @@ export default function StartPage() {
         {step !== 'code' && !consent && (
           <p className="mt-2 text-center text-[12px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
         )}
+        {/* 동의는 했는데 칸이 비어 [확인]이 꺼져 있으면 무엇이 빠졌는지 알린다 — 종전에는 버튼만 회색이라 성별·생년월일을
+            안 고른 줄 모르고 멈춰 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
+        {step === 'direct' && consent && missing.length > 0 && (
+          <p className="mt-2 text-center text-[12px] text-ink-mute">아직 비어 있는 칸이 있어요: {missing.join(', ')}</p>
+        )}
       </form>
       <p className="mt-auto pt-6 text-center text-[12px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
 
@@ -645,9 +661,9 @@ export default function StartPage() {
           명단 모드와 직접 입력 모드가 이 모달을 공유하므로 중복 검사 경고 문구도 한 벌뿐이다. */}
       {confirm && (
         <ConfirmDialog open busy={busy} error={confirmErr}
-          title={confirm.tested
-            ? `${confirm.childNo}번은 이미 검사했어요`
-            : '이 정보가 맞나요?'}
+          title={confirm.tested === 'inProgress'
+            ? `${confirm.childNo}번은 진행 중인 검사가 있어요`
+            : confirm.tested ? `${confirm.childNo}번은 이미 검사했어요` : '이 정보가 맞나요?'}
           confirmLabel={confirm.tested
             ? (isResumeChild(confirm.childNo) ? '그래도 새로 검사' : '네, 다시 검사할게요')
             : '맞아요, 시작하기'}
@@ -663,10 +679,14 @@ export default function StartPage() {
               <p className="mt-0.5 font-bold text-ink">
                 {confirm.cls.schoolName} {gradeClassLabel(confirm.cls.grade, confirm.cls.classNo)}
               </p>
-              <p className="mt-0.5 break-all text-[12.5px]">
+              {/* 이메일은 한 덩어리(inline-block)로 둔다 — 줄 전체에 break-all을 걸었을 때는 주소가 글자 중간에서
+                  잘렸고(「…@example.c / om」), 그냥 접으면 하이픈에서 잘렸다(「e2e- / teacher@…」, 2026-10-08 야간
+                  점검). 덩어리는 통째로 다음 줄로 가고, 칸보다 긴 주소만 그 안에서 접힌다(break-all). */}
+              <p className="mt-0.5 text-[12.5px]">
                 담임 {confirm.cls.teacherName}
-                {(confirm.cls.teacherPhone || confirm.cls.teacherEmail) && (
-                  <> · {[confirm.cls.teacherPhone, confirm.cls.teacherEmail].filter(Boolean).join(' · ')}</>
+                {confirm.cls.teacherPhone && <> · {confirm.cls.teacherPhone}</>}
+                {confirm.cls.teacherEmail && (
+                  <> · <span className="inline-block max-w-full break-all">{confirm.cls.teacherEmail}</span></>
                 )}
               </p>
             </div>
@@ -703,6 +723,12 @@ export default function StartPage() {
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 제출까지 끝난 검사가 있어요.<br />
                 다시 검사하면 새 결과가 추가로 남아요.
+              </p>
+            )}
+            {confirm.rosterClash && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
+                {confirm.childNo}번은 명단의 <b>{confirm.rosterClash}</b> 학생 번호예요.<br />
+                명단에 없는 학생이라면 번호를 다시 확인해 주세요.
               </p>
             )}
           </div>

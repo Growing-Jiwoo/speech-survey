@@ -94,6 +94,8 @@ function SurveyInner() {
   // 범위 검사에 페이지 수가 필요하므로 양식을 받은 뒤에 처리하고, 마운트당 한 번만 소비한다
   // (URL에서 p가 지워지기 전에 다시 돌면 같은 이동을 거듭 저장한다).
   const deepLinked = useRef(false)
+  /** 가운데 밴드(실제로 스크롤되는 곳) — 페이지를 옮길 때 맨 위로 되돌린다. window는 스크롤되지 않는다 */
+  const bandRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!form || deepLinked.current) return
     deepLinked.current = true
@@ -260,7 +262,7 @@ function SurveyInner() {
   function goToIdx(n: number) {
     patch({ pageIdx: n })
     setPracticeEnd(false)
-    window.scrollTo(0, 0)
+    bandRef.current?.scrollTo(0, 0)
   }
 
   function goNext() {
@@ -315,9 +317,25 @@ function SurveyInner() {
     const pending = pendingRetries[code]
     if (!pending || !st) return
     const { sessionId } = st
+    // 정상 녹음과 같이 「올리는 중」으로 센다 — 검토 화면이 끝날 때까지 제출을 잠그고(lib/upload-flight), 헤더도 「저장 중」
+    beginUpload(sessionId, code, pending.attemptNo)
+    setUploading(n => n + 1)
     const r = await uploadRecording({ sessionId, sessionToken: st.sessionToken,
       itemCode: code, attemptNo: pending.attemptNo, rec: pending.rec })
-    if (r.ok) { markSaved(code, pending.attemptNo, false); return }   // 이미 올라갔다 — 올리는 중 표시가 필요 없다
+      .finally(() => setUploading(n => n - 1))
+    if (r.ok) {
+      // 이미 올라갔다 — 저장 상태를 직접 고친다(그사이 검토 화면으로 옮겨 이 화면이 사라졌어도 「녹음 완료」가 남게)
+      const saved = (s: SurveyState) => ({ ...s, recorded: { ...s.recorded, [code]: (s.recorded[code] ?? 0) + 1 },
+        skipped: s.skipped.filter(c => c !== code) })
+      updateSavedState(sessionId, saved)
+      setSt(prev => prev && prev.sessionId === sessionId ? saved(prev) : prev)
+      setPendingRetries(prev => { const { [code]: _removed, ...rest } = prev; return rest })
+      setLostUploads(prev => prev.filter(c => c !== code))
+      setUploadNotice('')
+      endUpload(sessionId, code, pending.attemptNo)
+      return
+    }
+    endUpload(sessionId, code, pending.attemptNo)
     if (r.fatal) { setFatal(r.fatal); return }
     // 재시도도 4xx면 배너를 거둔다 — 더 눌러도 같다
     if (!r.retry) {
@@ -337,8 +355,14 @@ function SurveyInner() {
   // 응답 거부·모름도 유효한 관찰이다). 담당자 확정(2026-08-07): 별도 버튼을 만들지 않고
   // 기존 건너뛰기 버튼의 라벨만 바꾼다 — 근거 docs/superpowers/plans/2026-08-07-survey-session-controls.md
   // (연습 페이지는 제외한다 — 연습을 건너뛰는 것은 "모름"의 관찰이 아니라 그냥 넘기는 것이다.)
+  // **업로드가 실패해 재시도를 기다리는 화면은 「모르겠어요」가 아니다** — 아이는 읽었고 저장만 안 됐다. 라벨이 모르겠어요로
+  // 바뀌어 누르면 skipped로 남아, 검토 화면이 「모르겠어요」로 보이고 미완료로 세지 않은 채 제출돼 읽은 녹음이 X·0점이 됐다.
+  // 이 화면은 [다음]으로 넘어가고 검토 화면에는 「미녹음」(미완료)으로 남는다(2026-10-08 야간 점검).
+  // ⚠️ 담당자 확인 대기 — 확정 아님: 위 담당자 확정 규칙의 범위를 개발 판단으로 좁혔다. 물을 것 — 「아이가 읽었지만
+  // 저장에 실패한 화면도 녹음 없이 넘긴 것(모르겠어요)으로 보는가」.
   const skipping = !fromReview && !isLast && !page.practice
-    && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0
+    && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0 && !(page.code in pendingRetries)
+  const failedCount = Object.keys(pendingRetries).length
 
   // 섹션(주제) 진입 안내: 각 섹션의 첫 페이지에 처음 도달하면 안내 화면을 먼저 보여준다.
   // "첫 페이지"는 **진행 목록(pages) 기준**이다 — 양식의 고정 목록으로 판정하면 연습을
@@ -387,7 +411,9 @@ function SurveyInner() {
         ) : (
           <ProgressBar current={scoredNo} total={scoredTotal} />
         )}
-        {fromReview && (
+        {/* 주 버튼(「검토로 돌아가기」)과 같은 조건일 때만 보인다 — 녹음 중에 떠나 잘린 녹음이 올라가거나, 체크리스트를 비운 채·
+            쓰기를 덜 채운 채 검토로 돌아가 그대로 제출되는 길이었다(2026-10-08 야간 점검) */}
+        {fromReview && canNext && (
           <Link href="/review" className="mt-2 inline-block py-1 text-xs text-ink-mute underline">← 검토 화면으로 돌아가기</Link>
         )}
         {!showIntro && !practiceEnd && (
@@ -398,8 +424,9 @@ function SurveyInner() {
               {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
             </h1>
             {/* 업로드가 남아 있는 동안만 "저장 중"으로 바뀐다 — 진행을 막지 않고 상태만 알린다. */}
-            <p className="flex-none text-[12px] text-ink-mute" aria-live="polite">
-              {uploading > 0 ? '저장 중…' : '자동 저장됨'}
+            {/* 실패한 녹음이 있으면 「자동 저장됨」이라 말하지 않는다 — 아래 재시도 배너와 같은 사실을 헤더도 말한다 */}
+            <p className={`flex-none text-[12px] ${failedCount > 0 && uploading === 0 ? 'font-bold text-rec-deep' : 'text-ink-mute'}`} aria-live="polite">
+              {uploading > 0 ? '저장 중…' : failedCount > 0 ? `저장 실패 ${failedCount}개` : '자동 저장됨'}
             </p>
           </div>
         )}
@@ -407,7 +434,7 @@ function SurveyInner() {
 
       {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
           이 구역 안에서만 스크롤(헤더·내비는 그대로). */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={bandRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex min-h-full flex-col justify-center py-4">
           {practiceEnd ? (
             <PracticeEnd />
@@ -446,7 +473,8 @@ function SurveyInner() {
                   toggle={<WritingModeToggle mode={writingMode} onChange={changeWritingMode} />}
                   onChange={changeWriting}
                   onSetAll={v => patch(prev => ({
-                    writing: { ...prev.writing, ...Object.fromEntries(page.items.map(i => [i.code, v])) },
+                    // 아직 고르지 않은 칸만 채운다 — 이미 고른 값을 덮지 않는다(WritingPage 주석)
+                    writing: { ...Object.fromEntries(page.items.map(i => [i.code, v])), ...prev.writing },
                   }))} />
               )}
 

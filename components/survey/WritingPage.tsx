@@ -12,7 +12,9 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
   /** itemCode → 정확히 쓴 어절 수(1=예 / 0=아니오 / 미선택은 키 없음) */
   value: Record<string, number>
   onChange: (code: string, v: number) => void
-  /** 전체 선택 — 문항 수가 10개라 하나씩 누르는 부담을 덜어 준다 */
+  /** 남은 칸 일괄 선택 — 문항 수가 10개라 하나씩 누르는 부담을 덜어 준다. **고르지 않은 칸만** 채운다:
+   *  하나씩 고른 뒤 잘못 누르면 확인 없이 전부 덮였고, 검토 화면은 개수만 보여 잡을 수 없었다(2026-10-08 야간 점검).
+   *  그래서 하나라도 고르면 라벨이 「남은 칸 …」으로 바뀌고, 다 고르면 꺼진다. */
   onSetAll: (v: number) => void
 }) {
   const answered = items.filter(i => value[i.code] !== undefined).length
@@ -24,10 +26,10 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 낱말을 정확하게 썼나요?</p>
         <div className="flex gap-1.5">
-          {([['모두 예', 1], ['모두 아니오', 0]] as const).map(([label, v]) => (
-            <button key={label} type="button" onClick={() => onSetAll(v)}
-              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
-              {label}
+          {([['예', 1], ['아니오', 0]] as const).map(([label, v]) => (
+            <button key={label} type="button" onClick={() => onSetAll(v)} disabled={answered === required}
+              className="rounded-lg border-[1.5px] border-line bg-well px-2.5 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+              {answered === 0 ? `모두 ${label}` : `남은 칸 ${label}`}
             </button>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk,
   updateSavedState, withPendingUpload, withoutPendingUpload, settleLostUploads, LAST_KEY,
+  clearSessionState, markSubmitted, takeSubmitted,
   saveWritingModePref, writingModePref, resolveWritingMode, type SurveyState,
 } from '@/lib/survey-state'
 
@@ -327,3 +328,43 @@ describe('끊긴 업로드 — pendingUploads·settleLostUploads (사용자 확�
   })
 })
 
+
+describe('종료 화면 — 방금 제출한 검사만 치운다 (2026-10-08)', () => {
+  beforeEach(() => {
+    const store = new Map<string, string>()
+    ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage = {
+      getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: (i: number) => [...store.keys()][i] ?? null,
+      get length() { return store.size },
+    } as Storage
+  })
+  it('[REGRESSION] 뒤로가기로 종료 화면이 다시 열려도 그 사이 시작한 다음 아이의 진행은 남는다', () => {
+    saveState(newState('sid-1', '홍길동', 1, 'tok1', 1))
+    markSubmitted('sid-1')
+    clearState()                                      // 검토 화면이 제출 성공 때 지운다
+    const sid1 = takeSubmitted(); if (sid1) clearSessionState(sid1)   // 종료 화면
+    saveState(newState('sid-2', '김영희', 2, 'tok2', 1))           // 다음 아이 시작
+    // 뒤로가기로 종료 화면이 다시 열림 — 표시는 이미 꺼냈으므로 아무것도 치우지 않는다
+    const again = takeSubmitted(); if (again) clearSessionState(again)
+    expect(again).toBeNull()
+    expect(loadState()?.sessionId).toBe('sid-2')
+  })
+  it('clearSessionState는 그 세션 키만 지우고, 마지막 세션이 그 세션일 때만 LAST_KEY를 지운다', () => {
+    saveState(newState('sid-1', '홍길동', 1, 'tok1', 1))
+    saveState(newState('sid-2', '김영희', 2, 'tok2', 1))
+    clearSessionState('sid-1')
+    expect(localStorage.getItem('kodys-survey:sid-1')).toBeNull()
+    expect(loadState()?.sessionId).toBe('sid-2')
+    clearSessionState('sid-2')
+    expect(loadState()).toBeNull()
+    expect(localStorage.getItem(LAST_KEY)).toBeNull()
+  })
+  it('sessionStorage를 쓸 수 없어도 던지지 않는다', () => {
+    ;(globalThis as unknown as { sessionStorage: unknown }).sessionStorage = undefined
+    expect(() => markSubmitted('x')).not.toThrow()
+    expect(takeSubmitted()).toBeNull()
+  })
+})

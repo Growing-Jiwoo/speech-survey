@@ -44,20 +44,22 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
     onRecorded(rec)
   })
   const recording = recorder.state === 'recording'
+  // 마이크를 여는 중도 「녹음 중」처럼 다룬다 — [다음]·[이전]·헤더 링크를 잠그고, 일시정지가 그 시작을 취소할 수 있게
+  const busy = recording || recorder.starting
   // 제한 시간을 넘겨 여유 구간에 들어섰는지 — 채점은 limitSec까지만이므로 아동에게 종료를 알린다.
   const pastLimit = recording && recorder.elapsedMs / 1000 >= page.limitSec
 
   useEffect(() => {
-    onRecordingChange?.(recording)
+    onRecordingChange?.(busy)
     return () => onRecordingChange?.(false)
-  }, [recording, onRecordingChange])
+  }, [busy, onRecordingChange])
 
   // 녹음 중에만 손잡이를 내준다 — 녹음이 아닐 때 부모가 부르면 아무 일도 없어야 한다.
   useEffect(() => {
     if (!stopRef) return
-    stopRef.current = recording ? recorder.stop : null
+    stopRef.current = busy ? recorder.stop : null
     return () => { stopRef.current = null }
-  }, [stopRef, recording, recorder.stop])
+  }, [stopRef, busy, recorder.stop])
 
   async function begin() {
     setMicErr(null)
@@ -119,7 +121,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
       </p>
 
       <div className="mt-6 flex flex-col items-center gap-5">
-        <RecordButton state={recorder.state} onStart={begin} onStop={recorder.stop}
+        <RecordButton state={recorder.state} onStart={begin} onStop={recorder.stopByTap} disabled={recorder.starting}
           maxSec={page.limitSec} elapsedMs={recorder.elapsedMs} />
         <p className="text-sm font-bold text-ink-soft">
           {recording ? '다 읽었으면 버튼을 눌러 주세요'
