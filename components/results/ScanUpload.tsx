@@ -11,7 +11,7 @@
 // 4) 한 쪽씩 올린다. 올리면 그 아이는 「채점 중」이 되고 담당자가 스캔본을 보며 쓰기를 채점한다.
 // 판독이 어려운 스캔본은 담당자가 담임에게 직접 연락한다 — 앱 안의 「다시 올려 달라」 요청은 두지 않는다.
 'use client'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/Badge'
 import { Select } from '@/components/Select'
 import { Spinner } from '@/components/Spinner'
@@ -406,12 +406,16 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                             <Badge tone="amber" size="sm">{status.undecided}쪽 남음 ↓</Badge>
                           </button>
                         : <Badge tone="mint" size="sm">모두 정했어요</Badge>}
+                      {/* 해당하는 조각만 ` · `로 잇는다 — 스캔 대기가 없고 이미 올린 것을 바꾸기만 할 때
+                          「스캔 대기 0명 중 0명 연결」이 앞에 붙어 무엇을 하는 중인지 흐렸다. */}
                       <span>
-                        스캔 대기 {waitCount}명 중 <b className="text-ink">{linkedWait}명 연결</b>
-                        {replacing > 0 && <> · 바꾸는 스캔본 {replacing}장</>}
-                        {status.undecided > 0 && (status.missing.length > 0
-                          ? ' · 남은 쪽을 골라 주시면 모두 연결돼요.'
-                          : ' · 남은 쪽은 다른 학생이나 「올리지 않음」으로 정해 주세요.')}
+                        {[
+                          waitCount > 0 && <>스캔 대기 {waitCount}명 중 <b className="text-ink">{linkedWait}명 연결</b></>,
+                          replacing > 0 && <>바꾸는 스캔본 {replacing}장</>,
+                          status.undecided > 0 && (status.missing.length > 0
+                            ? '남은 쪽을 골라 주시면 모두 연결돼요.'
+                            : '남은 쪽은 다른 학생이나 「올리지 않음」으로 정해 주세요.'),
+                        ].filter(Boolean).map((part, i) => <Fragment key={i}>{i > 0 && ' · '}{part}</Fragment>)}
                       </span>
                       {status.undecided > 1 && (
                         <button type="button" onClick={skipRest}
