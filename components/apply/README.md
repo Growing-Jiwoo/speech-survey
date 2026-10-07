@@ -4,7 +4,7 @@
 
 | 파일 | 역할 |
 |---|---|
-| `RosterEditor.tsx` | 명단 파일 업로드(.xlsx/.csv) → 고정 4칸 표(번호·이름·성별·생년월일) → 칸 수정. 파싱은 `lib/xlsx`+`lib/roster`, 확정 명단만 `onChange`로 올린다 |
+| `RosterEditor.tsx` | 명단 파일 업로드(.xlsx/.csv) → 고정 4칸 표(번호·이름·성별·생년월일) → 칸 수정. 파싱은 `lib/xlsx`+`lib/roster`, 확정 명단만 `onChange`로 올린다. CSV는 UTF-8과 CP949(한국어 엑셀의 기본 CSV)를 모두 읽는다(`lib/roster`의 `decodeCsv`) |
 
 ## 파일은 브라우저에서만 읽는다
 

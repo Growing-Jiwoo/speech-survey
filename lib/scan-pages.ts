@@ -29,6 +29,10 @@ export const PAGE_LONG_SIDE = 2000
 export const MAX_FILE_BYTES = 150 * 1024 * 1024
 /** PDF를 여는 시간 제한 — 작업자가 뜨지 않으면(구형 브라우저·보안 설정) 「여는 중」에서 영영 멈춘다 */
 const PDF_OPEN_TIMEOUT_MS = 60_000
+/** pdf.js 이미지 해독기(wasm) 위치 — `scripts/copy-pdfjs-wasm.mjs`가 dev·build 때 public/에 복사한다. 흑백(1비트) 스캔 PDF는
+ *  CCITT G4·JBIG2로 압축되는데 pdf.js 6은 이것을 wasm으로만 푼다 — 주소가 없으면 그림을 경고만 남기고 빼서 모든 쪽이 흰 종이,
+ *  곧 「빈 쪽」이 됐다(2026-10-08 야간 점검에서 재현). */
+export const PDF_WASM_URL = '/pdfjs-wasm/'
 const THUMB_LONG_SIDE = 480
 const JPEG_QUALITY = 0.85
 const THUMB_QUALITY = 0.7
@@ -276,8 +280,9 @@ export async function readScanFiles(
       const pdfjs = await loadPdfJs()
       let doc: Awaited<ReturnType<PdfJs['getDocument']>['promise']>
       try {
-        // 6.x는 글꼴 처리에 eval을 쓰는 경로가 없다(옛 isEvalSupported 옵션도 없어졌다) — 운영 CSP가 eval을 막아도 그대로 된다
-        const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+        // 6.x는 글꼴 처리에 eval을 쓰는 경로가 없다(옛 isEvalSupported 옵션도 없어졌다) — 운영 CSP가 eval을 막아도 그대로 된다.
+        // `wasmUrl`: 흑백 스캔(CCITT G4·JBIG2)·JPEG 2000 해독기 — 없으면 그림을 빼고 그려 모든 쪽이 「빈 쪽」이 됐다(PDF_WASM_URL 주석)
+        const task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), wasmUrl: PDF_WASM_URL })
         let timer: ReturnType<typeof setTimeout> | undefined
         doc = await Promise.race([
           task.promise,

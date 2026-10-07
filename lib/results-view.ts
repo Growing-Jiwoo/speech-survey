@@ -43,6 +43,10 @@ export interface ResultsSession {
    * `verdict`가 null이면 판정 칸을 비운다.
    */
   complete: Record<TaskKey, boolean> | null
+  /** 과제별 판정(`scoreSession`의 `verdict` 그대로). scored일 때만 채워진다. **`complete[k]`가 false인 과제의
+   *  값은 0점 기반이라 쓰면 안 된다** — 화면은 채점된 과제의 기준 미달만 표시한다(사용자 확정 2026-10-08,
+   *  담당자 회신 아님: 같은 정보가 결과보고서 PDF에는 과제별 PASS/FAIL로 이미 나간다). */
+  taskVerdict: Record<TaskKey, Verdict> | null
   /** 쓰기 방식(migration 006) — scan이면 담당자가 스캔본으로 쓰기를 채점한다 */
   writingMode: 'screen' | 'scan'
   /** 쓰기 상태(lib/scan-mapping) — 스캔 대기·올림·채점됨 등. 올리기 확인 화면과 상태 배지가 쓴다 */

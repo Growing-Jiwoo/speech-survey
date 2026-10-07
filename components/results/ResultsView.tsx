@@ -89,13 +89,23 @@ function Check({ checked, indeterminate = false, disabled, label, onChange }: {
 function ScoreCell({ s, task, taskMax }: { s: ResultsSession | null; task: TaskKey; taskMax: Payload['taskMax'] }) {
   if (!s?.scores) return <span className="text-ink-mute">-</span>
   if (s.complete?.[task] === false) return <Badge tone="mute" size="sm">채점 전</Badge>
+  // 기준에 못 미친 과제는 숫자를 붉게 — 판정만 Pass로 보여서는 어느 과제가 모자랐는지 알 수 없었다(사용자 확정
+  // 2026-10-08, 담당자 회신 아님. 같은 정보가 결과보고서 PDF에는 과제별 PASS/FAIL로 이미 나간다). 채점 전 과제는
+  // 위에서 걸러졌다 — 그 0점 기반 판정을 칠하면 치르지도 않은 과제에서 미달한 아이가 된다(ResultsSession.taskVerdict).
+  const fail = s.taskVerdict?.[task] === 'fail'
   // 문장 읽기는 만점이 없는 비율이다 — 「2.12/36」처럼 척도를 섞어 찍지 않는다(lib/scoring CountTaskKey).
-  if (task === 'sentenceReading') return <>{fluencyLabel(s.scores[task])}</>
+  const value = task === 'sentenceReading' ? fluencyLabel(s.scores[task]) : `${s.scores[task]}/${taskMax[task]}`
+  const shown = fail
+    ? <span className="font-bold text-rec-deep">{value}<span className="sr-only"> (기준 미달)</span></span>
+    : <>{value}</>
   // 스캔본으로 채점한 쓰기는 담당자가 넣은 점수다 — 선생님이 화면에서 표시한 점수와 구별되게 작은 표시를 붙인다
   if (task === 'writing' && s.writingMode === 'scan')
-    return <span className="inline-flex items-center gap-1.5">{s.scores[task]}/{taskMax[task]}<Badge tone="mint" size="sm">스캔</Badge></span>
-  return <>{s.scores[task]}/{taskMax[task]}</>
+    return <span className="inline-flex items-center gap-1.5">{shown}<Badge tone="mint" size="sm">스캔</Badge></span>
+  return shown
 }
+
+/** 좁은 화면의 과제 머리글 — 이름 칸 아래 한 줄로 접을 때 쓴다(넓은 화면은 열 머리글이 말한다). */
+const TASK_SHORT: Record<TaskKey, string> = { wordReading: '해독', sentenceReading: '유창성', writing: '쓰기' }
 
 /** 상태 코드로 실패를 나눈다 — 401(만료·변조)은 재시도해 봐야 소용없고 404는 학급이 사라진 것. */
 class ResultsError extends Error { constructor(readonly status: number) { super('results') } }
@@ -289,18 +299,18 @@ export function ResultsView({ token }: { token: string }) {
           )}
 
           <section className="card mt-4 overflow-hidden">
-            <div className="overflow-x-auto p-2 lg:p-4">
+            <div className="overflow-x-auto sm:p-2 lg:p-4">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-ink-mute">
-                    <th className="w-8 px-2 py-2" />
-                    <th className="px-2 py-2 font-medium">번호</th>
-                    <th className="px-2 py-2 font-medium">이름</th>
-                    {TASKS.map(t => <th key={t.key} className="whitespace-nowrap px-2 py-2 font-medium">{t.label}</th>)}
-                    <th className="px-2 py-2 font-medium">판정</th>
-                    <th className="px-2 py-2 font-medium">상태</th>
-                    <th className="px-2 py-2 font-medium">검사일</th>
-                    <th className="px-2 py-2" />
+                    <th className="w-8 px-1.5 py-2 sm:px-2" />
+                    <th className="px-1.5 py-2 sm:px-2 font-medium">번호</th>
+                    <th className="px-1.5 py-2 sm:px-2 font-medium">이름</th>
+                    {TASKS.map(t => <th key={t.key} className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 font-medium md:table-cell">{t.label}</th>)}
+                    <th className="px-1.5 py-2 sm:px-2 font-medium">판정</th>
+                    <th className="px-1.5 py-2 sm:px-2 font-medium">상태</th>
+                    <th className="hidden px-1.5 py-2 sm:px-2 font-medium md:table-cell">검사일</th>
+                    <th className="px-1.5 py-2 sm:px-2" />
                   </tr>
                 </thead>
                 <tbody>
@@ -314,7 +324,7 @@ export function ResultsView({ token }: { token: string }) {
                     const pickedCountOfChild = scoredIds.filter(id => picked.has(id)).length
                     const row = (s: ResultsSession | null, label: string | null, key: string) => (
                       <tr key={key} className={`border-t border-line/60 ${label ? 'bg-well/60 text-[13px]' : ''}`}>
-                        <td className="px-2 py-2">
+                        <td className="px-1.5 py-2 sm:px-2">
                           {/* 아이 행은 **그 아이 전체**를, 차수 행은 그 차수 하나를 맡는다.
                               일부 차수만 골랐으면 아이 행은 막대(indeterminate)로 「일부 선택」을 알린다. */}
                           {label === null
@@ -333,18 +343,32 @@ export function ResultsView({ token }: { token: string }) {
                                 onChange={on => toggle(s.id, on)} />
                             )}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">
+                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2 tabular-nums">
                           {/* 차수는 어느 검사인지 가르는 값이라 회색 글자로는 눈에 안 띈다 — 배지로 세운다. */}
                           {label ? <Badge tone="blue" size="sm">{label}</Badge> : c.childNo}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-2 font-medium">{label ? '' : `${c.name} (${c.gender})`}</td>
+                        <td className="px-1.5 py-2 sm:px-2">
+                          {!label && <span className="whitespace-nowrap font-medium">{`${c.name} (${c.gender})`}</span>}
+                          {/* 768px 미만(휴대폰 — 결과지 링크는 메일로 온다)에서는 과제 열 셋과 검사일을 이 줄로 접는다.
+                              표가 옆으로 넘쳐 **판정이 화면 밖**에 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
+                          {s && (
+                            <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-normal tabular-nums text-ink-soft md:hidden">
+                              {s.scores && TASKS.map(t => (
+                                <span key={t.key} className="inline-flex items-center gap-1 whitespace-nowrap">
+                                  {TASK_SHORT[t.key]} <ScoreCell s={s} task={t.key} taskMax={taskMax} />
+                                </span>
+                              ))}
+                              <span className="whitespace-nowrap">{kstDate(s.startedAt)}</span>
+                            </div>
+                          )}
+                        </td>
                         {TASKS.map(t => (
-                          <td key={t.key} className="whitespace-nowrap px-2 py-2 tabular-nums">
+                          <td key={t.key} className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 tabular-nums md:table-cell">
                             <ScoreCell s={s} task={t.key} taskMax={taskMax} />
                           </td>
                         ))}
-                        <td className="px-2 py-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
-                        <td className="whitespace-nowrap px-2 py-2">
+                        <td className="px-1.5 py-2 sm:px-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
+                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2">
                           {s ? <Badge tone={STATUS_BADGE[sessionLabel(s, target?.id)].tone} size="sm">{STATUS_BADGE[sessionLabel(s, target?.id)].label}</Badge>
                             : <Badge tone="mute" size="sm">미실시</Badge>}
                           {/* 접힌 행은 최신 검사를 보인다 — 그것이 중단된 재검사면 스캔본을 기다리는 앞 차수가 가려져
@@ -353,8 +377,8 @@ export function ResultsView({ token }: { token: string }) {
                             <Badge tone="amber" size="sm" className="ml-1">{target.attemptNo}차 스캔 대기</Badge>
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-2 py-2 text-ink-soft">{s ? kstDate(s.startedAt) : ''}</td>
-                        <td className="whitespace-nowrap px-2 py-2 text-right">
+                        <td className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 text-ink-soft md:table-cell">{s ? kstDate(s.startedAt) : ''}</td>
+                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2 text-right">
                           {!label && retests && (
                             <button type="button" aria-expanded={expanded}
                               onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(c.childNo)) n.delete(c.childNo); else n.add(c.childNo); return n })}
@@ -402,6 +426,11 @@ export function ResultsView({ token }: { token: string }) {
                   ),
                   desc: <>과제별 기준 점수에 따른 판정입니다. <b>세 과제가 모두 채점돼야</b> 나오며,
                     결과보고서 PDF의 결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 둘 이상 Fail이면 Fail입니다.</>,
+                },
+                {
+                  badge: <span className="font-bold text-rec-deep tabular-nums">0.65</span>,
+                  desc: <>붉은 점수는 그 과제의 기준에 못 미친 점수입니다. 판정은 세 과제를 함께 본 결과라,
+                    한 과제가 붉어도 Pass일 수 있습니다.</>,
                 },
                 ...(provisional ? [{
                   badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,

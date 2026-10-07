@@ -135,7 +135,9 @@ export type SessionEditInput = z.infer<typeof sessionEditSchema>
  *  관리자 직접 발급(classCodeCreateSchema)과 교사 신청(applySchema)이 공유한다. */
 const classCodeFields = z.object({
   region: z.string().refine(r => REGION_NAMES.includes(r)),
-  schoolId: cleaned.pipe(z.string().min(1)),
+  // 학교 ID는 학교 목록(public/schools)의 10자리 코드다. 상한이 없으면 공개 신청 라우트로 임의 길이 문자열이
+  // DB에 실린다 — 목록 코드보다 넉넉하게 20자.
+  schoolId: cleaned.pipe(z.string().min(1).max(20)),
   schoolName: cleaned.pipe(z.string().min(1).max(100)),
   grade: gradeSchema,
   classNo: classNoSchema,

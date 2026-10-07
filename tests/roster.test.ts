@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readXlsx } from '@/lib/xlsx'
-import { badCells, cutText, dupChildNos, parseRosterGrid, toChild, type ParsedRoster } from '@/lib/roster'
+import { badCells, cutText, decodeCsv, dupChildNos, parseRosterGrid, toChild, type ParsedRoster } from '@/lib/roster'
 
 const grid = async (name: string) => {
   const b = readFileSync(join(__dirname, 'fixtures', name))
@@ -243,6 +243,26 @@ describe('cutText — CSV·붙여넣기 텍스트를 그리드로', () => {
   })
   it('탭 구분이 콤마보다 우선한다 (엑셀 복사는 탭)', () => {
     expect(cutText('번호\t성,명\n1\t김서아')).toEqual([['번호', '성,명'], ['1', '김서아']])
+  })
+})
+
+describe('decodeCsv — 한국어 엑셀 CSV(CP949)와 UTF-8 CSV를 모두 읽는다', () => {
+  // 「번호,성명\r\n1,김서아」를 CP949로 저장한 바이트. 한국어 윈도우 엑셀의 「CSV(쉼표로 분리)」가
+  // 이 인코딩이다 — UTF-8로만 읽던 때는 머리글이 깨져 "엑셀 파일로 저장해서 올려 주세요"가 떴다.
+  const cp949 = new Uint8Array([
+    0xb9, 0xf8, 0xc8, 0xa3, 0x2c, 0xbc, 0xba, 0xb8, 0xed, 0x0d, 0x0a,
+    0x31, 0x2c, 0xb1, 0xe8, 0xbc, 0xad, 0xbe, 0xc6,
+  ])
+
+  it('[REGRESSION] CP949 CSV를 한글 그대로 읽는다', () => {
+    expect(cutText(decodeCsv(cp949))).toEqual([['번호', '성명'], ['1', '김서아']])
+  })
+  it('UTF-8 CSV(BOM 포함)는 그대로 읽고 BOM을 뗀다', () => {
+    const utf8 = new TextEncoder().encode('\uFEFF번호,성명\n1,김서아')
+    expect(decodeCsv(utf8)).toBe('번호,성명\n1,김서아')
+  })
+  it('ArrayBuffer도 받는다 (File.arrayBuffer() 결과)', () => {
+    expect(decodeCsv(cp949.slice().buffer)).toBe('번호,성명\r\n1,김서아')
   })
 })
 

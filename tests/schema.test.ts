@@ -177,6 +177,10 @@ describe('applySchema — 신청 폼', () => {
   it('이메일이 없으면 거부한다 — 승인 메일이 유일한 코드 전달 경로다', () => {
     expect(applySchema.safeParse({ ...base, teacherEmail: '' }).success).toBe(false)
   })
+  it('학교 ID는 20자까지 — 공개 라우트로 임의 길이 문자열이 DB에 실리지 않게', () => {
+    expect(applySchema.safeParse({ ...base, schoolId: 'B000002497' }).success).toBe(true)
+    expect(applySchema.safeParse({ ...base, schoolId: 'x'.repeat(21) }).success).toBe(false)
+  })
   it('이메일 앞뒤 공백은 trim 후 통과한다 — 엑셀·메일 클라이언트 붙여넣기 대비', () => {
     const r = applySchema.safeParse({ ...base, teacherEmail: '  teacher@school.kr  ' })
     expect(r.success).toBe(true)

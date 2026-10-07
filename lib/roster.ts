@@ -211,6 +211,17 @@ export function dupChildNos(rows: RosterCells[]): Set<number> {
   return dup
 }
 
+/**
+ * CSV 파일 바이트 → 텍스트. 한국어 엑셀이 「CSV(쉼표로 분리)」로 저장하면 **CP949(EUC-KR)**다 —
+ * `file.text()`(UTF-8 고정)로 읽으면 한글 머리글이 �로 깨져 "엑셀 파일로 저장해서 올려 주세요"가
+ * 뜬다(CSV를 올린 선생님에게 엉뚱한 안내). UTF-8로 엄격하게 먼저 읽고, 깨진 바이트가 있으면
+ * EUC-KR로 다시 읽는다(브라우저의 euc-kr은 CP949 확장 한글까지 읽는다). UTF-8 BOM은 디코더가 뗀다.
+ */
+export function decodeCsv(bytes: ArrayBuffer | Uint8Array): string {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes) }
+  catch { return new TextDecoder('euc-kr').decode(bytes) }
+}
+
 /** CSV·붙여넣기 텍스트 → 그리드. 엑셀 복사는 탭, CSV는 콤마 — 탭이 있으면 탭이 우선. */
 export function cutText(text: string): string[][] {
   const lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '')

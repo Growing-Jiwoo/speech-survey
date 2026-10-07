@@ -19,7 +19,9 @@ const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
 export default function ApplyPage() {
   const [school, setSchool] = useState<SelectedSchool | null>(null)
-  const [grade, setGrade] = useState('1')
+  // 학년은 빈칸에서 시작한다 — 종전 기본값 「1학년」은 2학년 담임이 지나치면 그대로 접수돼 학급 전체가
+  // 1학년 검사지로 검사된다(학년이 문항 구성을 정한다). 옆의 반 칸처럼 직접 고르게 한다.
+  const [grade, setGrade] = useState('')
   const [classNo, setClassNo] = useState('')
   const [teacherName, setTeacherName] = useState('')
   const [phone, setPhone] = useState('')
@@ -39,7 +41,7 @@ export default function ApplyPage() {
   const cleanEmail = email.trim()
   const cleanEmailConfirm = emailConfirm.trim()
   const allChecked = checks.every(Boolean)
-  const filled = school !== null && classNo !== '' && cleanTeacher !== ''
+  const filled = school !== null && grade !== '' && classNo !== '' && cleanTeacher !== ''
     && cleanEmail !== '' && cleanEmailConfirm !== '' && roster !== null && allChecked
 
   /** [신청하기] — 서버 스키마(applySchema)와 같은 규칙으로 선검증한 뒤 접수한다.
@@ -48,6 +50,7 @@ export default function ApplyPage() {
    *  두 개 생기고, 관리자가 같은 학급을 두 번 승인하게 된다. */
   async function submit() {
     if (!school) { setErr('학교를 선택해 주세요.'); return }
+    if (grade === '') { setErr('학년을 선택해 주세요.'); return }
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('선생님 성함은 한글이나 영어로만 쓸 수 있어요.'); return }
     if (!validEmail(cleanEmail)) { setErr('이메일 형식을 확인해 주세요. (예: name@example.com)'); return }
@@ -117,7 +120,7 @@ export default function ApplyPage() {
             <div className="flex-1">
               <label className={labelCls} htmlFor="ap-grade">학년</label>
               <div className="mt-1.5">
-                <Select id="ap-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={setGrade}
+                <Select id="ap-grade" ariaLabel="학년" placeholder="학년 선택" value={grade} onChange={setGrade}
                   options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
               </div>
             </div>

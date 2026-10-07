@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { normBirth } from '@/lib/birth'
 import {
-  badCells, cutText, dupChildNos, parseRosterGrid, toChild,
+  badCells, cutText, decodeCsv, dupChildNos, parseRosterGrid, toChild,
   type RosterCells, type RosterChild,
 } from '@/lib/roster'
 import { readXlsx } from '@/lib/xlsx'
@@ -26,6 +26,8 @@ const GENDER_OPTIONS: SelectOption[] = [
   { value: '여', label: '여' },
 ]
 
+// 칸마다 min-w-*를 함께 준다 — w-full(셀 폭 100%)은 표 셀의 최소 폭 계산에 0으로 잡혀, 좁은 화면(375px)에서
+// 번호·이름 칸이 26px로 눌려 값이 안 보였다. 최소 폭이 있으면 표가 넓어지고 바깥 overflow-x-auto가 가로로 넘긴다.
 const cellCls = 'h-10 w-full rounded-lg border-[1.5px] bg-well px-2.5 text-[14px] outline-none transition focus:bg-white'
 const okCls = 'border-line focus:border-blue'
 const badCls = 'border-rec bg-rec/5 focus:border-rec'
@@ -107,7 +109,7 @@ export function RosterEditor({ onChange }: {
     const name = file.name.toLowerCase()
     try {
       const grid = name.endsWith('.xlsx') ? await readXlsx(await file.arrayBuffer())
-        : name.endsWith('.csv') ? cutText(await file.text())
+        : name.endsWith('.csv') ? cutText(decodeCsv(await file.arrayBuffer()))
           : null
       if (!grid) { setErr(FILE_ERR); return }
       const parsed = parseRosterGrid(grid)
@@ -221,13 +223,13 @@ export function RosterEditor({ onChange }: {
                         <input value={r.childNo} maxLength={2} inputMode="numeric" aria-label={`${i + 1}번째 줄 번호`}
                           aria-invalid={has('번호')}
                           onChange={e => patch(r.id, { childNo: e.target.value.replace(/\D/g, '') })}
-                          className={`${cellCls} w-14 ${has('번호') ? badCls : okCls}`} />
+                          className={`${cellCls} w-14 min-w-14 ${has('번호') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1">
                         <input value={r.name} maxLength={30} aria-label={`${i + 1}번째 줄 이름`}
                           aria-invalid={has('이름')}
                           onChange={e => patch(r.id, { name: e.target.value })}
-                          className={`${cellCls} w-28 ${has('이름') ? badCls : okCls}`} />
+                          className={`${cellCls} w-28 min-w-28 ${has('이름') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1">
                         {/* 성별은 드롭다운 — 잘못된 값을 타이핑할 길 자체를 없앤다. 네이티브
@@ -249,7 +251,7 @@ export function RosterEditor({ onChange }: {
                             const v = e.target.value
                             patch(r.id, { birth: normBirth(v) ?? v })
                           }}
-                          className={`${cellCls} w-36 ${has('생년월일') ? badCls : okCls}`} />
+                          className={`${cellCls} w-36 min-w-36 ${has('생년월일') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1 text-right">
                         <button type="button" aria-label={`${i + 1}번째 줄 삭제`}
