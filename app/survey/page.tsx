@@ -13,7 +13,8 @@ import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { canAdvance, visiblePages } from '@/lib/survey-flow'
 import {
-  clearState, loadState, saveState, settleLostUploads, updateSavedState, withPendingUpload, type SurveyState,
+  clearState, loadState, saveState, settleLostUploads, updateSavedState, withPendingUpload, withoutPendingUpload,
+  type SurveyState,
 } from '@/lib/survey-state'
 import { uploadRecording, type UploadResult } from '@/lib/upload'
 import { pageLabel } from '@/lib/items'
@@ -165,15 +166,20 @@ function SurveyInner() {
     })
   }, [])
 
-  const markSaved = useCallback((code: string, attemptNo: number) => {
+  const markSaved = useCallback((code: string, attemptNo: number, uploads: boolean) => {
     // 「모르겠어요」로 넘겼던 페이지에 돌아와 녹음했으면 그 표시를 거둔다 — 녹음이 있는데
     // 검토 화면이 「모르겠어요」라고 말하면 안 된다(둘은 상호 배타다).
-    // 올리는 중 표시도 함께 적는다 — 끝나면 settleUpload가 지운다(끊기면 다음에 열 때 거둔다).
-    patch(prev => withPendingUpload({
-      ...prev,
-      recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
-      skipped: prev.skipped.filter(c => c !== code),
-    }, code, attemptNo))
+    // 올리는 녹음이면 올리는 중 표시도 함께 적는다 — 끝나면 settleUpload가 지운다(끊기면 다음에 열 때 거둔다).
+    // 연습은 올리지 않으므로 적지 않는다 — 적었다 바로 지우면 지우는 쪽(저장 상태 직접 수정)이 이 업데이터보다
+    // 먼저 돌아 표시가 저장 상태에 남고, 그 사이 새로고침하면 연습 녹음에 「저장되지 않았어요」가 뜬다.
+    patch(prev => {
+      const next = {
+        ...prev,
+        recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
+        skipped: prev.skipped.filter(c => c !== code),
+      }
+      return uploads ? withPendingUpload(next, code, attemptNo) : next
+    })
     setPendingRetries(prev => {
       if (!(code in prev)) return prev
       const { [code]: _removed, ...rest } = prev
@@ -186,8 +192,8 @@ function SurveyInner() {
   /** 업로드가 끝났다(성공이든 실패든) — 「올리는 중」 표시를 저장 상태에서 직접 지운다(컴포넌트 생존과 무관). */
   const settleUpload = useCallback((sessionId: string, code: string, attemptNo: number) => {
     inFlight.delete(flightKey(sessionId, code, attemptNo))
-    updateSavedState(sessionId, s => withPendingUpload(s, code, null))
-    setSt(prev => prev && prev.sessionId === sessionId ? withPendingUpload(prev, code, null) : prev)
+    updateSavedState(sessionId, s => withoutPendingUpload(s, code, attemptNo))
+    setSt(prev => prev && prev.sessionId === sessionId ? withoutPendingUpload(prev, code, attemptNo) : prev)
   }, [])
 
   /**
@@ -273,9 +279,9 @@ function SurveyInner() {
     const code = page.code
     const attemptNo = (st!.recorded[code] ?? 0) + 1
     const { sessionId, sessionToken } = st!
-    if (page.practice) { markSaved(code, attemptNo); settleUpload(sessionId, code, attemptNo); return }   // 연습은 서버에 남기지 않는다
+    if (page.practice) { markSaved(code, attemptNo, false); return }   // 연습은 서버에 남기지 않는다
     inFlight.add(flightKey(sessionId, code, attemptNo))
-    markSaved(code, attemptNo)
+    markSaved(code, attemptNo, true)
     setUploading(n => n + 1)
     void uploadRecording({ sessionId, sessionToken, itemCode: code, attemptNo, rec })
       .then(r => { settleUpload(sessionId, code, attemptNo); if (!r.ok) undoSaved(sessionId, code, rec, attemptNo, r) })
@@ -304,7 +310,7 @@ function SurveyInner() {
     const { sessionId } = st
     const r = await uploadRecording({ sessionId, sessionToken: st.sessionToken,
       itemCode: code, attemptNo: pending.attemptNo, rec: pending.rec })
-    if (r.ok) { markSaved(code, pending.attemptNo); settleUpload(sessionId, code, pending.attemptNo); return }
+    if (r.ok) { markSaved(code, pending.attemptNo, false); return }   // 이미 올라갔다 — 올리는 중 표시가 필요 없다
     if (r.fatal) { setFatal(r.fatal); return }
     // 재시도도 4xx면 배너를 거둔다 — 더 눌러도 같다
     if (!r.retry) {

@@ -27,7 +27,7 @@ import type { SessionRow } from '@/lib/db'
  *  끝날 만큼은 짧게 — 손을 멈춘 뒤 한 번만 저장되게 하는 값이다. */
 const AUTOSAVE_DELAY_MS = 1500
 
-export function ResultSheet({ sessionId, session, form, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush }: {
+export function ResultSheet({ sessionId, session, form, writing, initialMarks, initialSentences, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave }: {
   sessionId: string
   session: SessionRow
   /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
@@ -44,6 +44,8 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
   onDirtyChange?: (dirty: boolean) => void
   /** 저장하지 않은 채점을 떠나는 순간 보냈다 — 상위가 그 아이의 상세 캐시를 비운다(아래 언마운트 효과) */
   onUnmountFlush?: (sessionId: string) => void
+  /** 떠날 때 저장하지 않은 채점을 **버리기로** 했는지(「저장하지 않고 이동」) — 그러면 위 즉시 저장을 건너뛴다 */
+  discardOnLeave?: (sessionId: string) => boolean
 }) {
   const [marks, setMarks] = useState(initialMarks)
   const [sentences, setSentences] = useState(initialSentences)
@@ -97,14 +99,19 @@ export function ResultSheet({ sessionId, session, form, writing, initialMarks, i
    * `keepalive`라 페이지가 사라져도 요청은 끝까지 간다. 응답은 받을 수 없으니 상위가 그 아이의 상세 캐시를
    * 비워(onUnmountFlush), 다시 열면 서버에서 새로 받게 한다 — 옛 캐시로 초기화된 화면이 방금 보낸 값을 되덮지
    * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다.
+   * 단 채점자가 「저장하지 않고 이동」을 골랐으면 보내지 않는다(`discardOnLeave`) — 확인 창이 「사라집니다」라고
+   * 말한 값을 몰래 저장하면 버리려던 O/X가 임상 기록에 남는다(사용자 확정 2026-10-07).
    */
   const latestRef = useRef({ dirty: false, body: { marks, sentences } })
   useEffect(() => { latestRef.current = { dirty, body: { marks, sentences } } })
   const onUnmountFlushRef = useRef(onUnmountFlush)
   useEffect(() => { onUnmountFlushRef.current = onUnmountFlush })
+  const discardOnLeaveRef = useRef(discardOnLeave)
+  useEffect(() => { discardOnLeaveRef.current = discardOnLeave })
   useEffect(() => () => {
     const l = latestRef.current
-    if (!l.dirty) return
+    const discard = discardOnLeaveRef.current?.(sessionId) ?? false
+    if (!l.dirty || discard) return
     void fetch(`/api/admin/sessions/${sessionId}/scores`, {
       method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l.body),
     }).catch(() => undefined)

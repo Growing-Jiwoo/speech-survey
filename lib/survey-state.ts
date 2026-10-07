@@ -50,13 +50,15 @@ export interface SurveyState {
   checklist: string[]                // 선택된 영역 코드
   introsSeen: string[]               // 진입 안내를 이미 본 섹션 코드(새로고침·왕복에도 재노출 방지)
   /**
-   * 업로드가 **아직 끝나지 않은** 녹음(pageCode → attemptNo). 녹음은 끝나는 즉시 「녹음 완료」로 표시하고
+   * 업로드가 **아직 끝나지 않은** 녹음(pageCode → 올리는 중인 시도 번호들). 녹음은 끝나는 즉시 「녹음 완료」로 표시하고
    * 뒤에서 올리는데(낙관적 저장), 올리는 도중 새로고침·탭 닫기를 하면 파일은 사라지고 표시만 남아 검토·제출을
    * 통과한 뒤 담당자 화면에서 X·0점으로 고정된다 — 아이도 선생님도 알 수 없는 유실이다. 그래서 올리기 시작할 때
    * 여기 적고 끝나면 지운다. 다시 열었을 때 남아 있는 것은 **끊긴 업로드**다(`settleLostUploads`가 표시를 거둔다).
    * 스키마 버전을 올리지 않는다 — 없는 값은 「올리는 중인 것이 없다」와 같다(사용자 확정 2026-10-01).
+   * 페이지마다 **시도 목록**이다 — 1회차가 느리게 올라가는 사이 다시 녹음하면 두 시도가 함께 올라간다. 하나만 적으면
+   * 먼저 끝난 1회차가 2회차 표시까지 지워, 그 사이 끊긴 2회차가 「녹음 완료」로 남는다(사용자 확정 2026-10-07).
    */
-  pendingUploads?: Record<string, number>
+  pendingUploads?: Record<string, number[]>
 }
 
 const PREFIX = 'kodys-survey:'
@@ -112,28 +114,53 @@ export function updateSavedState(sessionId: string, fn: (s: SurveyState) => Surv
   } catch { return null }
 }
 
-/** 올리는 중 표시를 넣거나 뺀다(위 `pendingUploads`). */
-export function withPendingUpload(s: SurveyState, code: string, attemptNo: number | null): SurveyState {
+/** 한 페이지의 올리는 중인 시도들. 미리보기 배포에서 남은 옛 모양(시도 번호 하나)도 읽는다. */
+function pendingOf(s: SurveyState, code: string): number[] {
+  const v: unknown = s.pendingUploads?.[code]
+  if (Array.isArray(v)) return v.filter((n): n is number => typeof n === 'number')
+  return typeof v === 'number' ? [v] : []
+}
+
+/** 올리는 중 표시를 넣는다(위 `pendingUploads`). */
+export function withPendingUpload(s: SurveyState, code: string, attemptNo: number): SurveyState {
+  const list = pendingOf(s, code)
+  if (list.includes(attemptNo)) return s
+  return { ...s, pendingUploads: { ...(s.pendingUploads ?? {}), [code]: [...list, attemptNo] } }
+}
+
+/** 올리기가 끝난 **그 시도만** 표시에서 뺀다 — 같은 페이지의 다른 시도는 아직 올라가는 중일 수 있다. */
+export function withoutPendingUpload(s: SurveyState, code: string, attemptNo: number): SurveyState {
+  const list = pendingOf(s, code)
+  if (!list.includes(attemptNo)) return s
   const pending = { ...(s.pendingUploads ?? {}) }
-  if (attemptNo === null) delete pending[code]
-  else pending[code] = attemptNo
+  const rest = list.filter(n => n !== attemptNo)
+  if (rest.length) pending[code] = rest
+  else delete pending[code]
   return { ...s, pendingUploads: pending }
 }
 
 /**
  * 다시 열었을 때 남아 있는 「올리는 중」 가운데 **지금 이 탭에서 실제로 올리고 있지 않은 것**은 끊긴 업로드다 —
- * 새로고침·탭 닫기로 파일이 사라졌으니 「녹음 완료」 표시(그 시도 1회)를 거두고 다시 녹음하게 한다.
+ * 새로고침·탭 닫기로 파일이 사라졌으니 「녹음 완료」 표시(끊긴 시도 수만큼)를 거두고 다시 녹음하게 한다.
  * `stillRunning(code, attemptNo)`가 true인 것(같은 탭에서 화면만 옮겼다 돌아온 경우)은 그대로 둔다.
  */
 export function settleLostUploads(
   s: SurveyState, stillRunning: (code: string, attemptNo: number) => boolean,
 ): { state: SurveyState; lost: string[] } {
-  const pending = s.pendingUploads ?? {}
-  const lost = Object.entries(pending).filter(([code, no]) => !stillRunning(code, no)).map(([code]) => code)
-  if (lost.length === 0) return { state: s, lost }
   const recorded = { ...s.recorded }
-  for (const code of lost) recorded[code] = Math.max(0, (recorded[code] ?? 1) - 1)
-  const rest = Object.fromEntries(Object.entries(pending).filter(([code]) => !lost.includes(code)))
+  const rest: Record<string, number[]> = {}
+  const lost: string[] = []
+  for (const code of Object.keys(s.pendingUploads ?? {})) {
+    const list = pendingOf(s, code)
+    const running = list.filter(no => stillRunning(code, no))
+    const gone = list.length - running.length
+    if (gone > 0) {
+      lost.push(code)
+      recorded[code] = Math.max(0, (recorded[code] ?? gone) - gone)
+    }
+    if (running.length) rest[code] = running
+  }
+  if (lost.length === 0) return { state: s, lost }
   return { state: { ...s, recorded, pendingUploads: rest }, lost }
 }
 

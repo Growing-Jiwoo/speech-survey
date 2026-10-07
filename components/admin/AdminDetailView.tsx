@@ -2,7 +2,7 @@
 // 목록 캐시를 재활용해 이전/다음 아동 내비를 제공하고, 녹음 청취·낱말쓰기·체크리스트를
 // 채점자가 한 화면에서 볼 수 있게 구성한다. 세션 삭제(PII 파기)도 여기서 수행한다.
 'use client'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
@@ -33,6 +33,9 @@ export function AdminDetailView() {
   // 녹음을 처음부터 다시 들어야 하므로, 이동 전에 한 번 묻는다.
   const [dirty, setDirty] = useState(false)
   const [pendingNav, setPendingNav] = useState<string | null>(null)
+  // 「저장하지 않고 이동」으로 떠나는 아이 — 결과지가 언마운트될 때 즉시 저장을 건너뛰게 한다(ResultSheet discardOnLeave).
+  // 아이 id로 적고 한 번 묻고 나면 지운다 — 같은 아이로 돌아와 다른 경로로 떠날 때까지 남지 않게.
+  const discardRef = useRef<string | null>(null)
   const go = (href: string) => (dirty ? setPendingNav(href) : router.push(href))
 
   const [editOpen, setEditOpen] = useState(false)
@@ -145,6 +148,7 @@ export function AdminDetailView() {
             // 떠나며 보낸 저장의 응답은 받을 수 없다 — 그 아이의 캐시를 비워 다시 열 때 서버에서 받게 한다
             // (이미 언마운트된 뒤라 아래 removeQueries 경고의 「로딩으로 떨어져 채점이 사라지는」 경우가 아니다)
             onUnmountFlush={sid => queryClient.removeQueries({ queryKey: adminKeys.session(sid) })}
+            discardOnLeave={sid => { const yes = discardRef.current === sid; if (yes) discardRef.current = null; return yes }}
             initialMarks={input.marks}
             initialSentences={input.sentences}
             attemptsOf={attemptsOf}
@@ -189,7 +193,7 @@ export function AdminDetailView() {
         <ConfirmDialog open={pendingNav !== null}
           title="저장하지 않은 채점이 있어요"
           confirmLabel="저장하지 않고 이동"
-          onConfirm={() => { const to = pendingNav!; setPendingNav(null); setDirty(false); router.push(to) }}
+          onConfirm={() => { const to = pendingNav!; discardRef.current = id; setPendingNav(null); setDirty(false); router.push(to) }}
           onClose={() => setPendingNav(null)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             이동하면 지금 화면의 채점이 <b className="text-rec-deep">사라집니다</b>.
