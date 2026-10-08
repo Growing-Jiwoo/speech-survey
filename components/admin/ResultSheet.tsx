@@ -37,7 +37,7 @@ const SCAN_CHANGED_NOTICE = '그사이 선생님이 스캔본을 올리거나 �
 
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
-  incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave, scan, onScanUnlinked, onScanStale, onSaved,
+  incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave, saveRef, scan, onScanUnlinked, onScanStale, onSaved,
 }: {
   sessionId: string
   session: SessionRow
@@ -62,6 +62,8 @@ export function ResultSheet({
   onUnmountFlush?: (sessionId: string) => void
   /** 떠날 때 저장하지 않은 채점을 **버리기로** 했는지(「저장하지 않고 이동」) — 그러면 위 즉시 저장을 건너뛴다 */
   discardOnLeave?: (sessionId: string) => boolean
+  /** 상위가 「저장하고 이동」에서 부를 일반 저장(아래 `save`) — 실패 문구를 돌려준다(성공이면 null, lib/sheet-leave) */
+  saveRef?: React.RefObject<(() => Promise<string | null>) | null>
   /** 쓰기 기록지 스캔본(스캔본 방식이고 선생님이 올렸을 때만) — 서명 URL. 서명에 실패하면 url이 null
    *  (파일이 없으면 missing) */
   scan?: { url: string | null; missing?: boolean; uploadedAt: string } | null
@@ -162,6 +164,7 @@ export function ResultSheet({
    * `keepalive`라 페이지가 사라져도 요청은 끝까지 간다. 응답은 받을 수 없으니 상위가 그 아이의 상세 캐시를
    * 비워(onUnmountFlush), 다시 열면 서버에서 새로 받게 한다 — 옛 캐시로 초기화된 화면이 방금 보낸 값을 되덮지
    * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다.
+   * 이 요청은 실패를 삼킨다 — 그래서 확인 창의 「저장하고 이동」은 여기에 맡기지 않고 일반 저장(`save`, saveRef)을 기다린다.
    * 단 채점자가 「저장하지 않고 이동」을 골랐으면 보내지 않는다(`discardOnLeave`) — 확인 창이 「사라집니다」라고
    * 말한 값을 몰래 저장하면 버리려던 O/X가 임상 기록에 남는다(사용자 확정 2026-10-07).
    * 본문은 아래 `save`와 **같은 규칙**이어야 한다 — 읽은 시간(`times`)을 빠뜨리면 시간을 넣고 바로 떠날 때 그 값만
@@ -200,7 +203,8 @@ export function ResultSheet({
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
 
-  const save = useCallback(async (auto = false) => {
+  // 실패 문구를 돌려준다(성공이면 null) — 「저장하고 이동」이 이 결과를 보고 떠날지 정한다(saveRef).
+  const save = useCallback(async (auto = false): Promise<string | null> => {
     setSaving(true)
     if (!auto) setMsg('')
     // requestJson은 init으로 { method?, body? }만 받고, body가 있으면 Content-Type과 직렬화를 스스로 한다.
@@ -219,7 +223,7 @@ export function ResultSheet({
       // 그냥 문구만 띄우면 목록을 다녀와도 같은 캐시로 다시 열려 409가 되풀이되고 읽기 저장까지 막힌다.
       setWritten(savedWritten); setScanNotice(SCAN_CHANGED_NOTICE); setMsg('')
       onScanStale?.()
-      return
+      return SCAN_CHANGED_NOTICE
     }
     if (res.ok) {
       setSavedMarks(marks); setSavedSentences(sentences); setSavedTimes(times); setSavedWritten(written); setAutoFailed(false)
@@ -227,11 +231,16 @@ export function ResultSheet({
       // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
       // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다.
       setMsg(auto ? '자동 저장됨' : '저장했어요.')
-    } else {
-      setMsg(res.error)
-      if (auto) setAutoFailed(true)
+      return null
     }
+    setMsg(res.error)
+    if (auto) setAutoFailed(true)
+    return res.error
   }, [marks, sentences, times, written, savedWritten, scanMode, seenScanAt, sessionId, onScanStale])
+  // 「저장하고 이동」은 떠날 때 즉시 저장(위 keepalive)에 맡기지 않고 이 저장을 기다린다 — keepalive는 실패(로그인 만료 401,
+  // 스캔본이 바뀐 409)를 삼켜 버려서, 저장을 약속한 버튼이 채점을 조용히 잃었다. 성공하면 저장값이 화면 값과 같아져
+  // dirty가 내려가므로 이어지는 언마운트에서 keepalive가 다시 나가지 않는다.
+  useEffect(() => { if (saveRef) saveRef.current = () => save(false) })
 
   /**
    * 자동 저장 — dirty가 생기면 잠시 뒤 스스로 저장한다.
