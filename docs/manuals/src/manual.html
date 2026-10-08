@@ -18,20 +18,19 @@
   <h1 class="tp-title">관리자<br>사용 설명서</h1>
   <p class="tp-lead">
     선생님이 신청한 학급을 승인해 <b>학급 코드</b>를 내주고,<br>
-    아이들이 읽은 <b>녹음을 들으며 채점</b>해 <b>결과보고서 PDF</b>를 만듭니다.
+    아이들의 <b>녹음을 들으며 채점</b>해 <b>결과보고서 PDF</b>를 만듭니다.
   </p>
 
   <div class="tp-hero">
     <img class="shot" src="shots/fig-list.png" alt="관리자 검사 목록 화면">
-    <p class="tp-hero-cap">관리자가 가장 자주 보는 검사 목록 화면입니다.
-      행을 누르면 그 아이의 결과지가 열립니다.</p>
+    <p class="tp-hero-cap">검사 목록 화면입니다. 행을 누르면 그 아이의 결과지가 열립니다.</p>
   </div>
 
   <div class="tp-set">
     <span class="tp-set-label">이 검사의 설명서는 둘입니다</span>
     <ol>
-      <li class="on"><b>관리자용</b> <span class="w">— 지금 보고 계신 문서</span></li>
-      <li><b>선생님용</b> <span class="w">— 선생님이 아이를 검사하고 결과지를 받을 때 보는 문서</span></li>
+      <li class="on"><b>관리자용</b> <span class="w">지금 보고 계신 문서</span></li>
+      <li><b>선생님용</b> <span class="w">선생님이 검사하고 결과지를 받을 때 보는 문서</span></li>
     </ol>
   </div>
 
@@ -47,803 +46,321 @@
   <h1>차례</h1>
 
   <div class="toc">
-    <div class="row"><span class="n">1</span><span class="t">이 도구가 하는 일 · 로그인</span></div>
-    <div class="row"><span class="n">2</span><span class="t">학급 코드 — 검사를 열어 주는 열쇠</span></div>
-    <div class="row"><span class="n">3</span><span class="t">검사 목록 읽는 법</span></div>
-    <div class="row"><span class="n">4</span><span class="t">결과지 — 녹음 듣고 채점하기</span></div>
-    <div class="row"><span class="n">5</span><span class="t">결과보고서 PDF — 공식 출력물</span></div>
-    <div class="row"><span class="n">6</span><span class="t">개인정보 — 꼭 지켜야 할 것</span></div>
-    <div class="row"><span class="n">7</span><span class="t">이럴 때는</span></div>
-    <div class="row"><span class="n">8</span><span class="t">관리와 정기 작업</span></div>
+    <div class="row"><span class="n">1</span><span class="t">로그인과 화면 구성</span></div>
+    <div class="row"><span class="n">2</span><span class="t">학급 코드 승인·발급</span></div>
+    <div class="row"><span class="n">3</span><span class="t">검사 목록 보기</span></div>
+    <div class="row"><span class="n">4</span><span class="t">채점하기</span></div>
+    <div class="row"><span class="n">5</span><span class="t">결과보고서 PDF</span></div>
+    <div class="row"><span class="n">6</span><span class="t">이럴 때는</span></div>
   </div>
 
-  <div class="figcol left" style="margin-top:11mm">
-    <div class="col">
-      <img class="shot" src="shots/fig-sheetpdf-1.png" alt="결과보고서 PDF">
+  <h3>하는 일은 세 가지입니다</h3>
+  <div class="flow">
+    <div class="step">
+      <span class="who">선생님</span>
+      <span class="what">학급 신청</span>
+      <span class="sub">학교·반과 학생 명단을 올립니다</span>
     </div>
-    <div class="col">
-      <h3 style="margin-top:0">이 일의 결과물</h3>
-      <p>관리자가 하는 일은 결국 <b>이 결과보고서 한 장</b>을 만드는 것입니다.
-        채점이 끝나면 아이 정보·과제별 PASS/FAIL·최종결과·해석 문구·관찰 체크가 채워져 나옵니다.</p>
-      <p>학교와 보호자에게 나가는 <b>공식 문서는 이 PDF</b>이고 화면은 채점하는 작업대입니다.
-        자세한 것은 <b>5장</b>에 있습니다.</p>
+    <div class="arrow">›</div>
+    <div class="step admin">
+      <span class="who">관리자</span>
+      <span class="what">① 승인</span>
+      <span class="sub">학급 코드가 선생님 메일로 갑니다(2장)</span>
+    </div>
+    <div class="arrow">›</div>
+    <div class="step">
+      <span class="who">선생님·아이</span>
+      <span class="what">검사</span>
+      <span class="sub">아이 한 명에 약 5분</span>
+    </div>
+    <div class="arrow">›</div>
+    <div class="step admin">
+      <span class="who">관리자</span>
+      <span class="what">② 채점 ③ PDF</span>
+      <span class="sub">녹음을 듣고 채점합니다(4·5장)</span>
     </div>
   </div>
 
   <div class="box info" style="margin-top:7mm">
-    <span class="bt">준비물은 브라우저 하나</span>
-    <p>크롬 또는 엣지에서 <b>배포 주소 뒤에 <code>/admin</code></b>을 붙여 들어가면 됩니다.
-      설치할 것은 없고, 로그인은 <b>비밀번호 하나</b>입니다(아이디 없음).</p>
+    <span class="bt">준비물</span>
+    <p>크롬이나 엣지 브라우저, 그리고 관리자 비밀번호 하나면 됩니다. 설치할 것은 없습니다.</p>
   </div>
 </section>
 
 
 <!-- ══════════════ 1 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">1</span>이 도구가 하는 일</h2>
-  <p class="sec-lead">아이가 낱말과 문장을 소리 내어 읽으면 녹음해 두고, 관리자가 그 녹음을 들으며 채점합니다.
-    자동 채점(음성 인식)은 쓰지 않고 <b>점수는 사람이 듣고 매깁니다.</b></p>
+  <h2 class="sec"><span class="chip">1</span>로그인과 화면 구성</h2>
 
-  <h3>일이 흘러가는 순서</h3>
-  <div class="flow">
-    <div class="step">
-      <span class="who">담임 선생님</span>
-      <span class="what">학급을 신청</span>
-      <span class="sub">학교·학년·반과 학생 명단을 올립니다</span>
+  <div class="figcol">
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b><code>https://speech-survey.vercel.app/admin</code>으로 들어갑니다</b>
+          <span>즐겨찾기에 넣어 두면 편합니다.</span></li>
+        <li><b>비밀번호를 넣고 <span class="key">로그인</span></b>
+          <span>아이디는 없습니다.</span></li>
+        <li><b>자리를 뜰 때는 <span class="key">로그아웃</span></b>
+          <span>검사 목록 오른쪽 위에 있습니다. 로그인은 8시간 뒤 저절로 끝납니다.</span></li>
+      </ol>
     </div>
-    <div class="arrow">›</div>
-    <div class="step admin">
-      <span class="who">관리자 — 나</span>
-      <span class="what">승인 → 코드 발송</span>
-      <span class="sub">명단을 확인하고 승인하면 6자리 코드가 메일로 나갑니다</span>
-    </div>
-    <div class="arrow">›</div>
-    <div class="step">
-      <span class="who">선생님 · 아이</span>
-      <span class="what">아이가 검사</span>
-      <span class="sub">코드를 넣고 아이를 골라 읽고 씁니다. 한 명당 약 5분</span>
-    </div>
-    <div class="arrow">›</div>
-    <div class="step admin">
-      <span class="who">관리자 — 나</span>
-      <span class="what">듣고 채점 → 인쇄</span>
-      <span class="sub">녹음을 듣고 채점해 결과보고서 PDF를 뽑습니다</span>
-    </div>
+    <div class="col"><img class="shot" src="shots/fig-login.png" alt="로그인 화면"></div>
   </div>
 
-  <h3>관리자 화면은 셋입니다</h3>
+  <ul class="small">
+    <li>채점 중에 로그인이 끝나면 화면 위에 <span class="key">다시 로그인</span>이 뜹니다. 다시 로그인하면 보던 화면으로 돌아옵니다.</li>
+    <li>비밀번호를 5번 틀리면 10분 동안 잠깁니다.</li>
+  </ul>
+
+  <h3>화면은 셋입니다</h3>
   <table>
-    <tr>
-      <th style="width:34mm">화면</th><th style="width:30mm">주소</th><th>하는 일</th>
-    </tr>
-    <tr>
-      <td><b>검사 목록</b></td><td class="mono">/admin</td>
-      <td>어느 학교에서 몇 명이 검사했는지 보고, 채점할 아이를 골라 결과지로 들어갑니다.</td>
-    </tr>
-    <tr>
-      <td><b>결과지</b></td><td class="mono">/admin/…</td>
-      <td>목록에서 행을 누르면 열립니다. 녹음을 듣고 채점해 결과보고서를 내려받습니다(4장).</td>
-    </tr>
-    <tr>
-      <td><b>학급 코드</b></td><td class="mono">/admin/codes</td>
-      <td>선생님 신청을 승인하고, 필요하면 코드를 직접 만듭니다. 검사 목록 오른쪽 위
-        <span class="key">학급 코드 발급</span> 버튼으로 들어갑니다.</td>
-    </tr>
+    <tr><th style="width:34mm">화면</th><th>하는 일</th></tr>
+    <tr><td><b>검사 목록</b></td><td>누가 검사했는지 보고, 채점할 아이를 고릅니다(3장).</td></tr>
+    <tr><td><b>결과지</b></td><td>목록에서 행을 누르면 열립니다. 녹음을 듣고 채점합니다(4장).</td></tr>
+    <tr><td><b>학급 코드</b></td><td>신청을 승인하거나 코드를 만듭니다. 검사 목록 오른쪽 위 <span class="key">학급 코드 발급</span>으로 들어갑니다(2장).</td></tr>
   </table>
-
-  <h3>로그인</h3>
-  <div class="cols2">
-    <div>
-      <p><code>https://speech-survey.vercel.app/admin</code>으로 들어가면 비밀번호 칸 하나가
-        나옵니다. 아이디는 없습니다. 즐겨찾기에 넣어 두세요.</p>
-      <p><b>로그인은 8시간 뒤 자동으로 끝납니다.</b> 공용 PC에서 자리를 뜰 때는
-        검사 목록 오른쪽 위 <span class="key">로그아웃</span>을 누르세요. 화면에 남아 있던
-        아이들 이름·생년월일까지 함께 지워집니다.</p>
-      <p>채점 중에 로그인이 끝나면 결과지·목록 위에 「로그인이 끝났어요(8시간)」와 <span class="key">다시 로그인</span>이 뜹니다.
-        다시 로그인하면 <b>보던 화면으로 돌아옵니다.</b></p>
-      <p class="small">같은 인터넷 회선에서 비밀번호를 5번 틀리면 10분 동안 잠기니 10분 뒤 다시 시도하세요.</p>
-    </div>
-    <figure style="margin-top:0">
-      <img src="shots/fig-login.png" alt="관리자 로그인 화면">
-      <figcaption>로그인 화면. 관리자 계정은 하나이고 비밀번호도 하나를 함께 씁니다.
-        바꾸는 방법은 8장에 있습니다.</figcaption>
-    </figure>
-  </div>
-
-  <div class="box info">
-    <span class="bt">먼저 알아 두면 좋은 말</span>
-    <div style="column-count:2; column-gap:7mm; font-size:9.2pt; line-height:1.62">
-      <p style="break-inside:avoid"><b>학급 코드</b> — 학급 하나를 여는 6자리 문자·숫자(예 <code>8VRE8M</code>).</p>
-      <p style="break-inside:avoid"><b>검사</b> — 아이 한 명이 한 번 받은 검사 기록 하나.
-        목록의 한 줄이 검사 하나입니다.</p>
-      <p style="break-inside:avoid"><b>결과지</b> — 검사 한 건을 열어 녹음을 듣고 점수를 찍는 화면.</p>
-      <p style="break-inside:avoid; margin-bottom:0"><b>결과보고서 PDF</b> — 채점을 끝내고 내려받는
-        <b>공식 출력물</b>. 과제별 PASS/FAIL이 적힌 한 장으로, 선생님이 받는 「결과지」도 이 PDF입니다.</p>
-      <p style="break-inside:avoid; margin-bottom:0"><b>담당자</b> — 선생님용 설명서에서 관리자를 부르는 말.</p>
-    </div>
-  </div>
 </section>
 
 
 <!-- ══════════════ 2 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">2</span>학급 코드 — 검사를 열어 주는 열쇠</h2>
-  <p class="sec-lead">코드 하나가 학급 하나입니다. 코드가 없으면 검사를 시작할 수 없고,
-    코드를 만드는 사람은 관리자뿐입니다.</p>
+  <h2 class="sec"><span class="chip">2</span>학급 코드 승인·발급</h2>
+  <p class="sec-lead">학급 코드는 6자리입니다. 선생님은 이 코드를 넣어야 검사를 시작할 수 있습니다.
+    보통은 <b>선생님 신청을 승인</b>하고, 급할 때만 <b>직접 발급</b>합니다.</p>
 
-  <h3>코드가 생기는 두 가지 길</h3>
-  <table>
-    <tr><th style="width:44mm">길</th><th>어떻게</th><th style="width:38mm">언제 씁니까</th></tr>
-    <tr>
-      <td><b>A. 선생님 신청 승인</b><br><span class="small">보통 이 길입니다</span></td>
-      <td>선생님이 신청 화면에서 학급 정보와 <b>학생 명단</b>을 올림 → 관리자가 승인 →
-        코드가 <b>선생님 메일로 자동 발송</b></td>
-      <td>명단이 함께 들어와, 선생님이 이름을 타이핑하지 않고 <b>고르기만</b> 합니다.</td>
-    </tr>
-    <tr>
-      <td><b>B. 직접 발급</b></td>
-      <td>관리자가 학교·학년·반·담임을 직접 입력해 코드를 만들고, 코드를 <b>직접 전달</b></td>
-      <td>신청 없이 급히 열어야 할 때. 명단이 없어 현장에서 이름을 직접 입력합니다.</td>
-    </tr>
-  </table>
+  <h3>선생님 신청 승인하기</h3>
+  <p>선생님은 <code>https://speech-survey.vercel.app/apply</code>에서 학급과 학생 명단을 올려 신청합니다.
+    신청이 들어오면 학급 코드 화면에 <b>대기 중 N건</b>이 뜹니다.</p>
 
-  <h3>A. 선생님 신청 승인하기</h3>
-  <p>승인을 기다리는 신청이 있으면 <code>/admin/codes</code> 화면 가운데에
-    <span class="bg amber">대기 중 N건</span> 띠가 뜹니다. 발급 목록보다 위에 있습니다.</p>
-
-  <figure>
-    <img src="shots/fig-codes-pending.png" alt="승인 대기 중인 신청">
-    <figcaption>대기 중인 신청 한 건. 이 줄에는 <b>인원 수만</b> 보이고
-      아이들 실명은 <span class="key">명단 보기</span>를 눌러야 나옵니다.</figcaption>
-  </figure>
+  <figure><img class="shot" src="shots/fig-codes-pending.png" alt="대기 중인 신청"></figure>
 
   <ol class="steps">
-    <li><b><span class="key">명단 보기</span>를 눌러 진짜 학급인지 확인합니다</b>
-      <span>번호·이름·성별·생년월일이 나옵니다. 인원이 터무니없거나 이름이 장난이면 장난 신청입니다.
-        신청 주소는 공문에 실려 사실상 공개돼 있어 장난 신청도 들어옵니다.</span></li>
+    <li><b><span class="key">명단 보기</span>로 명단을 확인합니다</b>
+      <span>실제 학급인지 봅니다. 확인이 끝나면 <span class="key">명단 닫기</span>로 접어 두세요.</span></li>
     <li><b><span class="key">승인</span>을 누릅니다</b>
-      <span>메일 발송까지 끝난 뒤에 응답하므로 1~2초 걸립니다. 그동안 버튼이 잠기니 두 번 누르지 마세요.</span></li>
-    <li><b>결과 문구를 반드시 읽습니다</b>
-      <span>세 가지 중 하나가 뜹니다. 아래 표를 보세요.</span></li>
-    <li><b>메일이 확실히 나가지 않았으면 <span class="key">안내 문구 복사</span>로 직접 전달합니다</b>
-      <span>코드·검사 주소·시작 방법이 들어 있는 문장이 복사됩니다. 문자·카톡·메일 어디든 붙여넣으면 됩니다.</span></li>
-    <li><b>승인한 학급은 아래 발급 목록으로 내려갑니다</b>
-      <span>이제 그 코드로 검사를 시작할 수 있습니다. 승인 전에는 코드를 입력해도 <b>없는 코드처럼 거부</b>됩니다.</span></li>
+      <span>1~2초 걸립니다. 두 번 누르지 마세요.</span></li>
+    <li><b>뜨는 문구를 확인합니다</b>
+      <span>아래 표대로 하면 됩니다.</span></li>
   </ol>
 
-  <figure>
-    <img src="shots/fig-codes-roster.png" alt="명단을 펼친 신청">
-    <figcaption><span class="key">명단 보기</span>를 누른 상태. 아이들 실명이 보이므로,
-      확인이 끝나면 <span class="key">명단 닫기</span>로 접어 두세요.</figcaption>
-  </figure>
-
-  <h4>승인 뒤에 뜨는 세 가지 문구</h4>
   <table>
-    <tr><th style="width:62mm">문구</th><th>뜻과 할 일</th></tr>
-    <tr><td><b>승인 완료 · 선생님께 코드 메일을 보냈어요</b></td>
-      <td>메일이 <b>확실히</b> 나갔습니다. 더 할 일이 없습니다.</td></tr>
-    <tr><td><b>승인은 됐지만 메일을 보내지 못했어요</b></td>
-      <td>학급은 열렸지만 선생님은 코드를 <b>못 받았습니다.</b>
-        <span class="key">안내 문구 복사</span>로 반드시 직접 전달하세요.</td></tr>
-    <tr><td><b>이미 승인된 학급이에요 · 메일을 보냈는지는 알 수 없어요</b></td>
-      <td>이미 승인돼 있던 학급을 다시 누른 경우입니다. 이 앱은 지난번에 메일이 나갔는지 알 수 없어
-        <b>보냈다고도 안 보냈다고도 말하지 않습니다.</b> 선생님께 받았는지 물어보거나,
-        그냥 <span class="key">안내 문구 복사</span>로 다시 보내면 됩니다.</td></tr>
+    <tr><th style="width:68mm">문구</th><th>할 일</th></tr>
+    <tr><td>승인 완료 · 선생님께 코드 메일을 보냈어요</td><td>끝입니다.</td></tr>
+    <tr><td>승인은 됐지만 메일을 보내지 못했어요</td><td><span class="key">안내 문구 복사</span>를 눌러 선생님께 문자·메일로 직접 보내 주세요.</td></tr>
+    <tr><td>이미 승인된 학급이에요</td><td>선생님이 코드를 받았는지 확인하고, 못 받았으면 <span class="key">안내 문구 복사</span>로 보내 주세요.</td></tr>
   </table>
 
   <div class="box danger">
-    <span class="bt">신청을 반려하는 방법은 「삭제」뿐이고, 되돌릴 수 없습니다</span>
-    <p>이 앱에는 「거절」 상태도, 거절 메일도 없습니다. 반려하려면 대기 중인 신청을
-      <span class="key">삭제</span>해야 하고, 그러면 <b>함께 올라온 학생 명단(실명·생년월일)도 같이 지워집니다.</b>
-      확인 창이 인원 수와 되돌릴 수 없다는 것을 알려 줍니다. 선생님께는 아무 알림도 가지 않으므로,
-      반려한 이유를 알려야 한다면 따로 연락해야 합니다.</p>
+    <span class="bt">신청을 거절하려면 삭제합니다</span>
+    <p>삭제하면 함께 올라온 명단도 지워지고 되돌릴 수 없습니다. 선생님께 알림이 가지 않으니 필요하면 따로 연락해 주세요.</p>
   </div>
 
-  <h3 style="break-before:page">B. 코드를 직접 발급하기</h3>
-  <p>신청 없이 학급을 열어야 할 때 씁니다. 화면 위쪽 폼에 채우고
-    <span class="key">코드 발급</span>을 누르면 6자리 코드가 바로 만들어집니다.
-    같은 학교·학년·반의 코드가 이미 있으면 「이 학급의 코드가 이미 있어요」가 뜨고, <b>한 번 더 눌러야</b> 새로 발급됩니다.
-    한 학급에 코드가 둘이면 결과가 둘로 나뉘니, 대개는 이미 있는 코드를 쓰면 됩니다.</p>
+  <h3>코드를 직접 발급하기</h3>
+  <p>신청 없이 학급을 열어야 할 때 씁니다.</p>
 
-  <figure>
-    <img src="shots/fig-codes-form.png" alt="학급 코드 직접 발급 폼">
-    <figcaption>학교명은 지역을 먼저 고르면 그 지역 초등학교를 검색할 수 있습니다.
-      <b>담임 이메일은 반드시 넣어야 합니다.</b> 선생님이 결과지를 받는 링크가 이 주소로만 갑니다.
-      전화번호는 선택이고 하이픈은 저장할 때 자동으로 빠집니다.</figcaption>
-  </figure>
+  <div class="figcol">
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b>학교·학년·반·담임 이름·이메일을 넣습니다</b>
+          <span>학교는 지역을 먼저 고르면 검색됩니다. 이메일은 꼭 넣어야 합니다. 결과지 링크가 이 주소로 갑니다.</span></li>
+        <li><b><span class="key">코드 발급</span>을 누릅니다</b>
+          <span>같은 반 코드가 이미 있으면 알림이 뜹니다. 대개는 있는 코드를 쓰면 됩니다.</span></li>
+        <li><b><span class="key">코드 복사</span>로 선생님께 전달합니다</b>
+          <span>메일이 자동으로 가지 않습니다. 검사 주소와 선생님용 설명서도 함께 보내 주세요.</span></li>
+      </ol>
+    </div>
+    <div class="col"><img class="shot" src="shots/fig-codes-form.png" alt="학급 코드 직접 발급 폼"></div>
+  </div>
 
   <div class="box warn">
-    <span class="bt">직접 발급 전에 알아 둘 세 가지</span>
-    <p><b>① 학급 정보는 나중에 고칠 수 없습니다.</b> 학교·학년·반·담임은 코드를 만들 때 한 번 입력하면 바꿀 수 없습니다(이메일만 예외).
-      검사를 시작할 때 서버가 이 값을 그대로 검사 기록에 복사해 둡니다.
-      학급을 잘못 골라 검사한 기록은 고치지 말고 <b>삭제한 뒤 재검사</b>하세요.</p>
-    <p style="margin-top:2mm"><b>② 명단이 없습니다.</b> 선생님이 아이 번호·이름·성별·생년월일을
-      손으로 입력하게 되므로, 오타가 그대로 임상 기록이 됩니다. 가능하면 A(신청 승인) 경로를 쓰세요.</p>
-    <p style="margin-top:2mm"><b>③ 메일이 나가지 않습니다.</b> 화면에는 <span class="key">코드 복사</span>만 있습니다.
-      선생님께 코드와 함께 검사 주소, 결과지 받는 방법(검사 주소에서 코드를 넣고 <span class="key">결과지 받기 →</span>)도
-      직접 알려 주세요. 선생님용 설명서 PDF도 함께 보내 주세요.</p>
+    <span class="bt">직접 발급할 때 주의할 점</span>
+    <p>학교·학년·반은 나중에 고칠 수 없습니다(이메일만 고칠 수 있습니다). 명단이 없어서 선생님이 아이 정보를 직접 입력하게 됩니다.</p>
   </div>
 
-  <h3>발급 목록에서 할 수 있는 일</h3>
+  <h3>발급 목록에서 하는 일</h3>
   <table>
-    <tr><th style="width:32mm">항목</th><th>설명</th></tr>
-    <tr><td><b>검사 수</b></td>
-      <td>그 코드로 시작된 검사가 몇 건인지. 학급이 실제로 검사를 시작했는지 여기서 봅니다.</td></tr>
-    <tr><td><b>삭제 버튼</b></td>
-      <td><b>검사 수가 0인 코드에만</b> 나타납니다. 검사 기록이 하나라도 있으면 코드를 지울 수 없습니다.
-        먼저 그 검사 기록들을 지워야 합니다.</td></tr>
-    <tr><td><b>코드 재발급</b></td>
-      <td>따로 없습니다. 코드를 바꾸려면 <b>기존 코드를 삭제하고 새로 발급</b>합니다.</td></tr>
-    <tr><td><b>담임 이메일 수정</b></td>
-      <td>연락처 칸의 <span class="key">수정</span>(주소가 없으면 <span class="key">이메일 등록</span>)을 누르면
-        그 자리에서 고칩니다. <b>결과지 링크가 이 주소로만 가므로</b> 오타를 바로잡는 유일한 길입니다.
-        <b>이메일 하나만</b> 바꿀 수 있고 학교·학년·반은 검사 기록과 어긋나므로 열어 두지 않았습니다.
-        고친 주소는 이후 결과지 링크에 쓰이고, 이미 만들어진 검사의 결과지 머리말에는 검사 당시 주소가 그대로 보입니다.</td></tr>
+    <tr><th style="width:34mm">항목</th><th>설명</th></tr>
+    <tr><td><b>검사 수</b></td><td>그 코드로 시작한 검사 수입니다.</td></tr>
+    <tr><td><b>수정</b></td><td>담임 이메일을 고칩니다. 결과지 링크가 이 주소로 갑니다.</td></tr>
+    <tr><td><b>삭제</b></td><td>검사 수가 0인 코드에만 나타납니다.</td></tr>
   </table>
 
-  <div class="box danger">
-    <span class="bt">학급 코드가 곧 그 학급 명단의 비밀번호입니다</span>
-    <p>6자리 코드만 알면 <b>누구든</b> 그 학급 아이들 전원의 이름·성별·생년월일을 화면에서 볼 수 있고,
-      로그인도 필요 없습니다. 선생님이 검사할 때 명단에서 아이를 고를 수 있어야 하기 때문입니다.</p>
-    <p style="margin-top:2mm"><b>그래서:</b> 코드를 단체 대화방·공유 문서·화면 캡처에 올리지 마세요.
-      담임 선생님 한 사람에게만 전달합니다.</p>
-    <p style="margin-top:2mm"><b>유출된 것 같으면</b> — 검사 전인 학급은 코드를 지우고 새로 발급합니다(새 코드에는 명단이 없습니다).
-      <b>검사가 시작된 학급은 지우지 말고</b> 먼저 개발자와 상의하세요. 코드를 지우려면 검사 기록부터 지워야 합니다.</p>
-  </div>
-
-  <h3>선생님이 신청하는 화면</h3>
-  <div class="cols2">
-    <div>
-      <p style="margin-bottom:1.5mm">선생님은 아래 주소로 들어가 스스로 신청합니다.
-        로그인이 필요 없는 공개 화면입니다.</p>
-      <p><code style="display:block; padding:1.4mm 2.4mm">https://speech-survey.vercel.app/apply</code></p>
-      <p>이 주소를 공문·안내문에 실어 배포하면 됩니다. 선생님용 설명서 PDF를 함께 붙여 주세요.</p>
-      <p>선생님이 넣는 것은 <b>학교·학년·반·이름·이메일(두 번 입력해 확인)</b>과 <b>학생 명단</b>입니다.
-        명단은 엑셀 파일을 올리거나 직접 입력할 수 있습니다.</p>
-      <p><b>명단 파일은 서버로 올라가지 않습니다.</b> 브라우저 안에서 읽어 번호·이름·성별·생년월일
-        네 칸만 전송하므로, 명렬표에 주민등록번호가 들어 있어도 이 시스템에 남지 않습니다.</p>
-      <p>신청 화면은 <b>완료 후에도 코드를 보여주지 않습니다.</b> 관리자가 승인하기 전에는 코드를 받을 수 없도록
-        일부러 막아 두었습니다. 코드는 승인 메일로만 나갑니다.</p>
-      <p class="small">신청이 들어오면 관리자 메일로 알림이 갑니다.
-        알림이 실패해도 신청은 정상으로 접수됩니다. 알림에만 의존하지 말고
-        <code>/admin/codes</code>를 주기적으로 확인하세요.</p>
-    </div>
-    <figure style="margin-top:0">
-      <img class="shot" src="shots/fig-apply.png" alt="선생님 신청 화면">
-      <figcaption>선생님이 보는 신청 화면(<code>/apply</code>).
-        아래로 내려가면 학급 명단 입력과 동의 체크가 이어집니다.</figcaption>
-    </figure>
+  <div class="box warn">
+    <span class="bt">코드는 담임 선생님께만 전달하세요</span>
+    <p>코드만 알면 그 학급 명단(이름·생년월일)을 볼 수 있습니다. 단체방이나 공유 문서에 올리지 마세요.</p>
   </div>
 </section>
 
 
 <!-- ══════════════ 3 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">3</span>검사 목록 읽는 법</h2>
-  <p class="sec-lead">누가 검사했고 무엇을 채점해야 하는지 한 화면에서 봅니다. 행을 누르면 결과지가 열립니다.</p>
+  <h2 class="sec"><span class="chip">3</span>검사 목록 보기</h2>
+  <p class="sec-lead">누가 검사했고 무엇을 채점할지 봅니다. <b>행을 누르면 결과지가 열립니다.</b></p>
 
-  <figure>
-    <img src="shots/fig-list-kpi.png" alt="검사 목록 상단 요약">
-  </figure>
-
+  <figure><img class="shot" src="shots/fig-list-kpi.png" alt="숫자 카드와 학교별 현황"></figure>
   <div class="callouts">
-    <div class="c"><span class="num">1</span><span><b>숫자 카드 넷.</b> 전체·제출 완료·진행 중·오늘 참여.
-      <b>카드를 누르면 그 조건으로 목록이 걸러지고</b> 다시 누르면 풀립니다. 「전체 검사」 카드는 걸어 둔 필터를 모두 풉니다.
-      「제출 완료」는 제출된 검사 전부(아래 <span class="bg amber">제출 · 미완료 있음</span> 포함)의 수입니다.</span></div>
-    <div class="c"><span class="num">2</span><span><b>학교별 현황.</b> 학교마다 몇 명 중 몇 명이 제출했는지.
-      막대가 꽉 차면 100%입니다. <b>학교 이름을 누르면 그 학교만</b> 걸러집니다.</span></div>
+    <div class="c"><span class="num">1</span><span><b>숫자 카드.</b> 누르면 그 조건으로 목록이 걸러지고, 다시 누르면 풀립니다.</span></div>
+    <div class="c"><span class="num">2</span><span><b>학교별 현황.</b> 학교 이름을 누르면 그 학교만 봅니다.</span></div>
   </div>
 
-  <figure style="margin-top:6mm">
-    <img src="shots/fig-list-table.png" alt="검사 목록 표">
-  </figure>
-
+  <figure><img class="shot" src="shots/fig-list-table.png" alt="검사 목록 표"></figure>
   <div class="callouts">
-    <div class="c"><span class="num">3</span><span><b>검색창.</b> 이름·학교·담임·반·아이 번호로 찾습니다.</span></div>
-    <div class="c"><span class="num">4</span><span><b>진행률.</b> 위가 녹음, 아래가 쓰기입니다.
-      <b>녹음 6칸이 채점 대상</b>이고, 빨간 막대는 아직 덜 찼다는 뜻입니다. 쓰기를 스캔본으로 한 검사는 쓰기 막대 대신
-      <span class="bg amber">스캔 대기</span>나 <span class="bg blue">스캔본 채점</span>이 보입니다. 스캔 대기는 선생님이 아직 올리지 않았다는 뜻이고,
-      스캔본 채점은 스캔본이 올라왔거나 종이로 채점을 시작해 채점할 차례라는 뜻입니다.
-      채점할 스캔본이 있으면 검색창 옆에 <span class="key">스캔본 채점 N</span> 탭이 생겨, 누르면 그 검사만 모아 봅니다.</span></div>
-    <div class="c"><span class="num">5</span><span><b>회차 표시.</b> 같은 학급·번호로 두 번 이상 검사하면
-      <span class="bg blue">1/2회차</span>처럼 붙습니다.</span></div>
-    <div class="c"><span class="num">6</span><span><b>열 제목을 누르면 정렬</b>됩니다. 한 번 더 누르면 반대 방향.</span></div>
+    <div class="c"><span class="num">3</span><span><b>검색.</b> 이름·학교·담임·반·번호로 찾습니다.</span></div>
+    <div class="c"><span class="num">4</span><span><b>진행률.</b> 위가 녹음, 아래가 쓰기입니다. 쓰기를 스캔본으로 한 검사는 <span class="bg amber">스캔 대기</span>나 <span class="bg blue">스캔본 채점</span>이 보입니다.</span></div>
+    <div class="c"><span class="num">5</span><span><b>회차.</b> 같은 아이를 다시 검사하면 <span class="bg mute">1/2회차</span>처럼 붙습니다.</span></div>
+    <div class="c"><span class="num">6</span><span><b>정렬.</b> 열 제목을 누릅니다.</span></div>
   </div>
 
-  <h3>상태 배지 세 가지</h3>
+  <h3>상태 표시</h3>
   <table>
-    <tr><th style="width:34mm">배지</th><th>뜻</th><th style="width:44mm">관리자가 할 일</th></tr>
-    <tr><td><span class="bg mute">진행 중</span></td>
-      <td>아직 제출하지 않은 검사입니다. 검사가 진행 중이거나, 중간에 멈춘 것입니다.</td>
-      <td><b>아직 채점하지 마세요.</b> 빈 녹음은 「안 읽었다」가 아니라 「아직 안 했다」입니다.</td></tr>
-    <tr><td><span class="bg mint">제출 완료</span></td>
-      <td>받아야 할 녹음·쓰기를 모두 받고 제출했습니다.</td>
-      <td>채점하면 됩니다.</td></tr>
-    <tr><td><span class="bg amber">제출 · 미완료 있음</span></td>
-      <td>제출은 했지만 녹음이나 쓰기가 비어 있습니다. 아이가 「모르겠어요」로 넘겼거나
-        업로드가 실패한 경우입니다. 스캔본으로 하는 쓰기는 비어 있어도 여기 들지 않습니다.</td>
-      <td>채점합니다. 녹음이 빠진 과제는 <b>오반응(X·0점)</b>으로 자동 채워지고(문장은 20초·0어절), 비어 있는 쓰기는
-        「채점 전」으로 남습니다(4장).</td></tr>
+    <tr><th style="width:42mm">표시</th><th>할 일</th></tr>
+    <tr><td><span class="bg mute">진행 중</span></td><td>아직 제출하지 않은 검사입니다. 채점하지 마세요.</td></tr>
+    <tr><td><span class="bg mint">제출 완료</span></td><td>채점하면 됩니다.</td></tr>
+    <tr><td><span class="bg amber">제출 · 미완료 있음</span></td><td>빠진 녹음이 있는 검사입니다. 채점하면 됩니다. 빠진 녹음은 자동으로 0점이 됩니다.</td></tr>
   </table>
-  <p class="small">배지는 제출 여부만 알려 줍니다. 채점을 마쳤는지는 결과지를 열어 총평 밴드의 「채점 전」 표시로 확인하세요.</p>
-
-  <div class="box">
-    <span class="bt">필터는 주소에 남습니다</span>
-    <p>걸러 놓은 상태 그대로 주소창을 복사해 두거나 새로고침해도 유지되고 결과지에 들어갔다 나와도
-      그대로입니다. 다만 <b>브라우저 뒤로가기로 직전 필터로 돌아가지는 않으니</b>
-      필터를 풀려면 <span class="key">초기화</span>를 누르세요.</p>
-  </div>
-
+  <p class="small">스캔본으로 채점할 검사가 있으면 검색창 옆에 <span class="key">스캔본 채점 N</span> 탭이 생깁니다.</p>
 </section>
 
 
 <!-- ══════════════ 4 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">4</span>결과지 — 녹음 듣고 채점하기</h2>
-  <p class="sec-lead">이 앱에서 관리자가 가장 오래 머무는 화면입니다.
-    종이 검사지와 <b>같은 순서</b>로, 아이의 녹음과 점수 칸을 나란히 놓았습니다.</p>
+  <h2 class="sec"><span class="chip">4</span>채점하기</h2>
+  <p class="sec-lead">결과지에서 녹음을 들으며 점수를 넣습니다. <b>손을 멈추면 저절로 저장됩니다.</b></p>
 
-  <figure>
-    <img src="shots/fig-sheet-head.png" alt="결과지 머리말과 총평">
-  </figure>
-
+  <figure><img class="shot" src="shots/fig-sheet-head.png" alt="결과지 머리 부분"></figure>
   <div class="callouts">
-    <div class="c"><span class="num">1</span><span><b>아이 정보.</b> 이름·성별·생년월일·학교·반·번호·검사일, 아래 작은 줄에 담임과 보호자 동의 확인일.
-      틀렸으면 결과지 위 수집 상태 줄 오른쪽 끝의 <span class="key">정보 수정</span>으로 고칩니다.</span></div>
-    <div class="c"><span class="num">2</span><span><b>양식과 상태.</b> 「KODYS - G1」은 1학년용, 「KODYS - G2」는 2학년용.
-      배지는 목록의 상태 칸과 같습니다.</span></div>
-    <div class="c"><span class="num">3</span><span><b>총평 밴드.</b> 과제 셋의 점수와 Pass/Fail.
-      <b>채점이 끝나지 않은 과제에는 판정이 나오지 않습니다.</b></span></div>
-    <div class="c"><span class="num">4</span><span><span class="bg amber">임시 기준 · 확정 전</span>
-      <b>Pass 기준이 아직 확정되지 않았다는 표시입니다.</b> 아래 상자를 꼭 읽으세요.</span></div>
+    <div class="c"><span class="num">1</span><span><b>아이 정보.</b> 틀렸으면 <span class="key">정보 수정</span>으로 고칩니다.</span></div>
+    <div class="c"><span class="num">2</span><span><b>검사지.</b> G1은 1학년, G2는 2학년입니다.</span></div>
+    <div class="c"><span class="num">3</span><span><b>총평.</b> 과제별 점수와 Pass/Fail입니다.</span></div>
+    <div class="c"><span class="num">4</span><span><b>임시 기준 · 확정 전.</b> Pass 기준이 아직 확정되지 않았다는 표시입니다. 판정은 참고용으로 보세요.</span></div>
   </div>
 
-  <div class="box warn" style="margin-top:5mm">
-    <span class="bt">Pass 기준은 아직 임시 숫자입니다</span>
-    <p>지금 쓰는 Pass 기준(1학년 기준 낱말 해독 9/14 · 문장 읽기유창성 1.00 어절/초 · 낱말 쓰기 6/10)은
-      <b>Pass 기준표가 아직 정해지지 않아 개발 쪽에서 임시로 정한 숫자</b>입니다.
-      화면에 <span class="bg amber">임시 기준 · 확정 전</span>이 붙어 있는 동안은 참고용으로만 보세요.</p>
-    <p style="margin-top:2mm"><b>점수 자체는 정확하고</b> 「몇 점부터 통과인가」만 임시입니다.
-      결과보고서 PDF에는 판정이 <b>PASS/FAIL로 그대로 찍히고</b> 「임시 기준」 표시는 화면에만 있습니다.
-      진짜 기준표를 넣으면 <b>이미 채점한 검사도 저장된 점수로 다시 계산</b>되니 다시 채점하지 않아도 됩니다.</p>
-  </div>
+  <h3>채점 순서</h3>
+  <ol class="steps">
+    <li><b>목록에서 제출된 검사를 엽니다</b>
+      <span><span class="bg mute">진행 중</span>인 검사는 채점하지 않습니다.</span></li>
+    <li><b>낱말 해독: 녹음을 들으며 낱말마다 O 또는 X를 누릅니다</b>
+      <span>20초 안에 맞게 읽은 낱말이 O입니다.</span></li>
+    <li><b>문장 읽기: 문장마다 읽은 시간(초)과 맞게 읽은 어절 수를 넣습니다</b>
+      <span>네 문장을 다 넣으면 총점(1초에 읽은 어절 수)이 계산됩니다.</span></li>
+    <li><b>쓰기: 화면에서 표시한 검사는 이미 채워져 있습니다</b>
+      <span>스캔본으로 한 검사는 아래 「스캔본으로 쓰기 채점」대로 합니다.</span></li>
+    <li><b>「자동 저장됨」을 확인합니다</b>
+      <span>오류가 뜨면 <span class="key">채점 저장</span>을 눌러 주세요.</span></li>
+    <li><b><span class="key">결과보고서 PDF 다운로드</span> 또는 <span class="key">다음 아동 ▶</span></b>
+      <span>다음 아동은 목록에서 보던 순서대로 넘어갑니다.</span></li>
+  </ol>
 
-
-  <h3>채점하는 순서</h3>
-  <figure>
-    <img src="shots/fig-sheet-word.png" alt="낱말 해독 채점 영역">
-    <figcaption>낱말 해독은 재생 바가 위에 붙어 있고 스크롤해도 따라오므로 들으면서 바로 찍을 수 있습니다.
-      문장 읽기유창성은 문장마다 재생기가 따로 있습니다.
-      배속을 <b>0.75배</b>로 낮추면 빠르게 읽은 아이를 받아 적기 쉽습니다.</figcaption>
-  </figure>
+  <figure><img class="shot" src="shots/fig-sheet-word.png" alt="낱말 해독 채점"></figure>
+  <figure><img class="shot" src="shots/fig-sheet-sentence.png" alt="문장 읽기 채점"></figure>
 
   <div class="box info">
-    <span class="bt">재녹음이 있으면 <b>마지막 차수</b>가 먼저 재생됩니다</span>
-    <p>같은 과제를 여러 번 녹음한 검사에는 재생 바 옆에 <span class="key">1차</span>
-      <span class="key">2차</span>… 칩(재녹음 차수)이 나옵니다. <b>처음에는 마지막 차수가 열립니다.</b>
-      선생님이 다시 녹음했다면 대개 그쪽이 제대로 담긴 것이라 화면 기본값을 이렇게 정했습니다.
-      이 기본값이 어느 차수로 채점할지를 정하지는 않습니다. 앞 차수도 칩을 눌러 그대로 들을 수 있습니다.</p>
-    <p style="margin-top:2mm">재생기 자리에 「이 녹음을 불러오지 못했어요」나 「이 녹음을 재생할 수 없어요」가 뜨면
-      옆의 <span class="key">다시 받기</span>를 누르세요.</p>
+    <span class="bt">녹음 듣기 요령</span>
+    <p>재생기를 누른 뒤 <b>스페이스</b>로 재생·정지, <b>← →</b>로 5초씩 옮깁니다. 배속을 0.75배로 낮추면 받아 적기 쉽습니다.
+      다시 녹음한 과제는 <span class="key">1차</span> <span class="key">2차</span> 칩으로 골라 들을 수 있습니다.
+      재생이 안 되면 <span class="key">다시 받기</span>를 누르세요.</p>
   </div>
 
+  <h3>스캔본으로 쓰기 채점</h3>
+  <figure><img class="shot" src="shots/fig-sheet-scan.png" alt="스캔본을 보며 쓰기 채점"></figure>
   <ol class="steps">
-    <li><b>목록에서 <span class="bg mint">제출 완료</span> 또는 <span class="bg amber">제출 · 미완료 있음</span>인 줄을 누릅니다</b>
-      <span><span class="bg mute">진행 중</span>은 아직 검사가 끝나지 않았으므로 채점 대상이 아닙니다.</span></li>
-    <li><b>낱말 해독 — 재생 버튼을 누르고, 아이가 맞게 읽은 낱말에 O, 틀린 낱말에 X를 찍습니다</b>
-      <span>기준은 <b>화면마다 20초 안에 정확하게 읽은 낱말 수</b>입니다. 검사지에 인쇄된 30초는 한 화면에
-        다 제시할 때의 값이고, 이 앱은 화면을 나눠 제시합니다.
-        녹음은 마지막 반응이 잘리지 않도록 조금 더 담기므로,
-        <b>20초를 넘긴 뒤의 반응은 채점하지 않습니다.</b> 재생 바 옆의 <span class="bg amber">20초 초과</span>는
-        녹음이 20초보다 길다는 표시이고, 오류는 아닙니다.</span></li>
-    <li><b>문장 읽기유창성 — 문장마다 <span style="border-bottom:1.6px solid var(--blue)">읽은 시간(초)</span>과 정확하게 읽은 <span style="border-bottom:1.6px solid var(--blue)">어절 수</span>를 넣습니다</b>
-      <span>녹음을 들으며 아이가 문장을 읽는 데 걸린 시간을 <b>초</b> 칸에, 맞게 읽은 어절 수를 그 오른쪽 칸에 넣습니다(아래 그림).
-        초는 4.5처럼 <b>소수 한 자리</b>까지 적을 수 있고 정수만 적어도 됩니다. 어절 칸은 문장마다 만점이 다릅니다(어절 수만큼).
-        <b>총점 = 정확하게 읽은 어절 수의 합 ÷ 읽은 시간의 합</b>(어절/초, 소수 둘째 자리까지)입니다.
-        예를 들어 네 문장을 10초에 읽고 정확 어절이 20개면 2.00입니다. <b>네 문장 모두</b> 시간과 어절이 들어가야 총점이 나오고,
-        그 전에는 「채점 전」입니다. 잘못 친 값(0초·4.55처럼 소수 두 자리 등)은 칸이 붉게 바뀌고 채점 전으로 남습니다.
-        녹음은 문장마다 20초입니다(인쇄된 40초는 한 화면에 다 제시할 때의 값입니다). 20초를 넘겨 읽은 경우
-        어디까지 셀지는 녹음을 들으며 정하시면 됩니다. 초 칸은 녹음 최대 길이인 25초까지 받습니다.</span></li>
-    <li><b>쓰기 — 화면에서 표시한 검사는 이미 채워져 있습니다(읽기만). 스캔본 검사는 여기서 채점합니다</b>
-      <span>쓰기는 녹음이 없어서, 선생님이 검사 중에 화면에서 표시하거나 아이가 쓴 기록지의 <b>스캔본</b>을 올립니다.
-        화면에서 표시한 값은 결과지에 <b>읽기 전용</b>으로 보이고 고칠 수 없습니다. 스캔본 검사는 아래 「스캔본을 보며 쓰기 채점」대로 관리자가 찍습니다.</span></li>
-    <li><b>손을 멈추면 1.5초 뒤 저절로 저장되고 「자동 저장됨」이 뜹니다</b>
-      <span><span class="key">채점 저장</span> 버튼도 있지만 누르지 않아도 됩니다(직접 누르면 「저장했어요.」가 뜹니다).
-        목록으로 돌아가도 채점은 남습니다. 자동 저장에 실패하면 오류 문구가 뜨고 자동 저장이 멈추니,
-        <span class="key">채점 저장</span>을 눌러 다시 저장하세요. 「저장하지 않은 채점이 있어요」가 남아 있는 동안에는 창을 닫지 마세요.
-        저장 전에 <span class="key">다음 아동</span>을 누르면 <span class="key">저장하고 이동</span>할지 묻습니다.
-        저장에 실패하면(로그인 만료 등) <b>이동하지 않고 창에 오류가 뜹니다.</b> 문구대로 처리한 뒤 다시 누르세요.
-        재생기를 누른 뒤 <b>스페이스</b>로 재생·정지, <b>← →</b>로 5초씩 이동할 수 있습니다.</span></li>
-    <li><b>다 됐으면 <span class="key">결과보고서 PDF 다운로드</span>를 누릅니다</b>
-      <span>또는 <span class="key">다음 아동 ▶</span>으로 넘어갑니다. 다음 아동은 목록에서 보던 순서의 다음 검사이고,
-        걸어 둔 필터와 정렬이 그대로 적용됩니다. 「스캔본 채점」 탭에서 채점을 마쳐 그 아이가 탭에서 빠져도 가장 가까운 남은 아이로 갑니다. 한 학급만 차례로 채점하려면 목록에서 학교·학년으로 거른 뒤 「학년/반」 열로 정렬하세요
-        (반별로 모이고, 같은 반 안에서는 이름순입니다).</span></li>
+    <li><b>왼쪽 스캔본을 보고 오른쪽 칸을 채웁니다</b>
+      <span>1학년은 O/X, 2학년은 맞게 쓴 어절 수(0·1·2)입니다. 확대·회전할 수 있습니다.</span></li>
+    <li><b>다른 아이의 기록지면 <span class="key">이 아이 기록지가 아니에요 — 연결 해제</span></b>
+      <span>선생님께 맞는 기록지를 다시 올려 달라고 연락해 주세요.</span></li>
   </ol>
 
-  <figure>
-    <img src="shots/fig-sheet-sentence.png" alt="문장 읽기유창성 채점 영역">
-    <figcaption>문장마다 <b>초</b> 칸(읽은 시간)과 <b>/ 7</b> 칸(정확 어절)이 나란히 있고, 아래 줄에 정확 어절·읽은 시간의 합과
-      총점(어절/초)이 계산됩니다. 녹음이 없는 3·4번 문장은 칸 대신 <b>점선 상자에 20 · 0</b>이 보이고 적을 수 없습니다.
-      제한 시간을 다 쓰고 0어절 읽은 것으로 계산한다는 뜻입니다.</figcaption>
-  </figure>
-
-  <h3>스캔본을 보며 쓰기 채점 — 스캔본 방식 검사</h3>
-  <figure>
-    <img src="shots/fig-sheet-scan.png" alt="스캔본을 보며 쓰기를 채점하는 영역">
-    <figcaption>왼쪽이 선생님이 올린 기록지 스캔본(확대·축소·회전·새 창에서 보기), 오른쪽이 채점 칸입니다.
-      번호는 기록지 칸 번호와 같습니다(1학년 1~10 · 2학년 1~5). 낱말 쓰기는 O/X, 2학년 문장 쓰기는 정확히 쓴 어절 수(0·1·2)를 고릅니다.</figcaption>
-  </figure>
-  <ol class="steps">
-    <li><b>제목 띠 오른쪽의 「스캔본 · 날짜 선생님이 올림」을 확인합니다</b>
-      <span>아직 안 올라왔으면 「스캔 대기」. 종이를 따로 받았다면 스캔본 없이 채점해도 되지만, 하나라도 찍는 순간
-        「스캔본 없이 채점 중」이 되어 선생님은 스캔본을 올릴 수 없습니다.</span></li>
-    <li><b>스캔본의 칸마다 O/X(또는 0·1·2)를 찍습니다</b>
-      <span>다른 채점과 같이 손을 멈추면 저절로 저장되고, 세 과제가 다 채점되면 선생님 화면이 「채점 완료」가 됩니다.</span></li>
-    <li><b>다른 아이의 기록지가 붙어 있으면 <span class="key">이 아이 기록지가 아니에요 — 연결 해제</span></b>
-      <span>스캔본과 그것을 보고 넣은 쓰기 채점이 지워지고 「스캔 대기」로 돌아갑니다. 선생님께 맞는 기록지를 올려 달라고 알려 주세요.</span></li>
-  </ol>
-  <div class="box">
-    <span class="bt">판독이 어려우면 담임 선생님께 직접 연락하세요</span>
-    <p>앱에는 「다시 올려 달라」 요청 기능이 없으니 결과지 머리말의 <b>담임 연락처</b>로 알려 주세요.
-      선생님이 다시 올리면 그 그림으로 바뀝니다. 다만 쓰기를 하나라도 찍은 뒤에는 선생님이 바꿀 수 없으니 먼저 연결을 해제하세요.
-      스캔본 없이 잘못 찍은 쓰기는 <span class="key">쓰기 채점 지우기</span>로 지웁니다. 채점하는 사이 선생님이 스캔본을 바꿨으면
-      저장하지 않은 쓰기 채점이 지워지고 새 스캔본이 보입니다. 새 그림으로 다시 채점하세요.</p>
-  </div>
-
-  <h3>화면의 표시 읽는 법</h3>
-  <p>결과지 맨 아래에 항상 붙어 있는 범례입니다. <b>「채점 전」과 「0점」을 헷갈리지 마세요.</b></p>
-
-  <figure>
-    <img src="shots/fig-sheet-legend.png" alt="결과지 표시 범례">
-  </figure>
-
+  <h3>화면의 표시</h3>
+  <figure><img class="shot" src="shots/fig-sheet-legend.png" alt="결과지 표시 범례"></figure>
   <table>
-    <tr><th style="width:32mm">표시</th><th>뜻</th></tr>
-    <tr><td><span class="bg mute">채점 전</span></td>
-      <td>아직 사람이 채점하지 않은 과제입니다. <b>0점이 아니며</b> 결과보고서 PDF에도 판정 칸이
-        <b>비어서</b> 나갑니다.</td></tr>
-    <tr><td><span class="bg red">미녹음</span></td>
-      <td>녹음이 올라오지 않은 과제입니다(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으므로 <b>오반응(X · 0점)으로 고정</b>되어
-        화면과 결과보고서 PDF에 그대로 나갑니다(제출된 검사만 해당하고, 진행 중인 검사는 「채점 전」으로 남습니다).
-        검사지의 「제한시간 내 읽지 못한 낱말은 0점」을 녹음이 없는 경우에도 적용한 것입니다.
-        문장 읽기유창성은 그 문장을 <b>20초 · 0어절</b>로 계산합니다. <b>칸이 잠겨 있어 고칠 수 없습니다.</b></td></tr>
-    <tr><td><span class="bg red">저장 실패</span></td>
-      <td>아이가 읽었지만 <b>인터넷 문제 등으로 녹음이 올라오지 않은</b> 과제입니다. 채점은 미녹음과 같고(오반응 고정),
-        결과보고서 PDF에서는 미녹음과 구별되지 않습니다.</td></tr>
-    <tr><td><span class="bg mint">Pass</span> <span class="bg red">Fail</span></td>
-      <td>과제별 기준 점수에 따른 판정. <b>채점이 끝난 과제에만</b> 나오고,
-        <b>결과보고서 PDF에 PASS/FAIL로 찍힙니다</b>(5장).</td></tr>
-    <tr><td><span class="bg amber">임시 기준 · 확정 전</span></td>
-      <td>Pass 기준이 아직 확정되지 않은 임시 숫자라는 표시입니다(앞의 상자 참고).</td></tr>
+    <tr><th style="width:42mm">표시</th><th>뜻</th></tr>
+    <tr><td><span class="bg mute">채점 전</span></td><td>아직 채점하지 않았습니다. 0점이 아닙니다.</td></tr>
+    <tr><td><span class="bg red">미녹음</span></td><td>녹음이 없습니다. 자동으로 0점이 되고 고칠 수 없습니다.</td></tr>
+    <tr><td><span class="bg red">저장 실패</span></td><td>아이가 읽었지만 녹음이 올라오지 않았습니다. 0점으로 처리됩니다.</td></tr>
+    <tr><td><span class="bg mint">Pass</span> <span class="bg red">Fail</span></td><td>과제별 판정입니다.</td></tr>
   </table>
 
-  <h3>아이 정보가 틀렸을 때 — <span class="key">정보 수정</span></h3>
-  <table>
-    <tr><th style="width:40mm">고칠 수 있는 것</th><th>고칠 수 없는 것</th></tr>
-    <tr>
-      <td>번호 · 이름 · 성별 · 생년월일</td>
-      <td><b>학년 · 학급</b>은 일부러 뺐습니다. 학년이 바뀌면 검사지 양식이 바뀌어
-        <b>이미 저장한 점수가 다른 문항을 가리키게</b> 됩니다.
-        학급 코드를 잘못 골라 검사했다면 수정하지 말고 <b>삭제한 뒤 재검사</b>하세요.</td>
-    </tr>
-  </table>
-  <p class="small">수정한 검사는 결과지 화면에 「정보 수정됨 · 원래 N번 이름」이 함께 표시되어 잘못 고쳤을 때
-    되돌릴 근거가 됩니다. 결과보고서 PDF에는 이 표시가 나오지 않습니다.</p>
+  <h3>아이 정보 고치기와 기록 삭제</h3>
+  <p>결과지 위쪽 <span class="key">정보 수정</span>에서 번호·이름·성별·생년월일을 고칩니다. 학년과 반은 고칠 수 없습니다.</p>
 
-  <h3>검사 기록을 지울 때 — <span class="key">검사 기록 삭제</span></h3>
   <div class="box danger">
-    <span class="bt">녹음 파일까지 영구 삭제되며 되돌릴 수 없습니다</span>
-    <p>결과지 맨 아래 오른쪽에 있습니다. 누르면 그 검사의 <b>녹음 파일·쓰기 기록지 스캔본·점수·아이 정보가 전부</b> 지워집니다.
-      휴지통은 없습니다. 보호자의 삭제 요청에 대응하거나, 잘못 만들어진 검사를 치울 때 씁니다.</p>
-    <p style="margin-top:2mm"><b>지우기 전에 결과보고서 PDF를 먼저 내려받아 두세요.</b>
-      지운 뒤에는 어떤 방법으로도 복구할 수 없습니다.</p>
+    <span class="bt">검사 기록 삭제는 되돌릴 수 없습니다</span>
+    <p>결과지 맨 아래 <span class="key">검사 기록 삭제</span>를 누르면 녹음·점수·아이 정보가 모두 지워집니다.
+      지우기 전에 결과보고서 PDF를 먼저 받아 두세요.</p>
   </div>
-
 </section>
 
 
 <!-- ══════════════ 5 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">5</span>결과보고서 PDF — 공식 출력물</h2>
-  <p class="sec-lead">채점을 마친 뒤 <b>학교와 보호자에게 보내는 공식 문서</b>입니다.
-    결과지 아래 <span class="key">결과보고서 PDF 다운로드</span>로 내려받습니다.</p>
+  <h2 class="sec"><span class="chip">5</span>결과보고서 PDF</h2>
+  <p class="sec-lead">채점을 마친 뒤 학교와 보호자에게 가는 결과 문서입니다.
+    결과지 아래 <span class="key">결과보고서 PDF 다운로드</span>로 받습니다.</p>
 
-  <div class="cols2">
-    <div>
-      <h4 style="margin-top:0">어떤 문서인가</h4>
-      <p>담당자가 정한 <b>결과보고서 양식</b>(1학년 남색 · 2학년 초록) 한 장입니다.
-        낱말별 O/X나 점수는 싣지 않고 <b>과제별 PASS/FAIL과 최종결과</b>만 보여 줍니다.</p>
-
-      <h4>찍히는 것 · 안 찍히는 것</h4>
-      <table class="tight">
-        <tr><td style="width:20mm"><b>찍힙니다</b></td>
-          <td>지역·학교, 학년·학기, 이름, 성별, 생년월일, 검사일 · 해독/읽기유창성/쓰기 PASS/FAIL과
-            <b>최종결과</b>(셋 중 둘 이상 FAIL이면 FAIL) · 최종결과에 따른 <b>결과 해석 및 권고</b> 문구 ·
-            검사자가 체크한 <b>추가 관찰 정보</b></td></tr>
-        <tr><td style="border:none"><b>안 찍힙니다</b></td>
-          <td style="border:none">낱말별 O/X·문장별 어절 수와 읽은 시간·소계와 총점 숫자(화면에서만 봅니다) · <b>아이 번호</b> ·
-            「임시 기준」 표시(양식에 그 칸이 없습니다)</td></tr>
-      </table>
-
-      <h4>파일 이름</h4>
-      <p><code>03_홍길동_2026-08-15.pdf</code>처럼 <b>두 자리 번호 + 이름 + 검사일</b>로 내려옵니다.
-        한 학급을 이어서 내려받으면 폴더에서 번호순으로 정렬됩니다.</p>
-
-      <div class="box warn">
-        <span class="bt">저장한 채점으로 만들어집니다</span>
-        <p>화면에서 방금 고친 값이 <b>아직 저장되지 않았으면 PDF가 내려오지 않고</b>
-          「먼저 채점을 저장해 주세요」 창이 뜹니다. 낱말 해독·문장 읽기유창성(어절과 읽은 시간) 채점이 남아 있으면
-          「채점이 끝나지 않았어요」가 뜹니다. 쓰기만 비어 있으면 <span class="key">그래도 다운로드</span>로
-          받을 수 있고, 쓰기 판정과 최종결과·해석 문구는 비어 나갑니다.</p>
+  <div class="figcol left">
+    <div class="col"><img class="shot" src="shots/fig-sheetpdf-1.png" alt="결과보고서 PDF"></div>
+    <div class="col">
+      <ul>
+        <li>과제별 PASS/FAIL, 최종결과, 해석 문구, 체크리스트가 들어갑니다.</li>
+        <li>채점을 저장하지 않았거나 낱말·문장 채점이 남아 있으면 받을 수 없다고 알려 줍니다.</li>
+        <li>쓰기만 비어 있으면 받을 수 있고, 그 칸은 비어서 나옵니다.</li>
+      </ul>
+      <div class="box ok">
+        <span class="bt">선생님은 직접 받아 갑니다</span>
+        <p>선생님이 검사 화면의 <span class="key">결과지 받기 →</span>로 메일 링크를 받아 내려받습니다.
+          관리자는 <b>채점만 끝내면</b> 됩니다.</p>
       </div>
-
-<div class="box">
-        <span class="bt">3~6학년은 아직 1학년 양식으로 나갑니다</span>
-        <p>지금 있는 검사지는 1학년(G1)과 2학년(G2) 둘뿐입니다. 3~6학년으로 발급한 코드로 검사하면
-          <b>1학년 양식으로 검사·채점</b>됩니다. PDF에는 드러나지 않고, 관리자 결과지 오른쪽 위 「KODYS - G1」 배지로만 알 수 있습니다.
-          3~6학년 검사지를 받으면 개발자에게 전달해 주세요.</p>
-      </div>
-
     </div>
-
-    <figure style="margin-top:0">
-      <img src="shots/fig-sheetpdf-1.png" alt="결과보고서 PDF">
-      <figcaption>실제로 내려받은 결과보고서 PDF(1학년 양식, 시험용 이름). 결과 요약의 네 칸과
-        해석 문구는 채점이 끝나야 채워지고, 아래 체크리스트는 검사자가 체크한 대로 나옵니다.</figcaption>
-    </figure>
   </div>
-
-  <h3>선생님은 이 PDF를 직접 받아 갑니다</h3>
-  <p>관리자가 파일을 보내 줄 필요가 없습니다. 담임 선생님이 검사 주소에서 학급 코드를 넣고
-    <span class="key">결과지 받기 →</span>를 누르면, <b>코드에 등록된 담임 메일로 링크</b>가 가고
-    그 링크에서 반 전체 또는 고른 아이의 결과지를 한 파일로 내려받습니다.</p>
-
-  <table>
-    <tr><th style="width:44mm">관리자가 할 일</th><td><b>채점을 끝내는 것뿐입니다.</b>
-      채점이 저장되는 즉시 선생님 화면에 반영되므로 같은 링크를 새로고침하면 됩니다.</td></tr>
-    <tr><th>선생님이 받는 것</th><td>관리자가 내려받는 것과 <b>똑같은 결과보고서 PDF</b>입니다.
-      여러 명이면 한 파일로 묶여 나갑니다.</td></tr>
-    <tr><th>받을 수 있는 것</th><td><b>채점이 끝난 검사만</b>입니다. 낱말 해독과 문장 읽기유창성(읽은 시간까지) 채점이 끝나면 되고,
-      쓰기가 비어 있어도 받을 수 있습니다(그 칸은 「채점 전」). 받을 수 있는 차수가 없는 아이 줄에는 고르는 칸이 없습니다.
-      스캔본 쓰기가 아직 채점 전인 아이가 섞이면 선생님 화면이 받기 전에 「쓰기 채점 전 N명」을 알리고
-      <b>완성된 것만</b> 받을 수도 있게 합니다.</td></tr>
-    <tr><th>스캔본</th><td>쓰기를 스캔본으로 한 반은 선생님이 <b>이 화면에서 반 전체 기록지 스캔본을 올립니다</b>.
-      선생님 화면의 상태는 <span class="bg amber">스캔 대기</span> → <span class="bg amber">채점 중</span>(올라옴) →
-      <span class="bg blue">채점 완료</span>(세 과제 모두)로 바뀌고, 스캔본으로 채점한 쓰기 점수에는 <span class="bg mint">스캔</span>이 붙습니다.</td></tr>
-    <tr><th>선생님 화면에 보이는 것</th><td>아이별 점수와 Pass/Fail(세 과제가 모두 채점됐을 때만),
-      「Fail N명」 요약, <span class="bg amber">임시 기준 · 확정 전</span> 표시. Fail인 아이가 위에 옵니다.</td></tr>
-  </table>
-
-  <div class="box warn">
-    <span class="bt">링크는 등록된 담임 메일로만 갑니다</span>
-    <p>선생님이 화면에서 주소를 바꿀 수 없습니다. 검사용 컴퓨터는 아이도 쓰는 자리라
-      누구나 주소를 적어 결과를 받아 가면 안 되기 때문입니다.
-      <b>주소가 잘못됐다면 관리자가 발급 목록에서 고쳐 줘야 합니다</b>(2장 「담임 이메일 수정」).</p>
-    <p style="margin-top:2mm">링크는 <b>14일</b> 동안 유효하고, 지나면 선생님이 같은 방법으로 다시 받으면 됩니다.
-      링크를 강제로 끊어야 할 일이 생기면 개발자에게 알려 주세요.</p>
-  </div>
-
 </section>
 
 
 <!-- ══════════════ 6 ══════════════ -->
 <section class="page">
-  <h2 class="sec"><span class="chip">6</span>개인정보 — 꼭 지켜야 할 것</h2>
-  <p class="sec-lead">이 시스템은 <b>만 14세 미만 아동의 실명·생년월일·성별·학교·반·번호와 음성 녹음</b>(스캔본으로 쓰기를 한
-    검사는 <b>아이 필적이 담긴 쓰기 기록지 그림</b>까지)을 갖고 있습니다.
-    법정대리인(보호자) 동의가 필수인 정보입니다(개인정보보호법 제22조의2).</p>
-
-  <h3>무엇을 갖고 있습니까</h3>
-  <table>
-    <tr><th style="width:36mm">어디에</th><th>무엇이</th><th style="width:44mm">언제 지워집니까</th></tr>
-    <tr><td><b>검사 기록</b></td>
-      <td>아이 이름·생년월일·성별·학교·학년·반·번호, <b>음성 녹음</b>, 쓰기 응답(스캔본이면 <b>기록지 그림</b>), 점수,
-        담임 성명·연락처(검사 당시 복사본)</td>
-      <td>결과지의 <span class="key">검사 기록 삭제</span>를 눌렀을 때</td></tr>
-    <tr><td><b>학급 코드</b></td>
-      <td>담임 성명·전화·이메일, 학교·학년·반</td>
-      <td>코드를 삭제했을 때. <b>검사 기록을 지워도 남습니다</b></td></tr>
-    <tr><td><b>신청 명단</b></td>
-      <td>아이 번호·이름·성별·생년월일</td>
-      <td>그 학급 코드를 지우면 <b>함께</b> 지워집니다</td></tr>
-  </table>
-
-  <h3>검사 전에 반드시 되어 있어야 하는 것</h3>
-  <ol class="steps">
-    <li><b>학교의 개인정보 처리 방침·절차에 따라 법정대리인(보호자) 동의를 받습니다</b>
-      <span>수단(종이·학교 알림앱·전자동의 등)은 학교가 정합니다. 이 앱은 동의서 양식을 제공하지 않습니다.
-        법적으로는 실제로 동의를 받았다는 사실이 중요합니다. 받아 온 동의 기록의 원본은 운영 주체가
-        따로 보관합니다.</span></li>
-    <li><b>검사 시작 화면에서 선생님이 「법정대리인(보호자)의 동의를 받았고, 위 개인정보 수집·이용 안내를 확인했습니다.」에 체크합니다</b>
-      <span>체크한 시각이 검사 기록에 남아 나중에 확인할 근거가 됩니다. 체크하지 않으면 검사가 시작되지 않습니다.</span></li>
-  </ol>
-  <p class="small">아이에게도 마이크 확인 화면에서 「지금부터 읽는 목소리를 녹음해요.
-    녹음한 소리는 검사를 확인하는 선생님만 들어요.」라고 쉬운 말로 알립니다.</p>
-
-  <h3>지우는 세 가지 방법</h3>
-  <table>
-    <tr><th style="width:40mm">방법</th><th>무엇이 지워집니까</th><th style="width:36mm">언제</th></tr>
-    <tr><td><b>결과지 →<br><span class="key">검사 기록 삭제</span></b></td>
-      <td>그 검사 한 건 — 녹음 파일·스캔본까지 영구 삭제</td>
-      <td>보호자 삭제 요청, 잘못 만든 기록</td></tr>
-    <tr><td><b>학급 코드 →<br><span class="key">삭제</span></b></td>
-      <td>담임 연락처와 학생 명단. <b>검사 기록이 남아 있으면 삭제 버튼이 나타나지 않으므로</b> 먼저 검사 기록부터 지웁니다</td>
-      <td>학급이 끝난 뒤</td></tr>
-    <tr><td><b>일괄 파기</b><br><span class="small">개발자와 함께</span></td>
-      <td>보존 기한이 지난 기록 전체</td>
-      <td>보존 기한을 정한 뒤, 주기적으로</td></tr>
-  </table>
-
-  <div class="box warn">
-    <span class="bt">일괄 파기는 자동이 아니고, 순서가 중요합니다</span>
-    <p>녹음·스캔본 <b>파일</b>은 데이터 행을 지운다고 함께 지워지지 않습니다. 반드시
-      <b>① 관리자 화면에서 대상 검사를 삭제</b>한 다음 <b>② 남은 코드를 정리</b>하는 순서로 하세요.
-      데이터베이스에서 기록만 지우면 녹음·스캔본 파일이 남습니다. <b>이 작업은 개발자와 함께 하세요.</b>
-      정확한 절차와 명령은 개발 문서에 정리돼 있습니다.</p>
-  </div>
-
-  <h3>매일 지킬 것</h3>
-  <div class="chk">
-    <div class="row"><span class="sq"></span><div>
-      <b>자리를 뜰 때는 <span class="key">로그아웃</span></b>
-      <span>화면에 남은 아이들 이름·생년월일까지 함께 지워집니다. 8시간을 기다리지 마세요.</span></div></div>
-    <div class="row"><span class="sq"></span><div>
-      <b>학급 코드는 담임 한 사람에게만</b>
-      <span>단체방·공유 문서·화면 캡처 금지. 코드만 알면 그 학급 명단 전체를 볼 수 있습니다.</span></div></div>
-    <div class="row"><span class="sq"></span><div>
-      <b>명단은 확인 후 바로 접기</b>
-      <span><code>/admin/codes</code>의 <span class="key">명단 보기</span>에는 신청 명단 전체(실명·생년월일)가 뜹니다.
-        아직 검사하지 않은 아이도 들어 있습니다.</span></div></div>
-    <div class="row"><span class="sq"></span><div>
-      <b>방치된 신청은 주기적으로 정리</b>
-      <span>승인도 반려도 하지 않은 대기 건에는 아이 실명 명단이 붙어 있습니다.
-        신청 주소는 사실상 공개돼 있어 장난 신청도 쌓입니다.</span></div></div>
-  </div>
-</section>
-
-
-<!-- ══════════════ 7 ══════════════ -->
-<section class="page">
-  <h2 class="sec"><span class="chip">7</span>이럴 때는</h2>
+  <h2 class="sec"><span class="chip">6</span>이럴 때는</h2>
 
   <div class="qa">
     <div class="item">
       <p class="q">선생님이 코드를 못 받았대요</p>
-      <p class="a"><code>/admin/codes</code>에서 그 학급을 찾습니다. <b>발급 목록에 있으면</b> 승인은 된 것이므로
-        코드를 그대로 알려 주면 됩니다. <b>대기 중에 있으면</b> 아직 승인하지 않았으니
-        <span class="key">승인</span>을 누르세요. 승인은 됐는데 메일만 실패한 경우가 흔하니,
-        승인 직후에 뜨는 문구를 항상 확인하세요.</p>
+      <p class="a">학급 코드 화면에서 그 학급을 찾습니다. 대기 중이면 <span class="key">승인</span>을,
+        발급 목록에 있으면 코드를 알려 주거나 <span class="key">안내 문구 복사</span>로 보내 주세요.</p>
     </div>
-
     <div class="item">
-      <p class="q">코드를 넣었더니 「코드를 확인해 주세요.」라고 나옵니다</p>
-      <p class="a">셋 중 하나입니다. ① 아직 <b>승인하지 않은</b> 신청입니다. 미승인 코드는 일부러
-        없는 코드와 똑같이 거부되게 만들었습니다. ② 코드를 <b>삭제</b>했습니다.
-        ③ 오타입니다. <code>0·O·1·I·L</code>은 헷갈려서 코드에 아예 쓰지 않으므로, 이 글자가 보이면 잘못 친 것입니다.</p>
+      <p class="q">선생님이 「코드를 확인해 주세요」가 뜬대요</p>
+      <p class="a">아직 승인하지 않았거나, 코드를 지웠거나, 잘못 친 것입니다. 코드에는 0·O·1·I·L이 쓰이지 않습니다.</p>
     </div>
-
     <div class="item">
-      <p class="q">녹음이 하나도 없이 「제출」로 올라왔습니다</p>
-      <p class="a">아이가 「모르겠어요」로 넘겼거나 업로드가 실패한 것입니다. 그 과제는
-        <span class="bg red">미녹음</span>으로, 업로드가 실패한 것은 <span class="bg red">저장 실패</span>로 표시되고
-        둘 다 <b>오반응(X·0점)</b>으로 자동 채점됩니다.
-        검사지의 「제한시간 내 읽지 못한 낱말은 0점」을 녹음이 없는 경우에도 적용한 것입니다.
-        이런 검사는 관리자가 열어 보기 전에 이미 채점 완료로 계산돼 <b>선생님이 0점 결과지를 받을 수 있습니다.</b>
-        <span class="bg red">저장 실패</span>가 보이면 선생님께 먼저 알리고, 같은 학급에서 계속 반복되면 그 교실의 마이크·네트워크를 의심하세요.</p>
+      <p class="q">결과지 링크 메일이 다른 주소로 갔대요</p>
+      <p class="a">학급 코드 발급 목록에서 그 학급의 <span class="key">수정</span>으로 이메일을 고친 뒤, 선생님께 다시 받으라고 알려 주세요.</p>
     </div>
-
     <div class="item">
-      <p class="q">선생님께 재검사를 요청하려면</p>
-      <p class="a">앱에는 알림 기능이 없습니다. 학급 코드 화면 발급 목록의 담임 연락처로 직접 연락해 학교·반·번호를 알려 주세요.
-        다시 검사하면 새 회차로 쌓이고 이전 기록은 남습니다.</p>
+      <p class="q">녹음이 안 들리거나 비어 있어요</p>
+      <p class="a">선생님께 연락해 다시 검사해 달라고 요청하세요. 다시 검사하면 새 회차로 쌓이고 이전 기록은 남습니다.</p>
     </div>
-
     <div class="item">
-      <p class="q">선생님이 쓰기 입력을 잘못 넣고 제출했대요</p>
-      <p class="a">화면에서 표시한 쓰기는 고칠 수 없습니다. 필요하면 결과보고서 PDF를 받아 둔 뒤 그 검사 기록을 지우고 재검사를 안내하세요.</p>
+      <p class="q">선생님이 쓰기를 잘못 넣고 제출했대요</p>
+      <p class="a">화면에서 표시한 쓰기는 고칠 수 없습니다. PDF를 받아 둔 뒤 그 기록을 지우고 다시 검사하도록 안내하세요.</p>
     </div>
-
     <div class="item">
-      <p class="q">명단의 이름·생년월일이 틀렸대요</p>
-      <p class="a">명단 자체는 고칠 수 없습니다. 검사가 끝난 뒤 결과지의 <span class="key">정보 수정</span>으로 그 검사 기록을 고칩니다.</p>
+      <p class="q">같은 아이가 목록에 두 번 있어요</p>
+      <p class="a">다시 검사한 것입니다. 필요 없는 쪽을 지우면 됩니다.</p>
     </div>
-
     <div class="item">
-      <p class="q">녹음이 안 들리거나 무음입니다</p>
-      <p class="a">현장 기기의 마이크 문제입니다. 다시 검사하는 수밖에 없습니다.
-        같은 학급·번호로 다시 검사하면 <span class="bg blue">2/2회차</span>로 따로 쌓이고
-        이전 기록은 지워지지 않습니다.</p>
+      <p class="q">학급 코드를 지우려는데 삭제 버튼이 없어요</p>
+      <p class="a">그 코드로 한 검사 기록이 있어서입니다. 검사 기록을 먼저 지워야 합니다.</p>
     </div>
-
     <div class="item">
-      <p class="q">아이 이름·생년월일이 틀렸습니다</p>
-      <p class="a">결과지 오른쪽 위 <span class="key">정보 수정</span>으로 고칩니다.
-        <b>학년·학급은 고칠 수 없습니다.</b> 학급을 잘못 골랐다면 그 기록을 지우고 다시 검사하세요.</p>
+      <p class="q">채점이 저장됐는지 모르겠어요</p>
+      <p class="a">「자동 저장됨」이 보이면 저장된 것입니다. 오류가 보이면 창을 닫지 말고 <span class="key">채점 저장</span>을 누르세요.</p>
     </div>
-
     <div class="item">
-      <p class="q">학급 코드를 지우려는데 삭제 버튼이 없습니다</p>
-      <p class="a">그 코드로 시작된 검사 기록이 있기 때문입니다(검사 수 열을 보세요).
-        검사 기록을 먼저 다 지워야 코드를 지울 수 있습니다. 기록을 남겨야 한다면
-        결과보고서 PDF를 먼저 내려받으세요.</p>
-    </div>
-
-    <div class="item">
-      <p class="q">같은 아이가 목록에 두 번 있습니다</p>
-      <p class="a">정상입니다. 재검사를 막지 않으므로 회차 표시(<span class="bg blue">1/2회차</span>)가 붙어
-        나란히 쌓입니다. 필요 없는 쪽을 지우면 됩니다.</p>
-    </div>
-
-    <div class="item">
-      <p class="q">채점을 했는데 저장됐는지 모르겠습니다</p>
-      <p class="a">「자동 저장됨」이 뜨면 저장된 것입니다. 「저장하지 않은 채점이 있어요」가 남아 있거나
-        「채점을 저장하지 못했어요.」 같은 오류가 보이면 <b>아직 저장되지 않았으니</b> 창을 닫지 말고
-        <span class="key">채점 저장</span>을 누르세요(4장 채점 순서 5).</p>
-    </div>
-
-    <div class="item">
-      <p class="q">Pass / Fail을 그대로 믿어도 됩니까</p>
-      <p class="a"><b>아직은 참고용입니다.</b> <span class="bg amber">임시 기준 · 확정 전</span>이
-        붙어 있는 동안 Pass/Fail은 임시 숫자로 매긴 판정입니다.
-        판정보다 점수를 보세요(4장 「Pass 기준은 아직 임시 숫자입니다」). 선생님 결과지 화면에도 같은 판정이
-        「임시 기준 · 확정 전」 표시와 함께 나옵니다.</p>
-    </div>
-
-    <div class="item">
-      <p class="q">비밀번호를 여러 번 틀려 잠겼습니다</p>
-      <p class="a">같은 인터넷 회선에서 5번 틀리면 10분 잠깁니다. 10분 뒤 다시 시도하세요.
-        비밀번호를 잊었다면 재발급 기능은 없고, 개발자가 새 비밀번호를 설정해야 합니다(8장).</p>
-    </div>
-
-    <div class="item">
-      <p class="q">아이 녹음이 외부로 나가나요</p>
-      <p class="a">나가지 않습니다. 녹음은 비공개 보관소에 있고, 관리자가 결과지를 열었을 때만
-        <b>1시간짜리 임시 주소</b>가 만들어져 재생됩니다. 이 앱은 자동 채점을 아예 쓰지 않으므로
-        음성 인식 서비스에도 보내지 않습니다.</p>
-    </div>
-
-    <div class="item">
-      <p class="q">제출된 검사를 아이가 다시 고칠 수 있나요</p>
-      <p class="a">없습니다. 최종 제출된 검사는 검사 기록이 나중에 바뀌지 않도록
-        녹음 추가 업로드와 재제출이 모두 막힙니다.</p>
+      <p class="q">비밀번호를 잊었어요</p>
+      <p class="a">화면에서 다시 만들 수 없습니다. 개발 담당자에게 새 비밀번호를 요청하세요.</p>
     </div>
   </div>
-</section>
 
-
-<!-- ══════════════ 8 ══════════════ -->
-<section class="page">
-  <h2 class="sec"><span class="chip">8</span>관리와 정기 작업</h2>
-  <p class="sec-lead">비밀번호 교체와 주기적으로 챙길 일입니다.</p>
-
-  <h3>관리자 비밀번호를 바꾸려면</h3>
-  <p>화면에서 바꿀 수 없습니다. 개발자에게 새 비밀번호 설정을 요청하세요. 비밀번호 값 자체는 코드나 문서
-    어디에도 적어 두지 않습니다. <b>함께 쓰는 비밀번호이니 관리자가 바뀌면 반드시 교체하세요.</b></p>
-
-  <h3>정기적으로 할 일</h3>
-  <table>
-    <tr><th style="width:26mm">주기</th><th>할 일</th></tr>
-    <tr><td><b>주 1회</b></td>
-      <td><code>/admin/codes</code>에서 대기 중인 신청을 처리합니다. 알림 메일이 실패할 수 있으니
-        메일만 믿지 말고 화면을 직접 확인하세요.</td></tr>
-    <tr><td><b>월 1회</b></td>
-      <td>승인도 반려도 하지 않고 오래 방치된 신청을 정리합니다. 이런 신청에는 아이 실명 명단이 붙어 있습니다.
-        <code>/admin/codes</code>에서 하나씩 <span class="key">삭제</span>하거나, 한꺼번에 지우려면 개발자에게 요청하세요.</td></tr>
-    <tr><td><b>학기·연 단위</b></td>
-      <td>보존 기한이 지난 검사 기록을 파기하고, 끝난 학급의 코드도 함께 정리합니다(6장 순서 주의).
-        녹음 파일과 쓰기 기록지 스캔본이 쌓이므로 저장 용량도 함께 확인하세요(스캔본은 쪽당 0.3~1MB). 목록은 최대 5,000건까지 보여 주고 넘으면 오래된 검사부터 빠지므로,
-        그쯤 되면 개발자에게 알려 주세요.</td></tr>
-    <tr><td style="border:none"><b>검사 시즌 전</b></td>
-      <td style="border:none">실제 검사에 쓸 컴퓨터와 헤드셋으로 마이크 녹음이 되는지 한 번 시험 검사해 보세요.
-        무음 녹음처럼 조용히 실패하는 문제는 실제 기기에서만 드러납니다.</td></tr>
-  </table>
-
-  <div class="box info">
-    <span class="bt">더 깊은 내용이 필요하면</span>
-    <p>이 설명서는 <b>화면을 쓰는 법</b>을 다룹니다. 시스템을 고치거나 옮겨야 할 때 필요한
-      셋업 순서, 환경 설정값, 데이터 구조, 왜 그렇게 만들었는지는
-      소스 코드 저장소의 <code>README.md</code>와 폴더마다 있는 <code>README.md</code>에
-      모두 적혀 있습니다. 개발자에게 그 문서를 가리키면 됩니다.</p>
+  <div class="box warn" style="margin-top:6mm">
+    <span class="bt">지켜 주세요</span>
+    <p>자리를 뜰 때는 로그아웃합니다. 명단은 확인한 뒤 바로 접습니다. 오래 방치된 신청은 정리합니다(아이 명단이 붙어 있습니다).</p>
   </div>
 </section>
 
