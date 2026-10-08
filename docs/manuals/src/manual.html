@@ -165,7 +165,7 @@
         <li><b><span class="key">코드 발급</span>을 누릅니다</b>
           <span>같은 반 코드가 이미 있으면 알림이 뜹니다. 대개는 있는 코드를 쓰면 됩니다.</span></li>
         <li><b><span class="key">코드 복사</span>로 선생님께 전달합니다</b>
-          <span>메일이 자동으로 가지 않습니다. 검사 주소와 선생님용 설명서도 함께 보내 주세요.</span></li>
+          <span>메일이 자동으로 가지 않습니다. 검사 주소 <code>https://speech-survey.vercel.app</code>와 선생님용 설명서도 함께 보내 주세요.</span></li>
       </ol>
     </div>
     <div class="col"><img class="shot" src="shots/fig-codes-form.png" alt="학급 코드 직접 발급 폼"></div>
@@ -231,7 +231,6 @@
     <div class="c"><span class="num">1</span><span><b>아이 정보.</b> 틀렸으면 <span class="key">정보 수정</span>으로 고칩니다.</span></div>
     <div class="c"><span class="num">2</span><span><b>검사지.</b> G1은 1학년, G2는 2학년입니다.</span></div>
     <div class="c"><span class="num">3</span><span><b>총평.</b> 과제별 점수와 Pass/Fail입니다.</span></div>
-    <div class="c"><span class="num">4</span><span><b>임시 기준 · 확정 전.</b> Pass 기준이 아직 확정되지 않았다는 표시입니다. 판정은 참고용으로 보세요.</span></div>
   </div>
 
   <h3>채점 순서</h3>
@@ -241,7 +240,8 @@
     <li><b>낱말 해독: 녹음을 들으며 낱말마다 O 또는 X를 누릅니다</b>
       <span>20초 안에 맞게 읽은 낱말이 O입니다.</span></li>
     <li><b>문장 읽기: 문장마다 읽은 시간(초)과 맞게 읽은 어절 수를 넣습니다</b>
-      <span>네 문장을 다 넣으면 총점(1초에 읽은 어절 수)이 계산됩니다.</span></li>
+      <span>시간은 녹음을 들으며 아이가 실제로 읽은 시간을 넣습니다. 녹음 길이를 그대로 쓰지 않습니다.
+        녹음이 없는 문장은 20초·0어절로 자동으로 채워집니다. 네 문장을 다 넣으면 총점(1초에 읽은 어절 수)이 계산됩니다.</span></li>
     <li><b>쓰기: 화면에서 표시한 검사는 이미 채워져 있습니다</b>
       <span>스캔본으로 한 검사는 아래 「스캔본으로 쓰기 채점」대로 합니다.</span></li>
     <li><b>「자동 저장됨」을 확인합니다</b>
@@ -270,7 +270,6 @@
   </ol>
 
   <h3>화면의 표시</h3>
-  <figure><img class="shot" src="shots/fig-sheet-legend.png" alt="결과지 표시 범례"></figure>
   <table>
     <tr><th style="width:42mm">표시</th><th>뜻</th></tr>
     <tr><td><span class="bg mute">채점 전</span></td><td>아직 채점하지 않았습니다. 0점이 아닙니다.</td></tr>
@@ -322,7 +321,7 @@
     <div class="item">
       <p class="q">선생님이 코드를 못 받았대요</p>
       <p class="a">학급 코드 화면에서 그 학급을 찾습니다. 대기 중이면 <span class="key">승인</span>을,
-        발급 목록에 있으면 코드를 알려 주거나 <span class="key">안내 문구 복사</span>로 보내 주세요.</p>
+        발급 목록에 있으면 그 코드와 검사 주소 <code>https://speech-survey.vercel.app</code>를 알려 주세요.</p>
     </div>
     <div class="item">
       <p class="q">선생님이 「코드를 확인해 주세요」가 뜬대요</p>
