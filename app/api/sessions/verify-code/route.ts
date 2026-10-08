@@ -56,6 +56,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ...base, alreadyTested })
   } catch (e) {
     console.error('[verify-code] 조회 실패', e)
-    return jsonError('확인에 실패했어요. 잠시 후 다시 시도해 주세요.', 502)
+    return jsonError('확인하지 못했어요. 잠시 후 다시 시도해 주세요.', 502)
   }
 }

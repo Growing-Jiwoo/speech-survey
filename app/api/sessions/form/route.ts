@@ -16,14 +16,14 @@ export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}))
-  const invalidToken = () => jsonError('유효하지 않은 세션이에요.', 401)
+  const invalidToken = () => jsonError('검사 정보가 올바르지 않아요.', 401)
   if (typeof b.sessionId !== 'string' || !b.sessionId || typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
 
   try {
     const s = await sessionState(b.sessionId)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     // 제출된 검사는 다시 진행할 수 없으니(제출·업로드가 모두 409) 문항을 줄 이유도 없다.
     if (s.state === 'submitted') return jsonError('이미 제출된 검사예요.', 409)
     // 학년은 클라이언트가 아니라 세션 행이 정한다 — 제출 라우트와 같은 규칙.

@@ -49,7 +49,7 @@ export function CodeIssuer() {
     if (!validEmail(v)) { setEditErr('이메일 형식을 확인해 주세요.'); return }
     setEditBusy(true); setEditErr('')
     const r = await requestJson<{ code: ClassCodeItem }>(`/api/admin/codes/${c.id}`,
-      { method: 'PATCH', body: { teacherEmail: v } }, '수정에 실패했어요. 다시 시도해 주세요.')
+      { method: 'PATCH', body: { teacherEmail: v } }, '수정하지 못했어요. 다시 시도해 주세요.')
     setEditBusy(false)
     if (!r.ok) { setEditErr(r.error); return }
     setEditId(null)
@@ -73,7 +73,7 @@ export function CodeIssuer() {
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('담임교사명은 한글이나 영어로만 쓸 수 있어요.'); return }
     // 이메일 필수(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 이 주소로만 간다.
-    if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크가 이 주소로 발송돼요.'); return }
+    if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크를 이 주소로 보내요.'); return }
     if (cleanPhone && !validPhone(cleanPhone)) { setErr('전화번호 형식으로 입력해 주세요. (예: 01012345678)'); return }
     if (!validEmail(cleanEmail)) { setErr('이메일 형식으로 입력해 주세요.'); return }
 
@@ -85,7 +85,7 @@ export function CodeIssuer() {
     if (dup && dupAck !== classKey) {
       setDupAck(classKey)
       setErr(`이 학급의 코드가 이미 있어요(${dup.code}${dup.status === 'pending' ? ' · 신청 대기' : ''}, 담임 ${dup.teacher_name}). `
-        + '같은 반에 코드가 둘이면 결과지가 나뉩니다. 그래도 새로 발급하려면 [코드 발급]을 한 번 더 누르세요.')
+        + '같은 반에 코드가 둘이면 결과지가 나뉘어요. 그래도 새로 발급하려면 [코드 발급]을 한 번 더 누르세요.')
       return
     }
 
@@ -94,7 +94,7 @@ export function CodeIssuer() {
       region: school.region, schoolId: school.schoolId, schoolName: school.schoolName,
       grade: Number(grade), classNo: Number(classNo),
       teacherName: cleanTeacher, teacherPhone: cleanPhone, teacherEmail: cleanEmail,
-    }, '코드 발급에 실패했어요. 다시 시도해 주세요.')
+    }, '코드를 발급하지 못했어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
     setIssued({ ...r.data.code, session_count: 0, roster_count: 0 })
@@ -108,7 +108,7 @@ export function CodeIssuer() {
     if (!toDelete) return
     setDeleting(true); setDelErr('')
     const r = await requestJson(`/api/admin/codes/${toDelete.id}`, { method: 'DELETE' },
-      '삭제에 실패했어요. 다시 시도해 주세요.')
+      '삭제하지 못했어요. 다시 시도해 주세요.')
     setDeleting(false)
     if (!r.ok) { setDelErr(r.error); return }
     if (issued?.id === toDelete.id) setIssued(null)
@@ -128,7 +128,7 @@ export function CodeIssuer() {
       <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
         <div>
           <p className="text-[15px] font-bold">학급 코드 발급</p>
-          <p className="text-[12px] text-ink-mute">코드 하나가 학급 하나예요 · 검사 현장은 이 코드만 입력합니다</p>
+          <p className="text-[12px] text-ink-mute">코드 하나가 학급 하나예요 · 검사 현장에서는 이 코드만 입력해요</p>
         </div>
         <Link href="/admin"
           className="ml-auto rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
@@ -274,7 +274,7 @@ export function CodeIssuer() {
             </tbody>
           </table>
           {active.length === 0 && (
-            <p className="p-8 text-center text-sm text-ink-mute">아직 발급한 코드가 없습니다.</p>
+            <p className="p-8 text-center text-sm text-ink-mute">아직 발급한 코드가 없어요.</p>
           )}
         </div>
       )}
@@ -289,15 +289,15 @@ export function CodeIssuer() {
         {toDelete?.status === 'pending' ? (
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             {toDelete.school_name} {gradeClassLabel(toDelete.grade, toDelete.class_no)} <b>{toDelete.teacher_name}</b> 선생님의
-            신청과 <b>학생 명단 {toDelete.roster_count}명</b>이 지워지며, 되돌릴 수 없습니다.
+            신청과 <b>학생 명단 {toDelete.roster_count}명</b>이 지워지고 되돌릴 수 없어요.
             {/* cascade로 명단(아동 실명·생년월일)까지 함께 지워지므로 반드시 알린다 */}
-            <br /><b className="text-rec-deep">선생님께는 메일이 가지 않습니다</b> — 반려 사실은 따로 알려 주세요
+            <br /><b className="text-rec-deep">선생님께는 메일이 가지 않아요</b>. 반려 사실은 따로 알려 주세요
             {toDelete.teacher_email ? <>({toDelete.teacher_email})</> : null}.
           </p>
         ) : (
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             <b>{toDelete?.code}</b> ({toDelete?.school_name} {toDelete && gradeClassLabel(toDelete.grade, toDelete.class_no)})
-            코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없습니다.
+            코드를 삭제하면 이 코드로는 더 이상 검사를 시작할 수 없어요.
           </p>
         )}
       </ConfirmDialog>

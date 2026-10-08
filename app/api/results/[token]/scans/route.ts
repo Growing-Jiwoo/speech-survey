@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const fd = await req.formData().catch(() => null)
   const file = fd?.get('file')
   const sessionId = String(fd?.get('sessionId') ?? '')
-  if (!(file instanceof File) || !UUID_RE.test(sessionId)) return jsonError('필수 항목 누락', 400)
+  if (!(file instanceof File) || !UUID_RE.test(sessionId)) return jsonError('빠진 항목이 있어요.', 400)
   if (file.size > MAX_BYTES) return jsonError('스캔본이 너무 커요.', 413)
   const bytes = new Uint8Array(await file.arrayBuffer())
   const mime = sniffImage(bytes)
@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   try {
     const t = await scanUploadTarget(sessionId)
     // 다른 학급의 검사는 없는 검사와 같은 404 — 있다는 사실도 알려 주지 않는다.
-    if (!t || t.class_code_id !== classCodeId) return jsonError('검사를 찾을 수 없어요.', 404)
+    if (!t || t.class_code_id !== classCodeId) return jsonError('검사 기록이 없어요.', 404)
     if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사예요.', 409)
     if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사예요.', 409)
     const writingCodes = new Set(itemsFor(formForGrade(t.grade)).writingItems.map(i => i.code))

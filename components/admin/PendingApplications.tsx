@@ -37,7 +37,7 @@ export function PendingApplications({
   async function approve(c: ClassCodeItem) {
     setBusyId(c.id); setErr('')
     const r = await postJson<{ already: boolean; mailed: boolean; code: string; surveyUrl: string }>(
-      `/api/admin/codes/${c.id}/approve`, undefined, '승인에 실패했어요. 다시 시도해 주세요.')
+      `/api/admin/codes/${c.id}/approve`, undefined, '승인하지 못했어요. 다시 시도해 주세요.')
     setBusyId(null)
     if (!r.ok) { setErr(r.error); return }
     setApproved({
@@ -68,7 +68,7 @@ export function PendingApplications({
         <p className="text-[15px] font-bold">
           대기 중 <span className="text-amber">{items.length}건</span>
           <span className="ml-2 text-[12px] font-medium text-ink-mute">
-            선생님이 직접 신청한 학급이에요 · 승인하면 코드가 메일로 발송됩니다
+            선생님이 직접 신청한 학급이에요 · 승인하면 코드를 메일로 보내요
           </span>
         </p>
       )}
@@ -211,8 +211,8 @@ function ApprovedBanner({ a, copied, onCopy }: { a: Approved; copied: boolean; o
       <div>
         <p className="text-sm font-bold">
           {sure ? '승인 완료 · 선생님께 코드 메일을 보냈어요'
-            : a.already ? '이미 승인된 학급이에요 · 메일 발송 여부는 알 수 없어요'
-              : '승인은 됐지만 메일 발송에 실패했어요'}
+            : a.already ? '이미 승인된 학급이에요 · 메일을 보냈는지는 알 수 없어요'
+              : '승인은 됐지만 메일을 보내지 못했어요'}
         </p>
         <p className="mt-0.5 text-[12px] text-ink-mute">
           {a.schoolName} 담임 {a.teacherName} · 학급 코드{' '}

@@ -104,7 +104,7 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
     const r = roster.find(x => x.childNo === n)
     if (r) {
       setPicked(prev => new Set(prev).add(n))
-      setExtraNote(`${n}번은 명단에 있어요 — ${r.name} 학생 기록지로 넣었어요`)
+      setExtraNote(`${n}번은 명단에 있어서 ${r.name} 학생 기록지로 넣었어요`)
       return
     }
     setExtraNote('')
@@ -150,7 +150,7 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 pb-2">
             <h2 id="sheet-dialog-title" className="text-lg font-bold">쓰기 기록지를 인쇄할까요?</h2>
             <p className="mt-1 text-[13px] text-ink-soft">
-              {hasRoster ? '아이마다 한 장씩, 번호·이름이 찍혀 나와요.' : '아이마다 한 장씩, 번호가 찍혀 나와요(이름은 손으로 적어요).'}
+              {hasRoster ? '아이마다 한 장씩, 번호·이름이 찍혀 나와요.' : '아이마다 한 장씩, 번호가 찍혀 나와요. 이름은 손으로 적어요.'}
             </p>
             <div className="mt-3 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] leading-relaxed text-ink-soft">
               <b className="text-ink">{cls.schoolName} {classLabel(cls.grade, cls.classNo)}</b>
@@ -193,14 +193,14 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
                 )}
                 <div className="mt-3 rounded-xl border border-dashed border-line px-3.5 py-2.5">
                   <p className="text-[13px] font-bold">번호만 찍힌 기록지</p>
-                  <p className="text-[11.5px] text-ink-mute">명단에 없는 학생(전학생 등)용 — 이름은 손으로 적어요</p>
+                  <p className="text-[11.5px] text-ink-mute">명단에 없는 학생(전학생 등)용이에요. 이름은 손으로 적어요</p>
                   {extraRow}
                 </div>
               </>
             ) : (
               <div className="mt-3 rounded-xl border border-dashed border-line px-3.5 py-2.5">
                 <p className="text-[13px] font-bold">번호만 찍힌 기록지</p>
-                <p className="text-[11.5px] text-ink-mute">명단이 없는 학급이에요 — 이름은 손으로 적어요</p>
+                <p className="text-[11.5px] text-ink-mute">명단이 없는 학급이라 이름은 손으로 적어요</p>
                 <div className="mt-2 flex items-center gap-2 text-[13px] text-ink-soft">
                   1번부터
                   <input value={rangeTo} inputMode="numeric" maxLength={2} aria-label="마지막 번호"

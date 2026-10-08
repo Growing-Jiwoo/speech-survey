@@ -55,7 +55,7 @@ export function ScoreBand({ form, result }: { form: SurveyForm; result: ScoreRes
               <span className="ml-auto text-[13px] text-ink-mute">{d.scale}</span>
             </p>
             <p className="mt-1.5 text-[12px] text-ink-mute">
-              {d.started ? d.progress : '아직 채점하지 않았습니다'}
+              {d.started ? d.progress : '아직 채점하지 않았어요'}
             </p>
           </div>
         )

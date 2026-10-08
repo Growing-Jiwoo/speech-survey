@@ -24,21 +24,21 @@ const asRecord = (v: unknown): Record<string, unknown> | null =>
 
 export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}))
-  if (typeof b.sessionId !== 'string' || !b.sessionId) return bad('세션 정보가 없어요.')
+  if (typeof b.sessionId !== 'string' || !b.sessionId) return bad('검사 정보가 없어요.')
 
   const rawWriting = asRecord(b.writing)
-  if (!rawWriting) return bad('쓰기 답 형식 오류')
+  if (!rawWriting) return bad('쓰기 답 형식이 올바르지 않아요.')
   // 쓰기 방식 — 없으면 screen(방식이 생기기 전의 화면이 보내는 요청과 같은 뜻). 그 밖의 값은 거부한다.
   const writingMode: WritingMode = b.writingMode === undefined ? 'screen' : b.writingMode
-  if (writingMode !== 'screen' && writingMode !== 'scan') return bad('쓰기 방식 형식 오류')
+  if (writingMode !== 'screen' && writingMode !== 'scan') return bad('쓰기 방식 형식이 올바르지 않아요.')
   if (!Array.isArray(b.checklist) || b.checklist.some((c: unknown) => typeof c !== 'string' || !AREA_CODES.includes(c)))
-    return bad('체크리스트 형식 오류')
+    return bad('체크리스트 형식이 올바르지 않아요.')
   const checklist = [...new Set(b.checklist as string[])]
   // 녹음을 시도한 페이지(저장 실패 표시용 — sessions.upload_failed). 없으면 빈 목록(이 필드가 생기기 전의 화면).
   if (b.attempted !== undefined && (!Array.isArray(b.attempted) || b.attempted.some((c: unknown) => typeof c !== 'string')))
-    return bad('녹음 기록 형식 오류')
+    return bad('녹음 기록 형식이 올바르지 않아요.')
 
-  const invalidToken = () => jsonError('유효하지 않은 세션이에요.', 401)
+  const invalidToken = () => jsonError('검사 정보가 올바르지 않아요.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
@@ -47,12 +47,12 @@ export async function POST(req: Request) {
   let grade: number
   try {
     const s = await sessionState(b.sessionId)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     if (s.state === 'submitted') return jsonError('이미 제출된 검사예요.', 409)
     grade = s.grade
   } catch (e) {
     console.error('[submit] 세션 조회 실패', e)
-    return jsonError('제출에 실패했어요.', 502)
+    return jsonError('제출하지 못했어요.', 502)
   }
 
   const f = itemsFor(formForGrade(grade))
@@ -66,9 +66,9 @@ export async function POST(req: Request) {
   const validWriting: Record<string, number> = {}
   for (const [itemCode, words] of Object.entries(rawWriting)) {
     const item = f.byCode.get(itemCode)
-    if (!item || item.section !== f.writingSection) return bad('쓰기 답 형식 오류')
+    if (!item || item.section !== f.writingSection) return bad('쓰기 답 형식이 올바르지 않아요.')
     if (typeof words !== 'number' || !Number.isInteger(words) || words < 0 || words > itemMaxWords(item))
-      return bad('쓰기 답 형식 오류')
+      return bad('쓰기 답 형식이 올바르지 않아요.')
     validWriting[itemCode] = words
   }
 
@@ -88,12 +88,12 @@ export async function POST(req: Request) {
       writingTask: { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', codes: f.writingItems.map(i => i.code) },
     })
     if (result === 'not_found')
-      return jsonError('세션을 찾을 수 없어요.', 404)
+      return jsonError('검사 기록이 없어요.', 404)
     if (result === 'already_submitted')
       return jsonError('이미 제출된 검사예요.', 409)
   } catch (e) {
     console.error('[submit] 제출 실패', e)
-    return jsonError('제출에 실패했어요.', 502)
+    return jsonError('제출하지 못했어요.', 502)
   }
   return NextResponse.json({ ok: true })
 }

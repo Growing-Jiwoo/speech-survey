@@ -218,7 +218,7 @@ export function ResultSheet({
     const res = await requestJson(`/api/admin/sessions/${sessionId}/scores`,
       { method: 'PUT', body: { marks, sentences, times,
         ...(writingDirty ? { writing: written, scanUploadedAt: seenScanAt } : {}) } },
-      '채점 저장에 실패했어요. 다시 시도해 주세요.')
+      '채점을 저장하지 못했어요. 다시 시도해 주세요.')
     setSaving(false)
     if (!res.ok && res.status === 409 && writingDirty) {
       // 그사이 선생님이 스캔본을 올리거나 바꿨다(이 요청의 올린 시각이 낡았다). 옛 그림을 보고 찍은 쓰기는 버리고
@@ -314,7 +314,7 @@ export function ResultSheet({
   async function unlink() {
     setUnlinking(true); setUnlinkErr('')
     const res = await requestJson(`/api/admin/sessions/${sessionId}/scan`, { method: 'DELETE' },
-      '연결 해제에 실패했어요. 다시 시도해 주세요.')
+      '연결을 해제하지 못했어요. 다시 시도해 주세요.')
     setUnlinking(false)
     if (!res.ok) { setUnlinkErr(res.error); return }
     setWritten({}); setSavedWritten({}); setUnlinkOpen(false)
@@ -524,9 +524,9 @@ export function ResultSheet({
       </div>
       {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
       <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
-        결과보고서 PDF는 저장한 채점 내용으로 만들어집니다
+        결과보고서 PDF는 저장한 채점 내용으로 만들어요
         {!(r.complete.wordReading && r.complete.sentenceReading && r.complete.writing)
-          && ' · 채점이 끝나지 않은 과제는 판정 칸이 비어 나갑니다'}
+          && ' · 채점이 끝나지 않은 과제는 판정 칸이 비어 나가요'}
       </p>
 
       {gate && (
@@ -546,17 +546,17 @@ export function ResultSheet({
           onClose={() => setGateOpen(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             {gate.reason === 'dirty' ? (
-              <>결과보고서 PDF는 <b>저장된 채점</b>으로 만들어집니다. 지금 화면의 수정은 아직 저장되지 않아
-                빠진 채로 나갑니다.</>
+              <>결과보고서 PDF는 <b>저장된 채점</b>으로 만들어요. 지금 화면의 수정은 아직 저장되지 않아
+                빠진 채로 나가요.</>
             ) : gate.overridable && scanMode ? (
               // 스캔본 방식은 이 화면에서 쓰기를 채울 수 있다 — 「채울 수 없으니」라고 하면 틀린 안내다
-              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있습니다. 스캔본을 보고 채점하면
-                판정이 채워지고, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나갑니다.</>
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있어요. 스캔본을 보고 채점하면
+                판정이 채워지고, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나가요.</>
             ) : gate.overridable ? (
-              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b>가 검사 중에 기록되지 않았습니다.
-                이 화면에서는 채울 수 없으니, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나갑니다.</>
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b>가 검사 중에 기록되지 않았어요.
+                이 화면에서는 채울 수 없으니, 그대로 내려받으면 판정 칸이 <b>빈 채로</b> 나가요.</>
             ) : (
-              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있습니다.
+              <><b>{gate.tasks.map(k => TASK_LABEL[k]).join(' · ')}</b> 채점이 남아 있어요.
                 녹음을 듣고 채점을 마친 뒤 <b>[채점 저장]</b>을 누르면 내려받을 수 있어요.</>
             )}
           </p>
@@ -585,22 +585,22 @@ export function ResultSheet({
         items={[
           {
             badge: <Badge tone="mute">채점 전</Badge>,
-            desc: <>아직 채점하지 않은 과제입니다. <b className="text-rec-deep">0점이 아닙니다</b> —
-              결과보고서 PDF에도 판정 칸이 비어 나갑니다.</>,
+            desc: <>아직 채점하지 않은 과제예요. <b className="text-rec-deep">0점이 아니에요</b>.
+              결과보고서 PDF에도 판정 칸이 비어 나가요.</>,
           },
           {
             badge: <Badge tone="rec">미녹음</Badge>,
             // 미녹음 채점은 사용자 확정(2026-08-12 기본 채점 → 2026-09-29 고정)이다. 출처는 여기(주석)에만 둔다 —
             // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
             // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes).
-            desc: <>녹음이 올라오지 않은 과제입니다(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으므로 <b>오반응(X ·
-              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나갑니다. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산합니다.</>,
+            desc: <>녹음이 올라오지 않은 과제예요(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으니 <b>오반응(X ·
+              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나가요. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산해요.</>,
           },
           {
             badge: <Badge tone="rec">저장 실패</Badge>,
             // 사용자 확정(2026-10-08) — 표시만 더한 것이고 채점은 미녹음과 같다. 결과보고서 PDF에는 넣지 않았다(담당자 양식).
-            desc: <>아이가 읽었지만 <b>인터넷 문제 등으로 녹음이 올라오지 않은</b> 과제입니다. 채점은 미녹음과
-              같습니다(오반응 고정). 결과보고서 PDF에는 미녹음과 구별되지 않습니다.</>,
+            desc: <>아이가 읽었지만 <b>인터넷 문제 등으로 녹음이 올라오지 않은</b> 과제예요. 채점은 미녹음과
+              같아요(오반응 고정). 결과보고서 PDF에서는 미녹음과 구별되지 않아요.</>,
           },
           {
             badge: (
@@ -608,23 +608,23 @@ export function ResultSheet({
                 <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
               </span>
             ),
-            desc: <>과제별 기준 점수에 따른 판정입니다. 채점이 끝난 과제에만 나오며, 결과보고서 PDF의
-              결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 둘 이상 Fail이면 Fail입니다.</>,
+            desc: <>과제별 기준 점수에 따른 판정이에요. 채점이 끝난 과제에만 나오고 결과보고서 PDF의
+              결과 요약에 <b>PASS/FAIL</b>로 찍혀요. 최종결과는 셋 중 둘 이상 Fail이면 Fail이에요.</>,
           },
           ...(PROVISIONAL_CRITERIA ? [{
             badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-            desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시입니다 —
+            desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요 —
               낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
               문장 읽기유창성 {fluencyLabel(passMark.sentenceReading)} {FLUENCY_UNIT} ·
               {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
-              기준표를 받으면 숫자만 교체되며 이미 채점한 검사도 저장된 점수로 다시 계산됩니다.</>,
+              기준표를 받으면 숫자만 바뀌어요. 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
           }] : []),
         ]}
         // 「기준 시간 이후 반응은 채점하지 않는다」는 낱말 해독에만 남긴다 — 문장은 20초를 넘겨 읽었을 때
         // 어디까지 셀지 담당자가 듣고 판단한다(lib/scoring readSecMax 주석). 앱이 규칙을 대신 말하지 않는다.
-        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초 내 정확 반응 수 — 녹음은 마지막 반응이
-          잘리지 않도록 조금 더 담기므로, 기준 시간 이후 반응은 채점하지 않습니다. 문장 읽기유창성은 정확하게 읽은
-          어절 수의 합을 읽은 시간(초)의 합으로 나눈 값({FLUENCY_UNIT})입니다.</>}
+        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초 내 정확 반응 수예요. 녹음은 마지막 반응이
+          잘리지 않게 조금 더 담기 때문에 기준 시간 이후 반응은 채점하지 않아요. 문장 읽기유창성은 정확하게 읽은
+          어절 수의 합을 읽은 시간(초)의 합으로 나눈 값({FLUENCY_UNIT})이에요.</>}
       />
     </section>
   )

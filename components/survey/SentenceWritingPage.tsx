@@ -24,7 +24,7 @@ export function SentenceWritingPage({ items, value, onChange, toggle }: {
       {toggle && <div className="mb-4">{toggle}</div>}
       <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 문장을 정확하게 썼나요?</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-mute">
-        정확하게 쓴 어절의 개수를 골라 주세요. 어절 하나가 1점입니다.
+        정확하게 쓴 어절의 개수를 골라 주세요. 어절 하나가 1점이에요.
       </p>
 
       <ul className="mt-4 flex flex-col gap-2">

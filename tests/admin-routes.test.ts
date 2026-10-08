@@ -135,7 +135,7 @@ describe('GET /api/admin/sessions/[id]', () => {
     })
     const res = await DETAIL(req(), ctx(SID))
     expect(res.status).toBe(404)
-    expect((await res.json()).error).toMatch(/찾을 수 없/)
+    expect((await res.json()).error).toMatch(/기록이 없/)
   })
 })
 
@@ -179,7 +179,7 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     })
     const res = await SHEET(req(), ctx(SID))
     expect(res.status).toBe(404)
-    expect((await res.json()).error).toMatch(/찾을 수 없/)
+    expect((await res.json()).error).toMatch(/기록이 없/)
   })
 
   it('PDF를 첨부 파일로 내려준다', async () => {
@@ -306,7 +306,7 @@ describe('PATCH /api/admin/sessions/[id]', () => {
     vi.mocked(db.updateSessionIdentity).mockResolvedValueOnce(null)
     const res = await patch(VALID)
     expect(res.status).toBe(404)
-    expect((await res.json()).error).toMatch(/찾을 수 없/)
+    expect((await res.json()).error).toMatch(/기록이 없/)
   })
 
   it('DB 오류 시 500 + 일반화된 메시지', async () => {

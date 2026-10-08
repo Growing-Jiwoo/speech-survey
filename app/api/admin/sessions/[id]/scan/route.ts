@@ -13,10 +13,10 @@ export const runtime = 'nodejs'
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('검사 정보가 올바르지 않아요.', 400)
   try {
     const s = await sessionState(id)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     // 화면에서 표시한 검사의 쓰기는 검사 중 입력이 유일한 채점 경로다 — 여기서 지우면 되돌릴 길이 없다.
     if (s.writingMode !== 'scan') return jsonError('스캔본으로 채점하는 검사가 아니에요.', 409)
     const f = itemsFor(formForGrade(s.grade))
@@ -26,6 +26,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[admin/sessions/:id/scan] 연결 해제 실패', e)
-    return jsonError('연결 해제에 실패했어요.', 500)
+    return jsonError('연결을 해제하지 못했어요.', 500)
   }
 }

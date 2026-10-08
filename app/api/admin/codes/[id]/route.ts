@@ -9,14 +9,14 @@ export const dynamic = 'force-dynamic'
 /** 세션이 참조 중이면 거부(FK restrict가 최종 방어). */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('코드 정보가 올바르지 않아요.', 400)
   try {
     const result = await deleteClassCode(id)
     if (result === 'in_use') return jsonError('이미 검사에 사용된 코드는 삭제할 수 없어요.', 409)
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[admin/codes/:id] 삭제 실패', e)
-    return jsonError('코드 삭제에 실패했어요.', 500)
+    return jsonError('코드를 삭제하지 못했어요.', 500)
   }
 }
 
@@ -26,7 +26,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
  *  어긋나므로 여기서 바꿀 수 없다. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('코드 정보가 올바르지 않아요.', 400)
   let body: unknown
   try { body = await req.json() } catch { return jsonError('요청 형식이 올바르지 않아요.', 400) }
   const parsed = classCodeEmailSchema.safeParse(body)
@@ -38,6 +38,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ code })
   } catch (e) {
     console.error('[admin/codes/:id] 이메일 수정 실패', e)
-    return jsonError('수정에 실패했어요.', 500)
+    return jsonError('수정하지 못했어요.', 500)
   }
 }

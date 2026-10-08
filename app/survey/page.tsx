@@ -221,7 +221,7 @@ function SurveyInner() {
     // 다시 보내면 될 수도 있는 실패만 재시도 배너로 — 4xx는 눌러도 영원히 실패한다
     if (r.retry) setPendingRetries(prev => ({ ...prev, [code]: { rec, attemptNo } }))
     else setUploadNotice(r.status === 400 && attemptNo > 10
-      ? '이 화면은 10번까지만 저장돼요 — 마지막 녹음이 저장돼 있어요.'
+      ? '이 화면은 10번까지만 저장돼요. 마지막 녹음은 저장돼 있어요.'
       : '이 녹음은 저장할 수 없었어요. 다시 녹음해 주세요.')
   }, [])
 
@@ -455,7 +455,7 @@ function SurveyInner() {
               {/* 끊긴 업로드(새로고침·탭 닫기) — 파일이 없으니 재시도가 아니라 다시 녹음이다 */}
               {lostUploads.length > 0 && (
                 <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">
-                  <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음이 저장되기 전에 화면이 닫혀 저장되지 않았어요.
+                  <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음을 저장하기 전에 화면이 닫혔어요.
                   그 화면에서 다시 녹음해 주세요.
                 </p>
               )}

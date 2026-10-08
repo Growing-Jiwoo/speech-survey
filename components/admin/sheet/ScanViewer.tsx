@@ -38,7 +38,7 @@ export function ScanViewer({ url, alt, onExpired }: {
       </div>
       {broken && (
         <p role="alert" className="border-b border-line bg-rec/5 px-3 py-2 text-[12.5px] text-rec-deep">
-          스캔본을 불러오지 못했어요. 결과지를 새로 열어 주세요(보기 링크는 1시간 동안만 열려요).
+          스캔본을 불러오지 못했어요. 결과지를 새로 열어 주세요. 보기 링크는 1시간 동안만 열려요.
         </p>
       )}
       <div className="max-h-[78vh] overflow-auto p-3">

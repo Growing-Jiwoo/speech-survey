@@ -25,7 +25,7 @@ import { UUID_RE, jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
 
-const bad = (msg: string) => jsonError('채점 형식 오류: ' + msg, 400)
+const bad = (msg: string) => jsonError(`${msg} 채점 형식이 올바르지 않아요.`, 400)
 
 /** 본문의 객체형 필드(코드 → 값)를 안전하게 꺼낸다. 배열·null은 객체가 아니므로 null. */
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -34,24 +34,24 @@ function asRecord(v: unknown): Record<string, unknown> | null {
 
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('검사 정보가 올바르지 않아요.', 400)
 
   const b = await req.json().catch(() => ({}))
   const rawMarks = asRecord(b.marks)
   const rawSentences = asRecord(b.sentences)
   const rawTimes = b.times === undefined ? undefined : asRecord(b.times)
   const rawWriting = b.writing === undefined ? undefined : asRecord(b.writing)
-  if (!rawMarks || !rawSentences || rawTimes === null || rawWriting === null) return jsonError('채점 형식 오류', 400)
+  if (!rawMarks || !rawSentences || rawTimes === null || rawWriting === null) return jsonError('채점 형식이 올바르지 않아요.', 400)
 
   let grade: number
   try {
     const s = await sessionState(id)
-    if (s.state === 'missing') return jsonError('세션을 찾을 수 없어요.', 404)
+    if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     if (rawWriting && s.writingMode !== 'scan') return jsonError('화면에서 표시한 쓰기는 고칠 수 없어요.', 409)
     grade = s.grade
   } catch (e) {
     console.error('[admin/scores] 세션 조회 실패', e)
-    return jsonError('채점 저장에 실패했어요.', 502)
+    return jsonError('채점을 저장하지 못했어요.', 502)
   }
 
   const form = formForGrade(grade)
@@ -108,7 +108,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         return jsonError('그사이 선생님이 스캔본을 올리거나 바꿨어요. 결과지를 새로 열어 주세요.', 409)
     } catch (e) {
       console.error('[admin/scores] 스캔본 조회 실패', e)
-      return jsonError('채점 저장에 실패했어요.', 502)
+      return jsonError('채점을 저장하지 못했어요.', 502)
     }
   }
 
@@ -120,7 +120,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     await saveScores(id, marks, sentences, sentenceCodes, times)
   } catch (e) {
     console.error('[admin/scores] 저장 실패', e)
-    return jsonError('채점 저장에 실패했어요.', 502)
+    return jsonError('채점을 저장하지 못했어요.', 502)
   }
   return NextResponse.json({ ok: true })
 }

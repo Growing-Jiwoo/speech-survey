@@ -93,7 +93,7 @@ export function SchoolPicker({ value, onSelect }: {
               ))}
               {shown.length === 0 && <li className="px-4 py-3 text-sm text-ink-mute">검색 결과가 없어요.</li>}
               {filtered.length > MAX_SHOWN &&
-                <li className="px-4 py-2 text-xs text-ink-mute">{filtered.length - MAX_SHOWN}개 더 있어요 — 이름을 더 입력해 주세요.</li>}
+                <li className="px-4 py-2 text-xs text-ink-mute">{filtered.length - MAX_SHOWN}개 더 있어요. 이름을 더 입력해 주세요.</li>}
             </ul>
           )}
         </div>

@@ -62,14 +62,14 @@ export function ScanWritingPanel({ toggle, items, kind, childNo, childName, scre
       <div className="mt-4 rounded-xl border-[1.5px] border-blue/25 bg-blue/[0.05] px-4 py-3.5">
         <p className="text-sm font-bold text-blue lg:text-base">이 학생은 기록지 스캔본으로 채점해요</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-ink-soft lg:text-sm">
-          <li>종이의 이름이 <b className="text-ink">{childNo}번 {childName}</b>인지 확인하고 건네 주세요(다른 아이 종이에 쓰면 그 아이 기록으로 올라가요).</li>
+          <li>종이의 이름이 <b className="text-ink">{childNo}번 {childName}</b>인지 확인하고 건네 주세요. 다른 아이 종이에 쓰면 그 아이 기록으로 올라가요.</li>
           <li>반 전체 검사가 끝나면 <b className="text-ink">결과지 화면</b>에서 스캔본을 올려 주세요.</li>
-          <li>스캔본을 보고 <b className="text-ink">담당자가 채점</b>합니다.</li>
+          <li>스캔본을 보고 <b className="text-ink">담당자가 채점</b>해요.</li>
         </ul>
       </div>
       {screenMarks > 0 && (
         <p className="mt-3 text-[12.5px] leading-relaxed text-amber">
-          화면에서 표시한 {screenMarks}개는 스캔본 방식으로 제출하면 저장되지 않아요(「화면에서 바로 표시」로 돌아가면 그대로 있어요).
+          화면에서 표시한 {screenMarks}개는 스캔본 방식으로 제출하면 저장되지 않아요. 「화면에서 바로 표시」로 돌아가면 그대로 있어요.
         </p>
       )}
       <p className="mt-4 text-[12px] font-bold text-ink-mute">불러 줄 {kind === 'word' ? '낱말' : '문장'}</p>

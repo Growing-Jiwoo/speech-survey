@@ -204,7 +204,7 @@ export default function ReviewPage() {
       </p>
       {lostUploads.length > 0 && (
         <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">
-          <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음이 저장되기 전에 화면이 닫혀 저장되지 않았어요.
+          <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음을 저장하기 전에 화면이 닫혔어요.
           번호를 눌러 그 화면에서 다시 녹음해 주세요.
         </p>
       )}
@@ -238,11 +238,11 @@ export default function ReviewPage() {
       )}
 
       <ConfirmDialog open={modal} busy={busy} error={err}
-        title={<>녹음이 잘 되었는지<br />모두 확인하셨습니까?</>}
+        title={<>녹음이 잘 되었는지<br />모두 확인하셨나요?</>}
         confirmLabel={missing > 0 ? '그래도 제출하기' : '제출하기'} cancelLabel="돌아가기"
         onConfirm={submit} onClose={() => setModal(false)}>
         <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-          ※ 녹음이 잘 되지 않았을 경우 재검사 요청이 갈 수 있습니다.
+          ※ 녹음이 잘 되지 않았으면 재검사 요청이 갈 수 있어요.
         </p>
         {missing > 0 && (
           <p className="mt-3 rounded-xl bg-rec/10 px-3 py-2 text-center text-[13px] font-bold text-rec-deep">

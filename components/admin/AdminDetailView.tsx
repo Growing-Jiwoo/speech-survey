@@ -69,7 +69,7 @@ export function AdminDetailView() {
 
   async function removeSession() {
     setDeleting(true); setDelErr('')
-    const r = await requestJson(`/api/admin/sessions/${id}`, { method: 'DELETE' }, '삭제에 실패했어요. 다시 시도해 주세요.')
+    const r = await requestJson(`/api/admin/sessions/${id}`, { method: 'DELETE' }, '삭제하지 못했어요. 다시 시도해 주세요.')
     setDeleting(false)
     if (!r.ok) { setDelErr(r.error); return }
     queryClient.removeQueries({ queryKey: adminKeys.session(id) })
@@ -105,8 +105,8 @@ export function AdminDetailView() {
       <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
         <p className="text-sm text-ink-soft">
-          {notFound ? '이 검사 기록을 찾을 수 없어요. 이미 삭제되었을 수 있어요.'
-            : expired ? '로그인이 끝났어요(8시간). 다시 로그인하면 이 결과지로 돌아옵니다.' : '결과지를 불러오지 못했어요.'}
+          {notFound ? '이 검사 기록이 없어요. 이미 삭제됐을 수 있어요.'
+            : expired ? '로그인이 끝났어요(8시간). 다시 로그인하면 이 결과지로 돌아와요.' : '결과지를 불러오지 못했어요.'}
         </p>
         {expired && <Link href={loginHref} className="text-sm font-bold text-blue underline">다시 로그인</Link>}
         {/* 없는 세션은 재시도해도 달라지지 않는다 — 목록으로 돌아가는 길만 남긴다. */}
@@ -142,11 +142,11 @@ export function AdminDetailView() {
         {/* 다시 받기가 실패했다 — 결과지는 그대로 두고(위 주석) 무엇이 문제인지만 알린다 */}
         {isError && (
           <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-[13px] text-amber print:hidden">
-            {expired ? <>로그인이 끝났어요(8시간). 지금 화면의 채점은 아직 남아 있어요 — <b>새 탭에서</b>{' '}
+            {expired ? <>로그인이 끝났어요(8시간). 지금 화면의 채점은 아직 남아 있어요. <b>새 탭에서</b>{' '}
                 <a href={loginHref} target="_blank" rel="noopener" className="font-bold underline">다시 로그인</a>한 뒤
                 이 화면에서 <b>[채점 저장]</b>을 눌러 주세요.</>
               : notFound ? <>이 검사 기록이 삭제됐을 수 있어요. 목록에서 다시 확인해 주세요.</>
-              : <>최신 결과지를 다시 받지 못했어요(연결 확인). 지금 화면은 그대로 쓸 수 있어요.
+              : <>최신 결과지를 다시 받지 못했어요. 연결을 확인해 주세요. 지금 화면은 그대로 쓸 수 있어요.
                 <button type="button" onClick={() => void refetch()} className="font-bold underline">다시 받기</button></>}
           </div>
         )}
@@ -260,7 +260,7 @@ export function AdminDetailView() {
           onClose={() => { setPendingNav(null); setNavErr('') }}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             방금 고친 채점을 저장하고 이동할까요?<br />
-            「저장하지 않고 이동」을 고르면 고친 채점이 <b className="text-rec-deep">사라집니다</b>.
+            「저장하지 않고 이동」을 고르면 고친 채점이 <b className="text-rec-deep">사라져요</b>.
           </p>
         </ConfirmDialog>
 
@@ -271,7 +271,7 @@ export function AdminDetailView() {
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
             {/* 스캔본도 함께 지워진다(DELETE 라우트가 녹음·스캔본 두 저장소를 모두 비운다) — 종전 문구는 녹음만 말했다 */}
             <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
-            녹음·스캔본 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되며 되돌릴 수 없습니다.
+            녹음·스캔본 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되고 되돌릴 수 없어요.
           </p>
         </ConfirmDialog>
         <LoadingOverlay show={deleting} />

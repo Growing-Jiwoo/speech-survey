@@ -42,7 +42,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않아요.', 401)
   try {
     const [row, rows] = await Promise.all([findClassCodeById(classCodeId), classResults(classCodeId)])
-    if (!row) return jsonError('학급을 찾을 수 없어요.', 404)
+    if (!row) return jsonError('학급 정보가 없어요.', 404)
 
     // 상태·차수는 lib/results가 정한다 — 화면과 같은 판정이어야 화면에서 잠긴 것이 여기서 열리지 않는다.
     const children = buildChildren([], rows)

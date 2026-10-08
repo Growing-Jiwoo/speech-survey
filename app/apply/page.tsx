@@ -65,7 +65,7 @@ export default function ApplyPage() {
       grade: Number(grade), classNo: Number(classNo),
       teacherName: cleanTeacher, teacherPhone: cleanPhone, teacherEmail: cleanEmail,
       roster,
-    }, '접수에 실패했어요. 다시 시도해 주세요.')
+    }, '신청을 접수하지 못했어요. 다시 시도해 주세요.')
     if (!r.ok) { setBusy(false); setErr(r.error); return }
     setDone(true)
   }
@@ -84,7 +84,7 @@ export default function ApplyPage() {
       <p className="mt-6 text-center text-[12px] leading-relaxed text-ink-mute">
         승인까지 며칠 걸릴 수 있어요.<br />
         메일이 오지 않으면 스팸함도 확인해 주세요.<br />
-        학급 코드는 메일로만 전달되니 받으신 메일을 보관해 주세요.
+        학급 코드는 메일로만 보내드리니 받으신 메일을 보관해 주세요.
       </p>
     </main>
   )
@@ -105,8 +105,8 @@ export default function ApplyPage() {
           이 화면은 **무엇을 입력해야 하는지**만 말한다(안내 4줄은 아래 「검사 안내 및 동의」에
           그대로 있다 — 「위 검사 안내를 확인했습니다」 체크가 가리키는 실체이므로 지우면 안 된다). */}
       <p className="mt-3 self-center text-center text-sm leading-relaxed text-ink-soft">
-        아래 정보란을 기입해주시면 담당자가 확인한 뒤<br />
-        학급 코드 및 실시방법을 메일로 보내드려요.
+        아래 정보를 채워 주시면 담당자가 확인한 뒤<br />
+        학급 코드와 실시 방법을 메일로 보내드려요.
       </p>
 
       {/* 자동완성은 끈다 — app/page.tsx와 같은 이유(개인 기기에서 남의 칸에 제안되는 것 방지) */}
@@ -172,7 +172,7 @@ export default function ApplyPage() {
             {/* "그 밖의 정보는 저장하지 않아요"보다 구체적으로 — 명렬표를 올릴 때 교사가
                 실제로 걱정하는 것은 주민등록번호다. 2중 차단이 실제 기능이므로 그것을 말한다
                 (lib/roster: 머리글 이름과 값 모양 양쪽에서 걸러 낸다). */}
-            번호·이름·성별·생년월일 <b className="text-ink-soft">네 칸만</b> 씁니다.
+            번호·이름·성별·생년월일 <b className="text-ink-soft">네 칸만</b> 써요.
             주민등록번호가 들어 있으면 읽지 않고 버려요.
           </p>
           <RosterEditor onChange={setRoster} />
