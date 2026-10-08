@@ -65,9 +65,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true }, { status: 201 })
     }
     console.error('[apply] 코드 unique 충돌 재시도 상한 도달')
-    return jsonError('접수에 실패했어요. 다시 시도해 주세요.', 502)
+    return jsonError('접수하지 못했어요. 다시 시도해 주세요.', 502)
   } catch (e) {
     console.error('[apply] 접수 실패', e)
-    return jsonError('접수에 실패했어요. 다시 시도해 주세요.', 502)
+    return jsonError('접수하지 못했어요. 다시 시도해 주세요.', 502)
   }
 }

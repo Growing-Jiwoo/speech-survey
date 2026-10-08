@@ -406,17 +406,17 @@ export function ResultsView({ token }: { token: string }) {
               items={[
                 ...(hasScan ? [{
                   badge: <Badge tone="amber">스캔 대기</Badge>,
-                  desc: <>「스캔본으로 올리기」를 고른 아이입니다. 스캔본을 올리면 담당자가 보고 쓰기를 채점합니다.
-                    채점된 쓰기 점수에는 <Badge tone="mint" size="sm">스캔</Badge> 표시가 붙습니다.</>,
+                  desc: <>「스캔본으로 올리기」를 고른 아이예요. 스캔본을 올리면 담당자가 보고 쓰기를 채점해요.
+                    채점한 쓰기 점수에는 <Badge tone="mint" size="sm">스캔</Badge> 표시가 붙어요.</>,
                 }] : []),
                 ...(hasReplaced ? [{
                   badge: <Badge tone="mute">재검사로 대체</Badge>,
-                  desc: <>더 최근에 제출한 재검사가 있어 이 검사에는 스캔본을 올리지 않습니다. 기록지는 최근 검사로 올라갑니다.</>,
+                  desc: <>더 최근에 제출한 재검사가 있어 이 검사에는 스캔본을 올리지 않아요. 기록지는 최근 검사로 올라가요.</>,
                 }] : []),
                 {
                   badge: <Badge tone="mute">채점 전</Badge>,
-                  desc: <>아직 채점하지 않은 과제입니다. <b className="text-rec-deep">0점이 아닙니다</b> —
-                    결과보고서 PDF에도 판정 칸이 비어 나갑니다.</>,
+                  desc: <>아직 채점하지 않은 과제예요. <b className="text-rec-deep">0점이 아니에요</b>.
+                    결과보고서 PDF에도 판정 칸이 비어 나가요.</>,
                 },
                 {
                   badge: (
@@ -424,18 +424,18 @@ export function ResultsView({ token }: { token: string }) {
                       <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
                     </span>
                   ),
-                  desc: <>과제별 기준 점수에 따른 판정입니다. <b>세 과제가 모두 채점돼야</b> 나오며,
-                    결과보고서 PDF의 결과 요약에 <b>PASS/FAIL</b>로 찍힙니다. 최종결과는 셋 중 둘 이상 Fail이면 Fail입니다.</>,
+                  desc: <>과제별 기준 점수에 따른 판정이에요. <b>세 과제가 모두 채점돼야</b> 나오고,
+                    결과보고서 PDF의 결과 요약에 <b>PASS/FAIL</b>로 찍혀요. 최종결과는 셋 중 둘 이상 Fail이면 Fail이에요.</>,
                 },
                 {
                   badge: <span className="font-bold text-rec-deep tabular-nums">0.65</span>,
-                  desc: <>붉은 점수는 그 과제의 기준에 못 미친 점수입니다. 판정은 세 과제를 함께 본 결과라,
-                    한 과제가 붉어도 Pass일 수 있습니다.</>,
+                  desc: <>붉은 점수는 그 과제의 기준에 못 미친 점수예요. 판정은 세 과제를 함께 본 결과라,
+                    한 과제가 붉어도 Pass일 수 있어요.</>,
                 },
                 ...(provisional ? [{
                   badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-                  desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시입니다.
-                    기준표를 받으면 숫자만 교체되며 이미 채점한 검사도 저장된 점수로 다시 계산됩니다.</>,
+                  desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요.
+                    기준표를 받으면 숫자만 바꾸고, 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
                 }] : []),
               ]}
             />
@@ -443,10 +443,10 @@ export function ResultsView({ token }: { token: string }) {
           <p className="mt-3 text-[12px] leading-relaxed text-ink-mute">
             {hasScan
               // 스캔 대기·채점 중이어도 읽기 채점이 끝났으면 받을 수 있다(A안) — 「채점 완료만」이라고 하면 틀린 말이 된다
-              ? '체크 상자가 있는 검사는 내려받을 수 있어요(쓰기가 채점 전이면 그 칸이 비어 나가요).'
+              ? '체크 상자가 있는 검사는 내려받을 수 있어요. 쓰기가 채점 전이면 그 칸은 비어 나가요.'
               : '채점 완료된 검사만 내려받을 수 있어요.'}
             {' '}재검사가 있으면 ▸를 눌러 차수별로 고를 수 있어요.
-            채점이 진행되면 새로고침하면 반영돼요.
+            채점이 진행된 뒤 새로고침하면 반영돼요.
           </p>
         </>
       )}
@@ -467,7 +467,7 @@ export function ResultsView({ token }: { token: string }) {
         {/* 두 문장을 한 문단에 붙이면 「만드는 데 몇 / 초 걸려요」처럼 어정쩡하게 감긴다.
             한 줄에 한 가지만 말한다 — 위는 무엇을 받는지, 아래는 얼마나 걸리는지. */}
         <p className="mt-3 text-sm text-ink-soft">
-          아래 <b>{pickList.length}명</b>의 결과지가 <b>한 파일</b>로 만들어져요.
+          아래 <b>{pickList.length}명</b>의 결과지를 <b>한 파일</b>로 만들어요.
         </p>
         <p className="mt-1 text-[12.5px] text-ink-mute">만드는 데 몇 초 걸려요.</p>
         {/* 한 학급이 40명까지 간다 — 한 줄에 하나씩 쌓으면 스크롤만 길어져 누구를 받는지 안 보인다.

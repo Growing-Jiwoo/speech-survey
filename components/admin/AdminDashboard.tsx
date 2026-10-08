@@ -103,7 +103,7 @@ export function AdminDashboard() {
         <Blip variant="logo" className="h-8 w-8" />
         <div>
           <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
-          <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열립니다 · 카드와 학교를 누르면 목록이 필터링됩니다</p>
+          <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열려요 · 카드와 학교를 누르면 목록을 걸러 볼 수 있어요</p>
         </div>
         <Link href="/admin/codes"
           className="ml-auto rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
@@ -126,7 +126,7 @@ export function AdminDashboard() {
       {isError && (
         <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">
           {expired ? <>로그인이 끝났어요(8시간). <Link href="/admin/login?next=%2Fadmin" className="font-bold underline">다시 로그인</Link>하면 목록이 갱신돼요.</>
-            : <>목록을 다시 받지 못했어요(연결 확인). 아래는 마지막으로 받은 목록이에요.</>}
+            : <>목록을 다시 받지 못했어요. 연결을 확인해 주세요. 아래는 마지막으로 받은 목록이에요.</>}
         </p>
       )}
       <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />

@@ -16,11 +16,11 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 세션 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('검사 정보가 올바르지 않아요.', 400)
   try {
     const { session, recordings, writing, marks, sentences, times } = await sessionDetail(id)
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다.
-    if (!session) return jsonError('세션을 찾을 수 없어요.', 404)
+    if (!session) return jsonError('검사 기록이 없어요.', 404)
     const form = formForGrade(session.grade)
     const f = itemsFor(form)
     // 녹음이 없는 페이지는 오반응(X·0점)으로 채운다 — 관리자 결과지 화면과 같은 함수를 쓴다.

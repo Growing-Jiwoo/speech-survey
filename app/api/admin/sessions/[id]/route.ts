@@ -7,7 +7,7 @@ import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
 
-const badId = () => jsonError('잘못된 세션 id예요.', 400)
+const badId = () => jsonError('검사 정보가 올바르지 않아요.', 400)
 
 /** 관리자 결과지 데이터. 녹음은 서명 URL을 미리 만들어 내려준다(service role 키는 클라이언트에 노출 금지).
  *  쓰기 기록지 스캔본도 같다(올라온 경우만 — 서명 URL 1시간, 결과지를 다시 열면 새로 받는다).
@@ -20,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { session, recordings, writing, marks, sentences, times, scan } = await sessionDetail(id)
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다
     // (sheet.pdf 라우트와 같은 판정 — 그쪽 가드는 sessionDetail이 throw해서 도달하지 못했다).
-    if (!session) return jsonError('세션을 찾을 수 없어요.', 404)
+    if (!session) return jsonError('검사 기록이 없어요.', 404)
     // 녹음 하나의 서명이 실패해도 결과지 전체를 500으로 막지 않는다 — 그 녹음만 url 없이 내린다(화면이 「불러오지
     // 못했어요」). 막으면 파일 하나가 없는 검사는 결과지가 안 열리고 [검사 기록 삭제]에도 닿을 수 없었다(2026-10-08 야간 점검).
     const withUrls = await Promise.all(recordings.map(async r => ({
@@ -66,14 +66,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const session = await updateSessionIdentity(id, parsed.data)
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리지 않는다(GET과 같은 판정).
-    if (!session) return jsonError('세션을 찾을 수 없어요.', 404)
+    if (!session) return jsonError('검사 기록이 없어요.', 404)
     // 임상 기록의 식별값이 바뀐 사건이라 최소 기록을 남긴다. 관리자 계정이 단일
     // 비밀번호라 행위자는 특정할 수 없다 — "무엇이 언제"까지만이다.
     console.info(`[admin/sessions/:id] 아동 정보 수정 id=${id} → ${parsed.data.childNo}번`)
     return NextResponse.json({ session })
   } catch (e) {
     console.error('[admin/sessions/:id] 수정 실패', e)
-    return jsonError('수정에 실패했어요.', 500)
+    return jsonError('수정하지 못했어요.', 500)
   }
 }
 
@@ -88,6 +88,6 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ ok: true })
   } catch (e) {
     console.error('[admin/sessions/:id] 삭제 실패', e)
-    return jsonError('세션 삭제에 실패했어요.', 500)
+    return jsonError('검사 기록을 삭제하지 못했어요.', 500)
   }
 }

@@ -87,7 +87,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
               </Link>
               {nth && (
                 <span className="rounded-full bg-well px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-ink-mute"
-                  title={`같은 번호로 ${nth.of}번 검사한 아동의 ${nth.nth}번째 검사입니다`}>
+                  title={`같은 번호로 ${nth.of}번 검사한 아동의 ${nth.nth}번째 검사예요`}>
                   {nth.nth}/{nth.of}회차
                 </span>
               )}
@@ -327,25 +327,25 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       <BadgeLegend
         title="상태 읽는 법"
         items={[
-          { badge: <Badge tone="mute">진행 중</Badge>, desc: '아직 제출하지 않은 검사입니다.' },
+          { badge: <Badge tone="mute">진행 중</Badge>, desc: '아직 제출하지 않은 검사예요.' },
           {
             badge: <Badge tone="amber">제출 · 미완료 있음</Badge>,
-            desc: '제출은 됐지만 녹음이나 쓰기가 비어 있습니다.',
+            desc: '제출은 됐지만 녹음이나 쓰기가 비어 있어요.',
           },
-          { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았습니다.' },
+          { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았어요.' },
           // 스캔본 방식의 쓰기 칸 — 막대 대신 이 두 배지가 보인다(ProgressCell)
-          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사 — 선생님이 아직 기록지 스캔본을 올리지 않았습니다.' },
-          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사 — 결과지에서 쓰기를 채점할 차례입니다.' },
+          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사예요. 선생님이 아직 기록지 스캔본을 올리지 않았어요.' },
+          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사예요. 결과지에서 쓰기를 채점할 차례예요.' },
           {
             badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
-            desc: '검사자가 체크리스트에서 표시한 발달 영역 수입니다.',
+            desc: '검사자가 체크리스트에서 표시한 발달 영역 수예요.',
           },
         ]}
-        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준입니다(1학년 쓰기 10문항 · 2학년 5문항).</>}
+        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준이에요(1학년 쓰기 10문항 · 2학년 5문항).</>}
       />
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">
-          {total === 0 ? '아직 참여한 검사가 없습니다.' : '조건에 맞는 검사가 없습니다.'}
+          {total === 0 ? '아직 참여한 검사가 없어요.' : '조건에 맞는 검사가 없어요.'}
         </p>
       )}
     </>

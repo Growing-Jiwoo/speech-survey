@@ -27,10 +27,10 @@ export async function POST(req: Request) {
       if (row !== 'duplicate') return NextResponse.json({ code: row })
     }
     console.error('[admin/codes] 코드 unique 충돌 재시도 상한 도달')
-    return jsonError('코드 발급에 실패했어요. 다시 시도해 주세요.', 502)
+    return jsonError('코드를 발급하지 못했어요. 다시 시도해 주세요.', 502)
   } catch (e) {
     console.error('[admin/codes] 발급 실패', e)
-    return jsonError('코드 발급에 실패했어요.', 502)
+    return jsonError('코드를 발급하지 못했어요.', 502)
   }
 }
 

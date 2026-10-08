@@ -74,7 +74,7 @@ export function SessionEditDialog({ open, session, onClose, onSaved }: {
     const r = await requestJson(`/api/admin/sessions/${session.id}`, {
       method: 'PATCH',
       body: { childNo: childNoNum, name: cleanName, gender, birthYmd },
-    }, '수정에 실패했어요. 다시 시도해 주세요.')
+    }, '수정하지 못했어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) { setErr(r.error); return }
     onSaved()
@@ -128,7 +128,7 @@ export function SessionEditDialog({ open, session, onClose, onSaved }: {
         {!session.submitted_at && (
           <p className="mt-3 rounded-lg bg-amber/10 px-3 py-2 text-[12.5px] leading-relaxed text-ink-soft">
             이 검사는 아직 <b>진행 중</b>이에요. 검사 중인 기기 화면의 이름은 그 검사가 끝날 때까지
-            예전 이름으로 보입니다(기록은 바뀐 값으로 남아요).
+            예전 이름으로 보여요. 기록은 바뀐 값으로 남아요.
           </p>
         )}
 

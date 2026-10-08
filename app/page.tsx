@@ -264,7 +264,7 @@ export default function StartPage() {
     // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
     if (!auto) setBusy(true)
     const r = await postJson<CodeLookup>('/api/sessions/verify-code',
-      { code: target }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
+      { code: target }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
     if (!auto) setBusy(false)
     // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
     if (auto && codeTouched.current) return
@@ -317,7 +317,7 @@ export default function StartPage() {
     setFormErr(''); setBusy(true)
     const r = await postJson<ClassInfo & { alreadyTested: Confirmed['tested'] }>(
       '/api/sessions/verify-code',
-      { code: cleanCode, childNo: childNoNum }, '코드 확인에 실패했어요. 다시 시도해 주세요.')
+      { code: cleanCode, childNo: childNoNum }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) {
       if (r.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
@@ -651,7 +651,7 @@ export default function StartPage() {
           {resume?.childName
             ? <><b>{resume.childNo}번 {resume.childName}</b> 학생의 검사를 </>
             : '이 기기에 진행 중인 검사를 '}
-          이 기기에서 <b className="text-rec-deep">이어서 할 수 없게</b> 됩니다.<br />
+          이 기기에서 <b className="text-rec-deep">이어서 할 수 없게</b> 돼요.<br />
           처음부터 다시 검사해야 해요.
         </p>
       </ConfirmDialog>

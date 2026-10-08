@@ -27,7 +27,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('코드 정보가 올바르지 않아요.', 400)
 
   try {
     const result = await approveClassCode(id)
@@ -52,6 +52,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, already, mailed, code: row.code, surveyUrl: origin })
   } catch (e) {
     console.error('[admin/codes/:id/approve] 승인 실패', e)
-    return jsonError('승인 처리에 실패했어요.', 502)
+    return jsonError('승인하지 못했어요.', 502)
   }
 }

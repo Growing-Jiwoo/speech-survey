@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     if ('fromRoster' in d) {
       const roster = await listRoster(classCode.id)
       const child = roster.find(r => r.child_no === d.childNo)
-      if (!child) return jsonError('명단에서 학생을 찾을 수 없어요. 직접 입력으로 진행해 주세요.', 400)
+      if (!child) return jsonError('명단에서 이 학생을 찾지 못했어요. 직접 입력으로 진행해 주세요.', 400)
       sessionId = await createSession({
         classCode, childNo: child.child_no,
         birthYmd: child.birth_ymd, gender: child.gender, childName: child.child_name,

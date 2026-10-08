@@ -25,7 +25,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     const [row, roster, rows, sheetTag] = await Promise.all([
       findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
     ])
-    if (!row) return jsonError('학급을 찾을 수 없어요.', 404)
+    if (!row) return jsonError('학급 정보가 없어요.', 404)
     const form = formForGrade(row.grade)
     // 아동 실명·점수·판정이 담긴 응답이다 — 중간 캐시·뒤로가기 복원에 남기지 않는다
     // (PDF 라우트와 같은 방침). 새로고침이 곧 최신 상태여야 한다는 이 라우트의 약속도 이것이 지킨다.

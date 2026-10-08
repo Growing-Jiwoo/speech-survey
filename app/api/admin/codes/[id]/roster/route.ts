@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!UUID_RE.test(id)) return jsonError('잘못된 코드 id예요.', 400)
+  if (!UUID_RE.test(id)) return jsonError('코드 정보가 올바르지 않아요.', 400)
   try {
     return NextResponse.json({ roster: await listRoster(id) })
   } catch (e) {

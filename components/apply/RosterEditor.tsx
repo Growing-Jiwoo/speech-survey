@@ -103,7 +103,7 @@ export function RosterEditor({ onChange }: {
     commit(rows.map(r => (r.id === id ? { ...r, ...part } : r)))
 
   async function load(file: File) {
-    // 안내 배너는 **시도할 때마다** 지운다 — 앞 파일의 "주민등록번호는 저장하지 않았습니다."가
+    // 안내 배너는 **시도할 때마다** 지운다 — 앞 파일의 "주민등록번호는 저장하지 않았어요."가
     // 실패한 다음 업로드 위에 그대로 남으면 올리지도 못한 파일을 두고 한 말이 된다.
     setErr(''); setNotice({ rrnSeen: false, missingCols: [] })
     const name = file.name.toLowerCase()
@@ -175,7 +175,7 @@ export function RosterEditor({ onChange }: {
 
       {notice.rrnSeen && (
         <p className="mt-3 rounded-lg border border-mint/40 bg-mint/5 px-3 py-2 text-[12.5px] text-mint">
-          주민등록번호는 저장하지 않았습니다.
+          주민등록번호는 저장하지 않았어요.
         </p>
       )}
       {notice.missingCols.length > 0 && (

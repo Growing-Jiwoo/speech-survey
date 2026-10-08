@@ -388,13 +388,13 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                       )}
                       {blocked.length > 0 && (
                         <p className={uploadedOk > 0 || retryable.length > 0 ? 'mt-1 text-rec-deep' : 'text-rec-deep'}>
-                          {blocked.length}쪽은 올릴 수 없었어요({pageList(blocked)}) — 쪽마다 까닭을 확인해 주세요.
+                          {blocked.length}쪽은 올릴 수 없었어요({pageList(blocked)}). 쪽마다 까닭을 확인해 주세요.
                         </p>
                       )}
                       {/* 스캔 파일에는 아이 이름과 필적이 있다 — 올린 뒤 교실 PC에 남기지 않게 한 줄 알린다.
                           다시 올릴 쪽이 남았으면 아직 파일이 필요할 수 있어 알리지 않는다 */}
                       {uploadedOk > 0 && retryable.length === 0 && (
-                        <p className="mt-1 text-[12px] text-ink-mute">컴퓨터에 남은 스캔 파일은 지워 주세요(종이 기록지는 채점이 끝날 때까지 보관).</p>
+                        <p className="mt-1 text-[12px] text-ink-mute">컴퓨터에 남은 스캔 파일은 지워 주세요. 종이 기록지는 채점이 끝날 때까지 보관해 주세요.</p>
                       )}
                     </div>
                   ) : (
