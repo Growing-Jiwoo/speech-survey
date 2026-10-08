@@ -107,7 +107,7 @@
   </div>
 
   <ul class="small">
-    <li>채점 중에 로그인이 끝나면 화면 위에 <span class="key">다시 로그인</span>이 뜹니다. 다시 로그인하면 보던 화면으로 돌아옵니다.</li>
+    <li>채점 중에 로그인이 끝나면 화면 위에 <span class="key">다시 로그인</span>이 뜹니다. 새 탭에서 로그인한 뒤, <b>원래 결과지 탭으로 돌아와</b> <span class="key">채점 저장</span>을 누르세요. 원래 탭을 먼저 닫으면 저장하지 않은 채점이 사라집니다.</li>
     <li>비밀번호를 5번 틀리면 10분 동안 잠깁니다.</li>
   </ul>
 
@@ -180,7 +180,7 @@
   <table>
     <tr><th style="width:34mm">항목</th><th>설명</th></tr>
     <tr><td><b>검사 수</b></td><td>그 코드로 시작한 검사 수입니다.</td></tr>
-    <tr><td><b>수정</b></td><td>담임 이메일을 고칩니다. 결과지 링크가 이 주소로 갑니다.</td></tr>
+    <tr><td><b>수정</b></td><td>담임 이메일을 고칩니다. 결과지 링크가 이 주소로 갑니다. 이메일이 비어 있으면 버튼 이름이 「이메일 등록」입니다.</td></tr>
     <tr><td><b>삭제</b></td><td>검사 수가 0인 코드에만 나타납니다.</td></tr>
   </table>
 
@@ -204,7 +204,7 @@
 
   <figure><img class="shot" src="shots/fig-list-table.png" alt="검사 목록 표"></figure>
   <div class="callouts">
-    <div class="c"><span class="num">3</span><span><b>검색.</b> 이름·학교·담임·반·번호로 찾습니다.</span></div>
+    <div class="c"><span class="num">3</span><span><b>검색.</b> 이름·학교·담임·반·번호로 찾습니다. 옆의 「학년 전체」에서 학년만 골라 볼 수 있습니다.</span></div>
     <div class="c"><span class="num">4</span><span><b>진행률.</b> 위가 녹음, 아래가 쓰기입니다. 쓰기를 스캔본으로 한 검사는 <span class="bg amber">스캔 대기</span>나 <span class="bg blue">스캔본 채점</span>이 보입니다.</span></div>
     <div class="c"><span class="num">5</span><span><b>회차.</b> 같은 아이를 다시 검사하면 <span class="bg mute">1/2회차</span>처럼 붙습니다.</span></div>
     <div class="c"><span class="num">6</span><span><b>정렬.</b> 열 제목을 누릅니다.</span></div>
@@ -215,9 +215,9 @@
     <tr><th style="width:42mm">표시</th><th>할 일</th></tr>
     <tr><td><span class="bg mute">진행 중</span></td><td>아직 제출하지 않은 검사입니다. 채점하지 마세요.</td></tr>
     <tr><td><span class="bg mint">제출 완료</span></td><td>채점하면 됩니다.</td></tr>
-    <tr><td><span class="bg amber">제출 · 미완료 있음</span></td><td><span class="bg red">미녹음</span> 과제가 있는 검사입니다. 채점하면 됩니다. 빠진 녹음은 자동으로 0점이 됩니다.</td></tr>
+    <tr><td><span class="bg amber">제출 · 미완료 있음</span></td><td>제출은 됐지만 녹음이나 쓰기가 비어 있는 검사입니다. 채점하면 됩니다. 빠진 녹음은 자동으로 0점이 됩니다.</td></tr>
   </table>
-  <p class="small">스캔본으로 채점할 검사가 있으면 검색창 옆에 <span class="key">스캔본 채점 N</span> 탭이 생깁니다.</p>
+  <p class="small">스캔본으로 채점할 검사가 있으면 검색창 옆에 <span class="key">스캔본 채점 N</span> 탭이 생깁니다. 방금 제출된 검사가 안 보이면 오른쪽 위 <span class="key">새로고침</span>을 누르세요.</p>
 </section>
 
 
@@ -267,6 +267,8 @@
       <span>1학년은 O/X, 2학년은 맞게 쓴 어절 수(0·1·2)입니다. 확대·회전할 수 있습니다.</span></li>
     <li><b>다른 아이의 기록지면 <span class="key">이 아이 기록지가 아니에요 — 연결 해제</span></b>
       <span>선생님께 맞는 기록지를 다시 올려 달라고 연락해 주세요.</span></li>
+    <li><b>스캔본이 오기 전에 쓰기 칸을 채우면 선생님은 스캔본을 올릴 수 없습니다</b>
+      <span>종이를 따로 받은 경우에만 채우세요. 잘못 채웠으면 <span class="key">쓰기 채점 지우기 — 선생님이 스캔본을 올릴 수 있게</span>를 누릅니다.</span></li>
   </ol>
 
   <h3>화면의 표시</h3>
@@ -329,7 +331,7 @@
     </div>
     <div class="item">
       <p class="q">결과지 링크 메일이 다른 주소로 갔대요</p>
-      <p class="a">학급 코드 발급 목록에서 그 학급의 <span class="key">수정</span>으로 이메일을 고친 뒤, 선생님께 다시 받으라고 알려 주세요.</p>
+      <p class="a">학급 코드 발급 목록에서 그 학급의 <span class="key">수정</span>(비어 있으면 <span class="key">이메일 등록</span>)으로 이메일을 고친 뒤, 선생님께 다시 받으라고 알려 주세요.</p>
     </div>
     <div class="item">
       <p class="q">녹음이 안 들리거나 비어 있어요</p>
