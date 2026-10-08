@@ -46,7 +46,7 @@ export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyC
     <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
       <input type="search" aria-label="검사 검색" value={qLocal} onChange={e => setQLocal(e.target.value)}
         placeholder="이름·학교·담임·반·번호 검색"
-        className="h-10 w-52 rounded-xl border-[1.5px] border-line bg-well px-3.5 text-sm outline-none transition focus:border-blue" />
+        className="h-10 w-60 rounded-xl border-[1.5px] border-line bg-well px-3.5 text-sm outline-none transition focus:border-blue" />
       <div className="flex gap-1.5">
         {[...STATUS_TABS, ...(scanReadyCount > 0 || filters.status === 'scanReady'
           ? [{ key: 'scanReady' as const, label: `스캔본 채점 ${scanReadyCount}` }] : [])].map(t => (
