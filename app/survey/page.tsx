@@ -361,8 +361,8 @@ function SurveyInner() {
   // **업로드가 실패해 재시도를 기다리는 화면은 「모르겠어요」가 아니다** — 아이는 읽었고 저장만 안 됐다. 라벨이 모르겠어요로
   // 바뀌어 누르면 skipped로 남아, 검토 화면이 「모르겠어요」로 보이고 미완료로 세지 않은 채 제출돼 읽은 녹음이 X·0점이 됐다.
   // 이 화면은 [다음]으로 넘어가고 검토 화면에는 「미녹음」(미완료)으로 남는다(2026-10-08 야간 점검).
-  // ⚠️ 담당자 확인 대기 — 확정 아님: 위 담당자 확정 규칙의 범위를 개발 판단으로 좁혔다. 물을 것 — 「아이가 읽었지만
-  // 저장에 실패한 화면도 녹음 없이 넘긴 것(모르겠어요)으로 보는가」.
+  // 사용자 확정(2026-10-08, 담당자 회신 아님): 위 담당자 확정 규칙의 범위를 좁힌 결정이다 — 저장 실패는 모르겠어요가
+  // 아니라 따로 구별한다. 관리자 결과지는 이런 페이지를 「저장 실패」로 표시한다(sessions.upload_failed, migration 007).
   const skipping = !fromReview && !isLast && !page.practice
     && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0 && !(page.code in pendingRetries)
   const failedCount = Object.keys(pendingRetries).length
