@@ -194,3 +194,20 @@ describe('POST submit — 쓰기 방식(스캔본, 2026-09-30)', () => {
   })
 })
 
+
+describe('POST submit — 녹음 시도 기록(저장 실패 표시, 2026-10-08)', () => {
+  it('이 양식의 (연습이 아닌) 녹음 페이지만 넘긴다 — 연습·없는 코드·중복은 버린다', async () => {
+    const attempted = ['p_rw_meaning', 'p_practice_rw', 'p_nope', 'p_rw_meaning', 'p_rw_nonsense']
+    expect((await POST(makeReq({ ...VALID(), attempted }))).status).toBe(200)
+    expect(submitArg().attempted).toEqual(['p_rw_meaning', 'p_rw_nonsense'])
+  })
+  it('없으면(이 필드가 생기기 전의 화면) 빈 목록', async () => {
+    expect((await POST(makeReq(VALID()))).status).toBe(200)
+    expect(submitArg().attempted).toEqual([])
+  })
+  it('배열이 아니거나 문자열이 아닌 값이 섞이면 400', async () => {
+    for (const attempted of ['p_rw_meaning', [1], null])
+      expect((await POST(makeReq({ ...VALID(), attempted }))).status).toBe(400)
+    expect(db.submitSession).not.toHaveBeenCalled()
+  })
+})

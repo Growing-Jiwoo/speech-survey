@@ -11,7 +11,7 @@ import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
 export function SentenceRows({
-  items, sentences, onChange, times, locked, onTimeChange, maxSec, attemptsFor, limitSec, onAudioError,
+  items, sentences, onChange, times, locked, onTimeChange, maxSec, attemptsFor, failedFor, limitSec, onAudioError,
 }: {
   items: SurveyItem[]
   sentences: Partial<Record<string, number>>
@@ -25,6 +25,8 @@ export function SentenceRows({
   maxSec: number
   /** 문항 코드 → 그 문장 페이지의 녹음 시도들 */
   attemptsFor: (code: string) => Attempt[]
+  /** 녹음 저장 실패 페이지인지(PageAudio `failed`) */
+  failedFor?: (code: string) => boolean
   limitSec: number
   onAudioError: () => void
 }) {
@@ -46,7 +48,7 @@ export function SentenceRows({
                 </p>
                 {/* 라벨 없이 플레이어만 — 바로 위에 번호와 문장 전문이 있어 '1번 문장'은 군더더기다 */}
                 <div className="mt-2">
-                  <PageAudio attempts={attemptsFor(item.code)}
+                  <PageAudio attempts={attemptsFor(item.code)} failed={failedFor?.(item.code)}
                     limitSec={limitSec} onAudioError={onAudioError} />
                 </div>
               </div>
