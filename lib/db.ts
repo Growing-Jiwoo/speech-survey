@@ -92,6 +92,9 @@ export interface SubmitInput {
   /** 문장 쓰기 양식(G2)에서만 채워진다 */
   sentenceWriting: SentenceScore[]
   checklist: string[]
+  /** 검사 기기가 녹음을 시도했다고 적은 페이지 코드(라우트가 이 양식의 녹음 페이지로 거른다). 이 가운데 녹음이
+   *  하나도 없는 것을 `upload_failed`로 적는다 — 「저장 실패」 표시(migration 007, 사용자 확정 2026-10-08) */
+  attempted?: string[]
 }
 
 /**
@@ -110,7 +113,7 @@ export interface SubmitInput {
  * (사용자 확정 2026-08-21 — 임상 규칙 아님, 실패 모드 비교에 따른 개발 판단)
  */
 export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
-  const { sessionId, writingMode, writingTask, writing, sentenceWriting, checklist } = input
+  const { sessionId, writingMode, writingTask, writing, sentenceWriting, checklist, attempted = [] } = input
 
   // 쓰기 답보다 먼저 상태를 본다: 미존재 세션에 답을 넣으면 FK 위반으로 던져
   // 404·409를 구분할 수 없고, 제출된 세션은 애초에 잠겨 있어야 한다.
@@ -130,12 +133,23 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
   }
+  // 저장 실패: 시도했는데 녹음이 하나도 없는 페이지. 확정 직전에 한 번 계산한다 — 그 뒤로는 업로드가 잠긴다.
+  // 이 조회와 확정 사이에 늦게 끝난 업로드가 들어오면 녹음이 있는데도 여기 남을 수 있어, 결과지는 녹음이
+  // 없는 페이지에만 이 표시를 쓴다(ResultSheet).
+  let uploadFailed: string[] = []
+  if (attempted.length > 0) {
+    const { data: recs, error: e5 } = await sb().from('recordings').select('item_code')
+      .eq('session_id', sessionId).in('item_code', attempted)
+    fail(e5)
+    const have = new Set((recs ?? []).map(r => r.item_code as string))
+    uploadFailed = attempted.filter(c => !have.has(c))
+  }
   // `.is('submitted_at', null)`은 여기 남겨 둔다 — 위 상태 확인과 이 업데이트 사이에
   // 다른 기기가 제출했을 때 재제출을 막는 것은 이 조건뿐이다(경쟁 조건의 최종 방어).
   const { data, error } = await sb().from('sessions')
     // 쓰기 방식도 제출과 **같은 업데이트**로 확정한다 — 따로 쓰면 둘 사이 실패에서 「제출됐는데 방식이
     // 기본값(screen)」인 검사가 생겨, 스캔본을 기다리는 아이가 「쓰기 채점 전」에 영영 머문다.
-    .update({ checklist, writing_mode: writingMode, submitted_at: new Date().toISOString() })
+    .update({ checklist, writing_mode: writingMode, upload_failed: uploadFailed, submitted_at: new Date().toISOString() })
     .eq('id', sessionId).is('submitted_at', null).select('id')
   fail(error)
   if ((data ?? []).length === 0) {
@@ -790,6 +804,9 @@ export interface SessionRow {
   original_identity: OriginalIdentity | null
   /** 쓰기 방식(migration 006). 도입 전 검사는 기본값 screen — 그때는 화면 입력뿐이었다 */
   writing_mode: WritingMode
+  /** 녹음을 시도했는데 제출 때 서버에 하나도 없던 페이지 코드(migration 007) — 결과지의 「저장 실패」 표시.
+   *  채점에는 쓰지 않는다(미녹음과 똑같이 고정 채점). 도입 전 검사는 빈 배열 */
+  upload_failed: string[]
 }
 
 /** 수정 전 아동 식별값 스냅샷(jsonb). 표시 전용이라 읽기만 한다. */
@@ -804,7 +821,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode, upload_failed'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

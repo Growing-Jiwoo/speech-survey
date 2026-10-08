@@ -81,6 +81,9 @@ export function ResultSheet({
   // **제출된 검사만**: 진행 중인 검사의 빈 녹음은 "안 읽었다"가 아니라 "아직 안 했다"이다.
   const hasRecording = (pageCode: string) => attemptsOf(pageCode).length > 0
   const locked = session.submitted_at ? unrecordedItemCodes(f, hasRecording) : NO_CODES
+  // 녹음을 시도했는데 올라오지 않은 페이지 — 미녹음 배지를 「저장 실패」로 바꿔 보일 뿐 채점은 같다(migration 007).
+  // 녹음이 없는 자리에만 배지가 서므로, 제출 직전에 늦게 올라온 녹음이 이 목록에 남아도 보이지 않는다.
+  const uploadFailed = new Set(session.upload_failed ?? [])
   // 잠긴 문항의 예전 저장값(잠그기 전에 넣은 값)은 채점 상태에 싣지 않는다 — 계산은 어차피 보지 않고,
   // 다음 저장 요청에서 빠지므로 문장 점수·시간은 그때 DB에서도 지워진다. 여는 것만으로 저장되지는 않는다.
   const unlocked = <T,>(m: Partial<Record<string, T>>) =>
@@ -373,10 +376,10 @@ export function ResultSheet({
       <TaskSection title={SECTION_LABEL.word_reading}
         hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
         <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
-          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')}
+          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')} failed={uploadFailed.has('p_rw_meaning')}
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
         <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
-          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')}
+          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')} failed={uploadFailed.has('p_rw_nonsense')}
             limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
         <Subtotal
           cells={[
@@ -393,7 +396,7 @@ export function ResultSheet({
         hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간">
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
           times={times} locked={locked} onTimeChange={setTime} maxSec={readSecMax(form)}
-          attemptsFor={code => attemptsOf(`p_${code}`)}
+          attemptsFor={code => attemptsOf(`p_${code}`)} failedFor={code => uploadFailed.has(`p_${code}`)}
           limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
         <Subtotal
           cells={[
@@ -592,6 +595,12 @@ export function ResultSheet({
             // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes).
             desc: <>녹음이 올라오지 않은 과제입니다(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으므로 <b>오반응(X ·
               0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나갑니다. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산합니다.</>,
+          },
+          {
+            badge: <Badge tone="rec">저장 실패</Badge>,
+            // 사용자 확정(2026-10-08) — 표시만 더한 것이고 채점은 미녹음과 같다. 결과보고서 PDF에는 넣지 않았다(담당자 양식).
+            desc: <>아이가 읽었지만 <b>인터넷 문제 등으로 녹음이 올라오지 않은</b> 과제입니다. 채점은 미녹음과 같습니다
+              (오반응 고정). 결과보고서 PDF에는 미녹음과 구별되지 않습니다.</>,
           },
           {
             badge: (

@@ -936,6 +936,26 @@ describe('submitSession — 쓰기 방식 확정', () => {
   })
 })
 
+describe('submitSession — 녹음 저장 실패(upload_failed, 2026-10-08)', () => {
+  it('[REGRESSION] 시도했는데 녹음이 없는 페이지만 upload_failed로, 제출 확정과 **같은 업데이트**로 쓴다', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    enqueue('recordings', { data: [{ item_code: 'p_rw_meaning' }], error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({ attempted: ['p_rw_meaning', 'p_rw_nonsense'] })).toBe('ok')
+    expect(inCallsByTable.get('recordings')).toEqual([['item_code', ['p_rw_meaning', 'p_rw_nonsense']]])
+    const upd = updateCallsByTable.get('sessions')![0] as Record<string, unknown>
+    expect(upd.upload_failed).toEqual(['p_rw_nonsense'])
+    expect(upd.submitted_at).toBeTruthy()
+  })
+  it('시도 기록이 없으면 녹음을 조회하지 않고 빈 배열', async () => {
+    enqueue('sessions', { data: { submitted_at: null, grade: 1 }, error: null })
+    enqueue('sessions', { data: [{ id: SID }], error: null })
+    expect(await submit({})).toBe('ok')
+    expect(fromCalls).toEqual(['sessions', 'sessions'])
+    expect((updateCallsByTable.get('sessions')![0] as Record<string, unknown>).upload_failed).toEqual([])
+  })
+})
+
 describe('saveWriting — 담당자의 스캔본 쓰기 채점', () => {
   const WW = ['ww01', 'ww02', 'ww03']
   it('낱말 쓰기(G1)는 writing_answers.can_write(1 이상 = 정반응)로 넣고, 안 보낸 칸은 지운다(보낸 것이 전부)', async () => {

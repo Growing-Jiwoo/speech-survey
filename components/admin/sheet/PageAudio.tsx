@@ -21,13 +21,16 @@ export type Attempt = Pick<DetailRecording, 'attempt_no' | 'url' | 'duration_sec
 /** 재생 오류로 결과지를 자동으로 다시 받는 최대 횟수(아래 errCount) */
 const MAX_RELOAD = 2
 
-export function PageAudio({ label, attempts, limitSec, onAudioError }: {
+export function PageAudio({ label, attempts, limitSec, onAudioError, failed }: {
   /** 무엇의 녹음인지 (예: '의미 낱말'). 문장처럼 바로 옆에 문항이 적혀 있으면 생략한다 */
   label?: string
   attempts: Attempt[]
   /** 검사지 제한 시간(초). 이 값을 넘는 녹음은 초과분이 채점 대상이 아님을 알린다 */
   limitSec: number
   onAudioError: () => void
+  /** 녹음을 시도했는데 서버에 올라오지 않은 페이지(sessions.upload_failed) — 「미녹음」 대신 「저장 실패」로 알린다.
+   *  채점은 미녹음과 같다(사용자 확정 2026-10-08 — 표시만, 담당자 회신 아님) */
+  failed?: boolean
 }) {
   // 기본 재생은 **마지막 차수**(사용자 확정 2026-09-22 — 담당자 회신이 아니라 표시 기본값이다).
   // 일시정지가 녹음 중에도 눌리게 된 뒤(PR #68) 잘린 1차가 흔해졌다 — 1차를 기본으로 두면 채점자가
@@ -42,7 +45,7 @@ export function PageAudio({ label, attempts, limitSec, onAudioError }: {
     return (
       <div className="flex items-center gap-2.5 print:hidden">
         {label && <span className="text-[14px] font-bold text-ink">{label}</span>}
-        <Badge tone="rec">미녹음</Badge>
+        <Badge tone="rec">{failed ? '저장 실패' : '미녹음'}</Badge>
       </div>
     )
   }

@@ -12,7 +12,7 @@ import {
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { formForGrade } from '@/lib/forms'
-import { AREA_CODES, itemsFor } from '@/lib/items'
+import { AREA_CODES, isRecordingPage, itemsFor } from '@/lib/items'
 import { itemMaxWords } from '@/lib/scoring'
 import { jsonError } from '@/lib/request'
 
@@ -34,6 +34,9 @@ export async function POST(req: Request) {
   if (!Array.isArray(b.checklist) || b.checklist.some((c: unknown) => typeof c !== 'string' || !AREA_CODES.includes(c)))
     return bad('체크리스트 형식 오류')
   const checklist = [...new Set(b.checklist as string[])]
+  // 녹음을 시도한 페이지(저장 실패 표시용 — sessions.upload_failed). 없으면 빈 목록(이 필드가 생기기 전의 화면).
+  if (b.attempted !== undefined && (!Array.isArray(b.attempted) || b.attempted.some((c: unknown) => typeof c !== 'string')))
+    return bad('녹음 기록 형식 오류')
 
   const invalidToken = () => jsonError('유효하지 않은 세션이에요.', 401)
   if (typeof b.sessionToken !== 'string') return invalidToken()
@@ -53,6 +56,11 @@ export async function POST(req: Request) {
   }
 
   const f = itemsFor(formForGrade(grade))
+  // 이 양식의 (연습이 아닌) 녹음 페이지만 남긴다 — 녹음 라우트가 받는 코드와 같은 조건
+  const attempted = [...new Set((b.attempted ?? []) as string[])].filter(c => {
+    const p = f.pageByCode.get(c)
+    return !!p && isRecordingPage(p) && !p.practice
+  })
 
   // 쓰기 답: 값은 "정확히 쓴 어절 수". 낱말 쓰기는 문항 만점이 1이라 0/1만 유효하다.
   const validWriting: Record<string, number> = {}
@@ -75,7 +83,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await submitSession({
-      sessionId: b.sessionId, writingMode, writing, sentenceWriting, checklist,
+      sessionId: b.sessionId, writingMode, writing, sentenceWriting, checklist, attempted,
       // 스캔본이면 앞선 시도가 남긴 쓰기 답을 지운다(lib/db submitSession)
       writingTask: { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', codes: f.writingItems.map(i => i.code) },
     })

@@ -9,6 +9,8 @@
 | `005_sentence_times.sql` | 문장 읽기유창성의 문장별 읽은 시간 `sentence_times(session_id, item_code, seconds numeric(4,1) > 0)`(RLS) — 총점이 어절/초가 됐다(담당자 확정 2026-09-29). `sentence_scores`에 열을 붙이지 않은 이유가 파일 주석에 있다: 어절과 시간은 따로 입력되는데 `words`가 NOT NULL이라 시간을 먼저 넣으면 담을 행이 없다. **코드 배포보다 먼저 실행할 것** — 새 코드는 결과지·결과보고서를 만들 때 이 테이블을 읽는다. 재실행 안전 |
 | `006_writing_scan.sql` | 쓰기 기록지 스캔본(2026-09-30): `sessions.writing_mode`(`screen`/`scan`, not null default `screen` — 도입 전 검사는 전부 화면 방식이었다) + 스캔본 행 `writing_scans(session_id PK → sessions, path, content_type, bytes, uploaded_at)`(RLS, 세션당 한 장) + 비공개 스토리지 버킷 `writing-scans`(한 장 4MB · JPEG/PNG만 — 이미 있는 버킷에도 다시 돌리면 상한이 걸린다, `on conflict do update`). 끝에 `notify pgrst, 'reload schema'` — 없으면 PostgREST 스키마 캐시가 갱신될 때까지(수 분) 목록·결과지가 「relationship … writing_scans」 500을 낸다(2026-10-01 운영에서 확인). **코드 배포보다 먼저 실행할 것** — 새 코드는 제출·목록·결과지에서 `writing_mode`와 `writing_scans`를 읽는다. 재실행 안전 |
 
+| `007_upload_failed.sql` | 녹음 「저장 실패」 표시(2026-10-08): `sessions.upload_failed text[] not null default '{}'` — 녹음을 시도했는데 제출 순간 서버에 하나도 없던 페이지 코드. 제출 라우트가 확정과 같은 업데이트로 적는다. **표시 전용**이라 채점(미녹음 고정)과 무관하다(사용자 확정, 담당자 회신 아님). **코드 배포보다 먼저 실행할 것** — 새 코드는 목록·결과지에서 이 컬럼을 읽는다. 재실행 안전 |
+
 적용 방법은 [../README.md](../README.md)와 루트 README 셋업 절 참고 — **Supabase CLI를 쓰지 않고
 SQL Editor에서 위→아래로 한 번에 실행한다.**
 

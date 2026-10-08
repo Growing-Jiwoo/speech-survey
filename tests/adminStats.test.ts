@@ -25,7 +25,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     checklist: [],
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
-    edited_at: null, original_identity: null, writing_mode: 'screen' as const,
+    edited_at: null, original_identity: null, writing_mode: 'screen' as const, upload_failed: [],
     recordings: [], writing_answers: [], sentence_scores: [],
     ...over,
   }

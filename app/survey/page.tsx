@@ -178,7 +178,10 @@ function SurveyInner() {
         recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
         skipped: prev.skipped.filter(c => c !== code),
       }
-      return uploads ? withPendingUpload(next, code, attemptNo) : next
+      // 올리는 녹음이면 「시도함」도 적는다 — 제출 때 서버가 저장 실패를 가린다(lib/survey-state `attempted`)
+      return uploads
+        ? withPendingUpload({ ...next, attempted: [...new Set([...(prev.attempted ?? []), code])] }, code, attemptNo)
+        : next
     })
     setPendingRetries(prev => {
       if (!(code in prev)) return prev

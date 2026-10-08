@@ -160,7 +160,8 @@ export default function ReviewPage() {
     const r = await postJson('/api/sessions/submit', {
       sessionId: st.sessionId, sessionToken: st.sessionToken, writingMode,
       writing: writingMode === 'scan' ? {} : st.writing, checklist: st.checklist,
-    }, '제출에 문제가 생겼어요. 다시 시도해 주세요.')
+      attempted: st.attempted ?? [],   // 서버가 저장 실패를 가린다(sessions.upload_failed)
+    },'제출에 문제가 생겼어요. 다시 시도해 주세요.')
     setBusy(false)
     if (!r.ok) {
       // 다시 눌러도 같은 답인 거절은 빠져나갈 길을 준다 — 409는 응답만 끊겼고 서버는 이미 받은 경우가 대부분이다
