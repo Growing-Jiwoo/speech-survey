@@ -40,6 +40,14 @@ function buildCsp(nonce: string | null): string {
 /** 관리자 API의 401 문구 — 화면이 그대로 보여 준다 */
 const ADMIN_EXPIRED_MSG = '로그인이 끝났어요. 새 탭에서 관리자 화면에 다시 로그인한 뒤 이 화면에서 다시 시도해 주세요.'
 
+/**
+ * 관리자 API 응답의 캐시 금지. 목록·결과지·코드·명단 JSON에 아동 실명·생년월일·담임 연락처가 담기는데, 라우트가 Cache-Control을
+ * 주지 않아 운영(Vercel)에서 `public, max-age=0, must-revalidate`가 붙었다 — `public`이라 학교 프록시 같은 공유 캐시가 저장할
+ * 수 있다(2026-10-12 점검 A22). 라우트마다 붙이면 새 라우트에서 빠뜨리므로 /api/admin 전체에 여기서 붙인다(이미 no-store인
+ * PDF 라우트와도 뜻이 같다 — proxy 헤더가 응답에 먼저 실린다).
+ */
+const ADMIN_API_CACHE = 'private, no-store'
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl
 
@@ -53,14 +61,20 @@ export async function proxy(req: NextRequest) {
     requestHeaders.set('x-nonce', nonce)
     requestHeaders.set('content-security-policy', csp)
   }
+  const isAdminApi = pathname.startsWith('/api/admin')
   const pass = () => {
     const res = NextResponse.next({ request: { headers: requestHeaders } })
     res.headers.set('Content-Security-Policy', csp)
+    if (isAdminApi) res.headers.set('Cache-Control', ADMIN_API_CACHE)
     return res
   }
-  const withCsp = (res: NextResponse) => { res.headers.set('Content-Security-Policy', csp); return res }
+  const withCsp = (res: NextResponse) => {
+    res.headers.set('Content-Security-Policy', csp)
+    if (isAdminApi) res.headers.set('Cache-Control', ADMIN_API_CACHE)
+    return res
+  }
 
-  const isAdminArea = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+  const isAdminArea = pathname.startsWith('/admin') || isAdminApi
   // 로그인·로그아웃은 인증 없이 통과(로그아웃은 만료 쿠키로도 가능해야 함). CSP는 그대로 부여.
   if (!isAdminArea
     || pathname === '/admin/login' || pathname === '/api/admin/login' || pathname === '/api/admin/logout')

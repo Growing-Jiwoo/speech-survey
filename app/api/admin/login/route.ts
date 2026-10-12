@@ -6,7 +6,7 @@ import { createToken, ADMIN_COOKIE, ADMIN_TTL_MS } from '@/lib/auth'
 import { clearLoginFailures, isLoginLocked, loginFailureCount, recordLoginFailure } from '@/lib/db'
 import { env } from '@/lib/env'
 import { clientIp } from '@/lib/request'
-import { GLOBAL_KEY, IP_MAX_FAILS, LOCK_MS, globalBackoffMs } from '@/lib/login-policy'
+import { GLOBAL_KEY, IP_MAX_FAILS, LOCKED_MSG, LOCK_MS, globalBackoffMs } from '@/lib/login-policy'
 
 export const runtime = 'nodejs' // @node-rs/argon2는 네이티브 바인딩 → Node 런타임 필수
 
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const ip = clientIp(req)
   // (1) per-IP 하드 잠금: 이 IP만 잠그므로 다른 IP의 정상 관리자는 영향받지 않는다.
   if (await isLoginLocked(ip, IP_MAX_FAILS))
-    return NextResponse.json({ error: '시도가 너무 많아요. 잠시 후 다시 시도해 주세요.' }, { status: 429 })
+    return NextResponse.json({ error: LOCKED_MSG }, { status: 429 })
 
   // (2) 글로벌 백오프: 예전엔 전역 50회 도달 시 모든 로그인을 하드 잠금(정상 관리자까지 봉쇄)했으나,
   //     이제 전역 실패 누적에 비례한 지연(상한 2s)만 준다 — IP 로테이션 공격엔 마찰을 주되 봉쇄는 안 한다.

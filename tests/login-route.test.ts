@@ -53,6 +53,7 @@ describe('POST /api/admin/login', () => {
     vi.mocked(db.isLoginLocked).mockImplementation(async (key: string) => key === '1.2.3.4')
     const res = await POST(makeReq(PW, { 'x-real-ip': '1.2.3.4' }))
     expect(res.status).toBe(429)
+    expect((await res.json()).error).toBe('시도가 너무 많아요. 10분 뒤에 다시 시도해 주세요.')
     expect(db.clearLoginFailures).not.toHaveBeenCalled()
   })
   it('[S1] 전역 실패가 누적돼도 로그인을 봉쇄하지 않는다 (하드 잠금 대신 백오프 지연)', async () => {
