@@ -17,6 +17,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Spinner } from '@/components/Spinner'
 // 폴더만 admin일 뿐 범용 컴포넌트다(관리자 전용 데이터를 알지 않는다).
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
+import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import {
@@ -136,6 +137,9 @@ export function ResultsView({ token }: { token: string }) {
    *  25장 병합은 서버가 몇 초를 쓰는 일이라, 잘못 눌린 클릭 하나로 시작되면 안 된다(사용자 확정 2026-09-22). */
   const [confirmMode, setConfirmMode] = useState<'all' | 'picked' | null>(null)
   const [dlErr, setDlErr] = useState('')
+  // 스캔 카드 밖(카드가 없는 반이면 화면 어디든)에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 결과지 화면을
+  // 떠난다 — 확인 중이던 스캔본 창도 함께 사라진다. 카드 유무와 무관하게 이 화면 전체에서 막는다(2026-10-12 점검).
+  useFileDropGuard()
 
   const err = error ? (error.status === 401 ? 'expired' : error.status === 404 ? 'gone' : 'other') : null
 
