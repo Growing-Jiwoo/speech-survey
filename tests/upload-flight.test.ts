@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { beginUpload, endUpload, isUploading, subscribeUploads, uploadsInFlight } from '@/lib/upload-flight'
+import {
+  beginUpload, clearFailedUpload, endUpload, failedUploads, isUploading, setFailedUpload, subscribeUploads, uploadsInFlight,
+} from '@/lib/upload-flight'
 
 // 모듈 범위 상태라 테스트마다 다른 세션 id를 쓴다.
 describe('올리는 중인 녹음 — 검사·검토 화면이 함께 본다 (2026-10-07)', () => {
@@ -49,5 +51,30 @@ describe('올리는 중인 녹음 — 검사·검토 화면이 함께 본다 (20
     beginUpload('s5', 'p_rs01', 1)
     expect(second).toHaveBeenCalledTimes(1)
     off2()
+  })
+})
+
+describe('다시 보낼 녹음 — 화면을 옮겨도 남는다 (2026-10-12)', () => {
+  const rec = { blob: new Blob(['a']), durationSec: 1, mime: 'audio/webm', peak: 0.5 }
+  it('[REGRESSION] 세션·페이지마다 녹음과 시도 번호를 들고 있고, 지우면 사라진다', () => {
+    setFailedUpload('f1', 'p_rw_meaning', { rec, attemptNo: 2 })
+    expect(failedUploads('f1').p_rw_meaning.attemptNo).toBe(2)
+    expect(failedUploads('f2')).toEqual({})
+    clearFailedUpload('f1', 'p_rw_meaning')
+    expect(failedUploads('f1')).toEqual({})
+  })
+  it('바뀌지 않으면 같은 객체를 돌려준다 — 화면이 바깥 저장소로 읽는다(useSyncExternalStore)', () => {
+    setFailedUpload('f3', 'p_rs01', { rec, attemptNo: 1 })
+    expect(failedUploads('f3')).toBe(failedUploads('f3'))
+    expect(failedUploads('none')).toBe(failedUploads('none2'))
+  })
+  it('넣고 지울 때 알린다 — 없는 것을 지우면 알리지 않는다', () => {
+    const fn = vi.fn()
+    const off = subscribeUploads(fn)
+    setFailedUpload('f4', 'p_rs01', { rec, attemptNo: 1 })
+    clearFailedUpload('f4', 'p_rs01')
+    clearFailedUpload('f4', 'p_rs01')
+    expect(fn).toHaveBeenCalledTimes(2)
+    off()
   })
 })

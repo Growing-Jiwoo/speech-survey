@@ -16,8 +16,13 @@ import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import { useSurveyForm } from '@/hooks/useSurveyForm'
 import { FormStatus } from '@/components/survey/FormStatus'
 import { visiblePages } from '@/lib/survey-flow'
-import { clearState, loadState, markSubmitted, resolveWritingMode, saveState, settleLostUploads, type SurveyState } from '@/lib/survey-state'
-import { isUploading, subscribeUploads, uploadsInFlight } from '@/lib/upload-flight'
+import {
+  clearState, loadState, markSubmitted, resolveWritingMode, saveState, settleLostUploads, unsavedPages, type SurveyState,
+} from '@/lib/survey-state'
+import { failedUploads, isUploading, subscribeUploads, uploadsInFlight } from '@/lib/upload-flight'
+
+/** 다시 보낼 녹음이 없을 때의 빈 값 — useSyncExternalStore 스냅숏은 같은 객체여야 한다 */
+const NO_FAILED: ReturnType<typeof failedUploads> = {}
 
 /** 상태 라벨 — 완료는 파랑, 미완료는 붉은 작은 배지 하나로만 표시(차분하게). */
 function StatusPill({ done, label }: { done: boolean; label: string }) {
@@ -32,7 +37,7 @@ export default function ReviewPage() {
   const [err, setErr] = useState('')
   /** 제출이 서버에서 거절돼 더 진행할 수 없다(이미 제출·세션 만료·지워짐) — 처음 화면으로 보낸다 */
   const [fatal, setFatal] = useState<'submitted' | 'expired' | null>(null)
-  /** 끊긴 업로드로 「녹음 완료」 표시를 거둔 페이지 — 검사 화면과 같은 판정·같은 안내 */
+  /** 녹음을 시도했는데 저장되지 않은 페이지 — 검사 화면과 같은 판정·같은 안내(lib/survey-state unsavedPages) */
   const [lostUploads, setLostUploads] = useState<string[]>([])
 
   useEffect(() => {
@@ -46,7 +51,7 @@ export default function ReviewPage() {
     // 마운트 후 1회 읽어 복원한다 — 이 setState는 의도된 패턴.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSt(settled.state)
-    setLostUploads(settled.lost)
+    setLostUploads(unsavedPages(settled.state, failedUploads(s.sessionId)))
   }, [router])
 
   // 이 탭에서 아직 올리고 있는 녹음 수 — 있으면 제출을 막는다(lib/upload-flight 머리 주석). 바깥 저장소라
@@ -54,6 +59,11 @@ export default function ReviewPage() {
   const sessionId = st?.sessionId
   const uploading = useSyncExternalStore(subscribeUploads,
     () => (sessionId ? uploadsInFlight(sessionId) : 0), () => 0)
+  // 다시 보낼 녹음(저장 실패) — 검사 화면의 [다시 저장]을 기다린다. 이 화면에 있는 동안 실패가 와도 그 행이 이유 없이
+  // 「미녹음」이 되지 않게 「저장 실패」로 따로 보인다(2026-10-12 점검)
+  const failed = useSyncExternalStore(subscribeUploads,
+    () => (sessionId ? failedUploads(sessionId) : NO_FAILED), () => NO_FAILED)
+  const failedCodes = Object.keys(failed)
   // 업로드가 끝날 때마다 저장 상태를 다시 읽는다. 실패한 녹음은 검사 화면이 저장 상태에서 「녹음 완료」를 거두므로
   // (undoSaved) 다시 읽으면 여기서도 미녹음으로 보인다.
   useEffect(() => {
@@ -64,20 +74,20 @@ export default function ReviewPage() {
     })
   }, [sessionId])
 
-  // 올리는 중 새로고침·탭 닫기 실수 방지(검사 화면과 같다 — 그 녹음이 사라진다)
+  // 올리는 중·다시 보낼 녹음이 남은 동안 새로고침·탭 닫기 실수 방지(검사 화면과 같다 — 그 녹음이 사라진다)
   useEffect(() => {
-    if (uploading === 0) return
+    if (uploading === 0 && failedCodes.length === 0) return
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault() }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [uploading])
+  }, [uploading, failedCodes.length])
 
   // 검사지는 서버가 내려준다(hooks/useSurveyForm) — 검사 화면에서 이미 받았으면 캐시로 즉시 뜬다.
   const formQ = useSurveyForm(st)
   const otherTab = useOtherTabGuard(st?.sessionId)
 
   if (!st) return null
-  if (otherTab) return <OtherTabNotice />
+  if (otherTab) return <OtherTabNotice kind={otherTab} />
   if (!formQ.data) return <FormStatus error={formQ.error} onRetry={() => void formQ.refetch()} />
   const state = st
 
@@ -120,8 +130,9 @@ export default function ReviewPage() {
               // 넘긴 **관찰 결과**이지 빠뜨린 것이 아니므로 누락 색(rec)을 쓰지 않는다
               // (담당자 확정 2026-09-21: 미녹음과 구분해 보여줄 것).
               pill = (state.recorded[p.code] ?? 0) > 0 ? <StatusPill done label="녹음 완료" />
-                : skipped(p) ? <Badge tone="amber">모르겠어요</Badge>
-                  : <StatusPill done={false} label="미녹음" />
+                : p.code in failed ? <StatusPill done={false} label="저장 실패" />
+                  : skipped(p) ? <Badge tone="amber">모르겠어요</Badge>
+                    : <StatusPill done={false} label="미녹음" />
             } else if (p.section === f.writingSection) {
               const done = p.items.filter(i => state.writing[i.code] !== undefined).length
               pill = scanWriting ? <Badge tone="blue">스캔 예정</Badge>
@@ -202,9 +213,15 @@ export default function ReviewPage() {
         단계 번호를 누르면 해당 화면으로 이동해요.
         {missing > 0 && <> 아직 <b className="text-rec-deep">{missing}개</b>가 완료되지 않았어요.</>}
       </p>
+      {failedCodes.length > 0 && (
+        <p role="alert" className="mt-3 rounded-[14px] border border-rec/30 bg-rec/5 p-3 text-xs leading-relaxed text-rec-deep">
+          <b>{failedCodes.map(c => pageLabel(f, c)).join(', ')}</b> 녹음을 저장하지 못했어요.
+          번호를 눌러 그 화면의 <b>[다시 저장]</b>을 눌러 주세요.
+        </p>
+      )}
       {lostUploads.length > 0 && (
         <p role="alert" className="mt-3 rounded-[14px] border border-amber/40 bg-amber/10 p-3 text-xs leading-relaxed text-amber">
-          <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음을 저장하기 전에 화면이 닫혔어요.
+          <b>{lostUploads.map(c => pageLabel(f, c)).join(', ')}</b> 녹음이 저장되지 않았어요.
           번호를 눌러 그 화면에서 다시 녹음해 주세요.
         </p>
       )}

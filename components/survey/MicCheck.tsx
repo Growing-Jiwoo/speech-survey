@@ -4,6 +4,7 @@
 // 다시 불러야 한다 — 이 화면의 존재 이유가 그것이다.
 // 실패는 종류별(권한 거부/미지원/그 외)로 갈라 플랫폼에 맞는 권한 해제 경로를 안내한다.
 'use client'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRecorder, type Recording } from '@/hooks/useRecorder'
 import { MIC_MIN_PEAK, classifyRecorderError, type RecorderErrorKind } from '@/lib/audio'
@@ -58,6 +59,9 @@ export function MicCheck({ onOk }: { onOk: () => void }) {
             : <>마이크를 시작하지 못했어요.<br />잠시 후 다시 눌러 주세요.</>}
       </p>
       {micErr !== 'unsupported' && <button onClick={start} className="cta mt-2 max-w-60">다시 시도</button>}
+      {/* 나갈 길 — 마이크를 고칠 수 없으면 다른 기기로 옮겨야 한다. 종전에는 브라우저 뒤로가기밖에 없었다(2026-10-12 점검).
+          진행 상태는 남으므로 시작 화면에 이어하기 카드가 뜬다. */}
+      <Link href="/" className="text-[13px] text-ink-mute underline underline-offset-2">처음 화면으로</Link>
     </main>
   )
 

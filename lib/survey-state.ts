@@ -79,6 +79,27 @@ export interface SurveyState {
    * 스키마 버전을 올리지 않는다 — 없는 값은 「시도 기록 없음」(= 저장 실패 표시 없음)과 같다.
    */
   attempted?: string[]
+  /**
+   * 페이지마다 **매긴 적 있는 가장 큰 시도 번호** — 줄지 않는다. 시도 번호를 「저장된 녹음 수 + 1」로만 매기면, 앞 시도가
+   * 올리기에 실패해 수가 줄었을 때 다음 녹음이 이미 올라간 시도의 번호를 다시 받아 그 파일을 덮었다(같은 경로 upsert,
+   * 2026-10-12 점검). 스키마 버전을 올리지 않는다 — 없으면 저장된 녹음 수에서 시작한다.
+   */
+  tries?: Record<string, number>
+}
+
+/**
+ * 녹음을 **시도했는데 저장된 녹음이 없는** 페이지 — 다시 보낼 녹음(`retryable`, lib/upload-flight)이 있는 것은 뺀다.
+ * 아이는 읽었고 저장만 안 됐다(올리기 실패를 다시 보내지 못한 채 새로고침·탭 닫기, 끊긴 업로드, 그 녹음만 저장할 수 없음).
+ * 「모르겠어요」가 아니라 **다시 녹음할 페이지**다 — 검사·검토 화면이 같은 판정으로 알리고, 이 페이지의 주 버튼은 「모르겠어요」가
+ * 되지 않는다(2026-10-12 점검: 그대로 「모르겠어요」로 넘기면 검토는 완료로 보고 관리자는 「저장 실패」로 보았다).
+ */
+export function unsavedPages(s: Pick<SurveyState, 'recorded' | 'attempted'>, retryable: Record<string, unknown> = {}): string[] {
+  return (s.attempted ?? []).filter(c => (s.recorded[c] ?? 0) === 0 && !(c in retryable))
+}
+
+/** 다음 녹음의 시도 번호 — 저장된 수와 매긴 적 있는 번호 중 큰 것 다음(위 `tries`) */
+export function nextAttemptNo(s: Pick<SurveyState, 'recorded' | 'tries'>, code: string): number {
+  return Math.max(s.recorded[code] ?? 0, s.tries?.[code] ?? 0) + 1
 }
 
 const PREFIX = 'kodys-survey:'
@@ -113,7 +134,22 @@ export function saveState(s: SurveyState): void {
   try {
     localStorage.setItem(keyOf(s.sessionId), JSON.stringify(s))
     localStorage.setItem(LAST_KEY, s.sessionId)
-  } catch { /* 프라이빗 모드 등 저장 실패 시 메모리 상태로만 진행 */ }
+  } catch { /* 쿼터 초과 등 — 화면 상태로는 계속 진행한다. 저장 자체가 막힌 브라우저는 시작 전에 걸러진다(storageWritable) */ }
+}
+
+/**
+ * 이 브라우저가 진행 상태를 저장할 수 있는가. 검사 화면은 시작할 때 저장된 상태를 읽어 진행하므로(없으면 처음 화면으로)
+ * 사이트 데이터 저장이 막힌 브라우저(쿠키·사이트 데이터 차단, 학교 PC 보안 설정)에서는 검사를 시작할 수 없다.
+ * 시작 화면이 세션을 만들기 **전에** 물어 막는다 — 종전에는 세션만 만들고 아무 말 없이 처음 화면으로 돌아와, 누를 때마다
+ * 「진행 중」 세션이 쌓였다(2026-10-12 점검).
+ */
+export function storageWritable(): boolean {
+  try {
+    const probe = `${PREFIX}probe`
+    localStorage.setItem(probe, '1')
+    localStorage.removeItem(probe)
+    return true
+  } catch { return false }
 }
 
 /**

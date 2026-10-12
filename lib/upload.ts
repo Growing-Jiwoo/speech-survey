@@ -9,7 +9,7 @@ import type { Recording } from '@/hooks/useRecorder'
 /** 업로드 한 번의 상한 — 5MB 이하 녹음은 보통 수 초 안에 끝난다. 넘으면 연결이 멈춘 것으로 본다 */
 export const UPLOAD_TIMEOUT_MS = 60_000
 
-export interface UploadResult { ok: boolean; status: number; retry: boolean; fatal: 'expired' | 'submitted' | null }
+export interface UploadResult { ok: boolean; status: number; retry: boolean; fatal: 'expired' | 'gone' | 'submitted' | null }
 
 export async function uploadRecording(params: {
   sessionId: string; sessionToken: string; itemCode: string; attemptNo: number; rec: Recording
@@ -34,8 +34,10 @@ export async function uploadRecording(params: {
 /** 상태 코드 → 결과 분류(순수 함수 — 테스트가 본다). 0은 연결 실패. */
 export function classifyUpload(status: number): UploadResult {
   if (status >= 200 && status < 300) return { ok: true, status, retry: false, fatal: null }
-  // 404는 세션이 없다(관리자가 지움) — 401처럼 이 검사를 더 이어갈 수 없다. 재시도·「다시 녹음」을 권하면 끝없이 반복된다
-  if (status === 401 || status === 404) return { ok: false, status, retry: false, fatal: 'expired' }
+  // 404는 세션이 없다(관리자가 지움) — 401처럼 이 검사를 더 이어갈 수 없다. 재시도·「다시 녹음」을 권하면 끝없이 반복된다.
+  // 다만 까닭은 다르다 — 「오래되어」라고 하면 방금 시작한 검사가 지워진 경우를 설명하지 못한다(2026-10-12 점검)
+  if (status === 401) return { ok: false, status, retry: false, fatal: 'expired' }
+  if (status === 404) return { ok: false, status, retry: false, fatal: 'gone' }
   if (status === 409) return { ok: false, status, retry: false, fatal: 'submitted' }
   const retry = status === 0 || status === 429 || status >= 500
   return { ok: false, status, retry, fatal: null }

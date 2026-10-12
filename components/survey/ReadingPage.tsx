@@ -57,9 +57,9 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
   // 녹음 중에만 손잡이를 내준다 — 녹음이 아닐 때 부모가 부르면 아무 일도 없어야 한다.
   useEffect(() => {
     if (!stopRef) return
-    stopRef.current = busy ? recorder.stop : null
+    stopRef.current = busy ? recorder.stopForPause : null
     return () => { stopRef.current = null }
-  }, [stopRef, busy, recorder.stop])
+  }, [stopRef, busy, recorder.stopForPause])
 
   async function begin() {
     setMicErr(null)

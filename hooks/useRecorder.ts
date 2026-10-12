@@ -24,6 +24,7 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
   const startingRef = useRef(false)
   const cancelStartRef = useRef(false)   // 여는 중에 멈춤(일시정지)이 눌렸다 — 열리는 대로 닫고 녹음하지 않는다
   const discardRef = useRef(false)       // 화면을 떠났다 — 그 시도는 저장하지 않는다
+  const dropOnceRef = useRef(false)      // 시작 직후의 일시정지 — 이번 시도 하나만 버린다(stopForPause)
   const lastStopRef = useRef(0)
   const [level, setLevel] = useState(0)
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -42,9 +43,16 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
     if (recRef.current?.state === 'recording') { lastStopRef.current = Date.now(); recRef.current.stop() }
   }, [])
 
-  /** 녹음 버튼으로 멈춤 — 시작 직후(TAP_GUARD_MS 안)의 누름은 연타로 보고 무시한다. 일시정지는 `stop`을 쓴다(언제든 멈춘다). */
+  /** 녹음 버튼으로 멈춤 — 시작 직후(TAP_GUARD_MS 안)의 누름은 연타로 보고 무시한다. 일시정지는 `stopForPause`를 쓴다(언제든 멈춘다). */
   const stopByTap = useCallback(() => {
     if (Date.now() - startedRef.current < TAP_GUARD_MS) return
+    stop()
+  }, [stop])
+
+  /** 일시정지로 멈춤 — 언제든 멈추되, 시작 직후(TAP_GUARD_MS 안)면 **그 시도를 버린다.** 0.2초짜리 녹음이 마지막 시도가 되어
+   *  관리자가 기본으로 듣는 녹음이 됐다(2026-10-12 점검 — 녹음 버튼 연타와 같은 문제). 읽은 것이 없으니 버려도 잃는 것이 없다. */
+  const stopForPause = useCallback(() => {
+    if (recRef.current?.state === 'recording' && Date.now() - startedRef.current < TAP_GUARD_MS) dropOnceRef.current = true
     stop()
   }, [stop])
 
@@ -101,6 +109,7 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
         // 잘린 녹음이 「마지막 시도」로 올라갔는데 이 기기의 진행 기록에는 남지 않았다(2026-10-08 야간 점검).
         if (discardRef.current) return
         setState('idle'); setLevel(0); setElapsedMs(0)
+        if (dropOnceRef.current) { dropOnceRef.current = false; return }
         onCompleteRef.current({
           blob: new Blob(chunks, { type: rec.mimeType }),
           durationSec: (Date.now() - startedRef.current) / 1000,
@@ -129,5 +138,5 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
     discardRef.current = false   // 개발 모드의 마운트-언마운트-마운트에서 되살린다
     return () => { discardRef.current = true; clearTimeout(timerRef.current); cleanupRef.current() }
   }, [])
-  return { state, starting, level, elapsedMs, remainingSec: calcRemaining(elapsedMs, maxSec), start, stop, stopByTap }
+  return { state, starting, level, elapsedMs, remainingSec: calcRemaining(elapsedMs, maxSec), start, stop, stopByTap, stopForPause }
 }

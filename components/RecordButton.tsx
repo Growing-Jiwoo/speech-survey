@@ -1,5 +1,6 @@
 // components/RecordButton.tsx — 대형 녹음 버튼(아동 터치 타깃) + 남은 시간 진행 링.
 'use client'
+import { useEffect, useRef } from 'react'
 import type { RecState } from '@/hooks/useRecorder'
 
 // 진행 링: 반지름 R의 원 둘레(CIRC)를 strokeDasharray로 깔고, 경과 비율만큼
@@ -17,8 +18,22 @@ export function RecordButton({ state, onStart, onStop, disabled, maxSec = 20, el
   const recording = state === 'recording'
   const progress = Math.min(elapsedMs / 1000 / maxSec, 1)
 
+  // 상태가 바뀌면 버튼이 통째로 바뀐다(시작 ↔ 끝내기) — 초점이 이 안에 있었으면 새 버튼으로 옮긴다. 안 옮기면 키보드로 녹음을
+  // 시작한 검사자가 멈추려고 Tab을 여러 번 눌러야 했다(2026-10-12 점검). 표시는 초점이 **다른 요소로 옮겨 갔을 때만** 지운다 —
+  // 버튼이 DOM에서 빠질 때 브라우저에 따라 상대 없는 blur가 오는데, 그것까지 지우면 옮길 때를 놓친다.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const focusedRef = useRef(false)
+  useEffect(() => {
+    if (focusedRef.current) wrapRef.current?.querySelector('button')?.focus()
+  }, [recording, success])
+
   return (
-    <div className="relative flex h-[116px] w-[116px] items-center justify-center">
+    <div ref={wrapRef} className="relative flex h-[116px] w-[116px] items-center justify-center"
+      onFocus={() => { focusedRef.current = true }}
+      onBlur={e => {
+        const to = e.relatedTarget as Node | null
+        if (to && !e.currentTarget.contains(to)) focusedRef.current = false
+      }}>
       <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 116 116" aria-hidden="true">
         <circle cx="58" cy="58" r={R} fill="none"
           stroke={!recording && success ? 'var(--color-mint)' : 'var(--color-line)'} strokeWidth="4" />
