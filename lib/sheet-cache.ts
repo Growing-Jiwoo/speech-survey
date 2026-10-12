@@ -8,6 +8,8 @@
 //
 // 서버 저장 규칙(lib/db saveScores·saveWriting)과 같게: 낱말 O/X는 upsert(보낸 칸만 바뀐다), 문장 읽기 어절 수와
 // 읽은 시간은 문장 읽기 코드 안에서 교체, 쓰기는 보냈을 때만 쓰기 코드 안에서 교체.
+// 판 충돌을 병합해 저장했으면(lib/sheet-save) 호출부가 캐시의 행을 그때 받은 서버 행으로 바꾼 뒤 이 함수로 고치고,
+// 저장 뒤 판도 캐시에 적는다(AdminDetailView) — 낡은 캐시 위에서 고치면 다른 화면이 저장한 칸이 캐시에서 빠진다.
 
 interface Rows {
   marks: { item_code: string; correct: boolean }[]

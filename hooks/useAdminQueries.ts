@@ -55,6 +55,9 @@ export interface SessionDetailData {
   scan: { url: string | null; missing: boolean; uploadedAt: string } | null
   /** 세션 학년의 검사지 — 서버가 싣는다(문항을 공개 JS에 넣지 않으려고, API 라우트 주석 참고) */
   form: SurveyForm
+  /** 위 채점 행(marks·sentences·times·writing)의 판(lib/score-version) — 결과지가 저장할 때 함께 보내 그사이 다른 화면이
+   *  저장했는지 대조한다(2026-10-12 점검 X8). 저장에 성공하면 캐시의 판도 새것으로 고친다. 판을 주기 전 서버면 없다 */
+  version?: string | null
 }
 
 /** 관리자 목록 세션. staleTime 동안 재방문/필터 변경 시 재요청 없이 캐시 사용.

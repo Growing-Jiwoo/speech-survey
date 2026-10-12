@@ -26,8 +26,8 @@
 | `POST /api/admin/login` | argon2id 해시 검증 + DB 기반 레이트리밋 → HttpOnly 쿠키(8h). IP는 5회 실패 시 10분 하드 잠금, **전역은 30회부터 하드 잠금이 아니라 점증 지연**(상한 2초) — 전역 하드 잠금은 공격자가 실패를 쌓는 것만으로 정상 관리자를 봉쇄할 수 있어 폐기됐다 |
 | `POST /api/admin/logout` | 쿠키 즉시 만료(만료된 쿠키로도 호출 가능해야 하므로 proxy 예외) |
 | `GET /api/admin/sessions` | 목록(최대 5,000행 — 초과 시 서버 페이지네이션 도입 필요, 코드에 경고 로그) |
-| `GET /api/admin/sessions/[id]` | 결과지. 녹음과 쓰기 기록지 스캔본은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출. 스캔본 서명이 실패해도(파일 없는 행) 결과지는 열린다 — url만 null |
-| `PUT /api/admin/sessions/[id]/scores` | 관리자 채점 저장. 쓰기(`writing`)는 **스캔본 방식 검사만** 받는다 — 화면 방식 검사에 실으면 409(검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다). 쓰기를 실을 때는 화면이 본 스캔본의 올린 시각(`scanUploadedAt`)도 싣고, 그사이 선생님이 스캔본을 바꿨으면 409 |
+| `GET /api/admin/sessions/[id]` | 결과지. 녹음과 쓰기 기록지 스캔본은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출. 스캔본 서명이 실패해도(파일 없는 행) 결과지는 열린다 — url만 null. 채점의 판(`version`, `lib/score-version`)도 싣는다 — 화면이 저장할 때 함께 보내 그사이 다른 화면이 저장했는지 대조한다(2026-10-12 점검 X8) |
+| `PUT /api/admin/sessions/[id]/scores` | 관리자 채점 저장. 쓰기(`writing`)는 **스캔본 방식 검사만** 받는다 — 화면 방식 검사에 실으면 409(검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다). 쓰기를 실을 때는 화면이 본 스캔본의 올린 시각(`scanUploadedAt`)도 싣고, 그사이 선생님이 스캔본을 바꿨으면 409(`conflict: 'scan'`). 화면이 본 판(`baseVersion`)을 실으면 지금 판과 대조해, 다르면 저장하지 않고 409(`conflict: 'scores'`)와 지금 판·행을 준다 — 오래 열어 둔 탭이 다른 탭이 저장한 칸을 「보낸 것이 전부」로 지우거나 되돌리던 것(X8). 화면은 이 화면에서 바꾼 칸만 지금 값 위에 얹어 한 번 다시 보낸다(`lib/sheet-save`). 판이 없으면 종전대로 저장하고, 성공 응답에는 저장 뒤 새 판(`version`)이 실린다 |
 | `DELETE /api/admin/sessions/[id]/scan` | 담당자의 「연결 해제」 — 잘못 붙은 스캔본과 그것을 보고 넣은 쓰기 채점을 함께 지워 스캔 대기로 되돌린다(스캔본 방식 검사만, 아니면 409) |
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 녹음·스캔본 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |

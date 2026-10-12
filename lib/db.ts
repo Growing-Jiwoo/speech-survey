@@ -1,4 +1,5 @@
 import type { RosterChild } from './roster'
+import type { ScoreRows } from './score-version'
 import { sessionProgress, type SessionProgress } from './session-progress'
 import { scanTargetState, type ScanTargetState } from './scan-mapping'
 import { sb } from './supabase'
@@ -194,6 +195,25 @@ export async function saveScores(
   if (times !== undefined)
     await replaceOwnedRows('sentence_times', sessionId,
       times.map(t => ({ session_id: sessionId, item_code: t.itemCode, seconds: t.seconds })), ownedCodes)
+}
+
+/**
+ * 세션의 채점 행 네 표(낱말 O/X · 문장 어절(읽기 rs·쓰기 sw) · 읽은 시간 · 낱말 쓰기) — 채점 판(lib/score-version)의 재료.
+ * 채점 라우트가 저장 전 대조(화면이 본 판과 같은가)와 저장 뒤 새 판에 쓴다. 결과지 상세(sessionDetail)와 같은 열을 읽는다 —
+ * 다르면 상세가 준 판과 라우트가 만든 판이 늘 어긋나 저장마다 충돌한다.
+ */
+export async function scoreRows(sessionId: string): Promise<ScoreRows> {
+  const [{ data: mk, error: e1 }, { data: ss, error: e2 }, { data: st, error: e3 }, { data: wa, error: e4 }] = await Promise.all([
+    sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
+    sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
+    sb().from('sentence_times').select('item_code, seconds').eq('session_id', sessionId),
+    sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
+  ])
+  fail(e1); fail(e2); fail(e3); fail(e4)
+  return {
+    marks: (mk ?? []) as ScoreRows['marks'], sentences: (ss ?? []) as ScoreRows['sentences'],
+    times: (st ?? []) as ScoreRows['times'], writing: (wa ?? []) as ScoreRows['writing'],
+  }
 }
 
 /**

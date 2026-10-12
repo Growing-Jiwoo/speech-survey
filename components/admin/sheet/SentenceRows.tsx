@@ -7,6 +7,7 @@
 'use client'
 import { useState } from 'react'
 import { itemMaxWords, parseReadSec } from '@/lib/scoring'
+import { syncSecondsTexts } from '@/lib/sheet-save'
 import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
@@ -30,6 +31,20 @@ export function SentenceRows({
   limitSec: number
   onAudioError: () => void
 }) {
+  // 시간 칸에 친 글자 — 칸마다 여기서 들고 있다(아래 SecondsInput 주석). 처음 한 번 저장된 값으로 채운다.
+  const [texts, setTexts] = useState<Partial<Record<string, string>>>(() => syncSecondsTexts({}, times, maxSec))
+  // 다른 화면이 저장한 시간이 병합으로 들어오면(lib/sheet-save, 2026-10-12 점검 X8) 그 칸의 글자를 새 값으로 바꾼다 —
+  // 그대로 두면 칸에 보이는 글자와 저장할 값이 갈린다. 렌더 중에 맞춘다(효과로 하면 옛 글자가 한 번 그려진다).
+  const [prevTimes, setPrevTimes] = useState(times)
+  if (prevTimes !== times) {
+    setPrevTimes(times)
+    setTexts(t => syncSecondsTexts(t, times, maxSec))
+  }
+  const setText = (code: string, t: string) => {
+    setTexts(prev => ({ ...prev, [code]: t }))
+    const v = parseReadSec(t, maxSec)
+    onTimeChange(code, v === null ? undefined : v)
+  }
   return (
     <div>
       {items.map((item, i) => {
@@ -66,8 +81,7 @@ export function SentenceRows({
               ) : (
               <div className="ml-auto flex flex-none items-center gap-1.5 self-center">
                 <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec}
-                  value={times[item.code]}
-                  onChange={v => onTimeChange(item.code, v)} />
+                  text={texts[item.code] ?? ''} onText={t => setText(item.code, t)} />
                 <span className="mr-3 text-[13px] text-ink-mute">초</span>
                 {/* type="number"가 아니다 — 포인터를 칸 위에 둔 채 휠로 화면을 내리면 값이 조용히 바뀌어 1.5초 뒤 저장됐다
                     (Chrome·Edge, 2026-10-08 야간 점검). 시간 칸(SecondsInput)과 같이 글자 칸 + 숫자 키패드로 받는다. */}
@@ -104,7 +118,7 @@ function FixedCell({ label, value }: { label: string; value: number }) {
 }
 
 /**
- * 읽은 시간 칸. **친 글자는 칸이 직접 들고 있고** 부모에는 해석한 숫자만 올린다.
+ * 읽은 시간 칸. **친 글자는 화면(SentenceRows)이 들고 있고** 결과지에는 해석한 숫자만 올린다.
  *
  * number 입력으로 두면 「4.」·「0」처럼 치는 도중의 글자를 값으로 나타낼 수 없어, 부모 값으로 다시
  * 그리는 순간 친 글자가 지워진다(0.5를 치려고 0을 누르면 칸이 빈다). 그래서 text + 소수 키패드로 두고,
@@ -113,26 +127,19 @@ function FixedCell({ label, value }: { label: string; value: number }) {
  * 형식·범위를 벗어난 글자는 붉은 테두리로 드러나고, 그동안 그 문장의 시간은 「없음」으로 올라간다 —
  * 잘못 친 값으로 조용히 계산하지 않고 채점 완료를 막는다(다른 칸의 자동 저장은 막지 않는다).
  */
-function SecondsInput({ label, value, max, onChange }: {
+function SecondsInput({ label, text, max, onText }: {
   label: string
-  value: number | undefined
+  text: string
   max: number
-  onChange: (v: number | undefined) => void
+  onText: (t: string) => void
 }) {
-  // 처음 한 번만 부모 값으로 채운다 — 이후 값은 이 칸에서만 바뀐다(결과지는 아동마다 다시 마운트된다).
-  const [text, setText] = useState(value === undefined ? '' : String(value))
   const invalid = parseReadSec(text, max) === null
   return (
     <input type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
       aria-label={label} aria-invalid={invalid || undefined}
       value={text}
       title={invalid ? `0.1초 단위로 ${max}초까지 적을 수 있어요` : undefined}
-      onChange={e => {
-        const t = e.target.value
-        setText(t)
-        const v = parseReadSec(t, max)
-        onChange(v === null ? undefined : v)
-      }}
+      onChange={e => onText(e.target.value)}
       className={`h-11 w-16 rounded-lg border-[1.5px] bg-well px-2 text-center text-base tabular-nums outline-none ${
         invalid ? 'border-rec focus:border-rec-deep' : 'border-line focus:border-blue'}`} />
   )

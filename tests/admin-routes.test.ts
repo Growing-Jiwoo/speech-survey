@@ -19,6 +19,7 @@ import { POST as LOGOUT } from '@/app/api/admin/logout/route'
 import * as db from '@/lib/db'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
+import { scoresVersion } from '@/lib/score-version'
 
 const SID = '11111111-1111-4111-8111-111111111111'
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) })
@@ -103,6 +104,16 @@ describe('GET /api/admin/sessions/[id]', () => {
     })
     vi.mocked(db.signedScanUrl).mockRejectedValueOnce(new Error('fetch failed'))
     expect((await (await DETAIL(req(), ctx(SID))).json()).scan).toEqual({ url: null, missing: false, uploadedAt: 'T' })
+  })
+  it('채점의 판(version)을 싣는다 — 채점 PUT이 대조하는 것과 같은 함수·같은 네 표로 만든다(X8)', async () => {
+    const rows = {
+      writing: [{ item_code: 'ww01', can_write: true }],
+      marks: [{ item_code: 'rw01', correct: true }], sentences: [{ item_code: 'rs01', words: 7 }, { item_code: 'sw01', words: 1 }],
+      times: [{ item_code: 'rs01', seconds: 4.5 }],
+    }
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({ session: { id: SID, grade: 1 } as never, recordings: [], scan: null, ...rows })
+    const body = await (await DETAIL(req(), ctx(SID))).json()
+    expect(body.version).toBe(scoresVersion(rows))
   })
   it('스캔본이 없으면 scan은 null이고 서명 URL을 만들지 않는다', async () => {
     const body = await (await DETAIL(req(), ctx(SID))).json()

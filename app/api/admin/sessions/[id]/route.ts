@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { deleteSession, sessionDetail, signedAudioUrl, signedScanUrl, updateSessionIdentity } from '@/lib/db'
 import { formForGrade } from '@/lib/forms'
 import { sessionEditSchema } from '@/lib/schema'
+import { scoresVersion } from '@/lib/score-version'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +13,9 @@ const badId = () => jsonError('검사 정보가 올바르지 않아요.', 400)
 /** 관리자 결과지 데이터. 녹음은 서명 URL을 미리 만들어 내려준다(service role 키는 클라이언트에 노출 금지).
  *  쓰기 기록지 스캔본도 같다(올라온 경우만 — 서명 URL 1시간, 결과지를 다시 열면 새로 받는다).
  *  응답에는 스토리지 내부 경로(audio_path·스캔본 path)를 담지 않는다.
- *  검사지(`form`)도 여기서 싣는다 — 화면이 lib/forms를 import하면 문항이 공개 JS 청크에 실린다. */
+ *  검사지(`form`)도 여기서 싣는다 — 화면이 lib/forms를 import하면 문항이 공개 JS 청크에 실린다.
+ *  채점의 판(`version`, lib/score-version)도 싣는다 — 화면이 저장할 때 함께 보내 그사이 다른 화면이 저장했는지 대조한다
+ *  (채점 PUT과 같은 함수·같은 행으로 만든다, 2026-10-12 점검 X8). */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID_RE.test(id)) return badId()
@@ -44,6 +47,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ) : null
     return NextResponse.json({
       session, recordings: withUrls, writing, marks, sentences, times, scan: scanView, form: formForGrade(session.grade),
+      version: scoresVersion({ marks, sentences, times, writing }),
     })
   } catch (e) {
     console.error('[admin/sessions/:id] 조회 실패', e)
