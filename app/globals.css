@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* 화면 높이가 낮은 기기(1366×768 노트북·크롬북의 실제 창 650~680px, 아이패드 가로 Safari 약 690px) — 검사 화면이 세로를
+   줄여 쓴다. 줄이지 않으면 녹음 뒤의 「녹음이 완료됐어요.」·「목소리가 잘 안 담긴 것 같아요」가 화면 아래로 밀려 보이지 않았다
+   (2026-10-12 점검). */
+@custom-variant short (@media (max-height: 800px));
+
 @theme {
   --color-blue: #2F6BFF;
   --color-blue-deep: #1E4FCC;
