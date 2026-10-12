@@ -56,6 +56,13 @@
   table th{ white-space:nowrap; }
 
   .now .after{ margin:2.4mm 0 0; }
+  table.rules{ border-collapse:separate; border-spacing:0; border:1px solid var(--line); border-radius:2.4mm; overflow:hidden; }
+  table.rules th{ background:var(--ink); color:#fff; font-weight:800; font-size:9pt; padding:2.2mm 3mm; border:0; text-align:left; }
+  table.rules td{ padding:2.4mm 3mm; border-top:1px solid var(--line); vertical-align:top; }
+  table.rules td + td, table.rules th + th{ border-left:1px solid var(--line); }
+  table.rules th + th{ border-left-color:#ffffff33; }
+  table.rules td:first-child{ font-weight:700; background:var(--well); }
+  table.rules td:last-child{ font-weight:700; color:var(--blue); background:var(--blue-well); }
   table.narrow{ width:90mm; margin-bottom:3mm; }
   .sub{ font-weight:800; margin:5mm 0 1.4mm; padding-left:2.6mm; border-left:3px solid var(--ink); line-height:1.3; }
 
@@ -203,7 +210,8 @@
 
     <p class="sub">지역 / 학교</p>
     <p>예시로 주신 「춘천 교동초등학교」와 같은 모양으로 맞췄어요.</p>
-    <table>
+    <table class="rules">
+      <colgroup><col style="width:36%"><col style="width:32%"><col style="width:32%"></colgroup>
       <tr><th>경우</th><th>표기</th><th>예</th></tr>
       <tr><td>도 지역 학교</td><td>시·군 이름(「시」「군」 없이) + 학교명</td><td>춘천 교동초등학교</td></tr>
       <tr><td>특별시·광역시·세종 학교</td><td>도시 이름 + 학교명</td><td>부산 운산초등학교</td></tr>
@@ -214,7 +222,7 @@
 
     <p class="sub">학년 / 학기</p>
     <p>검사한 달로 정해요.</p>
-  <table class="narrow">
+  <table class="rules narrow">
     <tr><th>검사한 달</th><th>표기</th></tr>
     <tr><td>3월 ~ 8월</td><td>1학기</td></tr>
     <tr><td>9월 ~ 다음 해 2월</td><td>2학기</td></tr>
