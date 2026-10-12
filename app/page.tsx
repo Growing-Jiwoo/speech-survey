@@ -28,13 +28,17 @@ import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
-import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState } from '@/lib/survey-state'
+import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState, storageWritable } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
 import type { ScanTargetState } from '@/lib/scan-mapping'
 import type { SheetLayout } from '@/lib/writing-sheet'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
+
+/** 사이트 데이터 저장이 막힌 브라우저 안내(시작 화면 머리·확인 창 공통) */
+const STORAGE_BLOCKED_MSG = '이 브라우저는 검사 진행 상태를 저장할 수 없어 검사를 시작할 수 없어요. '
+  + '브라우저 설정에서 이 사이트의 쿠키·사이트 데이터 저장을 허용한 뒤 새로고침해 주세요.'
 
 const NOW_YEAR = new Date().getFullYear()
 const YEARS = Array.from({ length: 12 }, (_, i) => NOW_YEAR - 5 - i) // 초등 연령대 여유 범위
@@ -130,6 +134,9 @@ export default function StartPage() {
   const [month, setMonth] = useState('')
   const [day, setDay] = useState('')
   const [errors, setErrors] = useState<FieldErrors>({})
+  /** 칸을 고치면 그 칸의 오류 문구를 지운다 — 고친 뒤에도 「이름은 한글이나 영어로만…」이 다음 [확인]까지 남아,
+   *  고친 값이 또 틀린 줄 알게 했다(2026-10-12 점검). */
+  const clearError = (key: FieldKey) => setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev))
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
   // 법정대리인 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
@@ -162,6 +169,8 @@ export default function StartPage() {
    *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
    */
   const codeTouched = useRef(false)
+  /** 이 브라우저가 진행 상태를 저장하지 못한다 — 검사를 시작할 수 없으니 처음부터 알리고 세션을 만들지 않는다(storageWritable) */
+  const [storageBlocked, setStorageBlocked] = useState(false)
 
   // ── 결과지 받기(교사) — 담임 메일로 학급 결과 링크. 사용자 확정 2026-09-22(담당자 회신 아님).
   // 이 버튼은 아동 앞 PC에 있다. 하는 일은 **등록된 메일함으로 링크를 보내는 것**뿐이라 아동이 눌러도
@@ -206,8 +215,9 @@ export default function StartPage() {
 
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
-    const s = loadState()
     // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!storageWritable()) setStorageBlocked(true)
+    const s = loadState()
     if (s) setResume({ childName: s.childName, childNo: s.childNo, classCode: loadClassCode() })
     // 같은 학급을 연달아 검사할 때 코드 재입력을 던다 — 직전 검사가 성공한 코드만 남아 있다.
     // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
@@ -288,7 +298,8 @@ export default function StartPage() {
    *  명단에서 다시 복사한다(클라이언트 값은 번호뿐). */
   function openRosterConfirm() {
     const child = roster.find(r => r.childNo === Number(pick))
-    if (!child || !cls) return
+    // 명단은 지금 코드 칸의 학급 것이어야 한다 — 세션은 명단이 아니라 **코드 칸의 코드**로 만들어진다(begin)
+    if (!child || !cls || clsCode !== cleanCode) return
     setConfirmErr('')
     setConfirm({
       cls, childNo: child.childNo, name: child.name,
@@ -315,6 +326,22 @@ export default function StartPage() {
     if (Object.keys(next).length > 0) { focusFirstError(next); return }
 
     setFormErr(''); setBusy(true)
+    // 코드를 고친 뒤라면(onChange가 옛 학급을 비웠다) 그 학급을 먼저 다시 받는다 — 배너·[결과지 받기]·기록지 인쇄와
+    // 아래 번호 겹침 경고가 **지금 코드의 학급** 기준이어야 한다.
+    let rosterNow = roster
+    if (clsCode !== cleanCode) {
+      const look = await postJson<CodeLookup>('/api/sessions/verify-code',
+        { code: cleanCode }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
+      if (!look.ok) {
+        setBusy(false)
+        if (look.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
+        else setFormErr(look.error)
+        return
+      }
+      setCls(look.data); setClsCode(cleanCode); setRoster(look.data.roster)
+      setSheet(look.data.sheet ?? null); setScanPending(look.data.scanPending ?? 0)
+      rosterNow = look.data.roster
+    }
     const r = await postJson<ClassInfo & { alreadyTested: Confirmed['tested'] }>(
       '/api/sessions/verify-code',
       { code: cleanCode, childNo: childNoNum }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
@@ -328,7 +355,7 @@ export default function StartPage() {
     // 명단 반에서 「명단에 없는 학생」으로 입력한 번호가 명단 아이의 번호와 같으면 알린다 — 전학생을 실수로 17번으로
     // 넣으면 명단의 17번이 「검사함」이 되고 교사 결과지의 17번 줄 이름이 바뀌어, 진짜 17번을 빠뜨릴 수 있다
     // (2026-10-08 야간 점검). 막지는 않는다 — 명단이 틀렸을 수도 있다.
-    const clash = roster.find(c => c.childNo === childNoNum && c.name !== cleanName)
+    const clash = rosterNow.find(c => c.childNo === childNoNum && c.name !== cleanName)
     setConfirm({
       cls: r.data, childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
       identity: null, tested: r.data.alreadyTested,
@@ -345,6 +372,8 @@ export default function StartPage() {
    *  이 잠금은 클라이언트 방어일 뿐이라 서버에도 멱등 키를 보낸다(`c.idemKey`) — 그 키가
    *  없으면 재전송·연타가 서버까지 도달했을 때 막을 근거가 없다(E2E 2026-08-20 항목 3.17). */
   async function begin(c: Confirmed) {
+    // 저장이 막힌 브라우저는 검사 화면이 진행 상태를 못 읽어 곧바로 처음 화면으로 돌아온다 — 세션을 만들기 전에 막는다
+    if (!storageWritable()) { setStorageBlocked(true); setConfirmErr(STORAGE_BLOCKED_MSG); return }
     setBusy(true)
     const r = await postJson<{ sessionId: string; sessionToken: string; grade: number }>('/api/sessions',
       step === 'roster'
@@ -365,7 +394,7 @@ export default function StartPage() {
 
   const filled = code.trim() && childNo !== '' && name.trim() && gender && year && month && day && consent
   // 직접 입력에서 [확인]이 꺼져 있을 때 무엇이 비었는지 — 아래 안내 줄이 쓴다
-  const missing = [childNo === '' && '아동 번호', !name.trim() && '이름', !gender && '성별',
+  const missing = [!code.trim() && '학급 코드', childNo === '' && '아동 번호', !name.trim() && '이름', !gender && '성별',
     !(year && month && day) && '생년월일'].filter(Boolean) as string[]
   const canSubmit = step === 'code' ? !!code.trim()
     : step === 'roster' ? !!(pick && consent)
@@ -416,6 +445,12 @@ export default function StartPage() {
             : '아동 정보를 입력해 주세요.'}
       </p>
 
+      {storageBlocked && (
+        <p role="alert" className="mt-6 w-full rounded-xl border border-rec/40 bg-rec/5 px-4 py-3 text-[13px] leading-relaxed text-rec-deep">
+          {STORAGE_BLOCKED_MSG}
+        </p>
+      )}
+
       {resume && (
         <div className="card mt-6 flex w-full flex-col gap-3 border-blue/40 bg-blue/5 p-4">
           <p className="text-sm font-bold text-ink-soft">
@@ -458,6 +493,7 @@ export default function StartPage() {
               // 자동 조회가 아직 날아오는 중일 수 있다 — 이 표시가 그 응답을 버리게 한다.
               codeTouched.current = true
               setCode(e.target.value.toUpperCase())
+              clearError('code')
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
               // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 법정대리인 동의를 받았다"는
               // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
@@ -469,6 +505,12 @@ export default function StartPage() {
               setResultsMsg(''); setResultsErr(''); setCooldown(0)
               if (step === 'roster') {
                 setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
+                setSheet(null); setScanPending(0)
+              } else if (step === 'direct') {
+                // 입력하던 칸은 두되 **고치기 전 학급의 명단은 버린다.** 남겨 두면 「명단에서 고르기」가 옛 반 명단을
+                // 보여 주고, 거기서 고른 번호로 **새 반의 같은 번호 아이** 세션이 만들어졌다(2026-10-12 점검 X1).
+                // 새 학급의 명단은 [확인]이 다시 받는다(verify).
+                setCls(null); setClsCode(''); setRoster([]); setPick('')
                 setSheet(null); setScanPending(0)
               }
             }}
@@ -542,13 +584,13 @@ export default function StartPage() {
                 <input id="childNo" data-field="childNo" name="childNo" value={childNo} maxLength={2}
                   inputMode="numeric"
                   aria-describedby={errors.childNo ? 'err-childNo' : undefined} aria-invalid={!!errors.childNo}
-                  onChange={e => setChildNo(e.target.value.replace(/\D/g, ''))} className={inputCls} />
+                  onChange={e => { setChildNo(e.target.value.replace(/\D/g, '')); clearError('childNo') }} className={inputCls} />
               </div>
               <div className="flex-[2]">
                 <label className={labelCls} htmlFor="name">이름</label>
                 <input id="name" data-field="name" name="name" value={name} maxLength={30}
                   aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
-                  onChange={e => setName(e.target.value)} className={inputCls} />
+                  onChange={e => { setName(e.target.value); clearError('name') }} className={inputCls} />
               </div>
             </div>
             <FieldError id="err-childNo" msg={errors.childNo} />
@@ -558,7 +600,7 @@ export default function StartPage() {
             <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
               aria-describedby={errors.gender ? 'err-gender' : undefined}>
               {(['남', '여'] as const).map(g => (
-                <button key={g} type="button" onClick={() => setGender(g)} aria-pressed={gender === g}
+                <button key={g} type="button" onClick={() => { setGender(g); clearError('gender') }} aria-pressed={gender === g}
                   className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
                     gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
                   {g}
@@ -571,13 +613,13 @@ export default function StartPage() {
             <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
               aria-describedby={errors.birth ? 'err-birth' : undefined}>
               <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
-                value={year} onChange={v => { setYear(v); setDay('') }}
+                value={year} onChange={v => { setYear(v); setDay(''); clearError('birth') }}
                 options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
               <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
-                value={month} onChange={v => { setMonth(v); setDay('') }}
+                value={month} onChange={v => { setMonth(v); setDay(''); clearError('birth') }}
                 options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
               <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
-                value={day} onChange={setDay}
+                value={day} onChange={v => { setDay(v); clearError('birth') }}
                 options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
             </div>
             <FieldError id="err-birth" msg={errors.birth} />
@@ -700,7 +742,9 @@ export default function StartPage() {
               <p className="mt-1 text-[13px] tabular-nums text-ink-mute">{confirm.identity}</p>
             )}
             {/* 진행 중인 검사가 **이 컴퓨터의 것**이면(이어하기 카드의 그 아이) 「다른 기기」 안내는 틀리다 — 이어하기를 가리킨다 */}
-            {confirm.tested === 'inProgress' && isResumeChild(confirm.childNo) && (
+            {/* 제출 뒤 재검사가 이 컴퓨터에서 진행 중인 아이(목록 배지 「검사함」)도 같다 — 버튼만 「그래도 새로 검사」로
+                바뀌고 까닭이 없었다(2026-10-12 점검) */}
+            {isResumeChild(confirm.childNo) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 컴퓨터에서 진행 중인 검사예요. 이어서 하려면 이 창을 닫고 위의 <b>[이어서 하기]</b>를 눌러 주세요.<br />
                 새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.

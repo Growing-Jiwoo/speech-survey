@@ -5,7 +5,8 @@ vi.mock('@/lib/db', () => ({
   findClassCode: vi.fn(),
   listRoster: vi.fn(),
 }))
-vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
+const envMock = vi.hoisted(() => ({ env: vi.fn((): string => 'test-secret') }))
+vi.mock('@/lib/env', () => envMock)
 
 import { POST } from '@/app/api/sessions/route'
 import * as db from '@/lib/db'
@@ -38,9 +39,19 @@ function makeReq(body: unknown, ip = `10.1.0.${++ipSeq}`) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  envMock.env.mockImplementation(() => 'test-secret')
   vi.mocked(db.createSession).mockResolvedValue('sess-1')
   vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
   vi.mocked(db.listRoster).mockResolvedValue(ROSTER)
+})
+
+describe('POST /api/sessions — 서명 키가 없는 배포', () => {
+  it('[REGRESSION] 세션 행을 만들기 전에 실패한다 — 이어갈 수 없는 「진행 중」 세션이 쌓이지 않게 (2026-10-12)', async () => {
+    envMock.env.mockImplementation(() => { throw new Error('환경변수 SESSION_SECRET가 설정되지 않았습니다') })
+    const res = await POST(makeReq(VALID))
+    expect(res.status).toBe(502)
+    expect(db.createSession).not.toHaveBeenCalled()
+  })
 })
 
 describe('POST /api/sessions — 코드 기반 생성', () => {
