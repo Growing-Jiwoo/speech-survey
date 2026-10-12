@@ -76,6 +76,9 @@ export function escapeHtml(s: string): string {
 // (관리자가 카톡·문자로 붙여넣는 평문), 그리고 관리자 화면의 [안내 문구 복사]. 한쪽만 고치면
 // 채널에 따라 안내가 갈린다(tests/mail.test.ts가 필수 정보 존재를 대조한다).
 
+// 링크는 전부 target="_blank"로 연다 — 학교 웹메일(한림대 등)은 target 없는 링크를 자기 화면의 iframe에
+// 띄우는데, 앱은 클릭재킹 방어로 프레임 안 표시를 막아(next.config.ts·proxy.ts) 「연결을 거부했습니다」가 뜬다
+// (2026-10-12 실제 발생). 헤더를 풀지 말 것. tests/mail.test.ts가 세 메일의 모든 <a>를 핀한다.
 const C = {
   ink: '#0E1526', soft: '#3A4256', mute: '#6E7994',
   line: '#E3E8F3', well: '#F7F9FE', blue: '#2F6BFF', blueWell: '#EDF2FF',
@@ -121,7 +124,7 @@ export function applyNoticeMail(v: {
         <tr><td style="padding:4px 16px 10px 14px;color:${C.mute};white-space:nowrap">등록 학생</td>
             <td style="padding:4px 14px 10px 0">${v.childCount}명</td></tr>
       </table>
-      <p style="margin:20px 0 0"><a href="${escapeHtml(v.adminUrl)}"
+      <p style="margin:20px 0 0"><a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.adminUrl)}"
         style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
         display:inline-block;font-weight:700;font-size:14px">명단 확인하고 승인하기</a></p>
       <p style="font-size:13px;color:${C.mute};margin:14px 0 0">
@@ -158,7 +161,7 @@ export function approvedMail(v: {
       </div>
 
       <p style="margin:0;font-size:14px;color:${C.mute}">검사 주소</p>
-      <p style="margin:2px 0 0"><a href="${escapeHtml(v.surveyUrl)}"
+      <p style="margin:2px 0 0"><a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.surveyUrl)}"
         style="color:${C.blue};word-break:break-all">${escapeHtml(v.surveyUrl)}</a></p>
 
       ${H('시작하는 방법')}
@@ -191,12 +194,12 @@ export function resultsLinkMail(v: {
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
       <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 검사 결과지를 받으실 수 있어요.</p>
-      <p style="margin:0"><a href="${escapeHtml(v.resultsUrl)}"
+      <p style="margin:0"><a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.resultsUrl)}"
         style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
         display:inline-block;font-weight:700;font-size:14px">결과지 보기</a></p>
       <p style="margin:14px 0 0;font-size:13px;color:${C.mute};word-break:break-all">
         버튼이 열리지 않으면 이 주소를 복사해 주세요:<br>
-        <a href="${escapeHtml(v.resultsUrl)}" style="color:${C.blue}">${escapeHtml(v.resultsUrl)}</a></p>
+        <a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.resultsUrl)}" style="color:${C.blue}">${escapeHtml(v.resultsUrl)}</a></p>
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
         이 링크는 <b>14일</b> 동안 유효해요. 지나면 검사 주소에서 [결과지 받기]를 다시 눌러 주세요.<br>
