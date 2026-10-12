@@ -64,10 +64,15 @@
   figcaption b{ display:block; font-size:10.4pt; font-weight:800; color:var(--ink); }
   figcaption span{ color:var(--mute); font-size:9.2pt; }
   figure img{ display:block; border:1px solid var(--line); border-radius:2.4mm; }
-  .w-wide{ width:100%; }
-  .figrow{ display:grid; grid-template-columns:50mm 1fr; gap:6mm; align-items:start; break-inside:avoid; }
-  .figrow figure{ margin-top:6mm; }
-  .figrow img{ width:100%; }
+  .w-wide{ width:140mm; }
+  .figgrid{ display:grid; grid-template-columns:100mm 1fr; gap:8mm; align-items:start; break-inside:avoid; margin-top:6mm; }
+  .figgrid figure{ margin-top:0; }
+  .figgrid figure + figure{ margin-top:5mm; }
+  .figgrid img{ width:100%; }
+  .figgrid img.mic{ width:48mm; }
+  .w-mail{ width:138mm; }
+  figure.newpg{ break-before:page; margin-top:0; }
+  .hl{ background:#FFE58A; border-radius:2px; padding:0 1mm; }
   .zoom-l{ font-size:8.8pt; font-weight:800; color:var(--mute); margin:3mm 0 1.2mm; }
   img.zoom{ border-color:#96660C88; background:#fff; }
 </style>
@@ -133,7 +138,12 @@
   <div class="card-b">
     <div class="blk need">
       <span class="lb">필요한 것</span>
-      <p>아래 그림 3장의 문구를 그대로 써도 되는지 확인해 주세요. 고칠 곳이 있으면 표시해 주세요.</p>
+      <p>아래 문구를 그대로 써도 되는지 확인해 주세요. 고칠 곳이 있으면 표시해 주세요.</p>
+      <ul>
+        <li><span class="box-ck"></span><span>그림 1: <span class="hl">노란색으로 칠한 부분</span>만</span></li>
+        <li><span class="box-ck"></span><span>그림 2·3·4: 전체</span></li>
+      </ul>
+      <p class="note">그림 1에서 칠하지 않은 문구는 이미 확인해 주신 거라 보지 않으셔도 돼요.</p>
     </div>
 
     <figure>
@@ -141,16 +151,21 @@
       <img class="w-wide" src="shots/apply-notice-consent.png" alt="신청 화면 안내·동의">
     </figure>
 
-    <div class="figrow">
+    <figure class="newpg">
+      <figcaption><b>그림 2. 승인 메일</b><span>신청을 승인하면 선생님께 자동으로 가는 메일 (학교·이름·코드는 예시)</span></figcaption>
+      <img class="w-mail" src="shots/approval-mail.png" alt="승인 메일">
+    </figure>
+
+    <div class="figgrid">
       <figure>
-        <figcaption><b>그림 2. 아이용 녹음 안내</b><span>마이크 확인 화면 아래쪽 두 줄</span></figcaption>
-        <img src="shots/mic-child-notice.png" alt="마이크 확인 화면">
-        <p class="zoom-l">아래쪽 두 줄 확대</p>
-        <img class="zoom" src="shots/mic-child-notice-zoom.png" alt="녹음 안내 두 줄 확대">
+        <figcaption><b>그림 3. 시작 화면 개인정보 안내</b><span>선생님이 학급 코드를 넣으면 나오는 안내와 확인 체크</span></figcaption>
+        <img src="shots/start-consent.png" alt="시작 화면 개인정보 수집·이용 안내">
       </figure>
       <figure>
-        <figcaption><b>그림 3. 승인 메일</b><span>신청을 승인하면 선생님께 자동으로 가는 메일 (학교·이름·코드는 예시)</span></figcaption>
-        <img src="shots/approval-mail.png" alt="승인 메일">
+        <figcaption><b>그림 4. 아이용 녹음 안내</b><span>마이크 확인 화면 아래쪽 두 줄</span></figcaption>
+        <img class="mic" src="shots/mic-child-notice.png" alt="마이크 확인 화면">
+        <p class="zoom-l">아래쪽 두 줄 확대</p>
+        <img class="zoom" src="shots/mic-child-notice-zoom.png" alt="녹음 안내 두 줄 확대">
       </figure>
     </div>
   </div>
