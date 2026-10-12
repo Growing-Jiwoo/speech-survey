@@ -58,11 +58,12 @@
   .now .after{ margin:2.4mm 0 0; }
   table.rules{ border-collapse:separate; border-spacing:0; border:1px solid var(--line); border-radius:2.4mm; overflow:hidden; }
   table.rules th{ background:var(--ink); color:#fff; font-weight:800; font-size:9pt; padding:2.2mm 3mm; border:0; text-align:left; }
-  table.rules td{ padding:2.4mm 3mm; border-top:1px solid var(--line); vertical-align:top; }
+  table.rules td{ background:#fff; padding:2.4mm 3mm; border-top:1px solid var(--line); vertical-align:top; }
   table.rules td + td, table.rules th + th{ border-left:1px solid var(--line); }
   table.rules th + th{ border-left-color:#ffffff33; }
   table.rules td:first-child{ font-weight:700; background:var(--well); }
   table.rules td:last-child{ font-weight:700; color:var(--blue); background:var(--blue-well); }
+  table.rules.temp td:last-child{ color:var(--amber); background:var(--amber-well); }
   table.narrow{ width:90mm; margin-bottom:3mm; }
   .sub{ font-weight:800; margin:5mm 0 1.4mm; padding-left:2.6mm; border-left:3px solid var(--ink); line-height:1.3; }
 
@@ -110,7 +111,8 @@
     <div class="blk now">
       <span class="lb">지금 상태</span>
       1·2학년만 검사지가 있고, 학기 구분 없이 학년마다 하나씩이에요. Pass 기준은 임시값이에요.
-      <table>
+      <table class="rules temp">
+        <colgroup><col style="width:22%"><col style="width:28%"><col style="width:28%"><col style="width:22%"></colgroup>
         <tr><th>과제</th><th>1학년</th><th>2학년</th><th>지금 Pass 기준(임시)</th></tr>
         <tr><td>낱말 읽기</td><td>의미 7개 + 무의미 7개 (14점)</td><td>의미 7개 + 무의미 7개 (14점)</td><td>9점 이상</td></tr>
         <tr><td>문장 읽기유창성</td><td>문장 4개</td><td>문장 4개</td><td>1.0 어절/초 이상</td></tr>
