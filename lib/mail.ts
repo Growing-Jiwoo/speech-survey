@@ -86,15 +86,24 @@ const C = {
 
 const FONT = `-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif`
 
+/** 꼬리말 — 이 메일이 왜 이 주소로 왔는지. 메일마다 받는 주소의 출처가 다르다: 승인 안내는 교사가 신청서에 적은
+ *  주소, 결과지 링크는 학급에 등록된 담임 주소(관리자가 직접 발급한 학급은 신청이 없다), 신청 알림은 관리자 알림
+ *  주소다. 셋 다 「신청하신 주소로」라고 적어 관리자 알림·직접 발급 학급의 결과지 메일이 틀린 말을 했다(2026-10-12 점검). */
+const FOOTER = {
+  applied: '이 메일은 신청하신 주소로 발송됐습니다.',
+  teacher: '이 메일은 학급에 등록된 담임 선생님 주소로 발송됐습니다.',
+  admin: '이 메일은 관리자 알림 주소로 발송됐습니다.',
+} as const
+
 /** 메일 골격 — 이름표(누가 보낸 메일인지)를 위에 두고 본문을 감싼다. 교사가 받은 편지함에서
  *  다시 찾을 물건이라 제목만으로 판별되지 않을 때 이 띠가 단서가 된다. */
-const WRAP = (body: string) => `<div style="font:15px/1.7 ${FONT};color:${C.ink};max-width:560px">
+const WRAP = (body: string, footer: string) => `<div style="font:15px/1.7 ${FONT};color:${C.ink};max-width:560px">
   <p style="margin:0 0 20px;padding:0 0 14px;border-bottom:2px solid ${C.blue};
     font-size:13px;font-weight:800;letter-spacing:.02em;color:${C.blue}">읽기 선별검사</p>
   ${body}
   <hr style="border:0;border-top:1px solid ${C.line};margin:26px 0 12px">
   <p style="font-size:12px;color:${C.mute};margin:0;line-height:1.6">
-    초등학교 읽기 선별검사 · 이 메일은 신청하신 주소로 발송됐습니다.</p></div>`
+    초등학교 읽기 선별검사 · ${footer}</p></div>`
 
 /** 소제목 — 메일에서는 h3보다 이 형태가 클라이언트별 여백 차이가 적다. */
 const H = (text: string) => `<p style="margin:24px 0 8px;font-size:13px;font-weight:800;
@@ -128,7 +137,7 @@ export function applyNoticeMail(v: {
         style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
         display:inline-block;font-weight:700;font-size:14px">명단 확인하고 승인하기</a></p>
       <p style="font-size:13px;color:${C.mute};margin:14px 0 0">
-        승인 화면에서 등록된 명단을 먼저 확인하실 수 있습니다.</p>`),
+        승인 화면에서 등록된 명단을 먼저 확인하실 수 있습니다.</p>`, FOOTER.admin),
   }
 }
 
@@ -177,7 +186,7 @@ export function approvedMail(v: {
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
         <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고,<br>
-        다시 받으려면 담당자에게 문의하셔야 합니다.</p>`),
+        다시 받으려면 담당자에게 문의하셔야 합니다.</p>`, FOOTER.applied),
   }
 }
 
@@ -204,6 +213,6 @@ export function resultsLinkMail(v: {
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
         이 링크는 <b>14일</b> 동안 유효해요. 지나면 검사 주소에서 [결과지 받기]를 다시 눌러 주세요.<br>
         채점이 진행되면 같은 링크를 새로고침하면 반영돼요.<br>
-        링크가 열리지 않으면 담당자에게 문의해 주세요.</p>`),
+        링크가 열리지 않으면 담당자에게 문의해 주세요.</p>`, FOOTER.teacher),
   }
 }
