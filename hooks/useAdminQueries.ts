@@ -63,12 +63,13 @@ export interface SessionDetailData {
 }
 
 /** 관리자 목록 세션. staleTime 동안 재방문/필터 변경 시 재요청 없이 캐시 사용.
- * 신규 제출 반영을 위해 목록에 한해 포커스 시 재페치를 켠다(전역 기본은 유지). */
+ * 신규 제출 반영을 위해 목록에 한해 창으로 돌아올 때 **항상** 다시 받는다(전역 기본은 끔). `true`는 staleTime(5분) 안이면
+ * 건너뛰어, 다른 기기에서 제출된 검사가 탭을 오가도 5분 동안 목록에 뜨지 않았다(2026-10-12 점검 L14). */
 export function useSessionsQuery() {
   return useQuery({
     queryKey: adminKeys.sessions,
     queryFn: () => fetchJson<{ sessions: SessionListRow[] }>('/api/admin/sessions').then(d => d.sessions),
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: 'always',
   })
 }
 
@@ -81,11 +82,13 @@ export function useSessionDetailQuery(id: string) {
   })
 }
 
-/** 학급 코드 목록 — 발급 화면이 쓴다. */
+/** 학급 코드 목록 — 발급 화면과 목록 화면의 「승인 대기 신청 N건」 띠가 쓴다. 창으로 돌아올 때 항상 다시 받는다 —
+ *  새 신청은 메일을 놓쳐도 이 수로 드러나야 하고, 다른 탭에서 승인·삭제한 것이 낡은 목록으로 남지 않게(목록과 같은 이유). */
 export function useClassCodesQuery() {
   return useQuery({
     queryKey: adminKeys.codes,
     queryFn: () => fetchJson<{ codes: ClassCodeItem[] }>('/api/admin/codes').then(d => d.codes),
+    refetchOnWindowFocus: 'always',
   })
 }
 

@@ -8,8 +8,8 @@ import {
   gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
   type Filters, type Sort, type SortKey,
 } from '@/lib/adminStats'
-import { adminKeys, useSessionsQuery } from '@/hooks/useAdminQueries'
-import { postJson } from '@/lib/http'
+import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { StatsCards, type KpiKind } from '@/components/admin/StatsCards'
@@ -23,6 +23,11 @@ export function AdminDashboard() {
   const sp = useSearchParams()
   const queryClient = useQueryClient()
   const { data: sessions, isLoading, isError, isFetching, error } = useSessionsQuery()
+  // 승인 대기 신청 수 — 신청 알림 메일은 10분에 한 번만 나가(app/api/apply) 그 안의 두 번째 신청부터는 메일이 없다.
+  // 메일을 놓쳐도 관리자가 이 화면에서 알게 머리에 띠로 둔다(2026-10-12 점검 X5). 코드 목록 쿼리를 그대로 쓴다 — 발급 화면으로
+  // 가면 캐시로 바로 뜬다. 못 받으면 띠만 없다(목록 쪽 안내가 로그인을 맡는다).
+  const { data: codes } = useClassCodesQuery()
+  const pendingCount = (codes ?? []).filter(c => c.status === 'pending').length
 
   // URL 문자열이 바뀔 때만 필터·정렬을 재파싱 → 파생값 useMemo가 안정적으로 캐시된다.
   const spString = sp.toString()
@@ -75,20 +80,29 @@ export function AdminDashboard() {
 
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: adminKeys.sessions }) }
 
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutErr, setLogoutErr] = useState('')
   async function logout() {
-    await postJson('/api/admin/logout') // 쿠키 삭제 실패(네트워크 등)해도 아래는 계속 — 로그인으로 이동
+    setLoggingOut(true); setLogoutErr('')
+    const r = await postJson('/api/admin/logout')
+    setLoggingOut(false)
+    // 실패하면 이동하지 않는다 — 전에는 실패해도 로그인 화면으로 넘어가 로그아웃된 줄 알았는데, 쿠키가 남아 /admin을 다시 열면
+    // 아동 목록이 그대로 보였다(2026-10-12 점검). 공용 PC에서 자리를 뜨기 전에 누르는 버튼이라 실패를 알려야 한다.
+    if (!r.ok) { setLogoutErr(r.status === 0 ? NETWORK_ERR_MSG : '로그아웃하지 못했어요. 다시 눌러 주세요.'); return }
     queryClient.clear() // 공용 PC 대비: 캐시에 남은 아동 PII 제거
     router.replace('/admin/login')
   }
 
   const errMsg = (error as Error | undefined)?.message ?? ''
   const expired = isError && /\(401\)/.test(errMsg)
+  // 다시 로그인하면 **지금 화면**(걸어 둔 필터 포함)으로 돌아온다 — `next=/admin` 고정이라 필터가 풀렸다(2026-10-12 점검)
+  const loginHref = `/admin/login?next=${encodeURIComponent(spString ? `${pathname}?${spString}` : pathname)}`
   if (isLoading) return <LoadingOverlay show />
   // 목록을 이미 받았으면 다시 받기 실패로 표를 내리지 않는다(결과지와 같은 규칙 — 2026-10-08 야간 점검).
   // 새로고침·로그아웃 버튼까지 사라져 빠져나갈 길이 없었다.
   if (!sessions) return (
     <div className="rounded-[20px] border border-line bg-white p-10 text-center text-sm text-ink-soft shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
-      {expired ? <>로그인이 끝났어요(8시간). <Link href="/admin/login?next=%2Fadmin" className="font-bold text-blue underline">다시 로그인</Link></>
+      {expired ? <>로그인이 끝났어요(8시간). <Link href={loginHref} className="font-bold text-blue underline">다시 로그인</Link></>
         : <>데이터를 불러오지 못했어요. {errMsg} <button type="button" onClick={refresh} className="font-bold underline">다시 시도</button></>}
     </div>
   )
@@ -118,18 +132,27 @@ export function AdminDashboard() {
           </svg>
           {isFetching ? '갱신 중' : '새로고침'}
         </button>
-        <button type="button" onClick={logout}
-          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
-          로그아웃
+        <button type="button" onClick={() => void logout()} disabled={loggingOut}
+          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-50">
+          {loggingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
+        {logoutErr && <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">{logoutErr}</p>}
       </div>
       {isError && (
         <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">
-          {expired ? <>로그인이 끝났어요(8시간). <Link href="/admin/login?next=%2Fadmin" className="font-bold underline">다시 로그인</Link>하면 목록이 갱신돼요.</>
+          {expired ? <>로그인이 끝났어요(8시간). <Link href={loginHref} className="font-bold underline">다시 로그인</Link>하면 목록이 갱신돼요.</>
             : <>목록을 다시 받지 못했어요. 연결을 확인해 주세요. 아래는 마지막으로 받은 목록이에요.</>}
         </p>
       )}
-      <StatsCards kpis={kpis} activeStatus={filters.status} activeToday={filters.today} onSelect={onKpi} />
+      {/* 승인 대기 신청 — 0건이면 없다. 알림 메일을 놓쳐도 여기서 보인다(위 pendingCount 주석) */}
+      {pendingCount > 0 && (
+        <Link href="/admin/codes"
+          className="flex items-center gap-2 border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] font-bold text-amber transition hover:bg-amber/15">
+          승인 대기 신청 {pendingCount}건 →
+          <span className="font-medium text-ink-mute">선생님이 학급 코드를 기다리고 있어요</span>
+        </Link>
+      )}
+      <StatsCards kpis={kpis} filters={filters} onSelect={onKpi} />
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
       <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}

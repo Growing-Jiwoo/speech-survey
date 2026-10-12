@@ -9,7 +9,9 @@ import {
 } from '@tanstack/react-table'
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import type { SessionListRow } from '@/lib/db'
-import { awaitsScanScoring, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals } from '@/lib/adminStats'
+import {
+  awaitsScanScoring, checklistSummary, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals,
+} from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
 import { StatusBadge } from './StatusBadge'
@@ -139,10 +141,14 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       col.display({
         id: 'checklist', header: '체크리스트',
         meta: { thClassName: 'hidden whitespace-nowrap px-3 xl:table-cell', tdClassName: 'hidden whitespace-nowrap px-3 xl:table-cell' },
-        cell: ({ row }) => row.original.checklist.length > 0
+        cell: ({ row }) => {
+          // 「특이사항 없음」(none)은 영역이 아니다 — 세면 none만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11)
+          const c = checklistSummary(row.original.checklist)
           // 체크리스트 선택은 경고가 아니다 — amber는 '제출 · 미완료 있음'에만 남긴다.
-          ? <Badge tone="mute" size="sm">{row.original.checklist.length}개 영역</Badge>
-          : <span className="text-xs text-ink-mute">—</span>,
+          return c.areas > 0 ? <Badge tone="mute" size="sm">{c.areas}개 영역</Badge>
+            : c.none ? <span className="text-xs text-ink-soft">특이사항 없음</span>
+            : <span className="text-xs text-ink-mute">—</span>
+        },
       }),
       col.display({
         id: 'status', header: '상태',
@@ -304,11 +310,12 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
             {virtualRows.map(vr => {
               const row = modelRows[vr.index]
               return (
-                // 행 전체 클릭은 마우스 편의용(키보드·새 탭 열기는 이름 셀의 실제 Link가 담당).
-                // 수정자 키(Cmd/Ctrl/Shift) 클릭은 가로채지 않는다 — 링크 기대 동작 존중.
+                // 행 전체 클릭은 마우스 편의용(키보드는 이름 셀의 실제 Link가 담당 — 그 클릭은 여기로 오지 않는다).
+                // 수정자 키(Cmd/Ctrl/Shift) 클릭은 이름 링크처럼 새 탭으로 연다 — 전에는 그냥 돌아가 이름 밖 칸을 Cmd 클릭하면
+                // 아무 일도 없었다(2026-10-12 점검 L6). 주소는 이름 링크와 같다(목록 필터를 back으로 싣는다).
                 <tr key={row.id} data-index={vr.index} ref={rowVirtualizer.measureElement}
                   onClick={e => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey) return
+                    if (e.metaKey || e.ctrlKey || e.shiftKey) { window.open(detailHref(row.original.id), '_blank', 'noopener'); return }
                     router.push(detailHref(row.original.id))
                   }}
                   className="cursor-pointer border-t border-line/60 hover:bg-well">
@@ -338,7 +345,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사예요. 결과지에서 쓰기를 채점할 차례예요.' },
           {
             badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
-            desc: '검사자가 체크리스트에서 표시한 발달 영역 수예요.',
+            desc: '검사자가 체크리스트에서 표시한 발달 영역 수예요. 「특이사항 없음」을 골랐으면 그렇게 적혀요.',
           },
         ]}
         note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준이에요(1학년 쓰기 10문항 · 2학년 5문항).</>}

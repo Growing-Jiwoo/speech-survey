@@ -10,7 +10,7 @@
 | 파일 | 역할 |
 |---|---|
 | `Badge.tsx` | 상태 pill(tone: blue/mint/amber/rec/mute) — 완료/누락/주의 표시의 단일 스타일 소스 |
-| `ConfirmDialog.tsx` | 확인 모달 — 포커스 트랩·Esc/오버레이 닫기·busy 잠금·배경 스크롤 잠금 내장. 파괴적 동작은 `danger`. 취소와 확인 사이의 둘째 선택지는 `secondary`(결과지 받기의 [완성된 N장만] — 있으면 창이 조금 넓어진다). 스크롤 잠금이 화면 폭을 바꾸지 않게 `app/globals.css`가 `html { scrollbar-gutter: stable }`로 스크롤바 자리를 항상 비워 둔다 — 없으면 모달을 여닫을 때마다 화면이 가로로 튄다 |
+| `ConfirmDialog.tsx` | 확인 모달 — 포커스 트랩·Esc/오버레이 닫기·busy 잠금·배경 스크롤 잠금 내장. 파괴적 동작은 `danger`. 취소와 확인 사이의 둘째 선택지는 `secondary`(결과지 받기의 [완성된 N장만] — 있으면 창이 조금 넓어진다). 할 일이 없을 때 확인 버튼만 끄는 `confirmDisabled`(정보 수정 창의 「바뀐 값 없음」). 스크롤 잠금이 화면 폭을 바꾸지 않게 `app/globals.css`가 `html { scrollbar-gutter: stable }`로 스크롤바 자리를 항상 비워 둔다 — 없으면 모달을 여닫을 때마다 화면이 가로로 튄다 |
 | `Select.tsx` | 커스텀 드롭다운 — body 포탈(overflow 클리핑 회피) + ARIA listbox 키보드 내비(`aria-activedescendant`). 크기 3종: `lg`(기본) · `sm`(관리자 툴바) · `grid`(표 한 칸 — 옆 input과 높이·모서리를 맞춘다). `triggerPrefix`는 트리거에만 붙는 앞말(배속 선택의 「배속」 — 옵션마다 되풀이하지 않는다). `ariaInvalid`를 주면 테두리를 붉게 하는 것도 여기서 판단한다 — 호출부가 className으로 못 준다(Tailwind 클래스는 특이도가 같아 순서로 못 이긴다) 옵션마다 `badge`(오른쪽 작은 배지 — 스캔본 올리기 창의 「스캔 대기/이미 올림」) |
 | `Blip.tsx` | 마스코트/로고 SVG. 감정 연출(축하·응원) 변형은 만들지 않는다(스펙: 평가 비노출) |
 | `RecordButton.tsx` | 대형 녹음 버튼 + 남은 시간 진행 링(strokeDashoffset 카운트다운). 상태가 바뀌어 버튼이 바뀔 때(시작 ↔ 끝내기) 초점이 안에 있었으면 새 버튼으로 옮긴다 — 키보드로 녹음한 검사자가 멈추려면 Tab을 여러 번 눌러야 했다(2026-10-12) |

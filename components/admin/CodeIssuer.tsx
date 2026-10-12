@@ -16,12 +16,22 @@ import { adminKeys, useClassCodesQuery, type ClassCodeItem } from '@/hooks/useAd
 const inputCls = 'mt-1.5 h-[46px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-[15px] outline-none transition focus:border-blue focus:bg-white'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
 
+/** 로그인이 끝났을 때 — 로그인 뒤 이 화면으로 돌아온다(새 탭에서 열어 쓰던 발급 폼을 잃지 않게) */
+const LOGIN_HREF = '/admin/login?next=%2Fadmin%2Fcodes'
+
 export function CodeIssuer() {
   const queryClient = useQueryClient()
-  const { data: codes, isLoading, isError, refetch } = useClassCodesQuery()
+  const { data: codes, isLoading, isError, isFetching, error, refetch } = useClassCodesQuery()
+  // 다시 받기가 실패해도 받아 둔 목록은 내리지 않는다(/admin 목록과 같은 규칙) — 전에는 한 번 실패하면 발급 목록 표가 통째로
+  // 사라졌다. 대신 위에 띠로 알리고, 낡은 목록으로는 승인·삭제를 못 하게 잠근다(그사이 다른 탭이 승인·삭제했을 수 있다).
+  // 401이면 다시 로그인 안내를 띄운다 — 전에는 「목록을 불러오지 못했어요」[다시 시도]뿐이었다(2026-10-12 점검).
+  const expired = isError && /\(401\)/.test((error as Error | null)?.message ?? '')
+  const stale = isError
 
   const [school, setSchool] = useState<SelectedSchool | null>(null)
-  const [grade, setGrade] = useState('1')
+  // 학년은 빈칸에서 시작한다 — 「1학년」이 미리 골라져 있으면 2학년 학급을 발급하며 지나쳐도 그대로 나가고,
+  // 그 학급의 검사는 1학년 검사지로 진행된다(신청 화면 /apply와 같은 이유, 2026-10-12 점검).
+  const [grade, setGrade] = useState('')
   const [classNo, setClassNo] = useState('')
   const [teacherName, setTeacherName] = useState('')
   const [phone, setPhone] = useState('')
@@ -66,11 +76,17 @@ export function CodeIssuer() {
   // 칸을 고치면 오류 문구를 지운다 — 「학교를 선택해 주세요」가 학교를 고른 뒤에도 [코드 발급]을 다시 누를
   // 때까지 남아 있었다(2026-10-08 야간 점검). 중복 학급 경고도 학급을 바꾸면 더는 맞지 않으므로 함께 지운다.
   const edit = <T,>(set: (v: T) => void) => (v: T) => { set(v); setErr('') }
+  /** 학교·학년·반 — 학급이 바뀌면 「그래도 발급」 확인도 거둔다. 남겨 두면 3반 경고를 본 뒤 4반으로 갔다가 3반으로
+   *  돌아왔을 때 경고 없이 바로 발급됐다(2026-10-12 점검). */
+  const editClass = <T,>(set: (v: T) => void) => (v: T) => { edit(set)(v); setDupAck('') }
 
   async function issue() {
     // 서버 스키마(classCodeCreateSchema)와 같은 규칙으로 선검증한다.
     if (!school) { setErr('학교를 선택해 주세요.'); return }
+    if (grade === '') { setErr('학년을 선택해 주세요.'); return }
     if (classNo === '') { setErr('반을 선택해 주세요.'); return }
+    // 비어 있으면 「입력해 주세요」 — 형식 문구(「한글이나 영어로만」)는 쓴 것이 틀렸을 때만(2026-10-12 점검)
+    if (cleanTeacher === '') { setErr('담임교사명을 입력해 주세요.'); return }
     if (!validName(cleanTeacher)) { setErr('담임교사명은 한글이나 영어로만 쓸 수 있어요.'); return }
     // 이메일 필수(사용자 확정 2026-09-22, 담당자 회신 아님) — 결과지 링크가 이 주소로만 간다.
     if (!cleanEmail) { setErr('담임 이메일을 입력해 주세요. 결과지 링크를 이 주소로 보내요.'); return }
@@ -135,16 +151,27 @@ export function CodeIssuer() {
           ← 검사 목록
         </Link>
       </div>
+      {isError && (
+        <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">
+          {expired ? <>로그인이 끝났어요(8시간).{' '}
+              <a href={LOGIN_HREF} target="_blank" rel="noopener" className="font-bold underline">다시 로그인</a>하면 목록이 갱신돼요.</>
+            : <>{codes ? '목록을 다시 받지 못했어요. 연결을 확인해 주세요. 아래는 마지막으로 받은 목록이에요.' : '목록을 불러오지 못했어요.'}{' '}
+                <button type="button" onClick={() => void refetch()} disabled={isFetching} className="font-bold underline disabled:opacity-50">
+                  {isFetching ? '다시 받는 중…' : '다시 시도'}
+                </button></>}
+          {codes && <> 목록을 다시 받을 때까지 승인·삭제는 잠가 둬요.</>}
+        </p>
+      )}
 
-      {/* 발급 폼 */}
-      <div className="border-b border-line p-5">
+      {/* 발급 폼 — 표가 넓어 화면 폭을 넓혔지만 입력 칸은 읽기 좋은 폭에 둔다 */}
+      <div className="border-b border-line p-5"><div className="max-w-3xl">
         <label className="text-[13px] font-bold text-ink-soft">학교명</label>
-        <SchoolPicker value={school} onSelect={edit(setSchool)} />
+        <SchoolPicker value={school} onSelect={editClass(setSchool)} />
         <div className="flex gap-2.5">
           <div className="flex-1">
             <label className={labelCls} htmlFor="cc-grade">학년</label>
             <div className="mt-1.5">
-              <Select id="cc-grade" ariaLabel="학년" placeholder="학년" value={grade} onChange={edit(setGrade)}
+              <Select id="cc-grade" ariaLabel="학년" placeholder="학년 선택" value={grade} onChange={editClass(setGrade)}
                 options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
             </div>
           </div>
@@ -152,7 +179,7 @@ export function CodeIssuer() {
             <label className={labelCls} htmlFor="cc-class">반</label>
             <div className="mt-1.5">
               <Select id="cc-class" ariaLabel="반" placeholder="반 선택" value={classNo}
-                onChange={edit(setClassNo)} options={CLASS_OPTIONS} />
+                onChange={editClass(setClassNo)} options={CLASS_OPTIONS} />
             </div>
           </div>
         </div>
@@ -194,43 +221,38 @@ export function CodeIssuer() {
             </button>
           </div>
         )}
-      </div>
+      </div></div>
 
-      {/* 신청 대기(pending) — 대기 건이 없으면 스스로 아무것도 그리지 않는다 */}
-      <PendingApplications items={(codes ?? []).filter(c => c.status === 'pending')}
+      {/* 신청 대기(pending) — 대기 건이 없으면 스스로 아무것도 그리지 않는다. 목록이 낡았으면 승인·삭제를 잠근다(위 stale) */}
+      <PendingApplications items={(codes ?? []).filter(c => c.status === 'pending')} locked={stale}
         onDelete={c => { setDelErr(''); setToDelete(c) }} />
 
-      {/* 발급된 코드(active) */}
+      {/* 발급된 코드(active) — 받아 둔 목록이 있으면 다시 받기가 실패해도 그대로 보인다(위 띠가 알린다) */}
       {isLoading ? (
         <p className="p-8 text-center text-sm text-ink-mute">불러오는 중…</p>
-      ) : isError ? (
-        <div className="flex flex-col items-start gap-3 p-8">
-          <p className="text-sm text-ink-soft">목록을 불러오지 못했어요.</p>
-          <button type="button" onClick={() => void refetch()}
-            className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
-            다시 시도
-          </button>
-        </div>
-      ) : (
+      ) : codes ? (
+        // 1024~1920 모든 폭에서 가로 스크롤 없이 연락처·발급일·검사 수·[삭제]가 보이게 — 화면 폭을 넓히고(app/admin/codes)
+        // 학교·연락처 칸은 줄을 바꾼다(전화와 이메일을 두 줄로, 긴 이메일은 칸 안에서 접는다). 전에는 「전화 · 이메일」이 한 줄로
+        // 잘리지 않아 발급일부터 [삭제]까지 표 맨 아래 가로 스크롤 뒤에 있었다(2026-10-12 점검).
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-mute">
                 {['코드', '학교', '학년/반', '담임', '연락처', '발급일', '검사 수', ''].map(h => (
-                  <th key={h} scope="col" className="whitespace-nowrap px-4 py-3 font-medium">{h}</th>
+                  <th key={h} scope="col" className="whitespace-nowrap px-3 py-3 font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {active.map(c => (
                 <tr key={c.id} className="border-t border-line/60">
-                  <td className="font-read whitespace-nowrap px-4 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
-                  <td className="whitespace-nowrap px-4">{c.school_name}</td>
-                  <td className="whitespace-nowrap px-4">{gradeClassLabel(c.grade, c.class_no)}</td>
-                  <td className="whitespace-nowrap px-4">{c.teacher_name}</td>
-                  <td className="whitespace-nowrap px-4 text-ink-soft">
+                  <td className="font-read whitespace-nowrap px-3 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
+                  <td className="max-w-[11rem] break-keep px-3">{c.school_name}</td>
+                  <td className="whitespace-nowrap px-3">{gradeClassLabel(c.grade, c.class_no)}</td>
+                  <td className="whitespace-nowrap px-3">{c.teacher_name}</td>
+                  <td className="px-3 py-2 text-ink-soft">
                     {editId === c.id ? (
-                      <span className="flex items-center gap-1.5">
+                      <span className="flex flex-wrap items-center gap-1.5">
                         <input value={editEmail} onChange={e => setEditEmail(e.target.value)} inputMode="email"
                           aria-label="담임 이메일" aria-invalid={!!editErr}
                           className="h-8 w-56 rounded-lg border-[1.5px] border-line bg-white px-2 text-[13px] outline-none focus:border-blue" />
@@ -245,26 +267,31 @@ export function CodeIssuer() {
                         {editErr && <span role="alert" className="text-xs text-rec-deep">{editErr}</span>}
                       </span>
                     ) : (
-                      <span className="flex items-center gap-2">
-                        <span>{[c.teacher_phone, c.teacher_email].filter(Boolean).join(' · ') || '—'}</span>
-                        {/* 이메일 없는 옛 코드(필수화 전 발급)도 여기서 채운다 — 채우기 전엔 그 학급이 결과지를 받을 수 없다 */}
-                        <button type="button" onClick={() => { setEditId(c.id); setEditEmail(c.teacher_email ?? ''); setEditErr('') }}
-                          className="text-[11.5px] font-bold text-blue underline underline-offset-2">
-                          {c.teacher_email ? '수정' : '이메일 등록'}
-                        </button>
+                      // 전화와 이메일을 두 줄로 — 한 줄로 이으면 칸이 넓어져 표가 화면을 넘었다. 긴 이메일은 칸 안에서 접는다.
+                      <span className="flex max-w-[17rem] flex-col gap-0.5">
+                        {c.teacher_phone && <span className="whitespace-nowrap tabular-nums">{c.teacher_phone}</span>}
+                        <span className="flex items-baseline gap-2">
+                          {c.teacher_email ? <span className="min-w-0 break-all">{c.teacher_email}</span>
+                            : !c.teacher_phone && <span>—</span>}
+                          {/* 이메일 없는 옛 코드(필수화 전 발급)도 여기서 채운다 — 채우기 전엔 그 학급이 결과지를 받을 수 없다 */}
+                          <button type="button" onClick={() => { setEditId(c.id); setEditEmail(c.teacher_email ?? ''); setEditErr('') }}
+                            className="flex-none whitespace-nowrap text-[11.5px] font-bold text-blue underline underline-offset-2">
+                            {c.teacher_email ? '수정' : '이메일 등록'}
+                          </button>
+                        </span>
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-4 text-ink-soft">
+                  <td className="whitespace-nowrap px-3 text-ink-soft">
                     {new Date(c.created_at).toLocaleDateString('ko-KR')}
                   </td>
-                  <td className="whitespace-nowrap px-4 tabular-nums">{c.session_count}</td>
-                  <td className="whitespace-nowrap px-4 text-right">
+                  <td className="whitespace-nowrap px-3 tabular-nums">{c.session_count}</td>
+                  <td className="whitespace-nowrap px-3 text-right">
                     {/* 세션이 있는 코드는 지울 수 없다(FK restrict) — 버튼 자체를 내지 않는다.
-                        대기(pending) 건의 삭제(반려)는 위 섹션이 맡으므로 여기에는 오지 않는다 */}
+                        대기(pending) 건의 삭제(반려)는 위 섹션이 맡으므로 여기에는 오지 않는다. 목록이 낡았으면 잠근다(위 stale) */}
                     {c.session_count === 0 && (
-                      <button type="button" onClick={() => { setDelErr(''); setToDelete(c) }}
-                        className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec">
+                      <button type="button" onClick={() => { setDelErr(''); setToDelete(c) }} disabled={stale}
+                        className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40">
                         삭제
                       </button>
                     )}
@@ -277,7 +304,7 @@ export function CodeIssuer() {
             <p className="p-8 text-center text-sm text-ink-mute">아직 발급한 코드가 없어요.</p>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* pending 삭제 = 신청 반려 — 승인 전이라 「이 코드로는 더 이상 검사를 시작할 수 없습니다」는 맞지 않는 말이었고,
           반려 메일이 없다는 것을 창이 말하지 않았다(2026-10-08 야간 점검, 사용자 확정 같은 날). 버튼 이름 「삭제」는
