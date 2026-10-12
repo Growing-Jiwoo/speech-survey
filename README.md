@@ -255,6 +255,7 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
      **`MAIL_TO_OVERRIDE`에 본인 주소를 넣어** 모든 수신자를 본인에게 돌려 둔다(로컬에서 실제 교사에게 나가는 것을 막는다).
      새 Resend 계정을 직접 만들었다면 도메인이 없으므로 `onboarding@resend.dev`에서 **가입 이메일로만** 발송된다 —
      이때는 `MAIL_TO_OVERRIDE`에 그 가입 주소를 넣는다.
+   - `MAIL_REPLY_TO`: 메일의 답장 주소(Reply-To, 선택). 로컬은 비워 둔다 — 운영 값은 아래 배포 절.
    - `ADMIN_NOTIFY_EMAIL`: 교사가 `/apply`로 신청할 때 알림을 받을 관리자 메일 주소(선택 — 비워두면
      알림 메일을 시도하지 않을 뿐, 신청 접수 자체는 그대로 성공한다).
 4. `npm run build:schools` — 전국 초등학교 원본 JSON을 지역별 경량 JSON(`public/schools/`)으로 생성.
@@ -363,6 +364,8 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
      파싱을 거치지 않으므로 `$`를 이스케이프하면 안 된다(로컬 `.env.local`용 `\$` 이스케이프 버전과 다름 — 위 셋업 절 참고).
    - `RESEND_API_KEY`·`MAIL_FROM` — 메일을 쓸 경우. `MAIL_TO_OVERRIDE`는 **운영에서 반드시 비운다**
      (설정돼 있으면 교사에게 갈 메일이 전부 그 주소로 간다).
+   - `MAIL_REPLY_TO` — 선생님이 메일에 [답장]하면 받을 **담당자 메일함**(Production만). 보내는 주소 `noreply@`에는
+     받는 메일함이 없어, 비워 두면 답장이 반송된다. 주소를 코드에 두지 않는 것은 저장소가 공개라서다(`lib/mail.ts`).
    - `APP_URL` — 메일에 넣는 절대 URL(운영: `https://lidislab.com`). 비워두면 요청의 Host
      헤더로 origin을 만드는데, `POST /api/apply`(공개 신청 접수)는 그 URL을 관리자 알림 메일
      링크에 그대로 싣는다 — 위조된 Host가 그 메일에 실릴 수 있으므로 **운영에서는 반드시 설정**한다.
@@ -370,10 +373,12 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
      접수는 그대로 성공하되 알림 메일만 시도하지 않는다.
    - (모든 변수가 서버 전용 — `NEXT_PUBLIC_` 접두사 붙이지 말 것. 붙이면 클라이언트에 노출된다.)
    - ⚠️ **Production과 Preview의 메일 설정을 나눈다**(정식 도메인 `lidislab.com`, 2026-10-12 전환).
-     Production은 `MAIL_TO_OVERRIDE`를 **두지 않고** `ADMIN_NOTIFY_EMAIL`에 담당자 주소를 넣는다. Preview는
+     Production은 `MAIL_TO_OVERRIDE`를 **두지 않고** `ADMIN_NOTIFY_EMAIL`·`MAIL_REPLY_TO`에 담당자 주소를 넣는다. Preview는
      `MAIL_TO_OVERRIDE`·`ADMIN_NOTIFY_EMAIL` 둘 다 개발자 주소로 두어 시험 배포의 메일이 전부 개발자에게 가게 한다.
      Production에 `MAIL_TO_OVERRIDE`가 남으면 교사 메일이 전부 그 주소로 가고 교사는 코드를 받지 못한다.
      도메인 연결·Resend 인증·환경변수 표·확인 순서: [docs/superpowers/plans/2026-08-19-domain-switch-checklist.md](docs/superpowers/plans/2026-08-19-domain-switch-checklist.md)
+   - 옛 주소 `speech-survey.vercel.app`은 `next.config.ts`의 `redirects()`가 `https://lidislab.com`으로 308한다(경로·쿼리
+     그대로, 2026-10-13). Vercel 대시보드가 아니라 코드에 있는 설정이라, 정식 도메인을 또 바꾸면 그 상수도 함께 고친다.
 4. **Deploy** → 자동 HTTPS 발급. 마이크 녹음은 HTTPS에서만 동작하므로 배포 후 정상 작동한다.
 5. 배포 도메인을 확인하고 `/`(아동)·`/admin`(관리자) 흐름을 실기기로 점검한다.
 

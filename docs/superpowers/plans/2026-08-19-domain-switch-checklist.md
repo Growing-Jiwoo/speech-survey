@@ -6,7 +6,7 @@
 | 무엇 | 어디 |
 |---|---|
 | 도메인 | Vercel 팀 `kids-survey`에서 구매(연 $11.25, 자동 갱신). DNS도 Vercel이 관리한다 |
-| 앱 | 프로젝트 `speech-survey` → Domains에 `lidislab.com`(Production). 예전 `speech-survey.vercel.app`도 계속 열린다 |
+| 앱 | 프로젝트 `speech-survey` → Domains에 `lidislab.com`(Production). 예전 `speech-survey.vercel.app`은 2026-10-13부터 308로 `lidislab.com`에 넘긴다(`next.config.ts`, 경로·쿼리 그대로) |
 | 메일 | Resend 도메인 `lidislab.com`, 리전 Tokyo(`ap-northeast-1`), 추적(클릭·열람) 끔 |
 
 ⚠️ 결제 수단에 청구지 주소가 비어 있으면 Vercel이 「Action Required」를 띄운다 — 비워 두면 1년 뒤
@@ -43,6 +43,7 @@ Resend 검증은 몇 분 만에 끝났다(최대 72시간).
 | `ADMIN_NOTIFY_EMAIL` | 담당자(관리자) 메일 | 개발자 개인 메일 |
 | `MAIL_FROM` | `읽기검사 <noreply@lidislab.com>` | (같음) |
 | `APP_URL` | `https://lidislab.com` | 비움 — 메일 링크가 그 Preview 주소로 만들어진다 |
+| `MAIL_REPLY_TO` | 담당자 메일함 — 선생님의 [답장]을 받는다(2026-10-13) | 비움(테스트 발송에는 어차피 싣지 않는다) |
 
 `RESEND_API_KEY`·`SUPABASE_*`·`ADMIN_PASSWORD_HASH`·`SESSION_SECRET`은 두 환경 공통으로 그대로.
 

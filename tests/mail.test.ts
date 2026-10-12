@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.stubEnv('RESEND_API_KEY', 're_test_key')
   vi.stubEnv('MAIL_FROM', 'onboarding@resend.dev')
   vi.stubEnv('MAIL_TO_OVERRIDE', '')
+  vi.stubEnv('MAIL_REPLY_TO', '')
   fetchMock = vi.fn().mockResolvedValue(okResponse())
   vi.stubGlobal('fetch', fetchMock)
 })
@@ -70,6 +71,27 @@ describe('MAIL_TO_OVERRIDE — 실수 발송 방지', () => {
     vi.stubEnv('MAIL_TO_OVERRIDE', '   ')
     await sendMail(mail)
     expect(bodyOf(fetchMock).to).toEqual(['teacher@school.kr'])
+  })
+})
+
+describe('MAIL_REPLY_TO — 답장 받을 곳', () => {
+  it('설정되면 Reply-To로 싣는다 — noreply로 가서 반송되지 않게', async () => {
+    vi.stubEnv('MAIL_REPLY_TO', ' coordinator@school.test ')
+    await sendMail(mail)
+    expect(bodyOf(fetchMock).reply_to).toBe('coordinator@school.test')
+  })
+
+  it('없거나 비어 있으면 필드를 싣지 않는다', async () => {
+    vi.stubEnv('MAIL_REPLY_TO', '')
+    await sendMail(mail)
+    expect(bodyOf(fetchMock)).not.toHaveProperty('reply_to')
+  })
+
+  it('[REGRESSION] 테스트 발송(override)에는 싣지 않는다 — 시험 메일 답장이 담당자에게 가면 안 된다', async () => {
+    vi.stubEnv('MAIL_REPLY_TO', 'coordinator@school.test')
+    vi.stubEnv('MAIL_TO_OVERRIDE', 'dev@me.test')
+    await sendMail(mail)
+    expect(bodyOf(fetchMock)).not.toHaveProperty('reply_to')
   })
 })
 
