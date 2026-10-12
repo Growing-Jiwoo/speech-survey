@@ -431,7 +431,8 @@ function SurveyInner() {
 
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
-    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6">
+    // 화면 높이가 낮으면(short — app/globals.css) 위아래 여백을 줄인다 — 녹음 뒤 알림이 밴드 안에 남게(2026-10-12 점검)
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6 short:pb-3 short:pt-3 lg:short:pt-3">
       <header className="flex-none">
         <div className="mb-2 flex items-center justify-between gap-2">
           {st.childName ? (
@@ -477,7 +478,7 @@ function SurveyInner() {
         {!showIntro && !practiceEnd && (
           // 자동 저장 안내는 별도 줄을 만들지 않고 이 줄의 남는 오른쪽 공간에 얹는다 —
           // 세로 공간이 빠듯해(가운데 밴드가 밀려 불필요한 스크롤이 생김) 한 줄도 아깝다.
-          <div className="mt-4 flex items-baseline justify-between gap-2">
+          <div className="mt-4 flex items-baseline justify-between gap-2 short:mt-2">
             <h1 className="text-xs font-bold text-ink-mute">
               {SECTION_LABEL[page.section]}{page.practice && ' · 연습'}
             </h1>
@@ -493,7 +494,7 @@ function SurveyInner() {
       {/* 가운데 밴드: 남는 높이를 모두 차지하고 내용을 세로 중앙 정렬. 내용이 밴드보다 크면
           이 구역 안에서만 스크롤(헤더·내비는 그대로). */}
       <div ref={bandRef} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex min-h-full flex-col justify-center py-4">
+        <div className="flex min-h-full flex-col justify-center py-4 short:py-2">
           {practiceEnd ? (
             <PracticeEnd />
           ) : showIntro ? (
@@ -553,7 +554,7 @@ function SurveyInner() {
         </div>
       </div>
 
-      <nav className="flex flex-none gap-2.5 pt-4">
+      <nav className="flex flex-none gap-2.5 pt-4 short:pt-2">
         <button onClick={() => goToIdx(idx - 1)} disabled={idx === 0 || busy}
           className="btn-ghost h-[52px] flex-1">
           이전
