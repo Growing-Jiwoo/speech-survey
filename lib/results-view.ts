@@ -99,29 +99,38 @@ export function latestSession(c: ResultsChild): ResultsSession | null {
  * 결과지로 내보낼 수 있는 한 장이 이것이다 — 「아이당 최신 1장」이 뜻하는 것은 *최신 세션*이
  * 아니라 *받을 수 있는 것 중 최신*이다. 재검사를 시작했다가 중단하면 최신 세션은 미제출이 되는데,
  * 그 아이를 통째로 빼면 **채점이 끝난 1차 결과지를 영영 못 받는다**(전수 점검 2026-09-22에서 발견).
- * 판정 표시(`childVerdict`)는 이것과 달리 **최신 세션만** 본다 — 채점 중인 재검사가 옛 판정을
- * 가리지 않게 하려는 별개의 규칙이다.
+ * 화면의 행·판정·정렬·요약 칸은 이것이 아니라 **대표 검사**(`representativeSession`)를 본다 — 제출돼 채점
+ * 중인 재검사가 있으면 그것이 대표라, 받을 수 있는 앞 차수가 있어도 판정 없이 「채점 중」이다.
  */
 export function latestScored(c: ResultsChild): ResultsSession | null {
   for (let i = c.sessions.length - 1; i >= 0; i--) if (c.sessions[i].status === 'scored') return c.sessions[i]
   return null
 }
 
-/** 접힌 행의 판정 = 최신 세션이 scored일 때만 그 판정. 채점 중인 재검사가 옛 판정을 가리지 않는다. */
-export function childVerdict(c: ResultsChild): Verdict | null {
-  const s = latestSession(c)
-  return s?.status === 'scored' ? s.verdict : null
-}
-
 /**
- * 그 아이의 스캔본이 붙을 검사 — **가장 최근에 제출된 검사**, 없으면 가장 최근 검사.
- * 기록지 QR에는 반과 번호만 있어 몇 차 검사인지 모른다. 재검사를 시작했다가 그만둔(제출 전) 검사가
- * 앞 차수의 스캔 대기를 가리면 선생님이 올릴 곳이 사라진다. 시작 화면의 「스캔 대기 N명」
- * (lib/db rosterWithTested)도 같은 규칙이다.
+ * 그 아이의 **대표 검사** — 가장 최근에 **제출된** 검사, 제출된 것이 없으면 가장 최근 검사.
+ * 접힌 행·판정(`childVerdict`)·정렬(lib/results buildChildren)·요약 칸(`summarize`)이 모두 이것을 본다(2026-10-12 점검).
+ * - 중단된(제출 전) 재검사는 대표가 아니다. 종전에는 최신 세션을 그려, 1차 FAIL(채점 완료)에 2차를 중단한
+ *   아이가 표에서는 「미제출」·판정 「-」로 Fail 위로 올라가지 않는데 요약은 「채점 완료」로 세고 받는
+ *   결과지에는 1차 FAIL이 실렸다 — 같은 아이를 화면 곳곳이 다르게 말했다.
+ * - 제출된 재검사는 채점 중이어도 대표다 — 앞 차수의 판정을 지금 판정처럼 보이지 않는다.
+ * 스캔본이 붙을 검사도 같은 규칙이다(`scanTargetSession`) — 기록지 QR에는 반과 번호만 있어 몇 차 검사인지
+ * 모르고, 그만둔 재검사가 앞 차수의 스캔 대기를 가리면 선생님이 올릴 곳이 사라진다. 시작 화면의
+ * 「스캔 대기 N명」(lib/db rosterWithTested)도 같은 규칙이다.
  */
-export function scanTargetSession(c: ResultsChild): ResultsSession | null {
+export function representativeSession(c: ResultsChild): ResultsSession | null {
   for (let i = c.sessions.length - 1; i >= 0; i--) if (c.sessions[i].submittedAt) return c.sessions[i]
   return latestSession(c)
+}
+
+/** 스캔본이 붙을 검사 = 대표 검사. 이름만 호출부의 뜻대로 둘 뿐 규칙은 하나다 — 갈라지면 대표 검사가
+ *  「재검사로 대체」로 그려지고 요약 칸이 어긋난다(`summarize`가 `sessionLabel(대표, 대표 id)`에 기댄다). */
+export const scanTargetSession = representativeSession
+
+/** 접힌 행의 판정 = 대표 검사가 채점 완료(scored)일 때만 그 판정. 정렬(Fail 먼저)도 이 값을 본다. */
+export function childVerdict(c: ResultsChild): Verdict | null {
+  const s = representativeSession(c)
+  return s?.status === 'scored' ? s.verdict : null
 }
 
 /** 올리기 확인 화면의 대상 — 아이마다 스캔본이 붙을 검사 하나. 검사가 없는 아이(미실시)는 없다. */
@@ -140,36 +149,34 @@ export function scanTargets(children: ResultsChild[]): ScanTarget[] {
 export interface ResultsSummary {
   /** 세션이 하나라도 있는 아이 */
   tested: number
-  /** 이 네 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다) */
+  /** 이 네 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다).
+   *  칸은 **대표 검사의 화면 상태**(접힌 행의 상태 배지와 같은 값)다 */
   scored: number; scoring: number; scanWait: number; unsubmitted: number
-  /** 채점 완료 중 Fail(최신 세션 판정) */
+  /** 채점 완료 중 Fail(대표 검사 판정 — 접힌 행의 판정과 같다) */
   fail: number
   /** 명단에만 있는 아이 */
   untested: number
-  /** **받을 수 있는 결과지가 있는 아이** 수 = [전체 PDF 다운로드]가 세는 것. 스캔본 방식은 쓰기 채점 전이어도
-   *  읽기 채점이 끝나면 받을 수 있어(A안) 「채점 완료」보다 클 수 있다 */
+  /** **받을 수 있는 결과지가 있는 아이** 수 = [전체 PDF 다운로드]가 세는 것(`latestScored`). 스캔본 방식은 쓰기
+   *  채점 전이어도 읽기 채점이 끝나면 받을 수 있고(A안), 제출된 재검사가 채점 중이어도 앞 차수를 받을 수 있어
+   *  「채점 완료」보다 클 수 있다 */
   downloadable: number
 }
 
 export function summarize(children: ResultsChild[]): ResultsSummary {
   const s: ResultsSummary = { tested: 0, scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0, fail: 0, untested: 0, downloadable: 0 }
   for (const c of children) {
-    const l = latestSession(c)
-    if (!l) { s.untested++; continue }
+    const rep = representativeSession(c)
+    if (!rep) { s.untested++; continue }
     s.tested++
-    const d = latestScored(c)
-    if (d) s.downloadable++
-    // 스캔본을 기다리는 아이는 채점이 끝난 앞 차수가 있어도 「스캔 대기」다 — 선생님이 할 일이 남았다
-    // (시작 화면 배너의 수와 같아야 한다).
-    if (scanTargetSession(c)?.scanState === 'wait') { s.scanWait++; continue }
-    // 받을 수 있는 결과지가 있으면 그 검사 기준 — 최신 세션이 중단된 재검사여도 채점이 끝난 앞 차수가
-    // 있으면 그 아이는 결과지를 받을 수 있다. 다만 스캔본 쓰기가 남았으면 아직 「채점 중」이다.
-    if (d) {
-      if (sessionLabel(d, scanTargetSession(c)?.id) === 'scored') { s.scored++; if (l.verdict === 'fail') s.fail++ }
-      else s.scoring++
-    }
-    else if (l.status === 'scoring') s.scoring++
-    else s.unsubmitted++
+    if (latestScored(c)) s.downloadable++
+    // 칸은 대표 검사의 화면 상태 하나로 정한다 — 접힌 행이 그리는 배지와 같은 값이어야 요약 숫자와 표가 맞는다
+    // (종전에는 요약이 받을 수 있는 앞 차수를, 표가 최신 세션을 봐 「채점 완료 6」 옆 배지가 5개였다, 2026-10-12 점검).
+    // 스캔 대기가 앞서는 것은 sessionLabel이 정한다 — 선생님이 할 일이 남았다(시작 화면 배너의 수와 같다).
+    const label = sessionLabel(rep, rep.id)
+    if (label === 'scored') { s.scored++; if (rep.verdict === 'fail') s.fail++ }
+    else if (label === 'scoring') s.scoring++
+    else if (label === 'scanWait') s.scanWait++
+    else s.unsubmitted++   // 대표 검사는 스캔 대상 자신이라 「재검사로 대체」가 되지 않는다 — 남는 것은 미제출뿐
   }
   return s
 }

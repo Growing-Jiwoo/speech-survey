@@ -4,6 +4,8 @@
 // 판정 표기는 관리자 화면과 같은 Pass/Fail(사용자 확정 2026-09-22). 받을 수 있는 검사(status scored)만 체크·다운로드.
 // 쓰기 스캔본(사용자 확정 2026-09-30): 올리기 입구(ScanUpload)와 「스캔 대기 → 채점 중 → 채점 완료」 상태,
 // 받을 때 「쓰기 채점 전」 경고를 이 화면이 맡는다.
+// 아이 행(접힌 행)은 **대표 검사**(가장 최근에 제출된 검사 — lib/results-view representativeSession)를 그린다.
+// 판정·정렬·요약도 같은 검사를 본다(2026-10-12 점검).
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -18,8 +20,8 @@ import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { gradeClassLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import {
-  awaitsScanWriting, latestScored, latestSession, scanTargetSession, scanTargets, sessionLabel, summarize,
-  type ResultsChild, type ResultsSession, type SessionLabel,
+  awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
+  summarize, type ResultsChild, type ResultsSession, type SessionLabel,
 } from '@/lib/results-view'
 import { FLUENCY_UNIT, fluencyLabel, type CountTaskKey, type TaskKey } from '@/lib/scoring'
 import { ScanUpload } from './ScanUpload'
@@ -142,15 +144,19 @@ export function ResultsView({ token }: { token: string }) {
   /** 확인 모달이 보여 줄 「이 검사들을 받습니다」 명단. 화면이 고른 것과 서버가 담을 것이
    *  같은 기준이어야 하므로(전체=아이당 받을 수 있는 것 중 최신), 여기서도 `latestScored`를 쓴다. */
   const pickList = useMemo(() => {
-    const rows: { id: string; childNo: number; name: string; attempt: string | null; pendingWriting: boolean }[] = []
+    const rows: { id: string; childNo: number; name: string; attempt: string | null; pendingWriting: boolean; replaced: boolean }[] = []
     for (const c of data?.children ?? []) {
+      const target = scanTargetSession(c)
       for (const s of c.sessions) {
         const inAll = confirmMode === 'all' && latestScored(c)?.id === s.id
         const inPicked = confirmMode === 'picked' && picked.has(s.id)
         if (inAll || inPicked) {
+          // 재검사로 대체된 검사의 쓰기는 앞으로도 채점되지 않는다 — 「채점이 끝나면 다시 받아 주세요」는 거짓 약속이다
+          // (2026-10-12 점검). 경고 목록에서 빼고 따로 한 줄로 알린다.
+          const replaced = sessionLabel(s, target?.id) === 'replaced'
           rows.push({
             id: s.id, childNo: c.childNo, name: c.name, attempt: c.sessions.length > 1 ? `${s.attemptNo}차` : null,
-            pendingWriting: awaitsScanWriting(s),
+            pendingWriting: awaitsScanWriting(s) && !replaced, replaced,
           })
         }
       }
@@ -159,9 +165,15 @@ export function ResultsView({ token }: { token: string }) {
   }, [data, confirmMode, picked])
   /** 받을 것 중 **스캔본 쓰기 채점 전**인 검사 — 결과보고서의 쓰기·최종결과 칸이 빈 채로 나간다. 담당자가 채우면
    *  다시 받아야 하므로 받기 전에 알린다(사용자 확정 2026-09-30). 화면 방식의 빈 쓰기(A안)는 나중에 채워지지
-   *  않아 여기서 따로 알리지 않는다 — 종전과 같다. */
+   *  않아 여기서 따로 알리지 않는다 — 종전과 같다. 재검사로 대체된 검사도 같은 이유로 여기 들지 않는다. */
   const pendingRows = pickList.filter(r => r.pendingWriting)
+  const replacedRows = pickList.filter(r => r.replaced)
   const completeIds = pickList.filter(r => !r.pendingWriting).map(r => r.id)
+  /** 「명」은 서로 다른 아이 수, 장 수는 「장」 — 한 아이의 1·2차를 고르면 「2명」이 아니다(2026-10-12 점검). */
+  const kidsOf = (rows: { childNo: number }[]) => new Set(rows.map(r => r.childNo)).size
+  const pickKids = kidsOf(pickList)
+  const pendingKids = kidsOf(pendingRows)
+  const pendingCount = pendingRows.length > pendingKids ? `${pendingRows.length}장` : `${pendingKids}명`
 
   /** mode: 'all'이면 서버가 아이마다 받을 것을 고른다. ids를 주면 그 검사들만(선택한 것 · 「완성된 N장만」). */
   async function download(mode: 'all' | 'picked', ids?: string[]) {
@@ -241,7 +253,9 @@ export function ResultsView({ token }: { token: string }) {
   const hasReplaced = children.some(c => { const t = scanTargetSession(c); return c.sessions.some(x => sessionLabel(x, t?.id) === 'replaced') })
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-4xl flex-col p-6 pt-8">
+    // 휴대폰(640px 미만)은 좌우 여백을 16px로 — 24px이면 375px에서 표(번호·이름·판정·상태)가 겨우 들어가, 재검사 행을
+    // 펼치면 상태 칸이 가로 스크롤 뒤로 밀렸다(2026-10-12 점검). 표 칸 안쪽 여백도 같은 이유로 좁다.
+    <main className="mx-auto flex min-h-dvh max-w-4xl flex-col px-4 pb-6 pt-8 sm:px-6">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">KODYS 결과지</span>
@@ -303,28 +317,38 @@ export function ResultsView({ token }: { token: string }) {
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-ink-mute">
-                    <th className="w-8 px-1.5 py-2 sm:px-2" />
-                    <th className="px-1.5 py-2 sm:px-2 font-medium">번호</th>
-                    <th className="px-1.5 py-2 sm:px-2 font-medium">이름</th>
-                    {TASKS.map(t => <th key={t.key} className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 font-medium md:table-cell">{t.label}</th>)}
-                    <th className="px-1.5 py-2 sm:px-2 font-medium">판정</th>
-                    <th className="px-1.5 py-2 sm:px-2 font-medium">상태</th>
-                    <th className="hidden px-1.5 py-2 sm:px-2 font-medium md:table-cell">검사일</th>
-                    <th className="px-1.5 py-2 sm:px-2" />
+                    <th className="w-8 px-1 py-2 sm:px-2" />
+                    <th className="px-1 py-2 sm:px-2 font-medium">번호</th>
+                    <th className="px-1 py-2 sm:px-2 font-medium">이름</th>
+                    {TASKS.map(t => <th key={t.key} className="hidden whitespace-nowrap px-1 py-2 sm:px-2 font-medium md:table-cell">{t.label}</th>)}
+                    <th className="px-1 py-2 sm:px-2 font-medium">판정</th>
+                    <th className="px-1 py-2 sm:px-2 font-medium">상태</th>
+                    <th className="hidden px-1 py-2 sm:px-2 font-medium md:table-cell">검사일</th>
+                    {/* 펼침 버튼 열 — 1024px 미만에서는 이름 칸으로 옮긴다(아래 이름 칸 주석) */}
+                    <th className="hidden px-1 py-2 sm:px-2 lg:table-cell" />
                   </tr>
                 </thead>
                 <tbody>
                   {children.map(c => {
+                    // 접힌 행은 대표 검사를 그린다(= 스캔본이 붙을 검사). 최신 세션을 그리면 1차 FAIL 뒤 2차를 중단한 아이가
+                    // 표에서는 「미제출」·판정 「-」인데 요약·받는 결과지는 1차 FAIL이었다(2026-10-12 점검).
+                    const rep = representativeSession(c)
                     const latest = latestSession(c)
-                    const target = scanTargetSession(c)
                     const retests = c.sessions.length > 1
                     const expanded = open.has(c.childNo)
                     // 아이 행 체크박스가 대표하는 것들 — 받을 수 있는(채점 완료) 차수 전부.
                     const scoredIds = c.sessions.filter(x => x.status === 'scored').map(x => x.id)
                     const pickedCountOfChild = scoredIds.filter(id => picked.has(id)).length
+                    const expandButton = () => (
+                      <button type="button" aria-expanded={expanded}
+                        onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(c.childNo)) n.delete(c.childNo); else n.add(c.childNo); return n })}
+                        className="text-[12px] font-bold text-blue underline underline-offset-2">
+                        {expanded ? '▾' : '▸'} 재검사 {c.sessions.length}회
+                      </button>
+                    )
                     const row = (s: ResultsSession | null, label: string | null, key: string) => (
                       <tr key={key} className={`border-t border-line/60 ${label ? 'bg-well/60 text-[13px]' : ''}`}>
-                        <td className="px-1.5 py-2 sm:px-2">
+                        <td className="px-1 py-2 sm:px-2">
                           {/* 아이 행은 **그 아이 전체**를, 차수 행은 그 차수 하나를 맡는다.
                               일부 차수만 골랐으면 아이 행은 막대(indeterminate)로 「일부 선택」을 알린다. */}
                           {label === null
@@ -343,12 +367,12 @@ export function ResultsView({ token }: { token: string }) {
                                 onChange={on => toggle(s.id, on)} />
                             )}
                         </td>
-                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2 tabular-nums">
+                        <td className="whitespace-nowrap px-1 py-2 sm:px-2 tabular-nums">
                           {/* 차수는 어느 검사인지 가르는 값이라 회색 글자로는 눈에 안 띈다 — 배지로 세운다. */}
                           {label ? <Badge tone="blue" size="sm">{label}</Badge> : c.childNo}
                         </td>
-                        <td className="px-1.5 py-2 sm:px-2">
-                          {!label && <span className="whitespace-nowrap font-medium">{`${c.name} (${c.gender})`}</span>}
+                        <td className="px-1 py-2 sm:px-2">
+                          {!label && <span className="font-medium md:whitespace-nowrap">{`${c.name} (${c.gender})`}</span>}
                           {/* 768px 미만(휴대폰 — 결과지 링크는 메일로 온다)에서는 과제 열 셋과 검사일을 이 줄로 접는다.
                               표가 옆으로 넘쳐 **판정이 화면 밖**에 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
                           {s && (
@@ -361,36 +385,35 @@ export function ResultsView({ token }: { token: string }) {
                               <span className="whitespace-nowrap">{kstDate(s.startedAt)}</span>
                             </div>
                           )}
+                          {/* 1024px 미만(휴대폰·아이패드 세로)에서는 펼침 버튼을 이 칸에 둔다 — 마지막 열은 가로 스크롤
+                              뒤라 차수를 고를 수 없었다(2026-10-12 점검). 768px도 과제 열이 펼쳐진 표가 상자보다 넓어
+                              마지막 열이 밀려났다. 넓은 화면은 종전처럼 마지막 열이다. */}
+                          {!label && retests && <div className="mt-1 lg:hidden">{expandButton()}</div>}
                         </td>
                         {TASKS.map(t => (
-                          <td key={t.key} className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 tabular-nums md:table-cell">
+                          <td key={t.key} className="hidden whitespace-nowrap px-1 py-2 sm:px-2 tabular-nums md:table-cell">
                             <ScoreCell s={s} task={t.key} taskMax={taskMax} />
                           </td>
                         ))}
-                        <td className="px-1.5 py-2 sm:px-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
-                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2">
-                          {s ? <Badge tone={STATUS_BADGE[sessionLabel(s, target?.id)].tone} size="sm">{STATUS_BADGE[sessionLabel(s, target?.id)].label}</Badge>
+                        <td className="px-1 py-2 sm:px-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
+                        <td className="whitespace-nowrap px-1 py-2 sm:px-2">
+                          {/* 대표 검사가 곧 스캔 대상이다 — 그보다 앞 차수의 스캔 대기는 「재검사로 대체」로 갈린다 */}
+                          {s ? <Badge tone={STATUS_BADGE[sessionLabel(s, rep?.id)].tone} size="sm">{STATUS_BADGE[sessionLabel(s, rep?.id)].label}</Badge>
                             : <Badge tone="mute" size="sm">미실시</Badge>}
-                          {/* 접힌 행은 최신 검사를 보인다 — 그것이 중단된 재검사면 스캔본을 기다리는 앞 차수가 가려져
-                              요약의 「스캔 대기 N명」이 누구인지 찾을 수 없다 */}
-                          {!label && target && target.id !== latest?.id && target.scanState === 'wait' && (
-                            <Badge tone="amber" size="sm" className="ml-1">{target.attemptNo}차 스캔 대기</Badge>
+                          {/* 대표 검사 뒤에 그만둔 재검사가 있으면 접힌 행에도 알린다 — 줄을 바꿔 붙여 좁은 화면에서 칸이
+                              넓어지지 않게 한다 */}
+                          {!label && rep && latest && latest.id !== rep.id && (
+                            <div className="mt-1"><Badge tone="rec" size="sm">{latest.attemptNo}차 미제출</Badge></div>
                           )}
                         </td>
-                        <td className="hidden whitespace-nowrap px-1.5 py-2 sm:px-2 text-ink-soft md:table-cell">{s ? kstDate(s.startedAt) : ''}</td>
-                        <td className="whitespace-nowrap px-1.5 py-2 sm:px-2 text-right">
-                          {!label && retests && (
-                            <button type="button" aria-expanded={expanded}
-                              onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(c.childNo)) n.delete(c.childNo); else n.add(c.childNo); return n })}
-                              className="text-[12px] font-bold text-blue underline underline-offset-2">
-                              {expanded ? '▾' : '▸'} 재검사 {c.sessions.length}회
-                            </button>
-                          )}
+                        <td className="hidden whitespace-nowrap px-1 py-2 sm:px-2 text-ink-soft md:table-cell">{s ? kstDate(s.startedAt) : ''}</td>
+                        <td className="hidden whitespace-nowrap px-1 py-2 sm:px-2 text-right lg:table-cell">
+                          {!label && retests && expandButton()}
                         </td>
                       </tr>
                     )
                     return [
-                      row(latest, null, `c${c.childNo}`),
+                      row(rep, null, `c${c.childNo}`),
                       ...(expanded ? c.sessions.map(s => row(s, `${s.attemptNo}차`, s.id)) : []),
                     ]
                   })}
@@ -467,7 +490,9 @@ export function ResultsView({ token }: { token: string }) {
         {/* 두 문장을 한 문단에 붙이면 「만드는 데 몇 / 초 걸려요」처럼 어정쩡하게 감긴다.
             한 줄에 한 가지만 말한다 — 위는 무엇을 받는지, 아래는 얼마나 걸리는지. */}
         <p className="mt-3 text-sm text-ink-soft">
-          아래 <b>{pickList.length}명</b>의 결과지를 <b>한 파일</b>로 만들어요.
+          {pickList.length > pickKids
+            ? <>아래 <b>{pickKids}명</b>의 결과지 <b>{pickList.length}장</b>을 <b>한 파일</b>로 만들어요.</>
+            : <>아래 <b>{pickList.length}명</b>의 결과지를 <b>한 파일</b>로 만들어요.</>}
         </p>
         <p className="mt-1 text-[12.5px] text-ink-mute">만드는 데 몇 초 걸려요.</p>
         {/* 한 학급이 40명까지 간다 — 한 줄에 하나씩 쌓으면 스크롤만 길어져 누구를 받는지 안 보인다.
@@ -486,7 +511,7 @@ export function ResultsView({ token }: { token: string }) {
           <div role="note" className="mt-3 rounded-xl border border-amber/40 bg-amber/10 px-3.5 py-3">
             <p className="flex items-center gap-1.5 text-[13.5px] font-bold text-amber">
               <span aria-hidden className="flex h-4 w-4 items-center justify-center rounded-full bg-amber text-[11px] text-white">!</span>
-              쓰기 채점 전 {pendingRows.length}명
+              쓰기 채점 전 {pendingCount}
             </p>
             <ul className="mt-2 flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
               {pendingRows.map(r => (
@@ -496,9 +521,17 @@ export function ResultsView({ token }: { token: string }) {
               ))}
             </ul>
             <p className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">
-              이 {pendingRows.length}명은 결과보고서의 <b>쓰기·최종결과 칸이 비어</b> 있어요. 채점이 끝나면 다시 받아 주세요.
+              이 {pendingCount}은 결과보고서의 <b>쓰기·최종결과 칸이 비어</b> 있어요. 채점이 끝나면 다시 받아 주세요.
             </p>
           </div>
+        )}
+        {/* 대체된 검사는 「다시 받아 주세요」 대상이 아니다 — 그 쓰기는 앞으로도 채점되지 않는다(2026-10-12 점검).
+            어느 검사인지는 명단만 보고는 모르므로 이름과 차수를 함께 적는다. */}
+        {replacedRows.length > 0 && (
+          <p className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">
+            재검사로 대체된 검사({replacedRows.map(r => `${r.childNo}번 ${r.name}${r.attempt ? ` ${r.attempt}` : ''}`).join(', ')})는
+            쓰기·최종결과 칸이 빈 채로 나가요.
+          </p>
         )}
         {confirmMode === 'all' && summary && summary.downloadable < summary.tested && (
           <p className="mt-3 text-[12.5px] leading-relaxed text-ink-mute">

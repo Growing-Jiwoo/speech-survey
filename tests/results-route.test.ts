@@ -278,6 +278,13 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
       .toEqual(['2026-09-21T01:00:00.000Z', '2026-09-22T02:00:00.000Z'])
     expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_결과지_2명_')
   })
+  it('[REGRESSION] 같은 아이의 1·2차를 고르면 「2명」이 아니라 그 아이 이름 + 2장(2026-10-12 점검)', async () => {
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,a2')
+    expect(res.status).toBe(200)
+    const name = decodeURIComponent(res.headers.get('content-disposition') ?? '')
+    expect(name).toMatch(/01_아이1_2장_\d{4}-\d{2}-\d{2}\.pdf/)
+    expect(name).not.toContain('명_')
+  })
   it('[REGRESSION] 같은 id를 두 번 주면 한 장만 — 같은 장이 두 번 붙고 「2명」이 되지 않게', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,a1')
     expect(res.status).toBe(200)
