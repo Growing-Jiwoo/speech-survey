@@ -60,6 +60,8 @@ export function RosterEditor({ onChange }: {
   onChange: (roster: RosterChild[] | null) => void
 }) {
   const [rows, setRows] = useState<Row[]>([])
+  /** 표가 파일에서 왔는지(손으로 줄을 추가해 만든 표가 아닌지) — 실패 문구가 남은 표를 무엇이라 부를지 가른다 */
+  const [fromFile, setFromFile] = useState(false)
   const [notice, setNotice] = useState<{ rrnSeen: boolean; missingCols: string[] }>(
     { rrnSeen: false, missingCols: [] })
   const [err, setErr] = useState('')
@@ -96,6 +98,7 @@ export function RosterEditor({ onChange }: {
    */
   function commit(next: Row[]) {
     setRows(next)
+    if (next.length === 0) setFromFile(false)
     onChange(confirmOf(next))
   }
 
@@ -106,20 +109,27 @@ export function RosterEditor({ onChange }: {
     // 안내 배너는 **시도할 때마다** 지운다 — 앞 파일의 "주민등록번호는 저장하지 않았어요."가
     // 실패한 다음 업로드 위에 그대로 남으면 올리지도 못한 파일을 두고 한 말이 된다.
     setErr(''); setNotice({ rrnSeen: false, missingCols: [] })
+    // 실패하면 표는 그대로 둔다. 다만 남은 표를 방금 고른 파일의 것으로 읽지 않게 그 사실을 함께 말한다(2026-10-12 점검).
+    const fail = (msg: string) => setErr(rows.length === 0 ? msg
+      : `${msg}\n${fromFile ? '아래 표는 앞에 올린 파일 그대로예요.' : '아래 표는 그대로 두었어요.'}`)
     const name = file.name.toLowerCase()
     try {
       const grid = name.endsWith('.xlsx') ? await readXlsx(await file.arrayBuffer())
         : name.endsWith('.csv') ? cutText(decodeCsv(await file.arrayBuffer()))
           : null
-      if (!grid) { setErr(FILE_ERR); return }
+      if (!grid) { fail(FILE_ERR); return }
       const parsed = parseRosterGrid(grid)
-      if ('error' in parsed) { setErr(parsed.error); return }
+      if ('error' in parsed) { fail(parsed.error); return }
+      // 머리글만 있는 파일(배포 양식을 채우지 않고 올린 경우 등) — 종전에는 아무 말 없이 빈 표로 갈아 끼워 앞에
+      // 올린 명단까지 사라졌다(2026-10-12 점검). 알리고 표는 그대로 둔다.
+      if (parsed.rows.length === 0) { fail(`「${file.name}」에 학생이 없어요. 양식에 번호·이름을 채운 뒤 다시 올려 주세요.`); return }
       setNotice({ rrnSeen: parsed.rrnSeen, missingCols: parsed.missingCols })
       // 파일에 적힌 순서 그대로, 못 읽은 칸도 원문째 싣는다(lib/roster의 RosterCells 주석).
       // 교사는 엑셀을 옆에 띄워 놓고 대조하므로 줄 순서를 바꾸지 않는다.
+      setFromFile(true)
       commit(parsed.rows.map(c => newRow(c)))
     } catch {
-      setErr(FILE_ERR)
+      fail(FILE_ERR)
     }
   }
 
@@ -171,7 +181,7 @@ export function RosterEditor({ onChange }: {
         </button>
       </div>
 
-      {err && <p role="alert" className="mt-3 text-sm text-rec-deep">{err}</p>}
+      {err && <p role="alert" className="mt-3 whitespace-pre-line text-sm text-rec-deep">{err}</p>}
 
       {notice.rrnSeen && (
         <p className="mt-3 rounded-lg border border-mint/40 bg-mint/5 px-3 py-2 text-[12.5px] text-mint">
@@ -198,7 +208,10 @@ export function RosterEditor({ onChange }: {
             </button>
           </div>
 
-          <div className="mt-2 overflow-x-auto">
+          {/* relative — 머리글의 sr-only(position:absolute)가 이 상자를 기준으로 잡히게 한다. 없으면 기준이 문서가
+              되어 표 오른쪽 끝의 그 칸이 이 상자의 가로 스크롤 밖으로 새고, 375px에서 **페이지 전체**가 98px 옆으로
+              밀렸다(2026-10-12 점검). */}
+          <div className="relative mt-2 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-ink-mute">
