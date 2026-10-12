@@ -181,6 +181,7 @@ export function AdminDetailView() {
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
             scan={data.scan} version={data.version ?? null} loginHref={loginHref} onAuthChange={setAuthLost}
+            retest={data.retest ?? null}
             // 저장한 값으로 캐시를 고친다 — 다시 열었을 때 옛 캐시로 초기화돼 자동 저장이 채점을 덮지 않게(lib/sheet-cache).
             // 받은 시각(updatedAt)은 그대로 둔다 — 저장마다 「방금 받음」이 되면 캐시가 계속 새것으로 남아, 그사이 바뀐
             // 스캔본을 다시 받을 기회가 사라진다(5분 뒤 다시 열어도 옛 정보). 쓰기를 저장했으면 목록의 진행 표시도 바뀐다.

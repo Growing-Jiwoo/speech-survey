@@ -58,6 +58,8 @@ export interface SessionDetailData {
   /** 위 채점 행(marks·sentences·times·writing)의 판(lib/score-version) — 결과지가 저장할 때 함께 보내 그사이 다른 화면이
    *  저장했는지 대조한다(2026-10-12 점검 X8). 저장에 성공하면 캐시의 판도 새것으로 고친다. 판을 주기 전 서버면 없다 */
   version?: string | null
+  /** 재검사 회차 — 같은 학급·번호로 두 번 이상 검사한 아이만 `{ nth, of }`(목록의 「N/M회차」와 같은 셈), 아니면 null */
+  retest?: { nth: number; of: number } | null
 }
 
 /** 관리자 목록 세션. staleTime 동안 재방문/필터 변경 시 재요청 없이 캐시 사용.

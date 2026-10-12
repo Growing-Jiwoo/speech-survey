@@ -52,11 +52,15 @@ export function kstDateKey(d: Date): string {
  * 회차는 시작 시각(`started_at`) 오름차순이다 — 목록의 정렬·필터와 무관하게 고정돼야
  * 한다. 화면 정렬을 바꿨다고 "1회차"가 다른 세션을 가리키면 회차 표기 자체가 무의미해진다.
  * 시작 시각이 같으면 id로 갈라 순서를 결정론적으로 만든다.
+ *
+ * 결과지 상세·결과보고서 PDF 라우트도 같은 아이의 검사들(`db.childSessions`)로 이 함수를 불러 결과지 머리의
+ * 「N/M회차」와 파일명의 `_N차`를 만든다(2026-10-12 점검) — 목록과 같은 숫자여야 해서 셈을 하나로 둔다.
  */
+type RetestRow = Pick<SessionListRow, 'id' | 'class_code_id' | 'child_no' | 'started_at'>
 export function retestOrdinals(
-  sessions: SessionListRow[],
+  sessions: readonly RetestRow[],
 ): Map<string, { nth: number; of: number }> {
-  const groups = new Map<string, SessionListRow[]>()
+  const groups = new Map<string, RetestRow[]>()
   for (const s of sessions) {
     const key = `${s.class_code_id}\u0000${s.child_no}`
     const list = groups.get(key)

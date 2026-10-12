@@ -49,6 +49,8 @@ export function SentenceRows({
     <div>
       {items.map((item, i) => {
         const max = itemMaxWords(item)
+        const timeErrId = `${item.code}-time-err`
+        const timeInvalid = !locked.has(item.code) && parseReadSec(texts[item.code] ?? '', maxSec) === null
         return (
           <div key={item.code} className="border-t border-line/60 px-4 py-3 first:border-t-0">
             {/* 좁은 폭에서는 입력 칸 묶음(시간·어절 ≈ 260px)이 오른쪽 아래로 내려간다 — 한 줄에 두면
@@ -80,7 +82,7 @@ export function SentenceRows({
                 </div>
               ) : (
               <div className="ml-auto flex flex-none items-center gap-1.5 self-center">
-                <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec}
+                <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec} errorId={timeErrId}
                   text={texts[item.code] ?? ''} onText={t => setText(item.code, t)} />
                 <span className="mr-3 text-[13px] text-ink-mute">초</span>
                 {/* type="number"가 아니다 — 포인터를 칸 위에 둔 채 휠로 화면을 내리면 값이 조용히 바뀌어 1.5초 뒤 저장됐다
@@ -100,6 +102,13 @@ export function SentenceRows({
               </div>
               )}
             </div>
+            {/* 시간 칸이 잘못됐을 때의 이유 — 말풍선(title)만으로는 아이패드에서 빨간 테두리만 보였다(2026-10-12 점검).
+                행 아래 오른쪽(입력 묶음 밑)에 둔다 — 묶음 안에 넣으면 묶음 폭이 늘어 문장 칸이 밀린다(1024px 행 배치 유지) */}
+            {timeInvalid && (
+              <p id={timeErrId} className="mt-1 text-right text-[12px] font-bold text-rec-deep">
+                0.1초 단위로 {maxSec}초까지 적을 수 있어요
+              </p>
+            )}
           </div>
         )
       })}
@@ -124,19 +133,21 @@ function FixedCell({ label, value }: { label: string; value: number }) {
  * 그리는 순간 친 글자가 지워진다(0.5를 치려고 0을 누르면 칸이 빈다). 그래서 text + 소수 키패드로 두고,
  * 해석은 저장 라우트와 같은 규칙(lib/scoring `parseReadSec`)이 한다.
  *
- * 형식·범위를 벗어난 글자는 붉은 테두리로 드러나고, 그동안 그 문장의 시간은 「없음」으로 올라간다 —
- * 잘못 친 값으로 조용히 계산하지 않고 채점 완료를 막는다(다른 칸의 자동 저장은 막지 않는다).
+ * 형식·범위를 벗어난 글자는 붉은 테두리와 행 아래 한 줄(「0.1초 단위로 N초까지…」)로 드러나고, 그동안 그 문장의 시간은
+ * 「없음」으로 올라간다 — 잘못 친 값으로 조용히 계산하지 않고 채점 완료를 막는다(다른 칸의 자동 저장은 막지 않는다).
  */
-function SecondsInput({ label, text, max, onText }: {
+function SecondsInput({ label, text, max, errorId, onText }: {
   label: string
   text: string
   max: number
+  /** 잘못된 글자일 때 이유를 적은 줄(행 아래)의 id — 화면 낭독기가 칸과 함께 읽는다 */
+  errorId: string
   onText: (t: string) => void
 }) {
   const invalid = parseReadSec(text, max) === null
   return (
     <input type="text" inputMode="decimal" autoComplete="off" spellCheck={false}
-      aria-label={label} aria-invalid={invalid || undefined}
+      aria-label={label} aria-invalid={invalid || undefined} aria-describedby={invalid ? errorId : undefined}
       value={text}
       title={invalid ? `0.1초 단위로 ${max}초까지 적을 수 있어요` : undefined}
       onChange={e => onText(e.target.value)}

@@ -15,7 +15,7 @@
 | `Blip.tsx` | 마스코트/로고 SVG. 감정 연출(축하·응원) 변형은 만들지 않는다(스펙: 평가 비노출) |
 | `RecordButton.tsx` | 대형 녹음 버튼 + 남은 시간 진행 링(strokeDashoffset 카운트다운). 상태가 바뀌어 버튼이 바뀔 때(시작 ↔ 끝내기) 초점이 안에 있었으면 새 버튼으로 옮긴다 — 키보드로 녹음한 검사자가 멈추려면 Tab을 여러 번 눌러야 했다(2026-10-12) |
 | `LevelMeter.tsx` | 목소리 크기 막대 5개 — "기계가 듣고 있다"는 기능 피드백(칭찬 신호 아님) |
-| `AudioPlayer.tsx` | 채점용 wavesurfer 플레이어 — 파형 시크·배속(목록은 숫자만, 트리거에 「배속」)·키보드(Space/±5초)·IntersectionObserver 지연 생성 |
+| `AudioPlayer.tsx` | 채점용 wavesurfer 플레이어 — 파형 시크·배속(목록은 숫자만, 트리거에 「배속」)·키보드(Space/±5초 — 빠르게 연달아 눌러도 누른 만큼 이동한다: 이동 중에는 직전 목표에서 이어 세고 media에 바로 건다, 2026-10-12)·IntersectionObserver 지연 생성 |
 | `AudioBus.tsx` | 동시 재생 1개 보장 컨텍스트(새 재생 시작 시 직전 플레이어 정지) |
 | `LoadingOverlay.tsx` | 전역 로딩 dim — 지연 노출(150ms)·최소 노출(250ms)로 깜빡임 방지 |
 | `Spinner.tsx` | 인라인 스피너(currentColor 상속) |

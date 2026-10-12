@@ -3,13 +3,13 @@
 // 경로 이름 sheet.pdf는 종전(검사지 스탬핑)에서 그대로 두었다 — 화면·설명서·테스트가 이 경로를 본다.
 // 파일명에 아동 이름이 들어가므로 proxy의 관리자 인증 뒤에서만 접근된다.
 import { NextResponse } from 'next/server'
-import { sessionDetail } from '@/lib/db'
+import { childSessions, sessionDetail } from '@/lib/db'
 import { formForGrade } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { scoreInputFrom, withUnrecordedFixed } from '@/lib/scoring'
 import { renderReport } from '@/lib/pdf/report'
-import { kstDateKey } from '@/lib/adminStats'
-import { pad2 } from '@/lib/format'
+import { kstDateKey, retestOrdinals } from '@/lib/adminStats'
+import { sheetsFileName } from '@/lib/results'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -40,7 +40,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // 아동 번호를 두 자리로 앞세운다(사용자 확정 2026-08-15): 한 학급 30명을 한꺼번에 받으면
     // ① 동명이인 파일이 서로 덮어쓰이고 ② 이름 정렬이 출석 번호 순서와 어긋나 인쇄물을 손으로
     // 다시 줄 세워야 했다. `03_`처럼 0을 채워야 문자열 정렬이 번호 순서와 같아진다(2_ > 11_).
-    const name = `${pad2(session.child_no)}_${session.child_name}_${date}.pdf`
+    // 재검사한 아이는 회차를 붙인다(`03_이름_2차_날짜.pdf`) — 1차·2차가 같은 이름이라 받으면 덮어써졌다(2026-10-12 점검).
+    // 교사 결과지에서 한 장만 받을 때와 같은 규칙(lib/results sheetsFileName)이라 같은 검사는 어디서 받아도 이름이 같다.
+    // 회차는 목록의 「N/M회차」와 같은 셈이다. 못 읽으면 회차 없이 낸다 — 파일명 때문에 결과보고서를 막지 않는다.
+    const retest = await (async () =>
+      retestOrdinals(await childSessions(session.class_code_id, session.child_no)).get(session.id) ?? null)()
+      .catch((e: unknown) => { console.error('[admin/sessions/:id/sheet.pdf] 재검사 회차 조회 실패', e); return null })
+    const name = sheetsFileName({
+      grade: session.grade, classNo: session.class_no, date, all: false,
+      picked: [{ childNo: session.child_no, name: session.child_name,
+        attemptNo: retest?.nth ?? 1, attemptCount: retest?.of ?? 1, startedDate: date }],
+    })
     return new NextResponse(bytes as BodyInit, {
       headers: {
         'content-type': 'application/pdf',

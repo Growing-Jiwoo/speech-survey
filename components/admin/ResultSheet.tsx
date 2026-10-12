@@ -13,6 +13,7 @@ import {
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
+import { fetchFile, saveBlobAs } from '@/lib/download'
 import {
   MERGED_NOTICE, mergeCells, putScores, sameCells, saveScoresMerging,
   type SaveOutcome, type ScoreRows, type SheetScores,
@@ -59,7 +60,7 @@ const savedOf = (r: Extract<SaveOutcome, { ok: true }>): SheetSaved => ({
 export function ResultSheet({
   sessionId, session, form, writing, initialMarks, initialSentences, initialTimes, version: initialVersion,
   incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave, saveRef, scan, onScanUnlinked, onScanStale, onSaved,
-  loginHref, onAuthChange,
+  loginHref, onAuthChange, retest,
 }: {
   sessionId: string
   session: SessionRow
@@ -101,8 +102,10 @@ export function ResultSheet({
   onSaved?: (v: SheetSaved) => void
   /** 다시 로그인 주소(이 결과지로 돌아오는 next) — 저장이 401이면 저장 줄에 링크로 띄운다 */
   loginHref: string
-  /** 저장이 로그인 만료(401)로 실패했는지(true) · 다시 성공했는지(false) — 상위가 화면 위 [다시 로그인] 띠를 여닫는다 */
+  /** 저장·결과보고서 받기가 로그인 만료(401)로 실패했는지(true) · 다시 성공했는지(false) — 상위가 화면 위 [다시 로그인] 띠를 여닫는다 */
   onAuthChange?: (expired: boolean) => void
+  /** 재검사 회차(같은 학급·번호로 두 번 이상 검사한 아이만) — 상세 API의 `retest`. 목록의 「N/M회차」와 같은 셈이다 */
+  retest?: { nth: number; of: number } | null
 }) {
   const f = itemsFor(form)
   // 미녹음 문항은 잠근다 — 들을 녹음이 없어 채점자가 판단할 것이 없다(lib/scoring withUnrecordedFixed).
@@ -163,6 +166,9 @@ export function ResultSheet({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
+  // 결과보고서 PDF 받기 — 받는 동안 버튼을 잠그고, 실패하면 이유를 버튼 옆에 둔다(401이면 [다시 로그인])
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfErr, setPdfErr] = useState<{ text: string; login: boolean } | null>(null)
   // 자동 저장이 실패한 뒤에는 채점자가 무언가 고칠 때까지 다시 시도하지 않는다 —
   // dirty가 그대로라 조건이 계속 참이어서, 이 플래그가 없으면 실패하는 엔드포인트를
   // 1.5초마다 영원히 두드린다.
@@ -337,6 +343,23 @@ export function ResultSheet({
   // 결과보고서 PDF 관문 — 채점이 끝나기 전에 실수로 공식 문서를 내려받지 않게 한다.
   const pdfHref = `/api/admin/sessions/${sessionId}/sheet.pdf`
   const gate = sheetPdfGate(r, dirty)
+  /**
+   * 결과보고서 PDF를 fetch로 받아 파일로 저장한다(lib/download — 교사 결과지와 같은 방식). 전에는 `<a download>`와
+   * `window.location.href`라, 로그인이 끝났을 때 전자는 아무 안내 없이 실패하고 후자는 화면이 JSON 원문으로 바뀌었다
+   * (2026-10-12 점검 X6). 401이면 서버 문구(「로그인이 끝났어요. 새 탭에서…」)와 [다시 로그인]을, 그 밖은 서버 문구를 띄운다.
+   */
+  async function downloadPdf() {
+    setPdfBusy(true); setPdfErr(null)
+    const res = await fetchFile(pdfHref, 'result.pdf', '결과보고서를 받지 못했어요. 다시 시도해 주세요.')
+    setPdfBusy(false)
+    if (!res.ok) {
+      setPdfErr({ text: res.error, login: res.status === 401 })
+      if (res.status === 401) onAuthChangeRef.current?.(true)
+      return
+    }
+    saveBlobAs(res.blob, res.name)
+    onAuthChangeRef.current?.(false)
+  }
   const TASK_LABEL: Record<TaskKey, string> = {
     wordReading: SECTION_LABEL.word_reading,
     sentenceReading: SECTION_LABEL.sentence_reading,
@@ -400,6 +423,14 @@ export function ResultSheet({
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h1 className="text-[26px] font-bold leading-none tracking-tight">{session.child_name}</h1>
+              {/* 재검사 회차 — 같은 아이의 1차·2차 결과지가 머리까지 같아 어느 검사인지 알 수 없었다(2026-10-12 점검).
+                  목록 이름 옆 꼬리표와 같은 모양·같은 셈이다 */}
+              {retest && (
+                <span className="self-center rounded-full bg-well px-2 py-0.5 text-[12px] font-bold tabular-nums text-ink-mute"
+                  title={`같은 번호로 ${retest.of}번 검사한 아동의 ${retest.nth}번째 검사예요`}>
+                  {retest.nth}/{retest.of}회차
+                </span>
+              )}
               <span className="text-[14px] text-ink-soft">{session.gender} · {birthLabel(session.birth_ymd)}</span>
             </div>
             <p className="mt-2.5 text-[14px] text-ink-soft">
@@ -574,12 +605,18 @@ export function ResultSheet({
         </button>
         {/* 공식 출력은 담당자 양식의 결과보고서 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
             어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다.
-            채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). */}
-        <a href={pdfHref} download
-          onClick={e => { if (gate) { e.preventDefault(); setGateOpen(true) } }}
-          className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
-          결과보고서 PDF 다운로드
-        </a>
+            채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). 받기는 fetch다(downloadPdf). */}
+        <button type="button" disabled={pdfBusy}
+          onClick={() => { if (gate) setGateOpen(true); else void downloadPdf() }}
+          className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+          {pdfBusy ? '결과보고서 만드는 중…' : '결과보고서 PDF 다운로드'}
+        </button>
+        {pdfErr && (
+          <span role="alert" className="text-[13px] text-rec-deep">
+            {pdfErr.text}
+            {pdfErr.login && <>{' '}<a href={loginHref} target="_blank" rel="noopener" className="font-bold text-blue underline">다시 로그인</a></>}
+          </span>
+        )}
         {dirty && <span className="text-[13px] font-bold text-amber">저장하지 않은 채점이 있어요</span>}
         {/* 병합 안내는 눈에 띄게 — 이 화면의 칸이 다른 화면 값으로 바뀌었다는 뜻이다 */}
         {msg && (
@@ -606,9 +643,8 @@ export function ResultSheet({
             setGateOpen(false)
             if (gate.reason === 'dirty') { void save(); return }
             // 쓰기만 남았으면 경고를 확인한 뒤 내려받는다(화면 방식은 여기서 채울 수 없고, 스캔본 방식도 A안이라 받게 둔다).
-            // 페이지 이동이 아니라 PDF 다운로드다 — router.push로 바꾸면 파일이 아니라 라우트로 이동해 깨진다.
-            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-            if (gate.overridable) window.location.href = pdfHref
+            // 주소 이동(window.location)이 아니라 fetch다 — 이동이면 로그인이 끝났을 때 화면이 JSON 원문으로 바뀌었다(X6).
+            if (gate.overridable) void downloadPdf()
           }}
           onClose={() => setGateOpen(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">

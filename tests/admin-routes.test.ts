@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
   listSessions: vi.fn().mockResolvedValue([]),
+  childSessions: vi.fn().mockResolvedValue([]),
   sessionDetail: vi.fn(),
   signedAudioUrl: vi.fn(),
   signedScanUrl: vi.fn(),
@@ -32,7 +33,14 @@ beforeEach(() => {
     session: { id: SID } as never, recordings: [], writing: [], marks: [], sentences: [], times: [], scan: null,
   })
   vi.mocked(db.deleteSession).mockResolvedValue(undefined)
+  vi.mocked(db.childSessions).mockResolvedValue([])
 })
+
+/** 같은 학급(C1)·같은 번호(3번) 아이의 검사 두 번 — 1차는 다른 id, 2차가 SID */
+const TWICE = [
+  { id: 'first-session', class_code_id: 'C1', child_no: 3, started_at: '2026-10-01T01:00:00.000Z' },
+  { id: SID, class_code_id: 'C1', child_no: 3, started_at: '2026-10-12T01:00:00.000Z' },
+]
 
 describe('GET /api/admin/sessions', () => {
   it('성공 시 200 + { sessions } 형태', async () => {
@@ -114,6 +122,23 @@ describe('GET /api/admin/sessions/[id]', () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce({ session: { id: SID, grade: 1 } as never, recordings: [], scan: null, ...rows })
     const body = await (await DETAIL(req(), ctx(SID))).json()
     expect(body.version).toBe(scoresVersion(rows))
+  })
+  it('재검사 회차를 싣는다 — 같은 학급·번호로 두 번 검사했으면 { nth, of }, 한 번이면 null(목록의 N/M회차와 같은 셈)', async () => {
+    const session = { id: SID, grade: 1, class_code_id: 'C1', child_no: 3 } as never
+    vi.mocked(db.sessionDetail).mockResolvedValue({ session, recordings: [], writing: [], marks: [], sentences: [], times: [], scan: null })
+    vi.mocked(db.childSessions).mockResolvedValueOnce(TWICE)
+    expect((await (await DETAIL(req(), ctx(SID))).json()).retest).toEqual({ nth: 2, of: 2 })
+    expect(db.childSessions).toHaveBeenCalledWith('C1', 3)
+    vi.mocked(db.childSessions).mockResolvedValueOnce([TWICE[1]])
+    expect((await (await DETAIL(req(), ctx(SID))).json()).retest).toBeNull()
+  })
+  it('재검사 회차를 못 읽어도 결과지는 열린다(회차만 null)', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(db.childSessions).mockRejectedValueOnce(new Error('boom'))
+    const res = await DETAIL(req(), ctx(SID))
+    expect(res.status).toBe(200)
+    expect((await res.json()).retest).toBeNull()
+    err.mockRestore()
   })
   it('스캔본이 없으면 scan은 null이고 서명 URL을 만들지 않는다', async () => {
     const body = await (await DETAIL(req(), ctx(SID))).json()
@@ -216,6 +241,22 @@ describe('GET /api/admin/sessions/[id]/sheet.pdf', () => {
     })
     const cd11 = (await SHEET(req(), ctx(SID))).headers.get('content-disposition') ?? ''
     expect(decodeURIComponent(cd11)).toContain('11_홍길동_2026-08-07.pdf')
+  })
+  it('[REGRESSION] 재검사한 아이는 파일명에 회차를 붙인다(03_이름_2차_날짜) — 1차·2차가 같은 이름이라 덮어써졌다', async () => {
+    const d = detail('2026-10-12T01:00:00.000Z')
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce({ ...d, session: { ...(d.session as object), class_code_id: 'C1' } as never })
+    vi.mocked(db.childSessions).mockResolvedValueOnce(TWICE)
+    const cd = (await SHEET(req(), ctx(SID))).headers.get('content-disposition') ?? ''
+    expect(decodeURIComponent(cd)).toContain('03_홍길동_2차_2026-10-12.pdf')
+  })
+  it('회차를 못 읽으면 회차 없이 낸다 — 파일명 때문에 결과보고서를 막지 않는다', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-07T06:25:08.000Z'))
+    vi.mocked(db.childSessions).mockRejectedValueOnce(new Error('boom'))
+    const res = await SHEET(req(), ctx(SID))
+    expect(res.status).toBe(200)
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('03_홍길동_2026-08-07.pdf')
+    err.mockRestore()
   })
   it('파일명 날짜는 KST 기준 — UTC로 계산하면 아침 검사가 하루 전으로 찍힌다', async () => {
     vi.mocked(db.sessionDetail).mockResolvedValueOnce(detail('2026-08-06T23:00:00.000Z'))

@@ -97,11 +97,29 @@ export function AudioPlayer({ src, durationSec, onError }: {
   }, [])
 
   // 3) 플레이어 포커스 시 키보드: Space 재생/정지, ←/→ 5초 이동.
+  //
+  // ←/→를 빠르게 두 번 누르면 한 번만 적용됐다(2026-10-12 점검). wavesurfer의 skip은 「지금 위치 + 5초」를 setTime에 넘기는데,
+  // 앞 이동이 끝나기 전(seeking)에는 media가 준비 상태를 낮춰 setTime이 이동을 대기시키고, 이어 도착한 앞 이동의 seeking
+  // 이벤트가 그 대기 값을 「밖에서 옮겼다」로 보고 지웠다. 그래서 이동 중에는 직전 목표에서 이어 세고, 메타데이터가 있으면
+  // media에 바로 건다(이동 중에 다시 걸면 브라우저가 앞 이동을 버리고 새 목표로 간다). 진행 표시는 media의 timeupdate가 맞춘다.
+  const skipTargetRef = useRef<number | null>(null)
+  const skip = useCallback((d: number) => {
+    const ws = wsRef.current
+    if (!ws) return
+    const media = ws.getMediaElement()
+    if (!media) { ws.skip(d); return }
+    const from = media.seeking && skipTargetRef.current !== null ? skipTargetRef.current : ws.getCurrentTime()
+    const dur = ws.getDuration()
+    const to = Math.max(0, Number.isFinite(dur) && dur > 0 ? Math.min(from + d, dur) : from + d)
+    skipTargetRef.current = to
+    if (media.readyState >= HTMLMediaElement.HAVE_METADATA) media.currentTime = to
+    else ws.setTime(to)
+  }, [])
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); void wsRef.current?.playPause() }
-    else if (e.key === 'ArrowLeft') { e.preventDefault(); wsRef.current?.skip(-5) }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); wsRef.current?.skip(5) }
-  }, [])
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); skip(-5) }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); skip(5) }
+  }, [skip])
 
   return (
     <div ref={rootRef} role="group" tabIndex={0} onKeyDown={onKeyDown} aria-label="녹음 재생기"

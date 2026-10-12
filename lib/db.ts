@@ -869,6 +869,19 @@ export async function listSessions(): Promise<SessionListRow[]> {
   return rows.map(r => ({ ...r, progress: sessionProgress(r) }))
 }
 
+/**
+ * 같은 학급·같은 번호의 검사 전부(id·시작 시각만) — 재검사 회차(lib/adminStats retestOrdinals)를 결과지 머리와 결과보고서 PDF
+ * 파일명에 붙이는 데 쓴다. 목록과 같은 묶음(학급 코드 + 번호)이라 목록의 「2/2회차」와 같은 숫자가 나온다.
+ */
+export async function childSessions(
+  classCodeId: string, childNo: number,
+): Promise<Pick<SessionRow, 'id' | 'class_code_id' | 'child_no' | 'started_at'>[]> {
+  const { data, error } = await sb().from('sessions').select('id, class_code_id, child_no, started_at')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo)
+  fail(error)
+  return (data ?? []) as Pick<SessionRow, 'id' | 'class_code_id' | 'child_no' | 'started_at'>[]
+}
+
 export interface MarkRow { item_code: string; correct: boolean }
 
 export interface SentenceScoreRow { item_code: string; words: number }
