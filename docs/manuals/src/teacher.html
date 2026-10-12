@@ -103,9 +103,9 @@
     <li><b>이메일을 두 번 넣습니다</b>
       <span>학급 코드와 결과지 링크가 이 주소로 옵니다.</span></li>
     <li><b>학급 명단을 올립니다</b>
-      <span>나이스 명렬표를 그대로 올리거나, <span class="key">명단 양식 내려받기 (.xlsx)</span>로 받은 파일을 채워 올립니다. 붉은 칸은 고쳐 주세요.</span></li>
+      <span>나이스 명렬표를 그대로 올리거나, <span class="key">명단 양식 내려받기 (.xlsx)</span>로 받은 파일을 채워 올립니다. 붉은 칸은 고쳐 주세요. 양식을 채우지 않고 올리면 「…에 학생이 없어요」가 뜹니다.</span></li>
     <li><b>동의 항목에 체크하고 <span class="key">신청하기</span></b>
-      <span>담당자가 승인하면 학급 코드가 메일로 옵니다. 며칠 걸릴 수 있고, 메일이 없으면 스팸함도 봐 주세요.</span></li>
+      <span>Enter 키로는 접수되지 않으니 버튼을 눌러 주세요. 담당자가 승인하면 학급 코드가 메일로 옵니다. 며칠 걸릴 수 있고, 메일이 없으면 스팸함도 봐 주세요.</span></li>
   </ol>
 
   <div class="box warn">
@@ -179,7 +179,7 @@
 
   <ul class="small">
     <li>같은 컴퓨터에서 10분 안에 통과했다면 <span class="key">방금 확인했어요 — 건너뛰기</span>로 넘어갈 수 있습니다.</li>
-    <li>「마이크를 쓸 수 없어요」가 나오면 화면 안내대로 마이크 권한을 허용하세요.</li>
+    <li>「마이크를 쓸 수 없어요」가 나오면 화면 안내대로 마이크 권한을 허용하세요. 고칠 수 없으면 <span class="key">처음 화면으로</span>를 누릅니다. 지금까지 한 것은 남아 있어, 마이크를 고친 뒤 <span class="key">이어서 하기</span>로 계속할 수 있습니다.</li>
   </ul>
 </section>
 
@@ -215,7 +215,7 @@
     <div class="col">
       <div class="callouts" style="grid-template-columns:1fr; gap:2.6mm 0; margin-top:0">
         <div class="c"><span class="num">1</span><span><b>진행률.</b> 지금 몇 번째 화면인지 보여 줍니다.</span></div>
-        <div class="c"><span class="num">2</span><span><b>자동 저장됨.</b> 녹음은 끝나는 즉시 저장됩니다. 「저장 중…」일 때는 창을 닫지 마세요.</span></div>
+        <div class="c"><span class="num">2</span><span><b>자동 저장됨.</b> 녹음은 끝나는 즉시 저장됩니다. 「저장 중…」일 때는 창을 닫지 마세요. 저장에 실패하면 「저장 실패 N개」로 바뀝니다.</span></div>
         <div class="c"><span class="num">3</span><span><b>녹음 버튼.</b> 누르면 시작, 다시 누르면 끝입니다.</span></div>
         <div class="c"><span class="num">4</span><span><b>모르겠어요.</b> 녹음하지 않았을 때 보입니다. 누르면 녹음 없이 넘어갑니다.</span></div>
         <div class="c"><span class="num">5</span><span><b>일시정지.</b> 잠시 쉴 때 누릅니다.</span></div>
@@ -238,8 +238,10 @@
   </div>
 
   <div class="box danger">
-    <span class="bt">「저장에 실패했어요」 띠가 뜨면</span>
-    <p><span class="key">다시 저장</span>을 누릅니다. 계속 실패하면 그 화면을 다시 녹음하세요.</p>
+    <span class="bt">「…저장에 실패했어요」 띠가 뜨면</span>
+    <p>읽기판 위 띠의 <span class="key">다시 저장</span>을 누릅니다. 계속 실패하면 그 화면을 다시 녹음하세요.
+      저장하지 못한 녹음이 남은 채 새로고침하거나 창을 닫으려 하면 브라우저가 경고합니다. 그래도 녹음을 잃으면
+      「…녹음이 저장되지 않았어요. 그 화면에서 다시 녹음해 주세요」가 뜹니다. 그 화면으로 가서 다시 녹음하세요(그냥 넘어가면 검토 화면에 「미녹음」으로 남습니다).</p>
   </div>
 </section>
 
@@ -257,8 +259,9 @@
   </div>
 
   <ul style="margin-top:5mm">
-    <li>이어서 하려면 <b>같은 컴퓨터, 같은 브라우저</b>로 <b>24시간 안</b>에 들어와야 합니다.</li>
+    <li>이어서 하려면 <b>같은 컴퓨터, 같은 브라우저</b>에서 <b>같은 주소(<code>lidislab.com</code>)</b>로 <b>24시간 안</b>에 들어와야 합니다. 주소가 다르면(예전에 쓰던 주소 등) <span class="key">이어서 하기</span>가 뜨지 않습니다.</li>
     <li>그 사이 같은 컴퓨터에서 다른 아이의 검사를 시작하면 이어서 할 수 없습니다.</li>
+    <li><b>한 아이는 한 탭에서만</b> 검사합니다. 다른 탭에서 같은 아이나 다른 학생의 검사를 열면 먼저 연 탭이 「이 학생의 검사를 다른 탭에서 열었어요」나 「다른 탭에서 다른 학생의 검사가 시작됐어요」로 막힙니다. 막힌 탭은 닫고 새로 연 탭에서 이어 하세요.</li>
     <li>되도록 그 자리에서 제출까지 마치세요. 제출하지 않은 검사는 채점되지 않습니다.</li>
   </ul>
 
@@ -289,8 +292,8 @@
   </div>
 
   <ul class="small" style="margin-top:4mm">
-    <li><span class="key">모두 예</span>로 채운 뒤 틀린 것만 바꾸면 빠릅니다.</li>
-    <li>2학년은 문장마다 맞게 쓴 어절 수(0·1·2)를 고릅니다.</li>
+    <li>처음에 <span class="key">모두 예</span>로 채운 뒤 틀린 것만 바꾸면 빠릅니다. 하나라도 고르면 <span class="key">남은 칸 예</span>로 바뀌어 빈칸만 채웁니다.</li>
+    <li>모두 골라야 <span class="key">다음</span>이 켜집니다. 2학년은 문장마다 맞게 쓴 어절 수(0·1·2)를 고릅니다.</li>
   </ul>
 
   <div class="box warn">
@@ -327,7 +330,8 @@
     <tr><td><span class="bg blue">녹음 완료</span></td><td>그대로 두면 됩니다.</td></tr>
     <tr><td><span class="bg amber">모르겠어요</span></td><td>그대로 두면 0점입니다. 아이가 읽을 수 있으면 돌아가 녹음하세요.</td></tr>
     <tr><td><span class="bg red">미녹음</span></td><td>녹음이 없습니다. 돌아가 다시 녹음하세요.</td></tr>
-    <tr><td><span class="bg mute">스캔 예정</span></td><td>쓰기를 스캔본으로 하는 아이입니다. 비어 있어도 됩니다.</td></tr>
+    <tr><td><span class="bg red">저장 실패</span></td><td>녹음을 저장하지 못했습니다. 번호를 눌러 그 화면의 <span class="key">다시 저장</span>을 누르세요.</td></tr>
+    <tr><td><span class="bg blue">스캔 예정</span></td><td>쓰기를 스캔본으로 하는 아이입니다. 비어 있어도 됩니다.</td></tr>
   </table>
     </div>
   </div>
@@ -343,6 +347,9 @@
     <span class="bt">제출하면 고칠 수 없습니다</span>
     <p>빠진 녹음은 제출 전에 채워 주세요. 이미 제출했다면 같은 아이를 다시 검사하고 담당자에게 알려 주세요.</p>
   </div>
+
+  <p class="small"><span class="key">제출</span>을 눌렀는데 「이미 제출된 검사예요」가 나오면 제출은 이미 끝난 것입니다. 「이 검사는 더 이어갈 수 없어요」가 나오면
+    시작한 지 오래됐거나 기록이 정리된 검사이니, <span class="key">처음 화면으로</span>를 누르고 그 아이를 처음부터 다시 검사하세요.</p>
 </section>
 
 
@@ -351,28 +358,39 @@
   <h2 class="sec"><span class="chip">9</span>결과지 받기</h2>
   <p class="sec-lead">채점이 끝난 아이의 결과보고서 PDF를 선생님이 직접 받습니다.</p>
 
-  <ol class="steps">
-    <li><b>검사 주소에서 학급 코드를 넣고 <span class="key">확인</span></b></li>
-    <li><b><span class="key">결과지 받기 →</span>를 누릅니다</b>
-      <span>학급 이름이 있는 띠 안에 있습니다.</span></li>
-    <li><b>메일로 온 링크를 엽니다</b>
-      <span>신청할 때 적은 주소로 옵니다. 메일이 없으면 스팸함을 봐 주세요. 링크는 14일 동안 쓸 수 있습니다.</span></li>
-    <li><b>받을 아이를 고르고 내려받습니다</b>
-      <span><span class="key">전체 PDF 다운로드</span>는 받을 수 있는 아이 전부, <span class="key">선택한 검사 다운로드</span>는 체크한 아이만입니다. 「쓰기 채점 전」 아이가 섞여 있을 때 그대로 받으면 그 아이들은 쓰기 칸이 비어 나옵니다. 채점이 끝난 것만 받으려면 <span class="key">완성된 N장만</span>을 고르세요. 받은 PDF는 공용 컴퓨터에 남기지 마세요.</span></li>
-  </ol>
+  <div class="figcol">
+    <div class="col">
+      <ol class="steps" style="margin-top:0">
+        <li><b>검사 주소에서 학급 코드를 넣고 <span class="key">확인</span></b></li>
+        <li><b><span class="key">결과지 받기 →</span>를 누릅니다</b>
+          <span>학급 이름이 있는 띠 안에 있습니다.</span></li>
+        <li><b>메일로 온 링크를 엽니다</b>
+          <span>신청할 때 적은 주소로 옵니다. 메일이 없으면 스팸함을 봐 주세요. 링크는 14일 동안 쓸 수 있습니다.</span></li>
+        <li><b>받을 아이를 고르고 내려받습니다</b>
+          <span><span class="key">전체 PDF 다운로드</span>는 받을 수 있는 아이 전부, <span class="key">선택한 검사 다운로드</span>는 체크한 아이만입니다. 「쓰기 채점 전」 아이가 섞여 있을 때 그대로 받으면 그 아이들은 쓰기 칸이 비어 나옵니다. 채점이 끝난 것만 받으려면 <span class="key">완성된 N장만</span>을 고르세요. 받은 PDF는 공용 컴퓨터에 남기지 마세요.</span></li>
+      </ol>
+    </div>
+    <div class="col"><img class="shot" src="shots/t-26-results-page.png" alt="결과지 화면"></div>
+  </div>
 
-  <figure style="max-width:94mm;margin-left:auto;margin-right:auto"><img class="shot" src="shots/t-26-results-page.png" alt="결과지 화면"></figure>
+  <p>아이마다 <b>대표 검사</b>(가장 최근에 제출한 검사) 한 줄이 나옵니다. 재검사한 아이는 오른쪽 끝 <span class="key">▸ 재검사 N회</span>를 눌러
+    차수별로 고를 수 있습니다. 휴대폰처럼 좁은 화면에서는 이 버튼이 이름 아래에 있습니다.</p>
 
-  <table>
-    <tr><th style="width:40mm">표시</th><th>뜻</th></tr>
+  <table class="tight">
+    <tr><th style="width:34mm">표시</th><th>뜻</th></tr>
     <tr><td><span class="bg blue">채점 완료</span></td><td>받을 수 있습니다.</td></tr>
-    <tr><td><span class="bg mute">채점 중</span></td><td>담당자가 채점하고 있습니다. 나중에 새로고침하세요.</td></tr>
+    <tr><td><span class="bg amber">채점 중</span></td><td>담당자가 채점하고 있습니다. 나중에 새로고침하세요.</td></tr>
     <tr><td><span class="bg amber">스캔 대기</span></td><td>쓰기 스캔본을 올려야 합니다(10장 참고).</td></tr>
+    <tr><td><span class="bg mute">재검사로 대체</span></td><td>더 최근에 제출한 재검사가 있어 이 검사에는 스캔본을 올리지 않습니다. 기록지는 최근 검사로 올라갑니다.</td></tr>
     <tr><td><span class="bg red">미제출</span></td><td>제출하지 않은 검사입니다. 다시 검사해야 할 수 있습니다.</td></tr>
+    <tr><td><span class="bg mute">미실시</span></td><td>명단에는 있지만 아직 검사하지 않은 아이입니다.</td></tr>
+    <tr><td><span class="bg red">N차 미제출</span></td><td>상태 아래에 붙습니다. 재검사를 시작했다가 제출하지 않았고, 줄에는 그 전에 제출한 검사가 보입니다.</td></tr>
     <tr><td><span class="bg mute">채점 전</span></td><td>그 과제를 아직 채점하지 않았습니다. 0점이 아닙니다.</td></tr>
     <tr><td><span class="bg mint">Pass</span> <span class="bg red">Fail</span></td><td>판정입니다.</td></tr>
+    <tr><td><b style="color:var(--red)">0.65</b></td><td>붉은 점수는 그 과제의 기준에 못 미친 점수입니다. 판정은 세 과제를 함께 본 결과라 한 과제가 붉어도 Pass일 수 있습니다.</td></tr>
   </table>
 
+  <p class="small">선택한 검사를 받을 때 확인 창과 파일 이름의 「N명」은 아이 수입니다. 한 아이의 1·2차를 함께 고르는 것처럼 장 수가 더 많으면 「N장」이 따로 붙습니다.</p>
 </section>
 
 
@@ -439,11 +457,15 @@
     </div>
     <div class="item">
       <p class="q">창이 닫혔어요</p>
-      <p class="a">같은 컴퓨터로 다시 들어오면 <span class="key">이어서 하기</span>가 뜹니다(6장 참고).</p>
+      <p class="a">같은 컴퓨터·같은 브라우저로 <code>lidislab.com</code>에 다시 들어오면 <span class="key">이어서 하기</span>가 뜹니다(6장 참고).</p>
     </div>
     <div class="item">
       <p class="q">「이어서 할 수 없어요」가 나와요</p>
-      <p class="a"><span class="key">처음 화면으로</span>를 누르고 그 아이를 처음부터 다시 검사하세요.</p>
+      <p class="a"><span class="key">처음 화면으로</span>를 누르고 그 아이를 처음부터 다시 검사하세요. 제출할 때 나오는 「이 검사는 더 이어갈 수 없어요」도 같습니다.</p>
+    </div>
+    <div class="item">
+      <p class="q">「이 브라우저는 검사 진행 상태를 저장할 수 없어…」가 나와요</p>
+      <p class="a">이 안내가 보이면 검사가 시작되지 않습니다. 브라우저 설정에서 이 사이트의 쿠키·사이트 데이터 저장을 허용한 뒤 새로고침하세요. 허용할 수 없는 컴퓨터라면 다른 컴퓨터에서 검사하세요.</p>
     </div>
     <div class="item">
       <p class="q">쓰기를 잘못 누르고 제출했어요</p>
