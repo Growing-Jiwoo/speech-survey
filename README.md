@@ -167,8 +167,8 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
 - **이메일 안전망 3중**: 관리자 직접 발급도 이메일 필수 · `/apply` 이메일 확인칸 ·
   `/admin/codes` 목록에서 이메일 수정.
 - 문의처는 「담당자에게 문의」까지만 쓴다(사용자 확정) — 연락처 값을 앱에 두지 않는다.
-- 전제: Resend 도메인 인증 + 프로덕션 `MAIL_TO_OVERRIDE` 해제(10월 전). 그 전엔 샌드박스라
-  결과지 메일이 교사에게 닿지 않는다.
+- 전제: Resend 도메인 인증 + 프로덕션 `MAIL_TO_OVERRIDE` 해제 — **2026-10-12 완료**(`lidislab.com`).
+  그 전엔 샌드박스라 결과지 메일이 교사에게 닿지 않았다.
 
 이 절의 결정은 전부 **사용자 확정(2026-09-22)** 이다(담당자 회신이 아니다). 스펙:
 `docs/superpowers/specs/2026-09-22-teacher-results-download-design.md`.
@@ -250,9 +250,10 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
        전용(아래 배포 절 참고).
    - `SESSION_SECRET`: `openssl rand -hex 32`
    - `RESEND_API_KEY`·`MAIL_FROM`·`MAIL_TO_OVERRIDE`: 메일 발송용(선택 — 신청·승인 메일을 쓸 때만).
-     [resend.com](https://resend.com) 가입 후 API Keys에서 발급한다. **도메인을 인증하기 전에는
-     `onboarding@resend.dev`에서 가입 이메일로만 발송된다** — 그래서 `MAIL_TO_OVERRIDE`에 그 주소를 넣어
-     모든 수신자를 본인에게 돌려 두고 개발한다. 도메인이 생기면 `MAIL_FROM`을 바꾸고 이 줄을 비운다.
+     운영 Resend 계정의 키를 받으면 `MAIL_FROM`은 `읽기검사 <noreply@lidislab.com>`(인증된 도메인)으로 두고,
+     **`MAIL_TO_OVERRIDE`에 본인 주소를 넣어** 모든 수신자를 본인에게 돌려 둔다(로컬에서 실제 교사에게 나가는 것을 막는다).
+     새 Resend 계정을 직접 만들었다면 도메인이 없으므로 `onboarding@resend.dev`에서 **가입 이메일로만** 발송된다 —
+     이때는 `MAIL_TO_OVERRIDE`에 그 가입 주소를 넣는다.
    - `ADMIN_NOTIFY_EMAIL`: 교사가 `/apply`로 신청할 때 알림을 받을 관리자 메일 주소(선택 — 비워두면
      알림 메일을 시도하지 않을 뿐, 신청 접수 자체는 그대로 성공한다).
 4. `npm run build:schools` — 전국 초등학교 원본 JSON을 지역별 경량 JSON(`public/schools/`)으로 생성.
@@ -358,18 +359,17 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
      파싱을 거치지 않으므로 `$`를 이스케이프하면 안 된다(로컬 `.env.local`용 `\$` 이스케이프 버전과 다름 — 위 셋업 절 참고).
    - `RESEND_API_KEY`·`MAIL_FROM` — 메일을 쓸 경우. `MAIL_TO_OVERRIDE`는 **운영에서 반드시 비운다**
      (설정돼 있으면 교사에게 갈 메일이 전부 그 주소로 간다).
-   - `APP_URL` — 메일에 넣는 절대 URL(예: `https://survey.example.kr`). 비워두면 요청의 Host
+   - `APP_URL` — 메일에 넣는 절대 URL(운영: `https://lidislab.com`). 비워두면 요청의 Host
      헤더로 origin을 만드는데, `POST /api/apply`(공개 신청 접수)는 그 URL을 관리자 알림 메일
      링크에 그대로 싣는다 — 위조된 Host가 그 메일에 실릴 수 있으므로 **운영에서는 반드시 설정**한다.
    - `ADMIN_NOTIFY_EMAIL` — 교사가 `/apply`로 신청할 때 알림을 받을 관리자 주소. 비워두면 신청
      접수는 그대로 성공하되 알림 메일만 시도하지 않는다.
    - (모든 변수가 서버 전용 — `NEXT_PUBLIC_` 접두사 붙이지 말 것. 붙이면 클라이언트에 노출된다.)
-   - ⚠️ **도메인 인증 전에는 설정이 다르다.** 샌드박스(`onboarding@resend.dev`)는 Resend 가입
-     주소로만 발송되므로 교사 승인 메일이 403으로 실패한다. 그동안은 `MAIL_TO_OVERRIDE`에
-     관리자 주소를 넣어 메일을 관리자에게 돌려 확인하고, 교사에게는 `/admin/codes`의
-     [안내 문구 복사]로 직접 전달한다. **도메인을 산 뒤 그 변수를 반드시 삭제할 것** —
-     남아 있으면 교사 메일이 전부 관리자에게 가고 교사는 코드를 받지 못한다.
-     전환 절차: [docs/superpowers/plans/2026-08-19-domain-switch-checklist.md](docs/superpowers/plans/2026-08-19-domain-switch-checklist.md)
+   - ⚠️ **Production과 Preview의 메일 설정을 나눈다**(정식 도메인 `lidislab.com`, 2026-10-12 전환).
+     Production은 `MAIL_TO_OVERRIDE`를 **두지 않고** `ADMIN_NOTIFY_EMAIL`에 담당자 주소를 넣는다. Preview는
+     `MAIL_TO_OVERRIDE`·`ADMIN_NOTIFY_EMAIL` 둘 다 개발자 주소로 두어 시험 배포의 메일이 전부 개발자에게 가게 한다.
+     Production에 `MAIL_TO_OVERRIDE`가 남으면 교사 메일이 전부 그 주소로 가고 교사는 코드를 받지 못한다.
+     도메인 연결·Resend 인증·환경변수 표·확인 순서: [docs/superpowers/plans/2026-08-19-domain-switch-checklist.md](docs/superpowers/plans/2026-08-19-domain-switch-checklist.md)
 4. **Deploy** → 자동 HTTPS 발급. 마이크 녹음은 HTTPS에서만 동작하므로 배포 후 정상 작동한다.
 5. 배포 도메인을 확인하고 `/`(아동)·`/admin`(관리자) 흐름을 실기기로 점검한다.
 
