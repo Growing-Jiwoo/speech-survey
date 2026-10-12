@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>읽기 선별검사 담당자 확인 사항</title>
+<link rel="stylesheet" href="../manuals/src/style.css">
+<style>
+  body{ font-size:10.4pt; line-height:1.7; }
+
+  /* 머리 */
+  .kicker{ font-size:9.6pt; font-weight:800; color:var(--blue); margin:0 0 1.6mm; }
+  h1{ font-size:22pt; font-weight:800; line-height:1.3; letter-spacing:-.02em; margin:0 0 3mm; }
+  .lead{ color:var(--soft); margin:0 0 7mm; }
+
+  /* 한눈에 보기 */
+  .summary{ border:1px solid var(--line); border-radius:3mm; overflow:hidden; margin:0 0 9mm; }
+  .summary .sh{ background:var(--ink); color:#fff; font-weight:800; font-size:9.6pt; padding:2.4mm 5mm; }
+  .summary ol{ list-style:none; margin:0; padding:0; }
+  .summary li{ display:grid; grid-template-columns:5mm 7mm 1fr auto; align-items:center; gap:2.4mm;
+    padding:2.6mm 5mm; border-top:1px solid var(--line); }
+  .summary li:first-child{ border-top:0; }
+  .summary .t{ font-weight:700; }
+
+  .box-ck{ width:4.4mm; height:4.4mm; border:1.6px solid var(--ink); border-radius:1mm; display:inline-block; }
+  .num{ display:inline-flex; align-items:center; justify-content:center; width:6.4mm; height:6.4mm; line-height:1;
+    font-family:-apple-system,'Helvetica Neue',sans-serif; font-variant-numeric:tabular-nums;
+    border-radius:50%; background:var(--blue); color:#fff; font-weight:800; font-size:9.4pt; }
+  .tag{ font-size:8.6pt; font-weight:800; border-radius:99px; padding:.5mm 2.8mm; white-space:nowrap; }
+  .tag.send{ background:var(--blue-well); color:var(--blue); }
+  .tag.check{ background:var(--amber-well); color:var(--amber); }
+
+  /* 항목 카드 */
+  .card{ border:1.4px solid var(--line); border-radius:3.4mm; margin:0 0 7mm; break-inside:avoid; }
+  .card.split{ break-inside:auto; -webkit-box-decoration-break:clone; box-decoration-break:clone; }
+  .card.newpage{ break-before:page; }
+  .card-h{ display:flex; align-items:center; gap:3mm; padding:3.6mm 5mm; border-bottom:1.4px solid var(--line);
+    background:var(--well); border-radius:3.4mm 3.4mm 0 0; break-after:avoid; }
+  .card-h .num{ width:8mm; height:8mm; font-size:11pt; }
+  .card-h h2{ font-size:13.4pt; font-weight:800; margin:0; flex:1; letter-spacing:-.01em; }
+  .card-b{ padding:4.4mm 5mm 5mm; }
+
+  .blk{ border-radius:2.4mm; padding:3.2mm 4.2mm; }
+  .blk + .blk{ margin-top:3.2mm; }
+  .blk .lb{ display:block; font-size:9pt; font-weight:800; margin-bottom:1.2mm; letter-spacing:.02em; }
+  .now{ background:var(--well); border:1px solid var(--line); }
+  .now .lb{ color:var(--mute); }
+  .need{ background:var(--blue-well); border:1px solid #2F6BFF44; }
+  .need .lb{ color:var(--blue); }
+  .need p{ font-weight:700; margin:0; }
+  .need ul{ list-style:none; margin:2mm 0 0; padding:0; }
+  .need li{ display:flex; gap:2.4mm; align-items:flex-start; font-weight:700; margin-top:1.4mm; }
+  .need li .box-ck{ width:3.8mm; height:3.8mm; margin-top:1.1mm; flex:none; background:#fff; border-color:var(--blue); }
+  .need .note{ font-weight:400; color:var(--soft); margin-top:2mm; font-size:9.8pt; }
+
+  table{ margin:2.4mm 0 0; font-size:9.4pt; }
+  table th{ white-space:nowrap; }
+
+  .now .after{ margin:2.4mm 0 0; }
+  table.rules{ border-collapse:separate; border-spacing:0; border:1px solid var(--line); border-radius:2.4mm; overflow:hidden; }
+  table.rules th{ background:var(--ink); color:#fff; font-weight:800; font-size:9pt; padding:2.2mm 3mm; border:0; text-align:left; }
+  table.rules td{ background:#fff; padding:2.4mm 3mm; border-top:1px solid var(--line); vertical-align:top; }
+  table.rules td + td, table.rules th + th{ border-left:1px solid var(--line); }
+  table.rules th + th{ border-left-color:#ffffff33; }
+  table.rules td:first-child{ font-weight:700; background:var(--well); }
+  table.rules td:last-child{ font-weight:700; color:var(--blue); background:var(--blue-well); }
+  table.rules.temp td:last-child{ color:var(--amber); background:var(--amber-well); }
+  table.narrow{ width:90mm; margin-bottom:3mm; }
+  .sub{ font-weight:800; margin:5mm 0 1.4mm; padding-left:2.6mm; border-left:3px solid var(--ink); line-height:1.3; }
+
+  /* 그림 */
+  figure{ margin:5mm 0 0; break-inside:avoid; }
+  figcaption{ margin:0 0 2.2mm; }
+  figcaption b{ display:block; font-size:10.4pt; font-weight:800; color:var(--ink); }
+  figcaption span{ color:var(--mute); font-size:9.2pt; }
+  figure img{ display:block; border:1px solid var(--line); border-radius:2.4mm; }
+  .w-wide{ width:140mm; }
+  .figgrid{ display:grid; grid-template-columns:100mm 1fr; gap:8mm; align-items:start; break-inside:avoid; margin-top:6mm; }
+  .figgrid figure{ margin-top:0; }
+  .figgrid figure + figure{ margin-top:5mm; }
+  .figgrid img{ width:100%; }
+  .figgrid img.mic{ width:48mm; }
+  .w-mail{ width:138mm; }
+  figure.newpg{ break-before:page; margin-top:0; }
+  .hl{ background:#FFE58A; border-radius:2px; padding:0 1mm; }
+  .zoom-l{ font-size:8.8pt; font-weight:800; color:var(--mute); margin:3mm 0 1.2mm; }
+  img.zoom{ border-color:#96660C88; background:#fff; }
+</style>
+</head>
+<body>
+
+<p class="kicker">읽기 선별검사</p>
+<h1>정해 주시거나 보내 주셔야 할 것</h1>
+<p class="lead">검사 앱(<b>https://lidislab.com</b>)은 지금 바로 쓸 수 있는 상태예요. 다만 아래 항목은 담당자님이 정해 주셔야
+  앱에 반영할 수 있어요. 항목마다 <b>지금 앱이 어떻게 되어 있는지</b>와 <b>무엇이 필요한지</b>를 나눠 적었어요.</p>
+
+<div class="summary">
+  <div class="sh">한눈에 보기</div>
+  <ol>
+    <li><span class="box-ck"></span><span class="num">1</span><span class="t">학년·학기별 검사 문항과 Pass 기준표 (1~6학년)</span><span class="tag send">보내 주세요</span></li>
+    <li><span class="box-ck"></span><span class="num">2</span><span class="t">쓰기 기록지 양식 파일</span><span class="tag send">보내 주세요</span></li>
+    <li><span class="box-ck"></span><span class="num">3</span><span class="t">안내·동의 문구</span><span class="tag check">확인해 주세요</span></li>
+    <li><span class="box-ck"></span><span class="num">4</span><span class="t">연습 문항 종류</span><span class="tag check">확인해 주세요</span></li>
+    <li><span class="box-ck"></span><span class="num">5</span><span class="t">결과보고서의 「지역 / 학교」·「학년 / 학기」 표기</span><span class="tag check">확인해 주세요</span></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<section class="card">
+  <div class="card-h"><span class="num">1</span><h2>학년·학기별 검사 문항과 Pass 기준표 (1~6학년)</h2><span class="tag send">보내 주세요</span></div>
+  <div class="card-b">
+    <div class="blk now">
+      <span class="lb">지금 상태</span>
+      1·2학년만 검사지가 있고, 학기 구분 없이 학년마다 하나씩이에요. Pass 기준은 임시값이에요.
+      <table class="rules temp">
+        <colgroup><col style="width:22%"><col style="width:28%"><col style="width:28%"><col style="width:22%"></colgroup>
+        <tr><th>과제</th><th>1학년</th><th>2학년</th><th>지금 Pass 기준(임시)</th></tr>
+        <tr><td>낱말 읽기</td><td>의미 7개 + 무의미 7개 (14점)</td><td>의미 7개 + 무의미 7개 (14점)</td><td>9점 이상</td></tr>
+        <tr><td>문장 읽기유창성</td><td>문장 4개</td><td>문장 4개</td><td>1.0 어절/초 이상</td></tr>
+        <tr><td>쓰기</td><td>낱말 10개 (10점)</td><td>문장 5개 (10점)</td><td>6점 이상</td></tr>
+      </table>
+      <p class="after">3~6학년은 검사지가 없어서 지금은 1학년 검사지로 검사해요.</p>
+    </div>
+    <div class="blk need">
+      <span class="lb">필요한 것</span>
+      <p>1~6학년 각 학년의 1학기·2학기마다 아래 두 가지를 보내 주세요.</p>
+      <ul>
+        <li><span class="box-ck"></span><span>낱말 읽기·문장 읽기·쓰기 문항 목록</span></li>
+        <li><span class="box-ck"></span><span>위 세 과제의 Pass 기준 (문장 읽기유창성은 "어절/초" 단위)</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="card">
+  <div class="card-h"><span class="num">2</span><h2>쓰기 기록지 양식 파일</h2><span class="tag send">보내 주세요</span></div>
+  <div class="card-b">
+    <div class="blk need">
+      <span class="lb">필요한 것</span>
+      <p>오프라인으로 쓰기 검사를 할 때 쓰는 기록지 양식 파일을 보내 주세요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="card split">
+  <div class="card-h"><span class="num">3</span><h2>안내·동의 문구</h2><span class="tag check">확인해 주세요</span></div>
+  <div class="card-b">
+    <div class="blk need">
+      <span class="lb">필요한 것</span>
+      <p>아래 문구를 그대로 써도 되는지 확인해 주세요. 고칠 곳이 있으면 표시해 주세요.</p>
+      <ul>
+        <li><span class="box-ck"></span><span>그림 1: <span class="hl">노란색으로 칠한 부분</span>만</span></li>
+        <li><span class="box-ck"></span><span>그림 2·3·4: 전체</span></li>
+      </ul>
+      <p class="note">그림 1에서 칠하지 않은 문구는 이미 확인해 주신 거라 보지 않으셔도 돼요.</p>
+    </div>
+
+    <figure>
+      <figcaption><b>그림 1. 선생님 신청 화면: 검사 안내와 동의 체크</b><span>lidislab.com/apply 아래쪽</span></figcaption>
+      <img class="w-wide" src="shots/apply-notice-consent.png" alt="신청 화면 안내·동의">
+    </figure>
+
+    <figure class="newpg">
+      <figcaption><b>그림 2. 승인 메일</b><span>신청을 승인하면 선생님께 자동으로 가는 메일 (학교·이름·코드는 예시)</span></figcaption>
+      <img class="w-mail" src="shots/approval-mail.png" alt="승인 메일">
+    </figure>
+
+    <div class="figgrid">
+      <figure>
+        <figcaption><b>그림 3. 시작 화면 개인정보 안내</b><span>선생님이 학급 코드를 넣으면 나오는 안내와 확인 체크</span></figcaption>
+        <img src="shots/start-consent.png" alt="시작 화면 개인정보 수집·이용 안내">
+      </figure>
+      <figure>
+        <figcaption><b>그림 4. 아이용 녹음 안내</b><span>마이크 확인 화면 아래쪽 두 줄</span></figcaption>
+        <img class="mic" src="shots/mic-child-notice.png" alt="마이크 확인 화면">
+        <p class="zoom-l">아래쪽 두 줄 확대</p>
+        <img class="zoom" src="shots/mic-child-notice-zoom.png" alt="녹음 안내 두 줄 확대">
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="card">
+  <div class="card-h"><span class="num">4</span><h2>연습 문항 종류</h2><span class="tag check">확인해 주세요</span></div>
+  <div class="card-b">
+    <div class="blk now">
+      <span class="lb">지금 상태</span>
+      본 검사 전에 연습할 때 <b>쉬운 실제 낱말</b>을 보여 주고 있어요.
+    </div>
+    <div class="blk need">
+      <span class="lb">필요한 것</span>
+      <p>연습 문항이 "쉬운 실제 낱말"이 맞는지, 아니면 "무의미 낱말(아로·부림 같은)"이어야 하는지 확인해 주세요.</p>
+      <p class="note">무의미 낱말이라면 연습에서 미리 경험하는 것이 본 검사에 영향을 줄 수 있어서 문항을 어떻게 고를지도 함께 알려 주세요.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="card">
+  <div class="card-h"><span class="num">5</span><h2>결과보고서의 「지역 / 학교」·「학년 / 학기」 표기</h2><span class="tag check">확인해 주세요</span></div>
+  <div class="card-b">
+    <div class="blk need">
+      <span class="lb">필요한 것</span>
+      <p>아래 두 가지가 맞는지 확인해 주세요.</p>
+      <ul>
+        <li><span class="box-ck"></span><span>지역 / 학교 표기 방식</span></li>
+        <li><span class="box-ck"></span><span>학기 구분: 3~8월 검사는 1학기, 9~2월 검사는 2학기</span></li>
+      </ul>
+    </div>
+
+    <p class="sub">지역 / 학교</p>
+    <p>예시로 주신 「춘천 교동초등학교」와 같은 모양으로 맞췄어요.</p>
+    <table class="rules">
+      <colgroup><col style="width:36%"><col style="width:32%"><col style="width:32%"></colgroup>
+      <tr><th>경우</th><th>표기</th><th>예</th></tr>
+      <tr><td>도 지역 학교</td><td>시·군 이름(「시」「군」 없이) + 학교명</td><td>춘천 교동초등학교</td></tr>
+      <tr><td>특별시·광역시·세종 학교</td><td>도시 이름 + 학교명</td><td>부산 운산초등학교</td></tr>
+      <tr><td>학교 이름이 지역 이름으로 시작</td><td>지역을 겹쳐 쓰지 않음</td><td>대구성지초등학교</td></tr>
+      <tr><td>도의 시 이름이 광역시 이름과 같음</td><td>도 이름을 앞에 붙임</td><td>경기 광주 ○○초등학교</td></tr>
+      <tr><td>위 규칙으로도 다른 학교와 표기가 같아짐 (전국 3쌍)</td><td>도는 도 이름, 광역시는 구 이름을 더 붙임</td><td>강원 고성 동광초등학교<br>부산 해운대구 송정초등학교</td></tr>
+    </table>
+
+    <p class="sub">학년 / 학기</p>
+    <p>검사한 달로 정해요.</p>
+  <table class="rules narrow">
+    <tr><th>검사한 달</th><th>표기</th></tr>
+    <tr><td>3월 ~ 8월</td><td>1학기</td></tr>
+    <tr><td>9월 ~ 다음 해 2월</td><td>2학기</td></tr>
+  </table>
+  <p>학기를 나누는 달이 맞는지 확인해 주세요. 1번의 학기별 검사지를 받으면 검사지 기준으로 바꿀게요.</p>
+  </div>
+</section>
+
+</body>
+</html>
