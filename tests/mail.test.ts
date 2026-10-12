@@ -183,3 +183,24 @@ describe('resultsLinkMail — 교사 결과지 링크', () => {
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;')
   })
 })
+
+describe('메일 속 링크는 새 탭으로 연다', () => {
+  // 학교 웹메일(한림대 등)은 target 없는 링크를 자기 화면 안의 iframe에 띄우는데, 앱은 클릭재킹 방어로
+  // 프레임 안 표시를 막는다(X-Frame-Options DENY · frame-ancestors 'none') → 「연결을 거부했습니다」.
+  // 실제로 밟았다(2026-10-12, 관리자 알림 메일). 헤더를 풀지 말고 링크를 새 탭으로 연다.
+  const all = [
+    applyNoticeMail({ schoolName: '예시초', grade: 1, classNo: 2, teacherName: '김담임', childCount: 1, adminUrl: 'https://x.test/admin/codes' }),
+    approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }),
+    resultsLinkMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, resultsUrl: 'https://x.test/results/abc' }),
+  ]
+  it('[REGRESSION] 세 메일의 모든 <a>에 target="_blank" rel="noopener noreferrer"', () => {
+    for (const m of all) {
+      const anchors = m.html.match(/<a\s[^>]*>/g) ?? []
+      expect(anchors.length).toBeGreaterThan(0)
+      for (const a of anchors) {
+        expect(a).toContain('target="_blank"')
+        expect(a).toContain('rel="noopener noreferrer"')
+      }
+    }
+  })
+})
