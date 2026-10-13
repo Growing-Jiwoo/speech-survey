@@ -4,11 +4,13 @@ vi.mock('@/lib/db', () => ({
   saveScores: vi.fn().mockResolvedValue(undefined),
   saveWriting: vi.fn().mockResolvedValue(undefined),
   scanUploadedAt: vi.fn().mockResolvedValue(null),
+  scoreRows: vi.fn(),
   sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
 }))
 
 import { PUT } from '@/app/api/admin/sessions/[id]/scores/route'
 import * as db from '@/lib/db'
+import { scoresVersion, type ScoreRows } from '@/lib/score-version'
 
 const SID = '11111111-1111-4111-8111-111111111111'
 const ctx = (id = SID) => ({ params: Promise.resolve({ id }) })
@@ -18,11 +20,14 @@ const req = (body: unknown) => new Request('http://x', {
 
 const RS = ['rs01', 'rs02', 'rs03', 'rs04']
 
+const EMPTY: ScoreRows = { marks: [], sentences: [], times: [], writing: [] }
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.saveScores).mockResolvedValue(undefined)
   vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
   vi.mocked(db.scanUploadedAt).mockResolvedValue(null)
+  vi.mocked(db.scoreRows).mockResolvedValue(EMPTY)
 })
 
 describe('PUT /api/admin/sessions/[id]/scores', () => {
@@ -283,3 +288,85 @@ describe('PUT scores — 스캔본 방식 검사의 쓰기', () => {
   })
 })
 
+
+// 판(baseVersion) — 오래 열어 둔 탭이 그사이 다른 탭이 저장한 칸을 지우거나 되돌리지 않게(2026-10-12 점검 X8).
+// 저장 의미(보낸 것이 전부)는 그대로이고, 본 판이 낡았으면 저장하지 않고 지금 판·행을 돌려준다(병합은 화면, lib/sheet-save).
+describe('PUT scores — 판(baseVersion) 대조', () => {
+  /** 다른 탭이 그사이 저장한 행 — 3번 문장 어절·시간과 「rw03 = X」 */
+  const B_SAVED: ScoreRows = {
+    marks: [{ item_code: 'rw03', correct: false }],
+    sentences: [{ item_code: 'rs01', words: 3 }, { item_code: 'rs03', words: 5 }],
+    times: [{ item_code: 'rs03', seconds: 6.2 }], writing: [],
+  }
+
+  it('[REGRESSION] 본 판이 지금 판과 다르면 저장하지 않고 409(conflict: scores) — 지금 판과 행을 함께 준다', async () => {
+    vi.mocked(db.scoreRows).mockResolvedValue(B_SAVED)
+    const res = await PUT(req({ marks: { rw01: true }, sentences: { rs01: 3 }, baseVersion: scoresVersion(EMPTY) }), ctx())
+    expect(res.status).toBe(409)
+    const body = await res.json()
+    expect(body.conflict).toBe('scores')
+    expect(body.version).toBe(scoresVersion(B_SAVED))
+    expect(body.rows).toEqual(B_SAVED)
+    expect(db.saveScores).not.toHaveBeenCalled()
+    expect(db.saveWriting).not.toHaveBeenCalled()
+  })
+
+  it('본 판이 지금 판과 같으면 저장하고, 저장 뒤 행으로 만든 새 판을 돌려준다', async () => {
+    const after: ScoreRows = { ...B_SAVED, marks: [...B_SAVED.marks, { item_code: 'rw01', correct: true }] }
+    vi.mocked(db.scoreRows).mockResolvedValueOnce(B_SAVED).mockResolvedValueOnce(after)
+    const res = await PUT(req({
+      marks: { rw01: true }, sentences: { rs01: 3, rs03: 5 }, times: { rs03: 6.2 }, baseVersion: scoresVersion(B_SAVED),
+    }), ctx())
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true, version: scoresVersion(after) })
+    expect(db.saveScores).toHaveBeenCalledOnce()
+  })
+
+  it('[호환] 판이 없는 요청(배포 전에 열린 탭)은 대조 없이 종전대로 저장한다 — 저장 뒤 새 판만 만든다', async () => {
+    vi.mocked(db.scoreRows).mockResolvedValue(B_SAVED)
+    const res = await PUT(req({ marks: {}, sentences: { rs01: 3 } }), ctx())
+    expect(res.status).toBe(200)
+    expect(db.saveScores).toHaveBeenCalledWith(SID, [], [{ itemCode: 'rs01', words: 3 }], RS, undefined)
+    expect(db.scoreRows).toHaveBeenCalledOnce()
+    expect(vi.mocked(db.scoreRows).mock.invocationCallOrder[0])
+      .toBeGreaterThan(vi.mocked(db.saveScores).mock.invocationCallOrder[0])
+  })
+
+  it('문자열이 아닌 판은 없는 것으로 본다(대조 없이 저장)', async () => {
+    vi.mocked(db.scoreRows).mockResolvedValue(B_SAVED)
+    expect((await PUT(req({ marks: {}, sentences: {}, baseVersion: 123 }), ctx())).status).toBe(200)
+    expect(db.saveScores).toHaveBeenCalledOnce()
+  })
+
+  it('스캔본이 바뀐 409가 판 대조보다 먼저다 — conflict: scan으로 구별한다(그 쓰기는 판과 무관하게 버려야 한다)', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-10-12T06:00:00Z')
+    vi.mocked(db.scoreRows).mockResolvedValue(B_SAVED)
+    const res = await PUT(req({
+      marks: {}, sentences: {}, writing: { ww01: 1 }, scanUploadedAt: '2026-10-12T05:00:00Z', baseVersion: 'stale',
+    }), ctx())
+    expect(res.status).toBe(409)
+    expect((await res.json()).conflict).toBe('scan')
+    expect(db.saveWriting).not.toHaveBeenCalled()
+    expect(db.saveScores).not.toHaveBeenCalled()
+  })
+
+  it('저장 뒤 판을 못 만들어도 저장은 성공으로 알린다(판은 null — 화면은 갖고 있던 판을 쓴다)', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(db.scoreRows).mockRejectedValueOnce(new Error('boom'))
+    const res = await PUT(req({ marks: {}, sentences: {} }), ctx())
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true, version: null })
+    err.mockRestore()
+  })
+
+  it('저장 전 대조 조회가 실패하면 502 — 저장하지 않고 내부 문구를 싣지 않는다', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(db.scoreRows).mockRejectedValueOnce(new Error('secret connection string'))
+    const res = await PUT(req({ marks: {}, sentences: {}, baseVersion: 'v' }), ctx())
+    expect(res.status).toBe(502)
+    expect((await res.json()).error).not.toMatch(/secret/)
+    expect(db.saveScores).not.toHaveBeenCalled()
+    err.mockRestore()
+  })
+})

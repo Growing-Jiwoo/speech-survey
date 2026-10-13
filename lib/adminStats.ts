@@ -27,6 +27,18 @@ export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, today: false }
 export const DEFAULT_SORT: Sort = { key: 'started', dir: 'desc' }
 
+/** 목록을 거르는 조건이 하나라도 걸려 있나 — 「전체 검사」 카드는 아무것도 안 걸렸을 때만 켜진 모양이다. 학교·학년·검색만
+ *  걸려 있어도 켜져 보여, 전체를 보고 있다고 오해했다(2026-10-12 점검). 검색은 공백뿐이면 거르지 않는다(filterSessions와 같다). */
+export function hasActiveFilters(f: Filters): boolean {
+  return f.q.trim() !== '' || f.status !== 'all' || f.school !== null || f.grade !== null || f.today
+}
+
+/** 목록 체크리스트 칸 — 표시한 발달 영역 수와 「특이사항 없음」(none)을 가른다. none은 영역이 아니다 — 세면 「특이사항
+ *  없음」만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11). */
+export function checklistSummary(checklist: readonly string[]): { areas: number; none: boolean } {
+  return { areas: checklist.filter(c => c !== 'none').length, none: checklist.includes('none') }
+}
+
 // ---------- 날짜(KST) ----------
 
 /** 해당 시각을 KST(UTC+9) 기준 일자 키 'YYYY-MM-DD'로 변환한다.
@@ -52,11 +64,15 @@ export function kstDateKey(d: Date): string {
  * 회차는 시작 시각(`started_at`) 오름차순이다 — 목록의 정렬·필터와 무관하게 고정돼야
  * 한다. 화면 정렬을 바꿨다고 "1회차"가 다른 세션을 가리키면 회차 표기 자체가 무의미해진다.
  * 시작 시각이 같으면 id로 갈라 순서를 결정론적으로 만든다.
+ *
+ * 결과지 상세·결과보고서 PDF 라우트도 같은 아이의 검사들(`db.childSessions`)로 이 함수를 불러 결과지 머리의
+ * 「N/M회차」와 파일명의 `_N차`를 만든다(2026-10-12 점검) — 목록과 같은 숫자여야 해서 셈을 하나로 둔다.
  */
+type RetestRow = Pick<SessionListRow, 'id' | 'class_code_id' | 'child_no' | 'started_at'>
 export function retestOrdinals(
-  sessions: SessionListRow[],
+  sessions: readonly RetestRow[],
 ): Map<string, { nth: number; of: number }> {
-  const groups = new Map<string, SessionListRow[]>()
+  const groups = new Map<string, RetestRow[]>()
   for (const s of sessions) {
     const key = `${s.class_code_id}\u0000${s.child_no}`
     const list = groups.get(key)

@@ -10,7 +10,7 @@ import { useFocusTrap } from '@/hooks/useFocusTrap'
  */
 export function ConfirmDialog({
   open, title, children, error, busy = false, danger = false,
-  confirmLabel, cancelLabel = '취소', onConfirm, onClose, secondary,
+  confirmLabel, cancelLabel = '취소', onConfirm, onClose, secondary, confirmDisabled = false,
 }: {
   open: boolean
   /** 모달 제목(질문). 줄바꿈이 필요하면 ReactNode로 전달 */
@@ -30,6 +30,8 @@ export function ConfirmDialog({
   /** 취소와 확인 사이의 둘째 선택지(예: 결과지 받기의 [완성된 N장만]). 있으면 창을 조금 넓힌다 — 버튼 셋이
    *  좁은 창에 들어가면 글자가 두 줄로 감긴다. */
   secondary?: { label: React.ReactNode; onClick: () => void }
+  /** 확인 버튼만 끈다(닫기는 그대로) — 할 일이 없을 때(예: 정보 수정 창에서 바뀐 값이 없음) */
+  confirmDisabled?: boolean
 }) {
   const titleId = useId()
   const close = useCallback(() => { if (!busy) onClose() }, [busy, onClose])
@@ -64,7 +66,7 @@ export function ConfirmDialog({
               {secondary.label}
             </button>
           )}
-          <button onClick={onConfirm} disabled={busy}
+          <button onClick={onConfirm} disabled={busy || confirmDisabled}
             className={`${danger ? 'btn-danger' : 'btn-primary'} h-[50px] flex-1`}>
             {confirmLabel}
           </button>

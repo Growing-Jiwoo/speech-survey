@@ -47,6 +47,17 @@ export function SessionEditDialog({ open, session, onClose, onSaved }: {
   const [day, setDay] = useState(init.d)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  // 열 때마다 **저장된 값으로** 다시 채운다 — 창은 닫혀도 마운트된 채라, [취소]로 닫았다 다시 열면 고치던 값이 남아 있다가
+  // [수정하기] 한 번에 함께 저장될 수 있었다(2026-10-12 점검). 렌더 중에 맞춘다(효과로 하면 옛 값이 한 번 그려진다).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      const v = splitYmd(session.birth_ymd)
+      setChildNo(String(session.child_no)); setName(session.child_name); setGender(session.gender)
+      setYear(v.y); setMonth(v.m); setDay(v.d); setErr('')
+    }
+  }
 
   const daysInMonth = year && month ? new Date(Number(year), Number(month), 0).getDate() : 31
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
@@ -65,6 +76,8 @@ export function SessionEditDialog({ open, session, onClose, onSaved }: {
   ].filter(([, before, after]) => before !== after)
 
   async function save() {
+    // 바뀐 값이 없으면 보내지 않는다(버튼도 꺼져 있다) — 보내면 같은 값으로 「정보 수정됨」 기록만 생겼다(2026-10-12 점검 O8)
+    if (changes.length === 0) return
     if (!validChildNo(childNoNum)) { setErr('아동 번호(1~99)를 입력해 주세요.'); return }
     if (!validName(cleanName)) { setErr('이름은 한글이나 영어로만 쓸 수 있어요.'); return }
     if (!validGender(gender)) { setErr('성별을 선택해 주세요.'); return }
@@ -81,7 +94,7 @@ export function SessionEditDialog({ open, session, onClose, onSaved }: {
   }
 
   return (
-    <ConfirmDialog open={open} busy={busy} error={err}
+    <ConfirmDialog open={open} busy={busy} error={err} confirmDisabled={changes.length === 0}
       title="아동 정보 수정"
       confirmLabel={busy ? '수정 중…' : '수정하기'}
       onConfirm={() => void save()} onClose={onClose}>

@@ -8,11 +8,16 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
 import {
-  FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreSession, scoringFor,
+  FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreInputFrom, scoreSession, scoringFor,
   sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
+import { fetchFile, saveBlobAs } from '@/lib/download'
+import {
+  MERGED_NOTICE, mergeCells, putScores, sameCells, saveScoresMerging,
+  type SaveOutcome, type ScoreRows, type SheetScores,
+} from '@/lib/sheet-save'
 import { Badge } from '@/components/Badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BadgeLegend } from './BadgeLegend'
@@ -35,9 +40,27 @@ const AUTOSAVE_DELAY_MS = 1500
 const NO_CODES: ReadonlySet<string> = new Set()
 const SCAN_CHANGED_NOTICE = '그사이 선생님이 스캔본을 올리거나 바꿨어요. 저장하지 않은 쓰기 채점을 지웠으니 새 스캔본을 보고 다시 채점해 주세요.'
 
+/** 저장에 성공했을 때 상위에 알리는 값 — 상위가 상세 캐시를 서버가 저장한 모양 그대로 고친다(lib/sheet-cache) */
+export interface SheetSaved {
+  marks: Partial<Record<string, boolean>>; sentences: Partial<Record<string, number>>
+  times: Partial<Record<string, number>>
+  /** 쓰기를 보냈을 때만(스캔본 방식) */
+  writing?: Partial<Record<string, number>>
+  /** 저장 뒤 판 — null이면 서버가 못 만들었다(캐시의 판을 그대로 둔다) */
+  version: string | null
+  /** 판 충돌로 병합해 저장했으면 그때 받은 서버 행 — 캐시를 이 행 위에서 고친다 */
+  serverRows: ScoreRows | null
+}
+
+const savedOf = (r: Extract<SaveOutcome, { ok: true }>): SheetSaved => ({
+  marks: r.saved.marks, sentences: r.saved.sentences, times: r.saved.times,
+  ...(r.wroteWriting ? { writing: r.saved.writing } : {}), version: r.version, serverRows: r.merged,
+})
+
 export function ResultSheet({
-  sessionId, session, form, writing, initialMarks, initialSentences, initialTimes,
+  sessionId, session, form, writing, initialMarks, initialSentences, initialTimes, version: initialVersion,
   incomplete, attemptsOf, onAudioError, onDirtyChange, onUnmountFlush, discardOnLeave, saveRef, scan, onScanUnlinked, onScanStale, onSaved,
+  loginHref, onAuthChange, retest,
 }: {
   sessionId: string
   session: SessionRow
@@ -53,6 +76,9 @@ export function ResultSheet({
   initialSentences: Partial<Record<string, number>>
   /** 문장 읽기유창성의 읽은 시간 — 채점자가 저장한 값 */
   initialTimes: Partial<Record<string, number>>
+  /** 위 채점 값들의 판(상세 API의 `version`, lib/score-version) — 저장할 때 함께 보내 그사이 다른 화면이 저장했는지 대조한다.
+   *  없으면(판을 주지 않는 서버) 대조 없이 종전대로 저장한다 */
+  version?: string | null
   /** 페이지 코드 → 녹음 시도들 */
   attemptsOf: (pageCode: string) => Attempt[]
   onAudioError: () => void
@@ -73,8 +99,13 @@ export function ResultSheet({
   onScanStale?: () => void
   /** 저장에 성공한 값 — 상위가 캐시를 고친다. 안 고치면 목록을 다녀왔을 때 옛 캐시로 화면이 초기화되고,
    *  다음 자동 저장이 그 옛 값으로 방금 저장한 채점을 덮는다 */
-  onSaved?: (v: { marks: Partial<Record<string, boolean>>; sentences: Partial<Record<string, number>>
-    times: Partial<Record<string, number>>; writing?: Partial<Record<string, number>> }) => void
+  onSaved?: (v: SheetSaved) => void
+  /** 다시 로그인 주소(이 결과지로 돌아오는 next) — 저장이 401이면 저장 줄에 링크로 띄운다 */
+  loginHref: string
+  /** 저장·결과보고서 받기가 로그인 만료(401)로 실패했는지(true) · 다시 성공했는지(false) — 상위가 화면 위 [다시 로그인] 띠를 여닫는다 */
+  onAuthChange?: (expired: boolean) => void
+  /** 재검사 회차(같은 학급·번호로 두 번 이상 검사한 아이만) — 상세 API의 `retest`. 목록의 「N/M회차」와 같은 셈이다 */
+  retest?: { nth: number; of: number } | null
 }) {
   const f = itemsFor(form)
   // 미녹음 문항은 잠근다 — 들을 녹음이 없어 채점자가 판단할 것이 없다(lib/scoring withUnrecordedFixed).
@@ -94,14 +125,29 @@ export function ResultSheet({
   // 스캔본 방식이면 쓰기도 이 화면의 채점 상태다(담당자가 스캔본을 보고 찍는다). 화면 방식은 prop 그대로(읽기 전용).
   const scanMode = session.writing_mode === 'scan'
   const [written, setWritten] = useState(writing)
-  // 저장에 성공한 값 — 화면 상태와 비교해 "저장 안 한 변경"을 판단한다
+  // 저장에 성공한 값(= 마지막으로 받은·저장한 서버 값) — 화면 상태와 비교해 "저장 안 한 변경"을 판단하고,
+  // 판 충돌 때는 「이 화면에서 바꾼 칸」을 가리는 기준이 된다(lib/sheet-save)
   const [savedMarks, setSavedMarks] = useState(marks)
   const [savedSentences, setSavedSentences] = useState(sentences)
   const [savedTimes, setSavedTimes] = useState(times)
   const [savedWritten, setSavedWritten] = useState(written)
+  // 저장한 값의 판 — 저장할 때 함께 보낸다. 저장에 성공하면 서버가 준 새 판으로 바꾼다(2026-10-12 점검 X8)
+  const [version, setVersion] = useState(initialVersion ?? null)
+  // 저장이 로그인 만료(401)로 실패했다 — 저장 줄의 문구 옆에 [다시 로그인]을 띄운다
+  const [loginNeeded, setLoginNeeded] = useState(false)
   // 상위 콜백은 최신 것을 참조만 한다 — 저장 함수가 부모의 렌더마다 새로 만들어지면 자동 저장 타이머가 계속 밀린다
   const onSavedRef = useRef(onSaved)
   useEffect(() => { onSavedRef.current = onSaved })
+  const onAuthChangeRef = useRef(onAuthChange)
+  useEffect(() => { onAuthChangeRef.current = onAuthChange })
+  // 서버 행 → 채점 상태. 처음 채울 때와 같은 규칙(잠긴 칸 제외)이다 — 판 충돌 병합이 쓴다. 잠금(locked)이 렌더마다 새 Set이라
+  // 같은 이유로 최신 것을 참조만 한다.
+  const fromRows = (rows: ScoreRows): SheetScores => {
+    const s = scoreInputFrom(f, rows)
+    return { marks: unlocked(s.marks), sentences: unlocked(s.sentences), times: unlocked(s.times), writing: s.writing }
+  }
+  const fromRowsRef = useRef(fromRows)
+  useEffect(() => { fromRowsRef.current = fromRows })
   const seenScanAt = scan?.uploadedAt ?? null
   // 스캔본이 바뀐 것을 알았을 때(409 뒤 다시 받은 상세, 뒤에서 다시 받은 상세) 옛 그림을 보고 찍은 **저장 전** 쓰기는
   // 버린다 — 그대로 두면 새 올린 시각과 함께 저장돼 새 그림에 옛 그림의 점수가 붙는다. 렌더 중에 비교한다
@@ -112,7 +158,7 @@ export function ResultSheet({
   const [scanNotice, setScanNotice] = useState('')
   if (prevScanAt !== seenScanAt) {
     setPrevScanAt(seenScanAt)
-    if (JSON.stringify(written) !== JSON.stringify(savedWritten)) { setWritten(savedWritten); setScanNotice(SCAN_CHANGED_NOTICE) }
+    if (!sameCells(written, savedWritten)) { setWritten(savedWritten); setScanNotice(SCAN_CHANGED_NOTICE) }
   }
   const [unlinkOpen, setUnlinkOpen] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
@@ -120,6 +166,9 @@ export function ResultSheet({
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [gateOpen, setGateOpen] = useState(false)
+  // 결과보고서 PDF 받기 — 받는 동안 버튼을 잠그고, 실패하면 이유를 버튼 옆에 둔다(401이면 [다시 로그인])
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [pdfErr, setPdfErr] = useState<{ text: string; login: boolean } | null>(null)
   // 자동 저장이 실패한 뒤에는 채점자가 무언가 고칠 때까지 다시 시도하지 않는다 —
   // dirty가 그대로라 조건이 계속 참이어서, 이 플래그가 없으면 실패하는 엔드포인트를
   // 1.5초마다 영원히 두드린다.
@@ -152,10 +201,9 @@ export function ResultSheet({
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
   // 상위가 막을 수 있도록 알린다. 저장된 값과 비교해 판단한다 — 되돌리면 다시 깨끗해진다.
-  const dirty = JSON.stringify(marks) !== JSON.stringify(savedMarks)
-    || JSON.stringify(sentences) !== JSON.stringify(savedSentences)
-    || JSON.stringify(times) !== JSON.stringify(savedTimes)
-    || (scanMode && JSON.stringify(written) !== JSON.stringify(savedWritten))
+  // 키 순서와 무관하게 비교한다(sameCells) — 병합한 값은 키 순서가 달라 문자열 비교로는 같은 채점이 「바뀜」이 된다.
+  const dirty = !sameCells(marks, savedMarks) || !sameCells(sentences, savedSentences) || !sameCells(times, savedTimes)
+    || (scanMode && !sameCells(written, savedWritten))
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty, onDirtyChange])
   // 떠날 때 dirty를 내린다 — 빠뜨리면 결과지를 벗어난 뒤에도 상위가 "저장 안 한 채점이 있다"고
   // 믿어, 다음 아동으로 넘어갈 때마다 없는 채점을 두고 경고 모달이 뜬다.
@@ -166,7 +214,7 @@ export function ResultSheet({
    * 뒤로가기(popstate — 확인 모달도 beforeunload도 못 막는다)를 하면 타이머만 취소되고 그 채점은 사라졌다.
    * `keepalive`라 페이지가 사라져도 요청은 끝까지 간다. 응답은 받을 수 없으니 상위가 그 아이의 상세 캐시를
    * 비워(onUnmountFlush), 다시 열면 서버에서 새로 받게 한다 — 옛 캐시로 초기화된 화면이 방금 보낸 값을 되덮지
-   * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다.
+   * 않게. 같은 값을 자동 저장과 두 번 보내도 PUT이라 결과는 같다(먼저 간 저장이 판을 바꿨으면 409를 거쳐 같은 값으로 병합된다).
    * 이 요청은 실패를 삼킨다 — 그래서 확인 창의 「저장하고 이동」은 여기에 맡기지 않고 일반 저장(`save`, saveRef)을 기다린다.
    * 단 채점자가 「저장하지 않고 이동」을 골랐으면 보내지 않는다(`discardOnLeave`) — 확인 창이 「사라집니다」라고
    * 말한 값을 몰래 저장하면 버리려던 O/X가 임상 기록에 남는다(사용자 확정 2026-10-07).
@@ -175,14 +223,20 @@ export function ResultSheet({
    * 쓰기는 싣지 않는다 — 자동 저장을 멈추는 것과 같은 이유(해제가 지운 쓰기 채점을 되살리지 않게).
    * 응답이 오면(앱 안에서 화면만 옮긴 경우) 저장 성공과 똑같이 `onSaved`를 부른다 — 쓰기를 보냈으면 목록의
    * 「스캔본 채점」 표시가 바뀌어야 한다. 비운 상세 캐시에는 패치가 아무것도 하지 않고, 그사이 다시 열었으면 새 캐시를 맞춘다.
+   * 판도 일반 저장과 같이 싣는다(lib/sheet-save) — 그사이 다른 화면이 저장했으면 409의 지금 행에 이 화면에서 바꾼 칸만 얹어
+   * 한 번 다시 보낸다. 화면이 없어도 응답만으로 병합한다(앱 안 이동이면 응답을 받는다).
    */
-  type FlushBody = Parameters<NonNullable<typeof onSaved>>[0] & { scanUploadedAt?: string | null }
-  const flushBody = (): FlushBody => {
-    const writingDirty = scanMode && !unlinking && !unlinkOpen && JSON.stringify(written) !== JSON.stringify(savedWritten)
-    return { marks, sentences, times, ...(writingDirty ? { writing: written, scanUploadedAt: seenScanAt } : {}) }
-  }
-  const latestRef = useRef({ dirty: false, body: flushBody() })
-  useEffect(() => { latestRef.current = { dirty, body: flushBody() } })
+  const latestRef = useRef<{
+    dirty: boolean; base: SheetScores; mine: SheetScores; version: string | null; withWriting: boolean; scanUploadedAt: string | null
+  } | null>(null)
+  useEffect(() => {
+    latestRef.current = {
+      dirty, version, scanUploadedAt: seenScanAt,
+      base: { marks: savedMarks, sentences: savedSentences, times: savedTimes, writing: savedWritten },
+      mine: { marks, sentences, times, writing: written },
+      withWriting: scanMode && !unlinking && !unlinkOpen,
+    }
+  })
   const onUnmountFlushRef = useRef(onUnmountFlush)
   useEffect(() => { onUnmountFlushRef.current = onUnmountFlush })
   const discardOnLeaveRef = useRef(discardOnLeave)
@@ -190,11 +244,10 @@ export function ResultSheet({
   useEffect(() => () => {
     const l = latestRef.current
     const discard = discardOnLeaveRef.current?.(sessionId) ?? false
-    if (!l.dirty || discard) return
-    const { scanUploadedAt: _seen, ...saved } = l.body
-    void fetch(`/api/admin/sessions/${sessionId}/scores`, {
-      method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(l.body),
-    }).then(r => { if (r.ok) onSavedRef.current?.(saved) }).catch(() => undefined)
+    if (!l || !l.dirty || discard) return
+    void saveScoresMerging({
+      ...l, fromRows: rows => fromRowsRef.current(rows), send: body => putScores(sessionId, body, { keepalive: true }),
+    }).then(r => { if (r.ok) onSavedRef.current?.(savedOf(r)) })
     onUnmountFlushRef.current?.(sessionId)
   }, [sessionId])
 
@@ -210,17 +263,15 @@ export function ResultSheet({
   const save = useCallback(async (auto = false): Promise<string | null> => {
     setSaving(true)
     if (!auto) setMsg('')
-    // requestJson은 init으로 { method?, body? }만 받고, body가 있으면 Content-Type과 직렬화를 스스로 한다.
-    // 쓰기는 스캔본 방식이고 **고쳤을 때만** 싣는다 — 화면 방식 검사에 실으면 라우트가 409로 거부하고(쓰기 소유권),
-    // 고치지 않은 쓰기를 읽기 저장마다 다시 보내면 연결 해제와 겹쳤을 때 지운 채점을 되살린다.
-    // 본 스캔본의 올린 시각을 함께 보낸다 — 그사이 선생님이 바꿨으면 라우트가 409로 막는다.
-    const writingDirty = scanMode && JSON.stringify(written) !== JSON.stringify(savedWritten)
-    const res = await requestJson(`/api/admin/sessions/${sessionId}/scores`,
-      { method: 'PUT', body: { marks, sentences, times,
-        ...(writingDirty ? { writing: written, scanUploadedAt: seenScanAt } : {}) } },
-      '채점을 저장하지 못했어요. 다시 시도해 주세요.')
+    // 쓰기를 실을지(스캔본 방식이고 고쳤을 때만)·본 스캔본 시각·판 충돌 병합은 lib/sheet-save가 정한다 — 떠날 때 저장과 같은 규칙.
+    const mine: SheetScores = { marks, sentences, times, writing: written }
+    const r = await saveScoresMerging({
+      base: { marks: savedMarks, sentences: savedSentences, times: savedTimes, writing: savedWritten },
+      mine, version, withWriting: scanMode, scanUploadedAt: seenScanAt,
+      fromRows: rows => fromRowsRef.current(rows), send: body => putScores(sessionId, body),
+    })
     setSaving(false)
-    if (!res.ok && res.status === 409 && writingDirty) {
+    if (!r.ok && r.scanStale) {
       // 그사이 선생님이 스캔본을 올리거나 바꿨다(이 요청의 올린 시각이 낡았다). 옛 그림을 보고 찍은 쓰기는 버리고
       // 새 스캔본을 받는다 — 요청 전체가 거부됐으므로 읽기 채점은 다음 자동 저장이 쓰기 없이 다시 보낸다.
       // 그냥 문구만 띄우면 목록을 다녀와도 같은 캐시로 다시 열려 409가 되풀이되고 읽기 저장까지 막힌다.
@@ -228,18 +279,33 @@ export function ResultSheet({
       onScanStale?.()
       return SCAN_CHANGED_NOTICE
     }
-    if (res.ok) {
-      setSavedMarks(marks); setSavedSentences(sentences); setSavedTimes(times); setSavedWritten(written); setAutoFailed(false)
-      onSavedRef.current?.({ marks, sentences, times, ...(writingDirty ? { writing: written } : {}) })
-      // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
-      // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다.
-      setMsg(auto ? '자동 저장됨' : '저장했어요.')
-      return null
+    if (!r.ok) {
+      // 로그인 만료(401)면 저장 줄에 [다시 로그인]을, 상위가 화면 위에 같은 띠를 띄운다(설명서 「화면 위에 다시 로그인이 뜹니다」)
+      // — 전에는 저장 줄에 회색 글씨만 떠 무엇을 할지 몰랐다(2026-10-12 점검 TA1)
+      setMsg(r.error); setLoginNeeded(r.status === 401)
+      if (r.status === 401) onAuthChangeRef.current?.(true)
+      if (auto) setAutoFailed(true)
+      return r.error
     }
-    setMsg(res.error)
-    if (auto) setAutoFailed(true)
-    return res.error
-  }, [marks, sentences, times, written, savedWritten, scanMode, seenScanAt, sessionId, onScanStale])
+    setSavedMarks(r.saved.marks); setSavedSentences(r.saved.sentences); setSavedTimes(r.saved.times); setSavedWritten(r.saved.writing)
+    if (r.version !== null) setVersion(r.version)
+    setAutoFailed(false); setLoginNeeded(false)
+    if (r.merged) {
+      // 다른 화면이 저장한 칸을 화면에도 들인다. 저장이 오가는 사이 또 고친 칸(보낸 값과 지금 화면이 다른 칸)은 그대로 둔다 —
+      // 그 칸은 이번 병합보다 새 값이라 다음 자동 저장이 보낸다.
+      setMarks(cur => mergeCells(mine.marks, cur, r.saved.marks))
+      setSentences(cur => mergeCells(mine.sentences, cur, r.saved.sentences))
+      setTimes(cur => mergeCells(mine.times, cur, r.saved.times))
+      setWritten(cur => mergeCells(mine.writing, cur, r.saved.writing))
+    }
+    onSavedRef.current?.(savedOf(r))
+    onAuthChangeRef.current?.(false)
+    // 자동 저장은 검사 진행 화면과 같은 말을 쓴다("자동 저장됨") — 채점자가 누른 적 없는
+    // 동작을 "저장했어요."로 알리면 자기가 저장한 것으로 오해한다. 다른 화면 값이 들어왔으면 그 사실을 알린다 — 화면의 칸이 바뀌었다.
+    setMsg(r.pulled ? MERGED_NOTICE : auto ? '자동 저장됨' : '저장했어요.')
+    return null
+  }, [marks, sentences, times, written, savedMarks, savedSentences, savedTimes, savedWritten, version, scanMode, seenScanAt,
+    sessionId, onScanStale])
   // 「저장하고 이동」은 떠날 때 즉시 저장(위 keepalive)에 맡기지 않고 이 저장을 기다린다 — keepalive는 실패(로그인 만료 401,
   // 스캔본이 바뀐 409)를 삼켜 버려서, 저장을 약속한 버튼이 채점을 조용히 잃었다. 성공하면 저장값이 화면 값과 같아져
   // dirty가 내려가므로 이어지는 언마운트에서 keepalive가 다시 나가지 않는다.
@@ -256,7 +322,8 @@ export function ResultSheet({
    *
    * 채점은 제출 여부와 무관하게 언제든 다시 고칠 수 있으므로(saveScores docblock) 중간
    * 상태가 저장돼도 해가 없다. 저장 의미는 explicit save와 완전히 같다 — 화면에 보이는
-   * 그대로를 보내고, 문장 점수·읽은 시간은 "보낸 것이 전부"로 취급된다.
+   * 그대로를 보내고, 문장 점수·읽은 시간은 "보낸 것이 전부"로 취급된다. 판을 함께 보내므로
+   * 그사이 다른 화면이 저장했으면 이 화면에서 바꾼 칸만 얹어 다시 보낸다(lib/sheet-save, X8).
    *
    * [채점 저장] 버튼은 그대로 둔다: 자동 저장이 실패했을 때 다시 시도하는 손잡이이고,
    * 결과보고서 PDF 관문 모달도 그 동작을 호출한다.
@@ -276,6 +343,23 @@ export function ResultSheet({
   // 결과보고서 PDF 관문 — 채점이 끝나기 전에 실수로 공식 문서를 내려받지 않게 한다.
   const pdfHref = `/api/admin/sessions/${sessionId}/sheet.pdf`
   const gate = sheetPdfGate(r, dirty)
+  /**
+   * 결과보고서 PDF를 fetch로 받아 파일로 저장한다(lib/download — 교사 결과지와 같은 방식). 전에는 `<a download>`와
+   * `window.location.href`라, 로그인이 끝났을 때 전자는 아무 안내 없이 실패하고 후자는 화면이 JSON 원문으로 바뀌었다
+   * (2026-10-12 점검 X6). 401이면 서버 문구(「로그인이 끝났어요. 새 탭에서…」)와 [다시 로그인]을, 그 밖은 서버 문구를 띄운다.
+   */
+  async function downloadPdf() {
+    setPdfBusy(true); setPdfErr(null)
+    const res = await fetchFile(pdfHref, 'result.pdf', '결과보고서를 받지 못했어요. 다시 시도해 주세요.')
+    setPdfBusy(false)
+    if (!res.ok) {
+      setPdfErr({ text: res.error, login: res.status === 401 })
+      if (res.status === 401) onAuthChangeRef.current?.(true)
+      return
+    }
+    saveBlobAs(res.blob, res.name)
+    onAuthChangeRef.current?.(false)
+  }
   const TASK_LABEL: Record<TaskKey, string> = {
     wordReading: SECTION_LABEL.word_reading,
     sentenceReading: SECTION_LABEL.sentence_reading,
@@ -339,6 +423,14 @@ export function ResultSheet({
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <h1 className="text-[26px] font-bold leading-none tracking-tight">{session.child_name}</h1>
+              {/* 재검사 회차 — 같은 아이의 1차·2차 결과지가 머리까지 같아 어느 검사인지 알 수 없었다(2026-10-12 점검).
+                  목록 이름 옆 꼬리표와 같은 모양·같은 셈이다 */}
+              {retest && (
+                <span className="self-center rounded-full bg-well px-2 py-0.5 text-[12px] font-bold tabular-nums text-ink-mute"
+                  title={`같은 번호로 ${retest.of}번 검사한 아동의 ${retest.nth}번째 검사예요`}>
+                  {retest.nth}/{retest.of}회차
+                </span>
+              )}
               <span className="text-[14px] text-ink-soft">{session.gender} · {birthLabel(session.birth_ymd)}</span>
             </div>
             <p className="mt-2.5 text-[14px] text-ink-soft">
@@ -513,14 +605,26 @@ export function ResultSheet({
         </button>
         {/* 공식 출력은 담당자 양식의 결과보고서 PDF 하나로 통일한다 — 화면 인쇄와 두 갈래면
             어느 쪽을 학교에 내는지 현장에서 헷갈린다. 이 화면은 채점 작업대로 남는다.
-            채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). */}
-        <a href={pdfHref} download
-          onClick={e => { if (gate) { e.preventDefault(); setGateOpen(true) } }}
-          className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue">
-          결과보고서 PDF 다운로드
-        </a>
+            채점이 끝나지 않았으면 내려받지 않고 이유를 모달로 알린다(sheetPdfGate). 받기는 fetch다(downloadPdf). */}
+        <button type="button" disabled={pdfBusy}
+          onClick={() => { if (gate) setGateOpen(true); else void downloadPdf() }}
+          className="rounded-lg border-[1.5px] border-line bg-well px-4 py-2 text-sm font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+          {pdfBusy ? '결과보고서 만드는 중…' : '결과보고서 PDF 다운로드'}
+        </button>
+        {pdfErr && (
+          <span role="alert" className="text-[13px] text-rec-deep">
+            {pdfErr.text}
+            {pdfErr.login && <>{' '}<a href={loginHref} target="_blank" rel="noopener" className="font-bold text-blue underline">다시 로그인</a></>}
+          </span>
+        )}
         {dirty && <span className="text-[13px] font-bold text-amber">저장하지 않은 채점이 있어요</span>}
-        {msg && <span aria-live="polite" className="text-[13px] text-ink-soft">{msg}</span>}
+        {/* 병합 안내는 눈에 띄게 — 이 화면의 칸이 다른 화면 값으로 바뀌었다는 뜻이다 */}
+        {msg && (
+          <span aria-live="polite" className={`text-[13px] ${msg === MERGED_NOTICE ? 'font-bold text-blue' : 'text-ink-soft'}`}>
+            {msg}
+            {loginNeeded && <>{' '}<a href={loginHref} target="_blank" rel="noopener" className="font-bold text-blue underline">다시 로그인</a></>}
+          </span>
+        )}
       </div>
       {/* PDF는 DB에 저장된 점수로 만들어진다 — 저장하지 않은 수정은 빠진다. */}
       <p className="border-t border-line px-4 py-2.5 text-[12px] leading-relaxed text-ink-mute print:hidden">
@@ -539,9 +643,8 @@ export function ResultSheet({
             setGateOpen(false)
             if (gate.reason === 'dirty') { void save(); return }
             // 쓰기만 남았으면 경고를 확인한 뒤 내려받는다(화면 방식은 여기서 채울 수 없고, 스캔본 방식도 A안이라 받게 둔다).
-            // 페이지 이동이 아니라 PDF 다운로드다 — router.push로 바꾸면 파일이 아니라 라우트로 이동해 깨진다.
-            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-            if (gate.overridable) window.location.href = pdfHref
+            // 주소 이동(window.location)이 아니라 fetch다 — 이동이면 로그인이 끝났을 때 화면이 JSON 원문으로 바뀌었다(X6).
+            if (gate.overridable) void downloadPdf()
           }}
           onClose={() => setGateOpen(false)}>
           <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">

@@ -14,6 +14,8 @@ vi.mock('@/lib/db', () => ({
   findClassCodeById: vi.fn(),
   classResults: vi.fn(),
   sessionDetail: vi.fn(),
+  // 관리자 PDF 파일명의 재검사 회차 — 문서 내용(renderReport 입력)과는 무관하다
+  childSessions: vi.fn(async () => []),
 }))
 vi.mock('@/lib/pdf/report', () => ({ renderReport: vi.fn() }))
 // 교사 라우트만 pdf-lib으로 병합한다 — 보고서 생성을 모킹했으므로 병합도 흉내만 낸다.

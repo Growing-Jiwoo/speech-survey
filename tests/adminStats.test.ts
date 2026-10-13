@@ -3,7 +3,7 @@ import type { SessionListRow } from '@/lib/db'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
-  awaitsScanScoring,
+  awaitsScanScoring, hasActiveFilters, checklistSummary,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -428,5 +428,28 @@ describe('retestOrdinals', () => {
     ])
     expect(m1.get('aaa')).toEqual({ nth: 1, of: 2 })
     expect(m1.get('zzz')).toEqual({ nth: 2, of: 2 })
+  })
+})
+
+// 「전체 검사」 카드 — 거르는 조건이 하나도 없을 때만 켜진 모양이다(2026-10-12 점검: 학교·학년·검색만 걸려 있어도 켜져 보였다)
+describe('hasActiveFilters', () => {
+  it('기본값이면 거르는 조건이 없다', () => {
+    expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, q: '   ' })).toBe(false)   // 공백 검색은 거르지 않는다(filterSessions와 같다)
+  })
+  it('[REGRESSION] 학교·학년·검색 하나만 걸려도 걸린 것이다 — 상태·오늘만 보던 때는 「전체」가 켜져 보였다', () => {
+    for (const over of [{ school: '가창초' }, { grade: 2 }, { q: '김' }, { status: 'submitted' as const }, { today: true }])
+      expect(hasActiveFilters({ ...DEFAULT_FILTERS, ...over })).toBe(true)
+  })
+})
+
+// 목록 체크리스트 칸 — 「특이사항 없음」(none)은 영역이 아니다(2026-10-12 점검 L11: none만 고른 아이가 「1개 영역」이었다)
+describe('checklistSummary', () => {
+  it('[REGRESSION] none만 있으면 영역 0 · 특이사항 없음', () => {
+    expect(checklistSummary(['none'])).toEqual({ areas: 0, none: true })
+  })
+  it('영역은 none을 빼고 센다 · 아무것도 없으면 둘 다 아님', () => {
+    expect(checklistSummary(['language', 'attention'])).toEqual({ areas: 2, none: false })
+    expect(checklistSummary([])).toEqual({ areas: 0, none: false })
   })
 })

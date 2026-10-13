@@ -21,20 +21,24 @@
 
 ## 관리자 라우트 (인증: proxy)
 
+응답에는 proxy가 `Cache-Control: private, no-store`를 붙인다(`/api/admin` 전체 — 아동 실명·생년월일·담임 연락처를 학교 프록시 같은
+공유 캐시가 저장하지 않게, 2026-10-12 점검 A22). 라우트가 주지 않으면 운영(Vercel)에서 `public, max-age=0, must-revalidate`가
+붙었다. 새 관리자 라우트도 따로 붙일 필요가 없다.
+
 | 라우트 | 역할 |
 |---|---|
-| `POST /api/admin/login` | argon2id 해시 검증 + DB 기반 레이트리밋 → HttpOnly 쿠키(8h). IP는 5회 실패 시 10분 하드 잠금, **전역은 30회부터 하드 잠금이 아니라 점증 지연**(상한 2초) — 전역 하드 잠금은 공격자가 실패를 쌓는 것만으로 정상 관리자를 봉쇄할 수 있어 폐기됐다 |
+| `POST /api/admin/login` | argon2id 해시 검증 + DB 기반 레이트리밋 → HttpOnly 쿠키(8h). IP는 5회 실패 시 10분 하드 잠금(문구 「10분 뒤에 다시 시도해 주세요」 — `LOCK_MS`에서 계산), **전역은 30회부터 하드 잠금이 아니라 점증 지연**(상한 2초) — 전역 하드 잠금은 공격자가 실패를 쌓는 것만으로 정상 관리자를 봉쇄할 수 있어 폐기됐다 |
 | `POST /api/admin/logout` | 쿠키 즉시 만료(만료된 쿠키로도 호출 가능해야 하므로 proxy 예외) |
 | `GET /api/admin/sessions` | 목록(최대 5,000행 — 초과 시 서버 페이지네이션 도입 필요, 코드에 경고 로그) |
-| `GET /api/admin/sessions/[id]` | 결과지. 녹음과 쓰기 기록지 스캔본은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출. 스캔본 서명이 실패해도(파일 없는 행) 결과지는 열린다 — url만 null |
-| `PUT /api/admin/sessions/[id]/scores` | 관리자 채점 저장. 쓰기(`writing`)는 **스캔본 방식 검사만** 받는다 — 화면 방식 검사에 실으면 409(검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다). 쓰기를 실을 때는 화면이 본 스캔본의 올린 시각(`scanUploadedAt`)도 싣고, 그사이 선생님이 스캔본을 바꿨으면 409 |
+| `GET /api/admin/sessions/[id]` | 결과지. 녹음과 쓰기 기록지 스캔본은 서명 URL(1h)로 변환해 내려주고 스토리지 내부 경로는 비노출. 스캔본 서명이 실패해도(파일 없는 행) 결과지는 열린다 — url만 null. 채점의 판(`version`, `lib/score-version`)도 싣는다 — 화면이 저장할 때 함께 보내 그사이 다른 화면이 저장했는지 대조한다(2026-10-12 점검 X8). 재검사 회차(`retest` — 같은 학급·번호로 두 번 이상 검사한 아이만 `{ nth, of }`, 목록의 「N/M회차」와 같은 셈)도 싣는다 — 결과지 머리에 붙는다 |
+| `PUT /api/admin/sessions/[id]/scores` | 관리자 채점 저장. 쓰기(`writing`)는 **스캔본 방식 검사만** 받는다 — 화면 방식 검사에 실으면 409(검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다). 쓰기를 실을 때는 화면이 본 스캔본의 올린 시각(`scanUploadedAt`)도 싣고, 그사이 선생님이 스캔본을 바꿨으면 409(`conflict: 'scan'`). 화면이 본 판(`baseVersion`)을 실으면 지금 판과 대조해, 다르면 저장하지 않고 409(`conflict: 'scores'`)와 지금 판·행을 준다 — 오래 열어 둔 탭이 다른 탭이 저장한 칸을 「보낸 것이 전부」로 지우거나 되돌리던 것(X8). 화면은 이 화면에서 바꾼 칸만 지금 값 위에 얹어 한 번 다시 보낸다(`lib/sheet-save`). 판이 없으면 종전대로 저장하고, 성공 응답에는 저장 뒤 새 판(`version`)이 실린다 |
 | `DELETE /api/admin/sessions/[id]/scan` | 담당자의 「연결 해제」 — 잘못 붙은 스캔본과 그것을 보고 넣은 쓰기 채점을 함께 지워 스캔 대기로 되돌린다(스캔본 방식 검사만, 아니면 409) |
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 녹음·스캔본 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |
 | `GET /api/admin/codes/[id]/roster` | 신청 명단 조회(읽기 전용). **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단해야 해서 존재한다. 목록 라우트는 그래서 실명 대신 `roster_count`만 센다 |
 | `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
 | `PATCH /api/admin/sessions/[id]` | 아동 식별값(번호·이름·성별·생년월일) 수정 — `sessionEditSchema`가 정한 4개만, 학년·학급은 받지 않는다(원래 값은 `original_identity`로 남긴다) |
-| `GET /api/admin/sessions/[id]/sheet.pdf` | 관리자 결과보고서 PDF 한 장 — 저장된 채점으로 만든다(`lib/pdf/report.ts`), 파일명 `NN_이름_YYYY-MM-DD.pdf` |
+| `GET /api/admin/sessions/[id]/sheet.pdf` | 관리자 결과보고서 PDF 한 장 — 저장된 채점으로 만든다(`lib/pdf/report.ts`), 파일명 `NN_이름_YYYY-MM-DD.pdf`, 재검사한 아이는 `NN_이름_N차_YYYY-MM-DD.pdf`(1차·2차가 같은 이름이라 덮어써졌다 — 교사 결과지 한 장과 같은 `sheetsFileName`, 2026-10-12) |
 | `PATCH /api/admin/codes/[id]` | 담임 이메일 수정. **이메일 한 필드만** 받는다(`classCodeEmailSchema`) — 학급 정보를 여기서 바꾸면 세션에 이미 복사된 임상 기록과 어긋난다. 이 경로가 필요한 이유는 결과지 매직링크(`POST /api/results/request`)가 `class_codes.teacher_email`로**만** 나가서다: 주소에 오타가 있으면 그 학급은 결과지를 영영 못 받으므로, 바로잡을 길이 하나는 있어야 한다(「관리자 개입 없음」 원칙의 의도된 예외 — 오류 복구 경로, 사용자 확정 2026-09-22). 없는 행 404, 형식 오류·잘못된 id 400 |
 | `POST /api/admin/codes/[id]/approve` | 신청 승인(pending→active, 멱등) + 교사에게 코드 안내 메일. 메일 실패에도 승인은 유지하고, 응답은 `already`(행이 이미 active였는지)와 `mailed`(이번 호출이 실제로 보냈는지)를 분리해 돌려준다 — `already:true`는 메일 발송 여부를 증명하지 않으므로 재발송을 시도하지 않는다. 응답에는 항상 `code`와 `surveyUrl`(메일에 찍은 것과 같은 origin)이 실려(호출자가 인증된 관리자이므로) 화면의 [안내 문구 복사] 예비 경로가 늘 동작하고, 복사한 주소가 메일과 갈리지 않는다 |
 

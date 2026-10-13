@@ -42,7 +42,8 @@ export async function POST(req: Request) {
       if (row === 'duplicate') continue
 
       // 관리자 알림 — 실패해도 신청은 성공(관리자 화면의 대기 배지가 예비 채널)
-      // 합치기 창 안이면 이번 신청은 조용히 접수만 되고 메일은 다음 창에서 나간다(NOTIFY_COALESCE_MS 주석 참고).
+      // 합치기 창 안이면 이번 신청은 조용히 접수만 되고 메일은 보내지 않는다 — 다음 창에 몰아 보내지도 않는다.
+      // 관리자 목록 화면(/admin) 머리의 「승인 대기 신청 N건」 띠와 /admin/codes의 대기 목록이 알린다(2026-10-12 점검 X5).
       // 발송은 응답 **뒤**(after)로 미룬다 — 교사에게는 결과가 보이지 않는 메일인데, 기다리면 메일 서버가
       // 느릴 때 이미 접수된 신청이 시간 초과로 "실패"처럼 보이고, 다시 누르면 같은 학급이 두 번 접수된다.
       const adminTo = process.env.ADMIN_NOTIFY_EMAIL?.trim()

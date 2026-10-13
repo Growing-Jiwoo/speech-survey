@@ -85,3 +85,22 @@ describe('proxy — CSP(쓰기 스캔본)', () => {
   })
 })
 
+
+// 관리자 API 응답은 아동 실명·생년월일을 담는다 — 공유 캐시(학교 프록시 등)가 저장하지 않게 private, no-store(2026-10-12 점검 A22).
+// 라우트가 Cache-Control을 주지 않으면 운영(Vercel)에서 `public, max-age=0, must-revalidate`가 붙었다.
+describe('proxy — 관리자 API 캐시 금지', () => {
+  it('[REGRESSION] 통과한 /api/admin/* 응답에 Cache-Control: private, no-store', async () => {
+    const token = await createToken(SECRET)
+    for (const path of ['/api/admin/sessions', '/api/admin/sessions/abc', '/api/admin/codes', '/api/admin/codes/x/roster'])
+      expect((await proxy(mkReq(path, token))).headers.get('cache-control'), path).toBe('private, no-store')
+  })
+  it('401 응답·로그인·로그아웃도 같다', async () => {
+    for (const path of ['/api/admin/sessions', '/api/admin/login', '/api/admin/logout'])
+      expect((await proxy(mkReq(path))).headers.get('cache-control'), path).toBe('private, no-store')
+  })
+  it('관리자 API가 아닌 경로에는 붙이지 않는다(화면·공개 API는 각자 정한다)', async () => {
+    const token = await createToken(SECRET)
+    for (const path of ['/admin', '/survey', '/api/sessions'])
+      expect((await proxy(mkReq(path, token))).headers.get('cache-control'), path).toBeNull()
+  })
+})

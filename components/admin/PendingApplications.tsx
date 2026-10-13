@@ -20,11 +20,14 @@ interface Approved {
 }
 
 export function PendingApplications({
-  items, onDelete,
+  items, onDelete, locked = false,
 }: {
   items: ClassCodeItem[]
   /** 삭제(반려) 확인 모달은 발급 목록과 공유하므로 부모(CodeIssuer)가 소유한다 */
   onDelete: (c: ClassCodeItem) => void
+  /** 목록 다시 받기가 실패해 이 목록이 낡았다 — 승인·삭제를 잠근다(그사이 다른 탭이 승인·삭제했을 수 있고, 로그인이 끝났으면
+   *  어차피 실패한다. 2026-10-12 점검). 명단 보기는 그대로 둔다 */
+  locked?: boolean
 }) {
   const queryClient = useQueryClient()
   const [openId, setOpenId] = useState<string | null>(null)
@@ -134,12 +137,12 @@ export function PendingApplications({
                 </button>
                 {/* 승인 하나가 진행 중이면 **모든 행의** 승인·삭제를 잠근다 — 연달아 누르면 앞 학급의 결과(메일 실패 등)가 뒤 결과에
                     덮여 사라지고, 앞 응답이 먼저 오면 아직 진행 중인 행의 [삭제]가 살아났다(2026-10-08 야간 점검). */}
-                <button type="button" disabled={busyId !== null}
+                <button type="button" disabled={busyId !== null || locked}
                   onClick={() => void approve(c)}
                   className="rounded-lg bg-blue px-3 py-1 text-xs font-bold text-white transition disabled:opacity-40">
                   {busyId === c.id ? '승인 중…' : '승인'}
                 </button>
-                <button type="button" disabled={busyId !== null} onClick={() => onDelete(c)}
+                <button type="button" disabled={busyId !== null || locked} onClick={() => onDelete(c)}
                   className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40">
                   삭제
                 </button>
@@ -214,8 +217,9 @@ function ApprovedBanner({ a, copied, onCopy }: { a: Approved; copied: boolean; o
             : a.already ? '이미 승인된 학급이에요 · 메일을 보냈는지는 알 수 없어요'
               : '승인은 됐지만 메일을 보내지 못했어요'}
         </p>
+        {/* 학년-반까지 — 학교 이름만으로는 어느 반을 승인했는지 알 수 없었다(2026-10-12 점검) */}
         <p className="mt-0.5 text-[12px] text-ink-mute">
-          {a.schoolName} 담임 {a.teacherName} · 학급 코드{' '}
+          {a.schoolName} <span className="whitespace-nowrap">{gradeClassLabel(a.grade, a.classNo)}</span> 담임 {a.teacherName} · 학급 코드{' '}
           <b className="font-read tracking-widest text-blue">{a.code}</b>
           {!sure && ' — 아래 버튼으로 안내 문구를 복사해 직접 전달해 주세요.'}
         </p>

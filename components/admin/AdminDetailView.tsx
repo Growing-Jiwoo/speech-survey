@@ -51,6 +51,9 @@ export function AdminDetailView() {
   }
   const go =(href: string) => (dirty ? setPendingNav(href) : router.push(href))
 
+  // 결과지 저장이 로그인 만료(401)로 실패했다 — 다시 받기 401과 같은 위쪽 [다시 로그인] 띠를 띄운다(2026-10-12 점검 TA1).
+  // 다시 저장에 성공하면 내린다(ResultSheet onAuthChange).
+  const [authLost, setAuthLost] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [delModal, setDelModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -139,10 +142,10 @@ export function AdminDetailView() {
     <AudioBusProvider>
       <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
         <NavBar listHref={listHref} nav={nav} go={go} goHref={goHref} />
-        {/* 다시 받기가 실패했다 — 결과지는 그대로 두고(위 주석) 무엇이 문제인지만 알린다 */}
-        {isError && (
+        {/* 다시 받기가 실패했다 — 결과지는 그대로 두고(위 주석) 무엇이 문제인지만 알린다. 채점 저장이 401이어도 같은 띠다 */}
+        {(isError || authLost) && (
           <div role="alert" className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-amber/40 bg-amber/10 px-3 py-2 text-[13px] text-amber print:hidden">
-            {expired ? <>로그인이 끝났어요(8시간). 지금 화면의 채점은 아직 남아 있어요. <b>새 탭에서</b>{' '}
+            {expired || authLost ? <>로그인이 끝났어요(8시간). 지금 화면의 채점은 아직 남아 있어요. <b>새 탭에서</b>{' '}
                 <a href={loginHref} target="_blank" rel="noopener" className="font-bold underline">다시 로그인</a>한 뒤
                 이 화면에서 <b>[채점 저장]</b>을 눌러 주세요.</>
               : notFound ? <>이 검사 기록이 삭제됐을 수 있어요. 목록에서 다시 확인해 주세요.</>
@@ -177,15 +180,20 @@ export function AdminDetailView() {
             무력화된다 — clip은 같은 모서리 클리핑을 주되 스크롤 컨테이너를 만들지 않는다. */}
         <div className="mt-3 overflow-clip rounded-[20px] border border-line bg-white shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           <ResultSheet key={id} sessionId={id} session={s} form={data.form} writing={input.writing}
-            scan={data.scan}
+            scan={data.scan} version={data.version ?? null} loginHref={loginHref} onAuthChange={setAuthLost}
+            retest={data.retest ?? null}
             // 저장한 값으로 캐시를 고친다 — 다시 열었을 때 옛 캐시로 초기화돼 자동 저장이 채점을 덮지 않게(lib/sheet-cache).
             // 받은 시각(updatedAt)은 그대로 둔다 — 저장마다 「방금 받음」이 되면 캐시가 계속 새것으로 남아, 그사이 바뀐
             // 스캔본을 다시 받을 기회가 사라진다(5분 뒤 다시 열어도 옛 정보). 쓰기를 저장했으면 목록의 진행 표시도 바뀐다.
+            // 판 충돌을 병합해 저장했으면 그때 받은 서버 행 위에서 고치고(캐시가 낡은 채로 남지 않게), 판도 새것으로 바꾼다 —
+            // 다시 연 결과지가 낡은 판으로 저장해 매번 충돌하지 않게. 병합은 다른 화면의 쓰기도 들였을 수 있어 목록도 다시 받는다.
             onSaved={saved => {
               const key = adminKeys.session(id)
-              queryClient.setQueryData<SessionDetailData>(key, old => old && patchDetail(old, saved, f),
-                { updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt })
-              if (saved.writing) void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
+              queryClient.setQueryData<SessionDetailData>(key, old => old && {
+                ...patchDetail(saved.serverRows ? { ...old, ...saved.serverRows } : old, saved, f),
+                ...(saved.version !== null ? { version: saved.version } : {}),
+              }, { updatedAt: queryClient.getQueryState(key)?.dataUpdatedAt })
+              if (saved.writing || saved.serverRows) void queryClient.invalidateQueries({ queryKey: adminKeys.sessions })
             }}
             // 해제 뒤 스캔본이 사라진 상세를 다시 받는다 — 목록의 진행 표시도 바뀐다
             onScanUnlinked={() => {

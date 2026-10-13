@@ -1,8 +1,10 @@
 // /api/admin/sessions/[id] — 관리자 결과지 조회(GET)·세션 영구 삭제(DELETE). 인증은 proxy가 담당.
 import { NextResponse } from 'next/server'
-import { deleteSession, sessionDetail, signedAudioUrl, signedScanUrl, updateSessionIdentity } from '@/lib/db'
+import { childSessions, deleteSession, sessionDetail, signedAudioUrl, signedScanUrl, updateSessionIdentity } from '@/lib/db'
+import { retestOrdinals } from '@/lib/adminStats'
 import { formForGrade } from '@/lib/forms'
 import { sessionEditSchema } from '@/lib/schema'
+import { scoresVersion } from '@/lib/score-version'
 import { UUID_RE, jsonError } from '@/lib/request'
 
 export const dynamic = 'force-dynamic'
@@ -12,7 +14,11 @@ const badId = () => jsonError('검사 정보가 올바르지 않아요.', 400)
 /** 관리자 결과지 데이터. 녹음은 서명 URL을 미리 만들어 내려준다(service role 키는 클라이언트에 노출 금지).
  *  쓰기 기록지 스캔본도 같다(올라온 경우만 — 서명 URL 1시간, 결과지를 다시 열면 새로 받는다).
  *  응답에는 스토리지 내부 경로(audio_path·스캔본 path)를 담지 않는다.
- *  검사지(`form`)도 여기서 싣는다 — 화면이 lib/forms를 import하면 문항이 공개 JS 청크에 실린다. */
+ *  검사지(`form`)도 여기서 싣는다 — 화면이 lib/forms를 import하면 문항이 공개 JS 청크에 실린다.
+ *  채점의 판(`version`, lib/score-version)도 싣는다 — 화면이 저장할 때 함께 보내 그사이 다른 화면이 저장했는지 대조한다
+ *  (채점 PUT과 같은 함수·같은 행으로 만든다, 2026-10-12 점검 X8).
+ *  재검사 회차(`retest` — 2회 이상 검사한 아이만 `{ nth, of }`, 아니면 null)도 싣는다 — 같은 아이의 1차·2차 결과지가 머리까지
+ *  같아 구별할 수 없었다(2026-10-12 점검). 목록과 같은 셈(lib/adminStats retestOrdinals)이다. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID_RE.test(id)) return badId()
@@ -21,6 +27,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다
     // (sheet.pdf 라우트와 같은 판정 — 그쪽 가드는 sessionDetail이 throw해서 도달하지 못했다).
     if (!session) return jsonError('검사 기록이 없어요.', 404)
+    // 머리에 붙는 표시일 뿐이라 못 읽어도 결과지는 연다(서명과 함께 기다린다)
+    const retestP = (async () => retestOrdinals(await childSessions(session.class_code_id, session.child_no)).get(session.id) ?? null)()
+      .catch((e: unknown) => { console.error('[admin/sessions/:id] 재검사 회차 조회 실패', e); return null })
     // 녹음 하나의 서명이 실패해도 결과지 전체를 500으로 막지 않는다 — 그 녹음만 url 없이 내린다(화면이 「불러오지
     // 못했어요」). 막으면 파일 하나가 없는 검사는 결과지가 안 열리고 [검사 기록 삭제]에도 닿을 수 없었다(2026-10-08 야간 점검).
     const withUrls = await Promise.all(recordings.map(async r => ({
@@ -44,6 +53,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ) : null
     return NextResponse.json({
       session, recordings: withUrls, writing, marks, sentences, times, scan: scanView, form: formForGrade(session.grade),
+      version: scoresVersion({ marks, sentences, times, writing }), retest: await retestP,
     })
   } catch (e) {
     console.error('[admin/sessions/:id] 조회 실패', e)
