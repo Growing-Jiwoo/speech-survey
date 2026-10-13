@@ -173,8 +173,8 @@ src/
 | `components/start/WritingSheet*.tsx`, `components/results/ScanUpload.tsx` | 선생님용 10장 |
 | 배포 주소 변경 | **두 문서 모두**(표지·본문의 `lidislab.com`) |
 
-지금 쓰는 주소는 정식 도메인 `lidislab.com`이다(2026-10-12 전환). 예전 Vercel 기본 주소(`speech-survey.vercel.app`)도
-계속 열리지만 설명서에는 쓰지 않는다.
+지금 쓰는 주소는 정식 도메인 `lidislab.com`이다(2026-10-12 전환). 예전 Vercel 기본 주소(`speech-survey.vercel.app`)는
+2026-10-13부터 308로 `lidislab.com`에 넘어간다(`next.config.ts`) — 설명서에는 쓰지 않는다.
 
 ## 설명서에 넣지 않는 것
 

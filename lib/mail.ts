@@ -26,9 +26,15 @@ export interface Mail {
  * 개발·스테이징에서 실수로 진짜 교사에게 메일이 나가는 것을 막는 안전장치이며,
  * 도메인 인증 전 Resend 샌드박스가 *가입 이메일로만* 발송을 허용하는 제약도 이걸로 넘긴다.
  * 원래 수신자를 본문 머리에 적어, 수신자 결정 로직까지 눈으로 검증할 수 있게 한다.
+ *
+ * **MAIL_REPLY_TO가 있으면 답장 주소(Reply-To)로 싣는다**(사용자 확정 2026-10-13 — 담당자 회신 아님). 보내는 주소
+ * `noreply@`에는 받는 메일함이 없어 선생님이 [답장]을 누르면 반송됐다. 주소는 환경변수로만 받는다 — 저장소가 공개라
+ * 연락처를 코드에 두지 않는다(「연락처 값을 앱에 두지 않는다」 사용자 확정 2026-09-22와 같은 방침). 테스트 발송
+ * (override)에는 싣지 않는다 — 개발자가 시험 메일에 답장하면 담당자 메일함으로 간다.
  */
 export async function sendMail({ to, subject, html }: Mail): Promise<MailResult> {
   const override = process.env.MAIL_TO_OVERRIDE?.trim()
+  const replyTo = override ? '' : process.env.MAIL_REPLY_TO?.trim()
   if (override) {
     html = `<p style="background:#FCF4E4;border:1px solid #96660C33;border-radius:8px;padding:10px 12px;
       font:13px/1.6 sans-serif;color:#3A4256;margin:0 0 16px">
@@ -44,7 +50,7 @@ export async function sendMail({ to, subject, html }: Mail): Promise<MailResult>
         Authorization: `Bearer ${env('RESEND_API_KEY')}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: env('MAIL_FROM'), to: [to], subject, html }),
+      body: JSON.stringify({ from: env('MAIL_FROM'), to: [to], subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
     })
     const data = (await res.json().catch(() => ({}))) as { id?: string; message?: string; name?: string }
     if (!res.ok) return { ok: false, error: data.message ?? `발송 실패 (${res.status})` }
