@@ -57,9 +57,9 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
   // 녹음 중에만 손잡이를 내준다 — 녹음이 아닐 때 부모가 부르면 아무 일도 없어야 한다.
   useEffect(() => {
     if (!stopRef) return
-    stopRef.current = busy ? recorder.stop : null
+    stopRef.current = busy ? recorder.stopForPause : null
     return () => { stopRef.current = null }
-  }, [stopRef, busy, recorder.stop])
+  }, [stopRef, busy, recorder.stopForPause])
 
   async function begin() {
     setMicErr(null)
@@ -91,18 +91,19 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
           화면에 드러나지 않는다(사용자 피드백 2026-08-12).
           `!`(important)가 필요한 이유: .card는 globals.css의 레이어 없는 규칙이라 같은
           특이도의 Tailwind 유틸리티(레이어 안)보다 나중에 적용된다 — 없으면 흰 카드로 남는다. */}
-      <div className={`card p-5 lg:p-6 ${page.practice ? 'border-amber/50! bg-amber/[0.06]!' : ''}`}>
+      <div className={`card p-5 lg:p-6 short:py-4 ${page.practice ? 'border-amber/50! bg-amber/[0.06]!' : ''}`}>
         {/* 낱말 페이지는 검사지처럼 두 줄 격자(4+3)로 배치하고, 문장은 원문 그대로 보인다.
             제시어는 길게 눌러도 선택·iOS 콜아웃이 뜨지 않게 한다(아동 오터치 방지). */}
         {/* 최소 높이는 "낱말 페이지와 문장 페이지의 카드 높이를 비슷하게 맞춰 녹음 버튼이 위아래로
             움직이지 않게" 하는 장치다. 실제로 필요한 높이는 낱말 격자 138px · 가장 긴 문장 85px이라
             lg 220px은 과했고, 그 여유분이 가운데 밴드를 밀어 불필요한 스크롤을 만들었다(176px로 조정). */}
-        <div className="flex min-h-[152px] items-center justify-center lg:min-h-[176px]">
+        {/* 화면 높이가 낮으면(short — app/globals.css) 최소 높이·낱말 크기·줄 간격을 줄인다 — 녹음 뒤 알림이 화면 안에 남게 */}
+        <div className="flex min-h-[152px] items-center justify-center lg:min-h-[176px] short:min-h-[120px] lg:short:min-h-[124px]">
           {words ? (
-            <div className="grid w-full grid-cols-4 gap-x-2 gap-y-4 lg:gap-y-7">
+            <div className="grid w-full grid-cols-4 gap-x-2 gap-y-4 lg:gap-y-7 lg:short:gap-y-4">
               {page.items.map(i => (
                 <span key={i.code}
-                  className="no-select-callout font-read break-keep text-center text-[26px] font-medium leading-tight lg:text-[44px]">
+                  className="no-select-callout font-read break-keep text-center text-[26px] font-medium leading-tight lg:text-[44px] lg:short:text-[38px]">
                   {i.text}
                 </span>
               ))}
@@ -120,7 +121,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
         {saved && !recording ? savedMessage : ''}
       </p>
 
-      <div className="mt-6 flex flex-col items-center gap-5">
+      <div className="mt-6 flex flex-col items-center gap-5 short:mt-3 short:gap-3">
         <RecordButton state={recorder.state} onStart={begin} onStop={recorder.stopByTap} disabled={recorder.starting}
           maxSec={page.limitSec} elapsedMs={recorder.elapsedMs} />
         <p className="text-sm font-bold text-ink-soft">
@@ -129,7 +130,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
         </p>
 
         {/* 상태 표시는 버튼 아래 이 고정 높이 슬롯 한 곳에만 나타난다 — 상태가 바뀌어도 버튼이 밀리지 않도록 */}
-        <div className="flex min-h-[92px] w-full flex-col items-center justify-start gap-2.5">
+        <div className="flex min-h-[92px] w-full flex-col items-center justify-start gap-2.5 short:min-h-[64px]">
           {recording ? (
             <>
               <LevelMeter level={recorder.level} />

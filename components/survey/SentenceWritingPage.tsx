@@ -20,11 +20,13 @@ export function SentenceWritingPage({ items, value, onChange, toggle }: {
   const required = items.length
 
   return (
-    <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
+    <div className="card mx-auto w-full max-w-2xl p-5 lg:max-w-4xl lg:p-7">
       {toggle && <div className="mb-4">{toggle}</div>}
       <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 문장을 정확하게 썼나요?</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-mute">
         정확하게 쓴 어절의 개수를 골라 주세요. 어절 하나가 1점이에요.
+        {/* [다음]이 꺼진 이유 — 목록 아래에 두면 1024×768에서 접힌 아래로 밀려 보이지 않았다(2026-10-12 점검) */}
+        {answered < required && <> <b className="font-bold text-ink-soft">{required}개 중 {answered}개 선택됨</b> — 모두 선택해야 다음으로 갈 수 있어요.</>}
       </p>
 
       <ul className="mt-4 flex flex-col gap-2">
@@ -62,11 +64,6 @@ export function SentenceWritingPage({ items, value, onChange, toggle }: {
         })}
       </ul>
 
-      {answered < required && (
-        <p className="mt-3 text-center text-xs text-ink-mute">
-          {required}개 중 {answered}개 선택됨 — 모두 선택해야 다음으로 갈 수 있어요.
-        </p>
-      )}
     </div>
   )
 }

@@ -4,19 +4,29 @@
 // 화면 모양(토글·안내 카드)과 기본값(이 기기에서 같은 학급의 마지막 선택 — lib/survey-state resolveWritingMode)은
 // 사용자 확정(2026-09-30).
 'use client'
+import { useEffect, useRef } from 'react'
 import type { SurveyItem } from '@/lib/items'
 import { sheetBoxNo } from '@/lib/writing-sheet'
 import type { WritingMode } from '@/lib/survey-state'
 
+/** 화살표로 방식을 바꾸면 토글이 **다른 카드 안에서 새로 그려진다**(화면 입력 ↔ 스캔본 안내) — 바꾼 직후 그려지는 토글이
+ *  고른 쪽에 초점을 받게 하는 표시. 종전에는 초점이 사라진 버튼과 함께 없어져 ←로도 되돌아오지 못했다(2026-10-12 점검). */
+let refocusAfterChange = false
+
 /** 방식 고르기 — 쓰기 카드 맨 위에 둔다. 고르기 전 값은 상위가 정해 넘긴다(resolveWritingMode). */
 export function WritingModeToggle({ mode, onChange }: { mode: WritingMode; onChange: (m: WritingMode) => void }) {
+  const groupRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!refocusAfterChange) return
+    refocusAfterChange = false
+    ;(groupRef.current?.querySelector(`[data-mode="${mode}"]`) as HTMLElement | null)?.focus()
+  }, [mode])
   // 라디오 묶음 관례 — 화살표로 옮긴다(탭 한 번에 묶음 전체, 고른 것에만 초점)
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
     e.preventDefault()
-    const next = mode === 'screen' ? 'scan' : 'screen'
-    onChange(next)
-    ;(e.currentTarget.querySelector(`[data-mode="${next}"]`) as HTMLElement | null)?.focus()
+    refocusAfterChange = true
+    onChange(mode === 'screen' ? 'scan' : 'screen')
   }
   const opt = (m: WritingMode, label: string) => (
     <button type="button" role="radio" aria-checked={mode === m} onClick={() => onChange(m)}
@@ -29,7 +39,7 @@ export function WritingModeToggle({ mode, onChange }: { mode: WritingMode; onCha
   return (
     <div className="flex items-center gap-2.5">
       <span className="flex-none text-[12px] font-bold text-ink-mute">쓰기 방식</span>
-      <div role="radiogroup" aria-label="쓰기 방식" onKeyDown={onKey} className="flex flex-1 gap-1 rounded-xl border-[1.5px] border-line bg-well p-1">
+      <div ref={groupRef} role="radiogroup" aria-label="쓰기 방식" onKeyDown={onKey} className="flex flex-1 gap-1 rounded-xl border-[1.5px] border-line bg-well p-1">
         {opt('screen', '화면에서 바로 표시')}
         {opt('scan', '스캔본으로 올리기')}
       </div>

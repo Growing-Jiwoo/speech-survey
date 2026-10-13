@@ -17,7 +17,7 @@ describe('classifyUpload', () => {
     expect(classifyUpload(400).fatal).toBeNull()
   })
   it('[REGRESSION] 404(관리자가 세션을 지움)도 더 진행할 수 없다 — 「다시 녹음」을 끝없이 권하지 않게 (2026-10-08)', () => {
-    expect(classifyUpload(404)).toEqual({ ok: false, status: 404, retry: false, fatal: 'expired' })
+    expect(classifyUpload(404)).toEqual({ ok: false, status: 404, retry: false, fatal: 'gone' })
   })
 })
 

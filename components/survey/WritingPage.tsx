@@ -20,8 +20,17 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
   const answered = items.filter(i => value[i.code] !== undefined).length
   const required = items.length
 
+  // 의미·무의미 두 묶음 — 큰 화면(lg)에서는 기록지처럼 두 열로 나란히 둔다. 한 열이면 1024×768(아이패드 가로)에서 화면 높이를
+  // 400px 넘게 넘어 아래 낱말과 안내 줄을 스크롤해야 보였다(2026-10-12 점검).
+  const groups: SurveyItem[][] = []
+  for (const item of items) {
+    const last = groups[groups.length - 1]
+    if (last && last[0].kind === item.kind) last.push(item)
+    else groups.push([item])
+  }
+
   return (
-    <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
+    <div className="card mx-auto w-full max-w-2xl p-5 lg:max-w-4xl lg:p-7">
       {toggle && <div className="mb-4">{toggle}</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-bold text-blue lg:text-base">학생이 아래 낱말을 정확하게 썼나요?</p>
@@ -34,41 +43,42 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
           ))}
         </div>
       </div>
-
-      <ul className="mt-4 flex flex-col gap-2">
-        {items.map((item, idx) => {
-          // 의미/무의미가 바뀌는 지점에 구분선을 넣어 검사지와 같은 두 묶음으로 보이게 한다.
-          const groupStart = idx === 0 || items[idx - 1].kind !== item.kind
-          return (
-            <li key={item.code} className={groupStart && idx > 0 ? 'mt-3 border-t border-line pt-3' : ''}>
-              {groupStart && (
-                <p className="mb-1.5 text-[12px] font-bold text-ink-mute">{KIND_LABEL[item.kind!]} 낱말</p>
-              )}
-              <div className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2">
-                <span className="w-5 flex-none text-xs font-bold text-ink-mute">{item.orderNo}</span>
-                <span className="font-read min-w-0 flex-1 truncate text-[22px] font-bold lg:text-[28px]">{item.text}</span>
-                <div className="flex flex-none gap-1.5">
-                  {([['예', 1], ['아니오', 0]] as const).map(([label, v]) => (
-                    <button key={label} type="button"
-                      aria-pressed={value[item.code] === v} aria-label={`${item.text} ${label}`}
-                      onClick={() => onChange(item.code, v)}
-                      className={`h-11 min-w-[58px] rounded-lg border-[1.5px] px-2 text-sm font-bold transition ${
-                        value[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </li>
-          )
-        })}
-      </ul>
-
+      {/* [다음]이 꺼진 이유 — 목록 아래에 두면 작은 화면에서 접힌 아래로 밀려 보이지 않았다(2026-10-12 점검) */}
       {answered < required && (
-        <p className="mt-3 text-center text-xs text-ink-mute">
+        <p className="mt-1.5 text-xs text-ink-mute">
           {required}개 중 {answered}개 선택됨 — 모두 선택해야 다음으로 갈 수 있어요.
         </p>
       )}
+
+      <div className="mt-4 flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-5">
+        {groups.map((group, gi) => (
+          // 묶음이 바뀌는 지점에 구분선 — 한 열(좁은 화면)에서만. 두 열이면 열 자체가 나눈다.
+          <div key={group[0].code} className={gi > 0 ? 'border-t border-line pt-3 lg:border-t-0 lg:pt-0' : ''}>
+            <p className="mb-1.5 text-[12px] font-bold text-ink-mute">{KIND_LABEL[group[0].kind!]} 낱말</p>
+            <ul className="flex flex-col gap-2">
+              {group.map(item => (
+                <li key={item.code}>
+                  <div className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2">
+                    <span className="w-5 flex-none text-xs font-bold text-ink-mute">{item.orderNo}</span>
+                    <span className="font-read min-w-0 flex-1 truncate text-[22px] font-bold lg:text-[28px]">{item.text}</span>
+                    <div className="flex flex-none gap-1.5">
+                      {([['예', 1], ['아니오', 0]] as const).map(([label, v]) => (
+                        <button key={label} type="button"
+                          aria-pressed={value[item.code] === v} aria-label={`${item.text} ${label}`}
+                          onClick={() => onChange(item.code, v)}
+                          className={`h-11 min-w-[58px] rounded-lg border-[1.5px] px-2 text-sm font-bold transition ${
+                            value[item.code] === v ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

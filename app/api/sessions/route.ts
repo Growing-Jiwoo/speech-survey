@@ -41,6 +41,9 @@ export async function POST(req: Request) {
 
   const d = parsed.data
   try {
+    // 서명 키를 **세션 행을 만들기 전에** 읽는다 — 설정이 빠진 배포에서 행부터 만들고 토큰에서 실패하면, 누를 때마다
+    // 이어갈 수 없는 「진행 중」 세션이 쌓여 명단에 잘못된 배지가 붙었다(2026-10-12 점검)
+    const secret = env('SESSION_SECRET')
     const classCode = await findClassCode(d.code)
     // pending도 미존재와 같은 404 — verify-code(Task 12)와 같은 이유: 승인 전 코드가
     // 실재한다는 사실을 노출하지 않기 위해서다. 이 검사가 없으면 verify-code가 막은
@@ -64,7 +67,7 @@ export async function POST(req: Request) {
         idemKey: d.idemKey,
       })
     }
-    const sessionToken = await createSessionToken(sessionId, env('SESSION_SECRET'))
+    const sessionToken = await createSessionToken(sessionId, secret)
     // grade는 어떤 검사지(양식)로 진행할지 정한다 — 코드가 정한 값을 서버가 내려준다.
     return NextResponse.json({ sessionId, sessionToken, grade: classCode.grade })
   } catch (e) {

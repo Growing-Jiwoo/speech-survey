@@ -3,7 +3,7 @@ import {
   newState, saveState, loadState, clearState, saveClassCode, loadClassCode, saveMicOk, recentMicOk,
   updateSavedState, withPendingUpload, withoutPendingUpload, settleLostUploads, LAST_KEY,
   clearSessionState, markSubmitted, takeSubmitted,
-  saveWritingModePref, writingModePref, resolveWritingMode, type SurveyState,
+  saveWritingModePref, writingModePref, resolveWritingMode, storageWritable, nextAttemptNo, unsavedPages, type SurveyState,
 } from '@/lib/survey-state'
 
 // node 환경에는 localStorage가 없으므로 Map 기반 스텁을 주입한다.
@@ -138,6 +138,20 @@ describe('survey-state — 손상·구버전 데이터 방어', () => {
     const broken = { ...localStorage, setItem: () => { throw new Error('QuotaExceededError') } }
     ;(globalThis as unknown as { localStorage: Storage }).localStorage = broken as Storage
     expect(() => saveState(newState('sid-1', '홍길동', 3, 'tok', 1))).not.toThrow()
+  })
+
+  it('storageWritable — 저장이 되면 true이고 시험 키를 남기지 않는다', () => {
+    expect(storageWritable()).toBe(true)
+    expect(localStorage.length).toBe(0)
+  })
+
+  it('[REGRESSION] storageWritable — 쓰기가 막혔거나 접근 자체가 막히면 false(시작 화면이 세션을 만들기 전에 막는다)', () => {
+    const broken = { ...localStorage, setItem: () => { throw new Error('QuotaExceededError') } }
+    ;(globalThis as unknown as { localStorage: Storage }).localStorage = broken as Storage
+    expect(storageWritable()).toBe(false)
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, get: () => { throw new Error('SecurityError') } })
+    expect(storageWritable()).toBe(false)
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: undefined })
   })
 
   it('clearState는 localStorage 접근 실패 시에도 예외를 전파하지 않는다', () => {
@@ -366,5 +380,28 @@ describe('종료 화면 — 방금 제출한 검사만 치운다 (2026-10-08)', 
     ;(globalThis as unknown as { sessionStorage: unknown }).sessionStorage = undefined
     expect(() => markSubmitted('x')).not.toThrow()
     expect(takeSubmitted()).toBeNull()
+  })
+})
+
+describe('시도 번호 — 줄지 않는다 (2026-10-12)', () => {
+  it('[REGRESSION] 앞 시도가 실패해 저장 수가 줄어도 이미 매긴 번호를 다시 쓰지 않는다 — 올라간 녹음을 덮지 않게', () => {
+    // 1회차 올리는 중 2회차 저장(수 2, 매긴 번호 2) → 1회차 실패로 수 1 → 다음은 3이어야 한다(종전 2 → 2회차 파일을 덮었다)
+    expect(nextAttemptNo({ recorded: { p_rs01: 1 }, tries: { p_rs01: 2 } }, 'p_rs01')).toBe(3)
+  })
+  it('매긴 기록이 없는 옛 진행 상태는 저장 수에서 시작한다', () => {
+    expect(nextAttemptNo({ recorded: { p_rs01: 2 } }, 'p_rs01')).toBe(3)
+    expect(nextAttemptNo({ recorded: {} }, 'p_rs02')).toBe(1)
+  })
+})
+
+describe('저장되지 않은 녹음 페이지 — 다시 녹음할 곳 (2026-10-12)', () => {
+  it('[REGRESSION] 시도했는데 저장된 녹음이 없는 페이지만 — 다시 보낼 녹음이 있으면 뺀다', () => {
+    const s = { recorded: { p_rw_meaning: 0, p_rw_nonsense: 1, p_rs01: 0 }, attempted: ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01'] }
+    expect(unsavedPages(s)).toEqual(['p_rw_meaning', 'p_rs01'])
+    expect(unsavedPages(s, { p_rs01: {} })).toEqual(['p_rw_meaning'])
+  })
+  it('시도하지 않은 페이지(녹음 없이 넘김)는 들지 않는다 — 시도 기록이 없는 옛 진행 상태도', () => {
+    expect(unsavedPages({ recorded: {}, attempted: [] })).toEqual([])
+    expect(unsavedPages({ recorded: {} })).toEqual([])
   })
 })
