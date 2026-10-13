@@ -244,6 +244,10 @@ export default function StartPage() {
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   const cleanCode = code.trim().toUpperCase()
+  /** 직접 입력 단계에서 코드를 고친 뒤 그 학급을 다시 불러올 수 있는가. 고치는 순간 옛 학급은 비우는데(코드 칸 onChange)
+   *  예전에는 [확인](아동 정보를 다 채워야 켜진다)만 새 학급을 조회해, 명단 없는 학급 다음에 명단 있는 학급 코드를 넣은
+   *  선생님이 명단에서 고르지 못하고 아이 정보를 손으로 다 넣어야 했다(2026-10-13 운영 점검). */
+  const canRecheckCode = step === 'direct' && cleanCode !== clsCode && validClassCode(cleanCode)
   /** 확인 중인 아이가 이 컴퓨터에서 진행 중인 바로 그 아이인가 — 학급과 번호가 모두 같아야 한다(위 `resume`) */
   const isResumeChild = (childNo: number) => resume !== null && resume.classCode === cleanCode && resume.childNo === childNo
   const cleanName = name.trim().replace(/\s+/g, ' ')
@@ -290,8 +294,11 @@ export default function StartPage() {
     setRoster(r.data.roster)
     setSheet(r.data.sheet ?? null)
     setScanPending(r.data.scanPending ?? 0)
+    // 명단 반으로 넘어가면 고른 아이·보호자 동의를 비운다 — 직접 입력 중 받은 체크가 명단 아이에게 승계되지 않게
+    if (r.data.roster.length > 0) { setPick(''); setConsent(false) }
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
+
 
   /** 명단 모드 [확인] — 서버를 다시 부르지 않는다. 코드 조회 때 받은 명단 행이 이름·성별·
    *  생년월일·검사 여부를 전부 담고 있고, 기록에 실릴 신원은 어차피 세션 생성 때 서버가
@@ -489,6 +496,10 @@ export default function StartPage() {
           <input id="code" data-field="code" name="code" value={code} maxLength={8}
             placeholder="ABC234" autoCapitalize="characters" spellCheck={false}
             aria-describedby={errors.code ? 'err-code' : undefined} aria-invalid={!!errors.code}
+            onKeyDown={e => {
+              // 코드를 고친 직접 입력 단계에서는 Enter가 [확인](아동 정보 확인) 대신 그 학급을 불러온다
+              if (e.key === 'Enter' && canRecheckCode && !busy) { e.preventDefault(); void lookupCode() }
+            }}
             onChange={e => {
               // 자동 조회가 아직 날아오는 중일 수 있다 — 이 표시가 그 응답을 버리게 한다.
               codeTouched.current = true
@@ -509,13 +520,19 @@ export default function StartPage() {
               } else if (step === 'direct') {
                 // 입력하던 칸은 두되 **고치기 전 학급의 명단은 버린다.** 남겨 두면 「명단에서 고르기」가 옛 반 명단을
                 // 보여 주고, 거기서 고른 번호로 **새 반의 같은 번호 아이** 세션이 만들어졌다(2026-10-12 점검 X1).
-                // 새 학급의 명단은 [확인]이 다시 받는다(verify).
+                // 새 학급은 코드 칸 아래 [이 코드로 학급 불러오기](또는 코드 칸 Enter)나 [확인](verify)이 다시 받는다.
                 setCls(null); setClsCode(''); setRoster([]); setPick('')
                 setSheet(null); setScanPending(0)
               }
             }}
             className={`${inputCls} font-read mt-1.5 text-center text-xl tracking-[0.3em]`} />
           <FieldError id="err-code" msg={errors.code} />
+          {canRecheckCode && (
+            <button type="button" onClick={() => void lookupCode()} disabled={busy}
+              className="mt-2 text-[13px] font-bold text-blue underline underline-offset-2 disabled:opacity-40">
+              이 코드로 학급 불러오기
+            </button>
+          )}
         </div>
 
         {step === 'roster' && cls && (

@@ -60,10 +60,13 @@ export function sheetEntries(
   return [...byNo.values()].sort((a, b) => a.childNo - b.childNo)
 }
 
-/** 1~to번 목록(99에서 자른다, to가 1보다 작거나 정수가 아니면 빈 목록). 명단 없는 학급이 「1번~N번」을 한 번에 뽑을 때 쓴다. */
-export function numberRange(to: number): number[] {
-  if (!Number.isInteger(to) || to < 1) return []
-  return Array.from({ length: Math.min(99, to) }, (_, i) => i + 1)
+/** from~to번 목록(99에서 자른다, 번호가 1보다 작거나 정수가 아니거나 from이 to보다 크면 빈 목록). 명단 없는 학급이
+ *  「M번~N번」을 한 번에 뽑을 때 쓴다. 시작 번호가 1로 고정이면 3~17번만 다시 뽑으려 해도 번호를 15번 하나씩 넣거나
+ *  1·2번을 버려야 했다(2026-10-13 운영 점검) — 그래서 from을 받는다. 기본은 1. */
+export function numberRange(to: number, from = 1): number[] {
+  if (!Number.isInteger(to) || !Number.isInteger(from) || from < 1 || to < from) return []
+  const end = Math.min(99, to)
+  return from > end ? [] : Array.from({ length: end - from + 1 }, (_, i) => from + i)
 }
 
 /**
