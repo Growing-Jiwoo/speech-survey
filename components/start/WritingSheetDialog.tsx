@@ -43,6 +43,7 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
   const [picked, setPicked] = useState<Set<number>>(() => new Set(roster.map(r => r.childNo)))
   const [extra, setExtra] = useState<number[]>([])
   const [extraInput, setExtraInput] = useState('')
+  const [rangeFrom, setRangeFrom] = useState('1')
   const [rangeTo, setRangeTo] = useState('')
   const [printing, setPrinting] = useState(false)
   /** 인쇄 창을 한 번 닫았다 — [취소]를 [닫기]로 바꾸고 안내를 띄운다 */
@@ -56,10 +57,12 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   const entries = useMemo(() => {
-    // 명단 없는 학급: 1~N번 범위 + 낱장 번호(범위를 적기 전에는 0장)
-    if (!hasRoster) return sheetEntries([], [...numberRange(Number(rangeTo)), ...extra])
+    // 명단 없는 학급: M~N번 범위 + 낱장 번호(끝 번호를 적기 전에는 0장)
+    if (!hasRoster) return sheetEntries([], [...numberRange(Number(rangeTo), Number(rangeFrom)), ...extra])
     return sheetEntries(roster.filter(r => picked.has(r.childNo)).map(r => ({ childNo: r.childNo, name: r.name })), extra)
-  }, [hasRoster, roster, picked, extra, rangeTo])
+  }, [hasRoster, roster, picked, extra, rangeFrom, rangeTo])
+  // 시작이 끝보다 크면 0장이 된다 — [인쇄하기]만 꺼지면 왜 안 되는지 모른다
+  const rangeBackwards = rangeFrom !== '' && rangeTo !== '' && Number(rangeFrom) > Number(rangeTo)
 
   // 인쇄 — 기록지를 인쇄 전용 뿌리(화면에는 안 보인다)에 그린 다음 인쇄 창을 띄운다. 그동안 이 창을 포함한
   // 다른 요소는 인쇄에서 숨긴다(globals.css의 body.printing-sheets). 인쇄 창이 닫히면(afterprint) 인쇄 상태만 푼다 —
@@ -201,13 +204,20 @@ export function WritingSheetDialog({ onClose, cls, tag, layout, roster }: {
               <div className="mt-3 rounded-xl border border-dashed border-line px-3.5 py-2.5">
                 <p className="text-[13px] font-bold">번호만 찍힌 기록지</p>
                 <p className="text-[11.5px] text-ink-mute">명단이 없는 학급이라 이름은 손으로 적어요</p>
+                {/* 시작 번호도 고칠 수 있다 — 1로 고정이면 3~17번만 다시 뽑을 때 번호를 하나씩 15번 넣어야 했다(2026-10-13) */}
                 <div className="mt-2 flex items-center gap-2 text-[13px] text-ink-soft">
-                  1번부터
+                  <input value={rangeFrom} inputMode="numeric" maxLength={2} aria-label="첫 번호"
+                    onChange={e => setRangeFrom(e.target.value.replace(/\D/g, ''))}
+                    className="h-8 w-14 rounded-lg border-[1.5px] border-line text-center text-sm font-bold" />
+                  번부터
                   <input value={rangeTo} inputMode="numeric" maxLength={2} aria-label="마지막 번호"
                     onChange={e => setRangeTo(e.target.value.replace(/\D/g, ''))}
                     className="h-8 w-14 rounded-lg border-[1.5px] border-line text-center text-sm font-bold" />
                   번까지
                 </div>
+                {rangeBackwards && (
+                  <p aria-live="polite" className="mt-1.5 text-[11.5px] font-bold text-rec-deep">앞 번호가 뒤 번호보다 커요.</p>
+                )}
                 <p className="mt-2 text-[11.5px] text-ink-mute">한 장만 다시 뽑을 때는 번호를 하나씩 넣어요</p>
                 {extraRow}
               </div>

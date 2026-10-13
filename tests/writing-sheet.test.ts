@@ -74,6 +74,17 @@ describe('numberRange', () => {
   it('끝 번호를 적기 전(0·빈 값)·음수·소수는 빈 목록 — 0장이면 [인쇄하기]가 잠긴다', () => {
     for (const n of [0, Number(''), -2, 1.5, Number.NaN]) expect(numberRange(n)).toEqual([])
   })
+  it('시작 번호부터 — 3~17번은 15장', () => {
+    expect(numberRange(17, 3)).toHaveLength(15)
+    expect(numberRange(17, 3)[0]).toBe(3)
+    expect(numberRange(5, 5)).toEqual([5])
+  })
+  it('시작이 끝보다 크거나 시작이 비었으면(0) 빈 목록', () => {
+    expect(numberRange(3, 5)).toEqual([])
+    expect(numberRange(3, 0)).toEqual([])
+    expect(numberRange(120, 99)).toEqual([99])
+    expect(numberRange(120, 100)).toEqual([])
+  })
 })
 
 describe('sheetBoxNo — 받아쓰기 목록·기록지 칸·담당자 채점 행이 같은 번호', () => {
