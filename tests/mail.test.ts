@@ -147,13 +147,32 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     expect(approvalNoticeText(v)).toContain('2학년 단일학급')
   })
 
-  it('두 채널 모두 「결과지 받는 방법」을 담는다 — 검사 주소에서 코드 입력 후 [결과지 받기], 이 메일로 링크', () => {
+  it('두 채널 모두 「결과지 받는 방법」을 담는다 — 검사 주소에서 코드 입력 후 [결과지 받기], 등록된 이메일로 링크', () => {
     const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
     for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
       expect(out).toContain('결과지 받는 방법')
       expect(out).toContain('[결과지 받기]')
-      expect(out).toContain('이 메일 주소로')
+      expect(out).toContain('등록된 선생님 이메일로')
     }
+  })
+
+  // 평문은 카톡·문자로도 간다 — 「이 메일 주소로」는 가리킬 메일이 없다(2026-10-12 점검)
+  it('[REGRESSION] 받는 주소를 「이 메일 주소」라고 부르지 않는다 — 평문 채널에는 메일이 없다', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    for (const out of [approvedMail(v).html, approvalNoticeText(v)]) expect(out).not.toContain('이 메일 주소로')
+  })
+})
+
+describe('꼬리말 — 메일마다 받는 주소의 출처가 다르다', () => {
+  // 셋 다 「신청하신 주소로」라고 적어, 관리자 알림과 직접 발급 학급의 결과지 메일이 틀린 말을 했다(2026-10-12 점검)
+  it('[REGRESSION] 승인 안내만 「신청하신 주소」, 결과지 링크는 학급에 등록된 담임 주소, 신청 알림은 관리자 알림 주소', () => {
+    const approved = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }).html
+    const results = resultsLinkMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, resultsUrl: 'https://x.test/results/abc' }).html
+    const notice = applyNoticeMail({ schoolName: '예시초', grade: 1, classNo: 2, teacherName: '김담임', childCount: 1, adminUrl: 'https://x.test/admin/codes' }).html
+    expect(approved).toContain('이 메일은 신청하신 주소로 발송됐습니다.')
+    expect(results).toContain('이 메일은 학급에 등록된 담임 선생님 주소로 발송됐습니다.')
+    expect(notice).toContain('이 메일은 관리자 알림 주소로 발송됐습니다.')
+    for (const html of [results, notice]) expect(html).not.toContain('신청하신 주소')
   })
 })
 

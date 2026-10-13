@@ -80,16 +80,14 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
   /** 크게 보기를 연 버튼 — 닫으면 그리로 포커스를 돌려준다 */
   const zoomOpenerRef = useRef<HTMLElement | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  /** 「N쪽 남음 ↓」이 마지막으로 데려간 쪽(0부터) — 누를 때마다 그 **다음** 남은 쪽으로 간다(새 파일이면 처음부터) */
+  const lastGotoRef = useRef(-1)
   const pagesRef = useRef<ScanPageImage[]>([])
   useEffect(() => { pagesRef.current = pages }, [pages])
   // 화면을 떠나면 그림 URL을 풀고 읽기를 멈춘다
   useEffect(() => () => { abortRef.current?.abort(); releasePages(pagesRef.current) }, [])
-  // 입구 카드 밖에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 결과지 화면을 떠난다 — 이 화면에서는 막는다
-  useEffect(() => {
-    const block = (e: DragEvent) => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault() }
-    window.addEventListener('dragover', block); window.addEventListener('drop', block)
-    return () => { window.removeEventListener('dragover', block); window.removeEventListener('drop', block) }
-  }, [])
+  // 카드 밖에 떨어뜨린 파일은 결과지 화면(ResultsView)이 통째로 막는다(hooks/useFileDropGuard) — 이 카드가 없는 반도
+  // 막아야 해서 화면 쪽으로 옮겼다(2026-10-12 점검).
   // 크게 보기: 열면 [닫기]로, 닫으면 연 버튼으로
   useEffect(() => {
     if (zoom !== null) zoomCloseRef.current?.focus()
@@ -105,6 +103,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
     abortRef.current?.abort()
     releasePages(pagesRef.current)
     setPages([]); setPlans([]); setChoices([]); setEditing(new Set()); setResults(new Map()); setZoom(null); setSnap(null)
+    lastGotoRef.current = -1
     setPhase(null)
   }, [])
 
@@ -128,6 +127,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
       setPages(read); setPlans(proposed); setChoices(proposed.map(p => p.choice))
       setEditing(new Set(proposed.filter(p => p.choice === null).map(p => p.index)))
       setResults(new Map())
+      lastGotoRef.current = -1
       setPhase('review')
     } catch (e) {
       if (ac.signal.aborted) return
@@ -144,19 +144,37 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
   const skipCount = choices.filter(c => c === 'skip').length
 
   const listRef = useRef<HTMLUListElement>(null)
-  /** 다음 남은 쪽으로 — 지금 보이는 곳보다 아래의 첫 남은 쪽, 없으면 처음부터 */
+  /** 방금 데려간 쪽 — 잠깐 테두리를 칠한다. 목록 끝처럼 더 내려갈 수 없는 곳에서는 눌러도 화면이 움직이지 않는다 */
+  const [flash, setFlash] = useState<number | null>(null)
+  useEffect(() => {
+    if (flash === null) return
+    const t = setTimeout(() => setFlash(null), 1200)
+    return () => clearTimeout(t)
+  }, [flash])
+  /** 다음 남은 쪽으로 — 마지막으로 간 쪽 다음의 첫 남은 쪽, 끝이면 처음으로 돌아간다. 종전에는 스크롤 위치로
+   *  「보이는 곳 아래」를 찾았는데 카드의 scroll-mt·목록 안쪽 여백 때문에 방금 간 쪽이 다시 「아래」로 잡혀,
+   *  몇 번을 눌러도 첫 남은 쪽에 머물렀다(2026-10-12 점검). */
   const gotoUndecided = () => {
-    const list = listRef.current
-    if (!list) return
-    const cards = [...list.querySelectorAll<HTMLElement>('[data-undecided="1"]')]
-    const top = list.scrollTop + 8
-    const next = cards.find(c => c.offsetTop - list.offsetTop > top) ?? cards[0]
-    next?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const left = choices.flatMap((c, i) => (c === null ? [i] : []))
+    if (left.length === 0) return
+    const next = left.find(i => i > lastGotoRef.current) ?? left[0]
+    lastGotoRef.current = next
+    listRef.current?.querySelector<HTMLElement>(`[data-page="${next}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setFlash(next)
   }
 
+  /** 다시 그린 뒤 포커스를 옮길 곳. 고르거나 [바꾸기]·[남은 N쪽 모두 올리지 않음]을 누르면 누르던 요소가 사라져
+   *  포커스가 body로 떨어지고 Tab이 창 뒤로 샜다(2026-10-12 점검) — 같은 쪽의 다음 조작으로 옮긴다. */
+  const refocusRef = useRef<(() => HTMLElement | null | undefined) | null>(null)
+  const inPage = (i: number, sel: string) => () => listRef.current?.querySelector<HTMLElement>(`[data-page="${i}"] ${sel}`)
   const choose = (i: number, v: string) => {
+    refocusRef.current = inPage(i, '[data-change]')
     setChoices(prev => prev.map((c, k) => (k === i ? (v === 'skip' ? 'skip' : Number(v)) : c)))
     setEditing(prev => { const n = new Set(prev); n.delete(i); return n })
+  }
+  const edit = (i: number) => {
+    refocusRef.current = inPage(i, '[role="combobox"]')
+    setEditing(prev => new Set(prev).add(i))
   }
 
   async function upload(onlyFailed = false) {
@@ -219,8 +237,11 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
     // 다 올린 뒤에는 잃을 것이 없을 때만 — 다시 올릴 쪽이 남았으면 Esc 한 번에 80쪽을 다시 읽게 된다
     if (phase === 'done' && retryable.length === 0) finish()
   }
-  /** 남은 쪽을 한꺼번에 「올리지 않음」 — 양면 스캔으로 빈 뒷면이 섞였을 때 쪽마다 드롭다운을 열지 않게 */
+  const uploadRef = useRef<HTMLButtonElement>(null)
+  /** 남은 쪽을 한꺼번에 「올리지 않음」 — 양면 스캔으로 빈 뒷면이 섞였을 때 쪽마다 드롭다운을 열지 않게.
+   *  누른 버튼이 사라지므로 포커스는 [올리기](올릴 쪽이 없어 잠겼으면 제목)로 옮긴다 */
   const skipRest = () => {
+    refocusRef.current = () => (uploadRef.current && !uploadRef.current.disabled ? uploadRef.current : titleRef.current)
     setChoices(prev => prev.map(c => (c === null ? 'skip' : c)))
     setEditing(new Set())
   }
@@ -229,6 +250,13 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
   // ⚠️ 트랩(바로 위) **뒤에** 둔다 — 앞에 두면 트랩이 창 안의 이 제목을 「닫을 때 돌아갈 곳」으로 잡아,
   // 닫으면 사라진 제목으로 가려다 포커스가 body로 떨어진다(트랩은 열릴 때의 포커스를 기억한다).
   useEffect(() => { if (phase) titleRef.current?.focus() }, [phase])
+  // 고르기·바꾸기·모두 올리지 않음 뒤 — 다시 그려진 뒤에야 옮길 요소가 생긴다(choose·edit·skipRest가 정해 둔다)
+  useEffect(() => {
+    const target = refocusRef.current
+    if (!target) return
+    refocusRef.current = null
+    target()?.focus()
+  }, [choices, editing])
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
@@ -309,8 +337,8 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                       { value: 'skip', label: '올리지 않음' },
                     ]
                     return (
-                      <li key={p.index} data-undecided={need ? '1' : undefined} className={`flex scroll-mt-4 flex-col rounded-2xl border-[1.5px] p-3 ${
-                        need ? 'border-amber/60 bg-amber/[0.04]' : 'border-line bg-well/50'}`}>
+                      <li key={p.index} data-page={i} className={`flex scroll-mt-4 flex-col rounded-2xl border-[1.5px] p-3 transition-shadow ${
+                        need ? 'border-amber/60 bg-amber/[0.04]' : 'border-line bg-well/50'} ${flash === i ? 'ring-2 ring-amber ring-offset-2' : ''}`}>
                         <div className="flex items-center justify-between text-[12.5px]">
                           <span className="font-bold text-ink-mute">
                             {i + 1}쪽{multiFile && <span className="font-normal"> · {p.source} {p.pageNo}쪽</span>}
@@ -368,7 +396,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                             </>
                           )}
                           {!r && !isEditing && !need && !busy && phase !== 'done' && (
-                            <button type="button" onClick={() => setEditing(prev => new Set(prev).add(i))}
+                            <button type="button" data-change onClick={() => edit(i)} aria-label={`${i + 1}쪽 누구 기록지인지 바꾸기`}
                               className="mt-1 text-[12px] font-bold text-blue underline underline-offset-2">바꾸기</button>
                           )}
                         </div>
@@ -445,7 +473,7 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                     ) : (
                       <>
                         <button type="button" onClick={reset} disabled={busy} className="btn-ghost h-[50px] flex-1">취소</button>
-                        <button type="button" onClick={() => void upload()} disabled={!status.canConfirm || busy}
+                        <button ref={uploadRef} type="button" onClick={() => void upload()} disabled={!status.canConfirm || busy}
                           className="btn-primary h-[50px] flex-[2]">
                           {phase === 'uploading'
                             ? `올리는 중… ${sent.done} / ${sent.total}`

@@ -1,7 +1,7 @@
 // lib/xlsx.ts — .xlsx 파일에서 표를 읽는다. 외부 라이브러리를 쓰지 않는다.
 //
 // xlsx는 ZIP 안에 XML이 든 것뿐이라, 압축 해제는 표준 DecompressionStream으로,
-// XML은 우리가 읽는 두 파일(공유 문자열·시트)에 맞춘 최소 스캐너로 처리한다.
+// XML은 우리가 읽는 파일(탭 순서를 정하는 통합문서·관계, 공유 문자열, 시트)에 맞춘 최소 스캐너로 처리한다.
 // SheetJS 같은 패키지를 넣으면 번들이 1MB 가까이 늘고, 우리가 쓰는 것은 셀 값 읽기 하나뿐이다.
 //
 // **파일은 서버로 보내지 않는다.** 신청 화면(브라우저)에서 이 모듈로 읽어 필요한 네 칸만
@@ -53,7 +53,7 @@ async function unzip(ab: ArrayBuffer): Promise<Record<string, Uint8Array>> {
   return out
 }
 
-// ── 최소 XML 스캐너 (우리가 읽는 두 파일 전용) ──────────────────────
+// ── 최소 XML 스캐너 (우리가 읽는 파일 전용) ──────────────────────
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
 function unescapeXml(s: string): string {
   return s.replace(/&(#x?[0-9a-fA-F]+|\w+);/g, (m, e: string) => {
@@ -92,8 +92,41 @@ function columnOf(ref: string): number {
 
 /** 엑셀 날짜 일련번호로 보이는 값 — 실제 날짜 변환은 lib/birth.ts가 한다. */
 
+/** `xl/` 기준 상대 경로(`worksheets/sheet1.xml`, `../xl/…`)나 `/`로 시작하는 절대 경로를 zip 안의 이름으로. */
+function resolvePart(target: string): string {
+  const parts = (target.startsWith('/') ? target.slice(1) : `xl/${target}`).split('/')
+  const out: string[] = []
+  for (const p of parts) { if (p === '..') out.pop(); else if (p !== '.' && p !== '') out.push(p) }
+  return out.join('/')
+}
+
 /**
- * .xlsx의 **첫 시트**를 문자열 표로 읽는다. 빈 행은 버린다.
+ * 통합문서의 **탭 순서 첫 시트**(숨긴 시트는 건너뛴다)의 zip 안 경로. 탭 순서는 `xl/workbook.xml`의 `<sheet>` 순서이고,
+ * 그 시트의 파일은 `r:id`로 `xl/_rels/workbook.xml.rels`에서 찾는다. 파일 이름(`sheetN.xml`)의 번호는 시트를 만든
+ * 순서라 탭을 옮기면 탭 순서와 갈린다 — 교사가 명단 시트를 맨 앞으로 옮겨도 다른 시트를 읽었다(2026-10-12 점검).
+ * 어느 하나라도 없거나 못 읽으면 null(호출부가 파일 이름 순서로 물러난다).
+ */
+function firstSheetPart(files: Record<string, Uint8Array>, dec: TextDecoder): string | null {
+  const wb = files['xl/workbook.xml'], rels = files['xl/_rels/workbook.xml.rels']
+  if (!wb || !rels) return null
+  const relXml = dec.decode(rels)
+  for (const sheet of blocks(dec.decode(wb), 'sheet')) {
+    if (/\sstate="(hidden|veryHidden)"/.test(sheet.attrs)) continue
+    // 관계 id 속성의 접두어는 보통 `r:`이지만 만든 프로그램마다 다를 수 있다 — 접두어를 따지지 않는다
+    const rid = sheet.attrs.match(/\s[\w.-]+:id="([^"]*)"/)?.[1]
+    if (!rid) return null
+    const rel = [...blocks(relXml, 'Relationship')].find(r => attr(r.attrs, 'Id') === rid)
+    if (!rel) return null
+    // 차트 시트처럼 표가 아닌 탭은 건너뛴다
+    if (!attr(rel.attrs, 'Type').endsWith('/worksheet')) continue
+    const part = resolvePart(attr(rel.attrs, 'Target'))
+    return files[part] ? part : null
+  }
+  return null
+}
+
+/**
+ * .xlsx의 **첫 시트**(엑셀 탭 순서 — `firstSheetPart`)를 문자열 표로 읽는다. 빈 행은 버린다.
  * 값은 셀에 저장된 그대로다(날짜 일련번호도 숫자 문자열) — 해석은 호출부(normBirth 등)가 한다.
  */
 export async function readXlsx(ab: ArrayBuffer): Promise<string[][]> {
@@ -104,8 +137,9 @@ export async function readXlsx(ab: ArrayBuffer): Promise<string[][]> {
   const ss = files['xl/sharedStrings.xml']
   if (ss) for (const si of blocks(dec.decode(ss), 'si')) shared.push(textOf(si.inner))
 
-  const sheetName = Object.keys(files)
-    .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0]
+  const sheetNo = (n: string) => Number(n.match(/sheet(\d+)\.xml$/)?.[1])
+  const sheetName = firstSheetPart(files, dec) ?? Object.keys(files)
+    .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a, b) => sheetNo(a) - sheetNo(b))[0]
   if (!sheetName) throw new Error('시트를 찾지 못했습니다')
 
   const rows: string[][] = []

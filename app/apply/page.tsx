@@ -8,6 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { RosterEditor } from '@/components/apply/RosterEditor'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
+import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { APPLY_CHECKS, SURVEY_NOTICE } from '@/lib/consent'
 import { CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
@@ -35,6 +36,9 @@ export default function ApplyPage() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  // 명단 상자 밖에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 이 화면을 떠난다 — 학교·명단 입력이 통째로
+  // 사라진다(2026-10-12 점검). 상자 안의 drop은 RosterEditor가 받는다.
+  useFileDropGuard()
 
   const cleanTeacher = teacherName.trim().replace(/\s+/g, ' ')
   const cleanPhone = phone.trim()
@@ -109,9 +113,11 @@ export default function ApplyPage() {
         학급 코드와 실시 방법을 메일로 보내드려요.
       </p>
 
-      {/* 자동완성은 끈다 — app/page.tsx와 같은 이유(개인 기기에서 남의 칸에 제안되는 것 방지) */}
-      <form className="mt-8 w-full" autoComplete="off"
-        onSubmit={e => { e.preventDefault(); if (!busy) void submit() }}>
+      {/* 자동완성은 끈다 — app/page.tsx와 같은 이유(개인 기기에서 남의 칸에 제안되는 것 방지).
+          접수는 [신청하기]로만 한다 — 그 버튼이 submit이면 아무 칸에서나 Enter 한 번에 신청이 접수됐다(2026-10-12
+          점검: 이메일·날짜 칸에서 Enter). 폼에 submit 버튼이 없고 글자 칸이 여럿이면 브라우저는 Enter로 폼을 보내지
+          않는다(HTML 암묵 제출 규칙) — 키를 가로채지 않으니 한글 입력 중의 Enter도 건드리지 않는다. */}
+      <form className="mt-8 w-full" autoComplete="off" onSubmit={e => e.preventDefault()}>
         <section className="card p-5">
           <h2 className="text-[15px] font-bold">학교와 선생님 정보</h2>
           <label className="mt-4 block text-[13px] font-bold text-ink-soft">학교명</label>
@@ -212,7 +218,8 @@ export default function ApplyPage() {
         </section>
 
         {err && <p role="alert" className="mt-3 text-sm text-rec-deep">{err}</p>}
-        <button type="submit" disabled={busy || !filled} className="cta mt-5">신청하기</button>
+        <button type="button" onClick={() => { if (!busy) void submit() }} disabled={busy || !filled}
+          className="cta mt-5">신청하기</button>
         {!filled && (
           <p className="mt-2 text-center text-[12px] leading-relaxed text-ink-mute">
             학급 정보와 명단을 채우고 동의 항목 3개에 체크하면 신청할 수 있어요.

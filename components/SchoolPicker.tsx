@@ -20,6 +20,8 @@ export function SchoolPicker({ value, onSelect }: {
   const [loading, setLoading] = useState(false)
   const [q, setQ] = useState('')
   const [err, setErr] = useState('')
+  /** 같은 지역을 다시 받을 때 올린다 — fetch 효과는 지역(slug)이 바뀔 때만 돌기 때문 */
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
     let ignore = false
@@ -39,10 +41,15 @@ export function SchoolPicker({ value, onSelect }: {
       .catch(() => { if (!ignore) setErr('학교 목록을 불러오지 못했어요. 지역을 다시 선택해 주세요.') })
       .finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
-  }, [slug])
+  }, [slug, retry])
 
   function selectRegion(nextSlug: string) {
-    if (nextSlug === slug) return // 같은 지역 재선택: fetch effect가 재실행되지 않으므로 리셋도 하지 않는다
+    // 같은 지역 재선택: 목록을 받았으면 그대로 둔다(검색어도 지우지 않는다). 받기에 실패한 뒤라면 다시 받는다 —
+    // 「지역을 다시 선택해 주세요」라고 해 놓고 같은 지역을 고르면 아무 일도 없었다(2026-10-12 점검).
+    if (nextSlug === slug) {
+      if (!err) return
+      setRetry(n => n + 1)
+    }
     setSlug(nextSlug)
     setLoading(true); setSchools([]); setQ(''); setErr('')
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  maskEmail, evaluateSession, scoreInputFor, buildChildren, latestSession, childVerdict,
+  maskEmail, evaluateSession, scoreInputFor, buildChildren, latestSession, childVerdict, representativeSession,
   summarize, sheetsFileName, latestScored, sessionLabel, awaitsScanWriting, scanTargetSession, scanTargets,
   type ResultsSessionRow,
 } from '@/lib/results'
@@ -198,13 +198,74 @@ describe('latestSession · childVerdict', () => {
     expect(latestSession(c)).toBeNull()
     expect(childVerdict(c)).toBeNull()
   })
-  it('최신 세션이 scored가 아니면 판정 null — 채점 중인 재검사가 옛 판정을 가리지 않는다', () => {
+  it('제출된 재검사가 채점 중이면 판정 null — 앞 차수의 판정을 지금 판정처럼 보이지 않는다', () => {
     const [c] = buildChildren([], [
-      row({ id: 'old', child_no: 1, recordings: [], started_at: '2026-09-22T01:00:00.000Z' }),
-      row({ id: 'new', child_no: 1, submitted_at: null, started_at: '2026-09-22T02:00:00.000Z' }),
+      row({ id: 'old', child_no: 1, ...ALL_SCORED_FAIL, started_at: '2026-09-22T01:00:00.000Z' }),
+      row({ id: 'new', child_no: 1, recordings: READ_SCORED.recordings, started_at: '2026-09-22T02:00:00.000Z' }),
     ])
     expect(latestSession(c)?.id).toBe('new')
+    expect(c.sessions[1].status).toBe('scoring')
     expect(childVerdict(c)).toBeNull()
+  })
+})
+
+// 대표 검사 = 가장 최근에 제출된 검사(없으면 최신). 접힌 행·판정·정렬·요약 칸이 모두 이것을 본다.
+// 종전에는 표가 최신 세션을, 요약이 받을 수 있는 앞 차수를, 받는 PDF가 또 앞 차수를 봐서 같은 아이를
+// 화면 곳곳이 다르게 말했다(2026-10-12 점검 — 1차 FAIL + 2차 중단인 아이).
+describe('대표 검사 — 접힌 행·판정·정렬·요약이 같은 검사를 본다', () => {
+  it('[REGRESSION] 1차 FAIL(채점 완료) + 2차 중단 → 대표는 1차, 판정 Fail, 정렬에서 Fail 위', () => {
+    const c = buildChildren([], [
+      row({ id: 'p', child_no: 3, ...READ_SCORED, ...WRITE_SCORED }),                                    // 3번 pass
+      row({ id: 'f1', child_no: 7, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),      // 7번 1차 fail
+      row({ id: 'f2', child_no: 7, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),      // 7번 2차 중단
+    ])
+    const seven = c.find(x => x.childNo === 7)!
+    expect(representativeSession(seven)?.id).toBe('f1')
+    expect(childVerdict(seven)).toBe('fail')
+    expect(c.map(x => x.childNo)).toEqual([7, 3])
+    expect(summarize(c)).toMatchObject({ scored: 2, fail: 1, unsubmitted: 0 })
+  })
+  it('1차 PASS + 2차 제출·채점 중 → 대표는 2차, 판정 없음·채점 중(받을 수는 있다 — 1차)', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', recordings: READ_SCORED.recordings }),
+    ])
+    expect(representativeSession(c)?.id).toBe('a2')
+    expect(childVerdict(c)).toBeNull()
+    expect(latestScored(c)?.id).toBe('a1')
+    expect(summarize([c])).toEqual({ tested: 1, scored: 0, scoring: 1, scanWait: 0, unsubmitted: 0, fail: 0, untested: 0, downloadable: 1 })
+  })
+  it('제출된 검사가 하나도 없으면 최신 검사가 대표다', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'u1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', submitted_at: null }),
+      row({ id: 'u2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(representativeSession(c)?.id).toBe('u2')
+  })
+  it('스캔본이 붙을 검사와 대표 검사는 같은 규칙이다 — 갈리면 대표 검사가 「재검사로 대체」로 그려진다', () => {
+    const [c] = buildChildren([], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...SCAN, ...READ_SCORED }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
+    ])
+    expect(scanTargetSession(c)?.id).toBe(representativeSession(c)?.id)
+  })
+  it('[REGRESSION] 요약의 네 칸은 접힌 행의 상태 배지 수와 같다', () => {
+    const c = buildChildren([{ child_no: 9, child_name: '명단만', gender: '여' }], [
+      row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),
+      row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),        // 채점 완료(1차)
+      row({ id: 'b1', child_no: 2, started_at: '2026-09-21T01:00:00.000Z', ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 'b2', child_no: 2, started_at: '2026-09-22T01:00:00.000Z', recordings: READ_SCORED.recordings }), // 채점 중(2차)
+      row({ id: 'c1', child_no: 3, ...SCAN, ...READ_SCORED }),                                          // 스캔 대기
+      row({ id: 'd1', child_no: 4, ...UPLOADED, ...READ_SCORED }),                                      // 채점 중(쓰기 남음)
+      row({ id: 'e1', child_no: 5, submitted_at: null }),                                               // 미제출
+    ])
+    const badges = { scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0 }
+    for (const x of c) {
+      const rep = representativeSession(x)
+      if (rep) badges[sessionLabel(rep, scanTargetSession(x)?.id) as keyof typeof badges]++
+    }
+    expect(badges).toEqual({ scored: 1, scoring: 2, scanWait: 1, unsubmitted: 1 })
+    expect(summarize(c)).toMatchObject({ ...badges, tested: 5, untested: 1, fail: 1, downloadable: 4 })
   })
 })
 
@@ -216,8 +277,8 @@ describe('latestScored — 받을 수 있는 것 중 최신 (전수 점검 2026-
     ])
     expect(latestSession(c)?.id).toBe('a2')
     expect(latestScored(c)?.id).toBe('a1')
-    // 판정 표시는 여전히 최신 세션만 본다 — 채점 중인 재검사가 옛 판정을 가리지 않는다(별개 규칙)
-    expect(childVerdict(c)).toBeNull()
+    // 판정 표시도 중단된 재검사를 보지 않는다 — 대표 검사(가장 최근에 제출된 검사)가 1차다(2026-10-12 점검)
+    expect(childVerdict(c)).toBe('pass')
   })
   it('채점 완료가 하나도 없으면 null', () => {
     const [c] = buildChildren([], [row({ id: 's', child_no: 1, submitted_at: null })])
@@ -250,8 +311,9 @@ describe('summarize — 상단 한 줄', () => {
       row({ id: 'a1', child_no: 1, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),
       row({ id: 'a2', child_no: 1, started_at: '2026-09-22T01:00:00.000Z', submitted_at: null }),
     ])
-    // 칸은 겹치지 않는다 — 이 아이는 「채점 완료」에만 센다(미제출로 두 번 세지 않는다)
-    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 0, scoring: 0, scanWait: 0, unsubmitted: 0, untested: 0, downloadable: 1 })
+    // 칸은 겹치지 않는다 — 이 아이는 「채점 완료」에만 센다(미제출로 두 번 세지 않는다).
+    // Fail도 대표 검사(1차) 판정으로 센다 — 받는 결과지가 1차 FAIL인데 Fail 0으로 세지 않는다(2026-10-12 점검)
+    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 1, scoring: 0, scanWait: 0, unsubmitted: 0, untested: 0, downloadable: 1 })
   })
 })
 
@@ -275,6 +337,18 @@ describe('sheetsFileName — 관리자 규약 계승', () => {
     expect(sheetsFileName({ ...base, all: false, picked: [
       { childNo: 3, name: '박서준', attemptNo: 2, attemptCount: 3, startedDate: '2026-09-21' },
     ] })).toBe('03_박서준_2차_2026-09-21.pdf')
+  })
+  // 「명」은 서로 다른 아이 수, 장 수는 「장」(2026-10-12 점검 — 한 아이의 1·2차를 받았는데 「2명」이 찍혔다)
+  it('[REGRESSION] 한 아이의 여러 장은 「명」이 아니라 그 아이 이름 + 장 수', () => {
+    expect(sheetsFileName({ ...base, all: false, picked: [
+      { childNo: 3, name: '박서준', attemptNo: 1, attemptCount: 2, startedDate: '2026-09-15' },
+      { childNo: 3, name: '박서준', attemptNo: 2, attemptCount: 2, startedDate: '2026-09-21' },
+    ] })).toBe('03_박서준_2장_2026-09-22.pdf')
+  })
+  it('여러 아이인데 장 수가 더 많으면 「N명_M장」, 같으면 「N명」만', () => {
+    const p = (childNo: number, attemptNo: number) => ({ childNo, name: `아이${childNo}`, attemptNo, attemptCount: 2, startedDate: '2026-09-21' })
+    expect(sheetsFileName({ ...base, all: false, picked: [p(1, 1), p(1, 2), p(3, 1)] })).toBe('1-2_결과지_2명_3장_2026-09-22.pdf')
+    expect(sheetsFileName({ ...base, all: false, picked: [p(1, 2), p(3, 1)] })).toBe('1-2_결과지_2명_2026-09-22.pdf')
   })
   it('단일학급(반 0)은 학년만', () => {
     expect(sheetsFileName({ grade: 2, classNo: 0, date: '2026-09-22', all: true, picked: [] })).toBe('2학년_결과지_전체_2026-09-22.pdf')

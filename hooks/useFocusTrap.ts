@@ -28,7 +28,10 @@ export function useFocusTrap(active: boolean, onEscape?: () => void) {
       if (items.length === 0) return
       const first = items[0], last = items[items.length - 1]
       const activeEl = document.activeElement as HTMLElement | null
-      if (e.shiftKey && activeEl === first) { e.preventDefault(); last.focus() }
+      // 포커스가 창 밖(body)에 떨어져 있으면 창 안으로 되돌린다 — 누르던 요소가 다시 그려지며 사라지면 그렇게 되고,
+      // 그대로 두면 Tab이 창 뒤의 화면으로 샌다(스캔본 확인 창에서 학생을 고른 뒤, 2026-10-12 점검).
+      if (!activeEl || !container!.contains(activeEl)) { e.preventDefault(); (e.shiftKey ? last : first).focus() }
+      else if (e.shiftKey && activeEl === first) { e.preventDefault(); last.focus() }
       else if (!e.shiftKey && activeEl === last) { e.preventDefault(); first.focus() }
     }
     document.addEventListener('keydown', onKeyDown)

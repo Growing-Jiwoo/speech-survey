@@ -107,6 +107,8 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
 
 /**
  * 명단 ∪ 세션 → 아이당 한 줄. 정렬은 **Fail 먼저, 그 안에서 번호순**(사용자 확정 ④).
+ * Fail은 대표 검사의 판정(`childVerdict` — 가장 최근에 제출된 검사)이다. 화면의 접힌 행·요약과 같은 검사를
+ * 봐야 한다 — 1차 FAIL 뒤 2차를 중단한 아이가 Fail 위로 올라가지 않았다(2026-10-12 점검).
  * - 명단에만 있음 → sessions 빈 행(미실시)
  * - 세션만 있음(직접 입력·명단 없는 학급) → 세션의 이름·성별
  * - 둘 다 → 이름·성별은 **최신 세션** 값(임상 기록이 명단보다 우선 — 관리자가 고친 값이 여기 있다)
@@ -137,6 +139,8 @@ const classTag = (grade: number, classNo: number) => (classNo === 0 ? `${grade}�
 /**
  * 내려받기 파일명. 관리자 규약(`03_이름_날짜.pdf`, 사용자 확정 2026-08-15)을 한 장에 그대로 쓰고,
  * 그 아이에 재검사가 있으면 `_2차`를 붙여 같은 이름으로 덮어써지지 않게 한다.
+ * 여러 장이면 「명」은 **서로 다른 아이 수**이고, 장 수가 그보다 많을 때만 `_N장`을 붙인다 — 한 아이의 1·2차를
+ * 받았는데 `_2명_`이 찍혔다(2026-10-12 점검). 한 아이의 여러 장은 관리자 규약을 따라 `03_이름_N장_오늘.pdf`.
  */
 export function sheetsFileName(a: {
   grade: number; classNo: number
@@ -147,10 +151,13 @@ export function sheetsFileName(a: {
 }): string {
   const tag = classTag(a.grade, a.classNo)
   if (a.all) return `${tag}_결과지_전체_${a.date}.pdf`
-  if (a.picked.length === 1) {
+  const sheets = a.picked.length
+  const kids = new Set(a.picked.map(p => p.childNo)).size
+  if (sheets === 1) {
     const p = a.picked[0]
     const nth = p.attemptCount > 1 ? `_${p.attemptNo}차` : ''
     return `${pad2(p.childNo)}_${p.name}${nth}_${p.startedDate}.pdf`
   }
-  return `${tag}_결과지_${a.picked.length}명_${a.date}.pdf`
+  if (kids === 1) return `${pad2(a.picked[0].childNo)}_${a.picked[0].name}_${sheets}장_${a.date}.pdf`
+  return `${tag}_결과지_${kids}명${sheets > kids ? `_${sheets}장` : ''}_${a.date}.pdf`
 }
