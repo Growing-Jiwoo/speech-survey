@@ -86,7 +86,7 @@ describe('saveScoresMerging', () => {
   })
 
   it('[REGRESSION] 다른 화면이 X로 저장한 칸을 이 화면이 손대지 않았으면 O로 되돌리지 않는다', async () => {
-    const before = S({ marks: { rw01: true, rw03: true } })          // 「어디」(rw03)는 O였다
+    const before = S({ marks: { rw01: true, rw03: true } })          // 「사과」(rw03)는 O였다
     const serverNow: ScoreRows = { marks: [{ item_code: 'rw01', correct: true }, { item_code: 'rw03', correct: false }], sentences: [], times: [], writing: [] }
     const mine = S({ marks: { rw01: false, rw03: true } })           // 이 화면은 rw01만 고쳤다
     const { bodies, send } = fakeSend(conflict('vB', serverNow), { ok: true, version: 'vC' })

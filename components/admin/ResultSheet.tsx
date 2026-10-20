@@ -1,5 +1,5 @@
 // components/admin/ResultSheet.tsx — 관리자 결과지.
-// 종이 검사지(assets/forms/kodys-g*.pdf)와 같은 순서·구조로 두고,
+// 종이 검사지(담당자 배포 PDF)와 같은 순서·구조로 두고,
 // 각 줄에 아동의 결과물(녹음·검사 중 응답)과 채점 입력을 함께 놓는다.
 // 공식 출력물은 이 화면이 아니라 결과보고서 PDF다(/api/admin/sessions/[id]/sheet.pdf).
 // 화면 인쇄(@page, app/globals.css)는 작업 중 참고용으로만 남겨 둔다.

@@ -6,14 +6,22 @@
 // import 하나로 조용히 되돌아가는 종류의 실수라 사람이 리뷰로 잡기 어렵다.
 //
 // 무엇을 찾나: 문장 읽기 문항(한 줄씩)과 **따옴표로 감싼** 무의미 낱말. 두 글자 의미 낱말
-// ('바지' 등)은 UI 문구와 우연히 겹칠 수 있어 찾지 않는다 — 문항이 새면 문장과 무의미 낱말도
+// ('연필' 등)은 UI 문구와 우연히 겹칠 수 있어 찾지 않는다 — 문항이 새면 문장과 무의미 낱말도
 // 같은 배열에 붙어 함께 새므로 이것으로 충분하다. 번들러가 한글을 \uXXXX로 바꿔 쓸 수도 있어
 // 두 표기를 다 본다.
 //
+// 실제 문항은 암호문(lib/forms/sealed.ts)이라 키(FORMS_KEY)가 있어야 실제 낱말로 찾는다 — 환경 변수, 없으면 .env.local.
+// 키가 없으면 가짜 문항으로 찾고, Vercel에서는 lib/forms가 던져 여기서 빌드가 멈춘다(키가 빠진 배포를 막는 자리다).
+// 암호문 자체도 찾는다 — 클라이언트가 lib/forms를 import하면 실제 낱말이 아니라 암호문과 가짜 문항이 실린다.
+//
 // 실행: npm run build (next build 뒤에 자동으로 돈다). 단독 실행은 `npx tsx scripts/check-client-bundle.ts`.
+import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
-import { FORMS } from '../lib/forms'
+
+if (!process.env.FORMS_KEY && existsSync('.env.local')) process.loadEnvFile('.env.local')
+const { FORMS, REAL_FORMS } = await import('../lib/forms')
+const { SEALED } = await import('../lib/forms/sealed')
 
 const DIR = path.join(import.meta.dirname, '..', '.next', 'static')
 
@@ -24,7 +32,7 @@ const needles = FORMS.flatMap(f => [
   ...f.sentences.flatMap(s => s.split('\n')),
   ...[...f.readNonsense, ...(f.writing.kind === 'word' ? f.writing.nonsense : [])]
     .flatMap(w => [`"${w}"`, `'${w}'`]),
-]).flatMap(n => [n, escapeU(n)])
+]).flatMap(n => [n, escapeU(n)]).concat(SEALED.slice(0, 48))
 
 async function* files(dir: string): AsyncGenerator<string> {
   for (const e of await readdir(dir, { withFileTypes: true })) {
@@ -50,4 +58,4 @@ if (hits.length > 0) {
   for (const h of hits) console.error(`  ${h}`)
   process.exit(1)
 }
-console.log(`[check-client-bundle] 공개 청크 ${scanned}개에 검사지 문항 없음`)
+console.log(`[check-client-bundle] 공개 청크 ${scanned}개에 검사지 문항 없음(${REAL_FORMS ? '실제 문항' : '가짜 문항 — FORMS_KEY 없음'}으로 검사)`)

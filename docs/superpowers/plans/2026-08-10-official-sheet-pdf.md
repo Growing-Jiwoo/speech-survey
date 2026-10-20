@@ -388,8 +388,8 @@ function grid(rowWords) {
            rows: out.map(c => c.y), perRow: row.length }
 }
 
-console.log('\n// wordReading'); console.log(JSON.stringify(grid([['어디'], ['아로']])))
-console.log('\n// wordWriting'); console.log(JSON.stringify(grid([['우비'], ['오거']])))
+console.log('\n// wordReading'); console.log(JSON.stringify(grid([['사과'], ['가보']])))
+console.log('\n// wordWriting'); console.log(JSON.stringify(grid([['하늘'], ['모타']])))
 
 /** '/' 글리프 위치 = 점수 빈칸 앵커 */
 console.log('\n// 점수 빈칸 후보 (slashX, baselineY)')

@@ -11,7 +11,9 @@
     "test": "vitest run",
     "build:schools": "tsx scripts/build-schools.ts",
     "build:roster-template": "tsx scripts/build-roster-template.ts",
-    "hash-password": "tsx scripts/hash-password.ts"
+    "hash-password": "tsx scripts/hash-password.ts",
+    "forms:seal": "tsx scripts/forms-seal.ts seal",
+    "forms:unseal": "tsx scripts/forms-seal.ts unseal"
   },
   "dependencies": {
     "@node-rs/argon2": "2.2.2",

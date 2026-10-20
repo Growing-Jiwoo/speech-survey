@@ -2,6 +2,9 @@ node_modules/
 .next/
 .env*
 !.env.local.example
+
+# 실제 검사 문항 평문·검사지 원본 — 저장소가 공개라 커밋하지 않는다. 커밋하는 것은 암호문 lib/forms/sealed.ts뿐(lib/forms/seal.ts)
+/private/
 *.log
 
 *.tsbuildinfo

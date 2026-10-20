@@ -84,13 +84,13 @@ describe('ITEMS (KODYS-G1)', () => {
     })
   })
   it('PDF 문구 대조 (표본)', () => {
-    expect(itemByCode.get('rw01')!.text).toBe('어디')
-    expect(itemByCode.get('rw08')!.text).toBe('아로')
-    expect(itemByCode.get('rw14')!.text).toBe('봉밥')
-    expect(itemByCode.get('rs01')!.text).toBe('아이가 아빠와 우유 사러 가서 고기도 사요.')
+    expect(itemByCode.get('rw01')!.text).toBe('사과')
+    expect(itemByCode.get('rw08')!.text).toBe('가보')
+    expect(itemByCode.get('rw14')!.text).toBe('사도')
+    expect(itemByCode.get('rs01')!.text).toBe('작은 토끼가 숲에서 당근을 찾아 집으로 가요.')
     expect(itemByCode.get('rs04')!.text).toContain('사과를 했어요')
-    expect(itemByCode.get('ww01')!.text).toBe('우비')
-    expect(itemByCode.get('ww06')!.text).toBe('오거')
+    expect(itemByCode.get('ww01')!.text).toBe('하늘')
+    expect(itemByCode.get('ww06')!.text).toBe('모타')
   })
   it('의미/무의미 구분', () => {
     expect(itemByCode.get('rw07')!.kind).toBe('meaning')
@@ -127,16 +127,16 @@ export interface SurveyItem {
   maxSec: number    // 녹음 제한(초). 비녹음 문항은 0
 }
 
-const READ_MEANING = ['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법']
-const READ_NONSENSE = ['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥']
+const READ_MEANING = ['사과', '연필', '의자', '시계', '우산', '모자', '신발']
+const READ_NONSENSE = ['가보', '나로', '다무', '라시', '마고', '바누', '사도']
 const SENTENCES = [
-  '아이가 아빠와 우유 사러 가서 고기도 사요.',
-  '스라소니가 피리 가져오고 개구리가 해바라기 가지고 와요.',
-  '다람쥐가 두꺼비를 보고 도망가요 그래서 부엉이가 다람쥐를 숨겨줘요.',
-  '쉬는시간에 친구가 나에게 장난을 계속 쳐서 다투었어요.\n학교가 끝난 후에 친구가 다가와서 사과를 했어요.',
+  '작은 토끼가 숲에서 당근을 찾아 집으로 가요.',
+  '고양이가 공을 굴리고 강아지가 그 공을 쫓아요.',
+  '오리가 연못에서 헤엄치고 거북이는 바위 위에서 천천히 쉬어요.',
+  '아침에 일어나서 세수를 하고 밥을 먹었어요.\n그리고 가방을 메고 친구와 함께 즐겁게 학교에 갔어요.',
 ]
-const WRITE_MEANING = ['우비', '까치', '수박', '동상', '생각']
-const WRITE_NONSENSE = ['오거', '끼추', '소벅', '당송', '갈먹']
+const WRITE_MEANING = ['하늘', '바람', '그림', '노래', '편지']
+const WRITE_NONSENSE = ['모타', '루기', '파소', '키버', '하두']
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -1514,7 +1514,7 @@ export default function SurveyPage() {
 }
 ```
 
-- [ ] **Step 4: 확인** — Run: `npm run typecheck && npx vitest run && npm run build` / Expected: 모두 PASS. 브라우저: 시작 → 마이크 확인 → 문항 1(낱말 '어디', 30초 카운트다운) → 15(문장, 40초) → 19(낱말쓰기: 예/아니오 전 '다음' 비활성) → 29(체크리스트, '제출' 버튼) 확인. 이전/다음 왕복, 새로고침 후 상태 유지 확인.
+- [ ] **Step 4: 확인** — Run: `npm run typecheck && npx vitest run && npm run build` / Expected: 모두 PASS. 브라우저: 시작 → 마이크 확인 → 문항 1(낱말 '사과', 30초 카운트다운) → 15(문장, 40초) → 19(낱말쓰기: 예/아니오 전 '다음' 비활성) → 29(체크리스트, '제출' 버튼) 확인. 이전/다음 왕복, 새로고침 후 상태 유지 확인.
 
 - [ ] **Step 5: 커밋**
 
@@ -1731,11 +1731,11 @@ describe('GET /api/admin/export', () => {
     expect(lines[0]).toContain('학교')
     expect(lines[0]).toContain('생년월일')
     // rw01: 시도 2회, 최종 경로는 2번째
-    const rw01 = lines.find(l => l.includes('rw01') || (l.includes(',1,') && l.includes('어디')))!
+    const rw01 = lines.find(l => l.includes('rw01') || (l.includes(',1,') && l.includes('사과')))!
     expect(rw01).toContain('녹음완료')
     expect(rw01).toContain('sess-1/rw01_2.webm')
     // ww01: 예
-    expect(lines.some(l => l.includes('우비') && l.includes('예'))).toBe(true)
+    expect(lines.some(l => l.includes('하늘') && l.includes('예'))).toBe(true)
     // 미녹음 문항 존재 (rw02 등)
     expect(lines.some(l => l.includes('미녹음'))).toBe(true)
     // 체크리스트 라벨
