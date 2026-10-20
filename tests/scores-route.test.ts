@@ -167,6 +167,14 @@ describe('PUT …/scores — 문장 읽은 시간(times)', () => {
     expect((await put({ sw01: 3 })).status).toBe(400)
   })
 
+  it('[REGRESSION] 상한은 문장마다 그 문장의 제한 시간 + 5초 — 2학기 3·4번은 35초, 1·2번은 25초까지(담당자 확정 2026-10-20)', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, form_id: 'KODYS-G1-S2', writingMode: 'screen' })
+    expect((await put({ rs03: 35, rs04: 32.5 })).status).toBe(200)
+    expect((await put({ rs02: 25 })).status).toBe(200)
+    expect((await put({ rs03: 35.1 })).status).toBe(400)
+    expect((await put({ rs01: 25.1 })).status).toBe(400)
+  })
+
   it('담당 양식이 없는 학년(3학년 → G1 폴백)도 같은 규칙', async () => {
     vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3, form_id: null, writingMode: 'screen' })
     expect((await put({ rs01: 4 })).status).toBe(200)

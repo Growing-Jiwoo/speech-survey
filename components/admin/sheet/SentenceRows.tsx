@@ -29,21 +29,22 @@ export function SentenceRows({
   onAudioError: () => void
 }) {
   // 제한 시간·입력 상한은 문장마다 다르다(2학기 3·4번 30초) — 문항의 `maxSec`(= 그 문장의 제한 시간)에서 꺼낸다.
-  // 저장된 값을 글자로 맞출 때는 가장 큰 상한을 쓴다 — 서버가 문장마다 검사해 둔 값이라 이 상한을 넘는 값은 없다.
-  const maxSec = Math.max(...items.map(readSecMax))
+  // 칸의 글자를 값에 맞출 때도 그 문장의 상한으로 읽는다(lib/sheet-save `syncSecondsTexts` 주석 — 가장 큰 상한 하나로 읽었더니
+  // 1·2번 칸에 친 26이 안내 없이 지워졌다, 2026-10-20 최종 점검).
+  const maxByCode = new Map(items.map(i => [i.code, readSecMax(i)]))
+  const maxOf = (code: string) => maxByCode.get(code) ?? Math.max(...maxByCode.values())
   // 시간 칸에 친 글자 — 칸마다 여기서 들고 있다(아래 SecondsInput 주석). 처음 한 번 저장된 값으로 채운다.
-  const [texts, setTexts] = useState<Partial<Record<string, string>>>(() => syncSecondsTexts({}, times, maxSec))
+  const [texts, setTexts] = useState<Partial<Record<string, string>>>(() => syncSecondsTexts({}, times, maxOf))
   // 다른 화면이 저장한 시간이 병합으로 들어오면(lib/sheet-save, 2026-10-12 점검 X8) 그 칸의 글자를 새 값으로 바꾼다 —
   // 그대로 두면 칸에 보이는 글자와 저장할 값이 갈린다. 렌더 중에 맞춘다(효과로 하면 옛 글자가 한 번 그려진다).
   const [prevTimes, setPrevTimes] = useState(times)
   if (prevTimes !== times) {
     setPrevTimes(times)
-    setTexts(t => syncSecondsTexts(t, times, maxSec))
+    setTexts(t => syncSecondsTexts(t, times, maxOf))
   }
   const setText = (code: string, t: string) => {
     setTexts(prev => ({ ...prev, [code]: t }))
-    const item = items.find(x => x.code === code)
-    const v = parseReadSec(t, item ? readSecMax(item) : maxSec)
+    const v = parseReadSec(t, maxOf(code))
     onTimeChange(code, v === null ? undefined : v)
   }
   return (

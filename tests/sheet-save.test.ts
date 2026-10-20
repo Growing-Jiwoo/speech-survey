@@ -204,10 +204,15 @@ describe('putScores', () => {
 
 describe('syncSecondsTexts — 병합으로 바뀐 시간을 칸의 글자에 맞춘다', () => {
   it('바뀐 칸만 새 값으로, 사라진 칸은 빈 칸으로', () => {
-    expect(syncSecondsTexts({ rs01: '5', rs02: '6' }, { rs01: 5, rs03: 7.5 }, 25)).toEqual({ rs01: '5', rs02: '', rs03: '7.5' })
+    expect(syncSecondsTexts({ rs01: '5', rs02: '6' }, { rs01: 5, rs03: 7.5 }, () => 25)).toEqual({ rs01: '5', rs02: '', rs03: '7.5' })
   })
   it('치는 중인 글자는 지우지 않는다 — 「4.」는 4, 잘못 친 글자는 값 없음과 같다', () => {
     const texts = { rs01: '4.', rs02: 'abc' }
-    expect(syncSecondsTexts(texts, { rs01: 4 }, 25)).toBe(texts)
+    expect(syncSecondsTexts(texts, { rs01: 4 }, () => 25)).toBe(texts)
+  })
+  it('[REGRESSION] 글자는 그 칸의 상한으로 읽는다 — 2학기 1번(25초) 칸의 26은 잘못 친 글자로 남는다(가장 큰 상한 35초로 읽으면 안내 없이 지워졌다, 2026-10-20)', () => {
+    const maxOf = (code: string) => (code === 'rs03' || code === 'rs04' ? 35 : 25)
+    const texts = { rs01: '26', rs03: '35' }
+    expect(syncSecondsTexts(texts, { rs03: 35 }, maxOf)).toBe(texts)
   })
 })

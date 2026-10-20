@@ -109,6 +109,15 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
   })
 })
 
+describe('evaluateSession — 세션의 양식(form_id)으로 판정한다', () => {
+  it('[REGRESSION] 같은 해독 10점도 1학기 임시 기준은 양호, 1학년 2학기 기준(12 이하 주의)은 주의', () => {
+    const legacy = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
+    const s2 = evaluateSession(row({ id: 's', child_no: 1, form_id: 'KODYS-G1-S2', ...READ_SCORED, ...WRITE_SCORED }))
+    expect([legacy.taskVerdict?.wordReading, legacy.verdict]).toEqual(['good', 'good'])
+    expect([s2.taskVerdict?.wordReading, s2.verdict]).toEqual(['caution', 'caution'])
+  })
+})
+
 describe('evaluateSession — 문장 읽기유창성(어절/10초)', () => {
   const recordedAll = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
   it('교사 결과표의 문장 읽기 점수는 관리자 결과지와 같은 어절/10초다', () => {
