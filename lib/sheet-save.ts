@@ -184,12 +184,14 @@ export async function saveScoresMerging(a: {
  * 읽은 시간 칸의 글자를 화면 값에 맞춘다 — 칸이 친 글자를 따로 들고 있어서(SentenceRows), 병합으로 다른 화면의 시간이
  * 들어오면 그 칸의 글자를 새 값으로 바꿔야 보이는 것과 저장할 값이 갈리지 않는다. 친 글자가 지금 값과 같으면(「4.」 = 4,
  * 잘못 친 글자 = 값 없음) 건드리지 않는다 — 치는 중인 글자를 지우지 않게. 바뀐 칸이 없으면 같은 객체를 돌려준다.
+ * 글자는 **그 칸의 상한**(`maxOf`)으로 읽는다 — 2학기는 문장마다 상한이 다르다(1·2번 25초, 3·4번 35초). 가장 큰 상한 하나로
+ * 읽었더니 1·2번 칸에 친 26이 「값 26」으로 읽혀 「값 없음」과 어긋났고, 칸이 오류 안내 없이 지워졌다(2026-10-20 최종 점검).
  */
-export function syncSecondsTexts(texts: Cells<string>, times: Cells<number>, max: number): Cells<string> {
+export function syncSecondsTexts(texts: Cells<string>, times: Cells<number>, maxOf: (code: string) => number): Cells<string> {
   let out: Cells<string> | null = null
   for (const code of new Set([...Object.keys(texts), ...Object.keys(times)])) {
     const value = times[code]
-    if ((parseReadSec(texts[code] ?? '', max) ?? undefined) === value) continue
+    if ((parseReadSec(texts[code] ?? '', maxOf(code)) ?? undefined) === value) continue
     out ??= { ...texts }
     out[code] = value === undefined ? '' : String(value)
   }

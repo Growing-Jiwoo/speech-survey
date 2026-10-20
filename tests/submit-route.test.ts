@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/env', () => ({ env: () => 'test-secret' }))
 vi.mock('@/lib/db', () => ({
   submitSession: vi.fn().mockResolvedValue('ok'),
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, form_id: null, writingMode: 'screen' }),
 }))
 
 import { POST } from '@/app/api/sessions/submit/route'
@@ -26,7 +26,7 @@ const submitArg = () => vi.mocked(db.submitSession).mock.calls[0][0]
 beforeEach(async () => {
   vi.clearAllMocks()
   vi.mocked(db.submitSession).mockResolvedValue('ok')
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, form_id: null, writingMode: 'screen' })
   TOKEN = await createSessionToken(SID, 'test-secret')
 })
 
@@ -47,7 +47,7 @@ describe('POST /api/sessions/submit', () => {
     expect(submitArg()).toMatchObject({ writing: [], sentenceWriting: [], checklist: [] })
   })
   it('존재하지 않는 세션 404 (허위 성공 제거)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, form_id: null, writingMode: 'screen' })
     expect((await POST(makeReq(VALID()))).status).toBe(404)
     expect(db.submitSession).not.toHaveBeenCalled()
   })
@@ -56,7 +56,7 @@ describe('POST /api/sessions/submit', () => {
     expect((await POST(makeReq(VALID()))).status).toBe(404)
   })
   it('이미 제출된 세션 재제출 409 (제출 후 변조 차단)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, form_id: null, writingMode: 'screen' })
     expect((await POST(makeReq(VALID()))).status).toBe(409)
     expect(db.submitSession).not.toHaveBeenCalled()
   })
@@ -133,7 +133,7 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
     makeReq({ sessionId: SID, sessionToken: TOKEN, writing, checklist: ['none'] })
 
   beforeEach(() => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, form_id: null, writingMode: 'screen' })
   })
 
   it('G2 세션의 문장 쓰기 점수는 sentence_scores 쪽으로 간다', async () => {
@@ -155,7 +155,7 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
   })
 
   it('G1 세션에 G2 문항 코드(sw01)를 보내면 400', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, form_id: null, writingMode: 'screen' })
     expect((await POST(g2Req({ sw01: 2 }))).status).toBe(400)
   })
 

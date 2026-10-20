@@ -8,7 +8,7 @@ import {
 /** G1 세션 행 골격. 채점 행은 테스트마다 채운다. */
 function row(over: Partial<ResultsSessionRow> & { id: string; child_no: number }): ResultsSessionRow {
   return {
-    child_name: `아이${over.child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+    child_name: `아이${over.child_no}`, gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     writing_mode: 'screen', writing_scan: null,
@@ -16,7 +16,7 @@ function row(over: Partial<ResultsSessionRow> & { id: string; child_no: number }
   }
 }
 /** 낱말 14 O/X + 문장 4 어절·시간 = 읽기 두 과제 채점 완료. 쓰기는 비움.
- *  문장은 36어절 ÷ 18초 = 2.00 어절/초. 녹음도 전부 있다 — 녹음 없는 페이지는 저장값과 무관하게
+ *  문장은 36어절 ÷ 18초 × 10 = 20.00 어절/10초. 녹음도 전부 있다 — 녹음 없는 페이지는 저장값과 무관하게
  *  X·0어절·20초로 고정되므로(lib/scoring withUnrecordedFixed) 녹음 없이는 채점한 값이 계산에 들어가지 않는다. */
 const READ_SCORED = {
   recordings: ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code })),
@@ -27,8 +27,8 @@ const READ_SCORED = {
 const WRITE_SCORED = {
   writing_answers: Array.from({ length: 10 }, (_, i) => ({ item_code: `ww${String(i + 1).padStart(2, '0')}`, can_write: i < 8 })),
 }
-/** 세 과제 모두 채점됐고 낱말 해독·쓰기가 기준 미달 = 판정이 실제로 나오는 Fail(FAIL 2개 이상,
- *  담당자 확정 2026-09-29). A안에서 Fail은 **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는
+/** 세 과제 모두 채점됐고 낱말 해독·쓰기가 주의 = 판정이 실제로 나오는 위험(주의 2개 이상,
+ *  담당자 확정 2026-10-19). A안에서 판정은 **채점이 끝난 세션에서만** 나오므로, 정렬·집계 픽스처는
  *  쓰기까지 채워야 한다. */
 const ALL_SCORED_FAIL = {
   ...READ_SCORED,
@@ -61,9 +61,9 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
   it('읽기 두 과제가 채점되면 쓰기가 비어도 scored — (화면 방식) 쓰기는 관리자가 채울 수 없어 막으면 영원히 못 받는다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED }))
     expect(r.status).toBe('scored')
-    expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 2, writing: 0 })
+    expect(r.scores).toEqual({ wordReading: 10, sentenceReading: 20, writing: 0 })
   })
-  it('[REGRESSION] 녹음이 있는 문장에 읽은 시간이 없으면 scoring — 시간 없이는 어절/초를 낼 수 없다', () => {
+  it('[REGRESSION] 녹음이 있는 문장에 읽은 시간이 없으면 scoring — 시간 없이는 10초당 어절을 낼 수 없다', () => {
     const recorded = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, recordings: recorded, sentence_times: [] }))
     expect(r.status).toBe('scoring')
@@ -79,7 +79,7 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
   it('세 과제가 모두 채점되면 complete가 전부 true이고 판정이 나온다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
     expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: true })
-    expect(r.verdict).toBe('pass')
+    expect(r.verdict).toBe('good')
   })
   it('[REGRESSION] 녹음 없는 페이지는 X·0점으로 채워져 채점 완료로 본다(사용자 확정 2026-08-12) — 채점 행이 하나도 없어도 녹음이 없으면 scored', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, recordings: [] }))
@@ -90,53 +90,62 @@ describe('evaluateSession — 상태·점수·판정 (관리자 sheetPdfGate와 
     expect(r.complete).toEqual({ wordReading: true, sentenceReading: true, writing: false })
     expect(r.verdict).toBeNull()
   })
-  // 담당자 확정(2026-09-29) 「3개 중에 2개 이상이 fail이면 최종 fail」 — lib/scoring의 finalVerdict.
-  it('판정: fail이 2개 이상일 때만 fail — 쓰기 하나만 fail이면 pass (G1 임시 기준 9점 · 1.0 어절/초 · 6점)', () => {
+  // 담당자 확정(2026-10-19) 주의 1개 → 주의, 주의 2개 이상 → 위험 — lib/scoring의 finalVerdict.
+  it('판정: 주의가 2개 이상이면 위험, 쓰기 하나만 주의면 주의 (1학기 임시 기준 「8점 이하 · 9.99 이하 · 5점 이하」 주의)', () => {
     const pass = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
-    expect(pass.verdict).toBe('pass')
+    expect(pass.verdict).toBe('good')
     const failWriting = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED,
       writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })) }))
-    expect(failWriting.verdict).toBe('pass')
-    // 읽기 두 과제가 미녹음(X·0점)이면 FAIL 2개 → 최종 FAIL
+    expect(failWriting.verdict).toBe('caution')
+    // 읽기 두 과제가 미녹음(X·0점)이면 주의 2개 → 최종 위험
     const failReading = evaluateSession(row({ id: 's', child_no: 1, recordings: [], ...WRITE_SCORED }))
-    expect(failReading.verdict).toBe('fail')
+    expect(failReading.verdict).toBe('risk')
   })
-  it('과제별 판정(taskVerdict)을 함께 싣는다 — 교사 화면이 기준 미달 점수만 붉게 칠하는 근거', () => {
+  it('과제별 판정(taskVerdict)을 함께 싣는다 — 교사 화면이 주의·위험 점수에만 색을 칠하는 근거', () => {
     const failWriting = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED,
       writing_answers: WRITE_SCORED.writing_answers.map((w, i) => ({ ...w, can_write: i < 3 })) }))
-    expect(failWriting.taskVerdict).toEqual({ wordReading: 'pass', sentenceReading: 'pass', writing: 'fail' })
+    expect(failWriting.taskVerdict).toEqual({ wordReading: 'good', sentenceReading: 'good', writing: 'caution' })
     expect(evaluateSession(row({ id: 's', child_no: 1, submitted_at: null })).taskVerdict).toBeNull()
   })
 })
 
-describe('evaluateSession — 문장 읽기유창성(어절/초)', () => {
+describe('evaluateSession — 세션의 양식(form_id)으로 판정한다', () => {
+  it('[REGRESSION] 같은 해독 10점도 1학기 임시 기준은 양호, 1학년 2학기 기준(12 이하 주의)은 주의', () => {
+    const legacy = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }))
+    const s2 = evaluateSession(row({ id: 's', child_no: 1, form_id: 'KODYS-G1-S2', ...READ_SCORED, ...WRITE_SCORED }))
+    expect([legacy.taskVerdict?.wordReading, legacy.verdict]).toEqual(['good', 'good'])
+    expect([s2.taskVerdict?.wordReading, s2.verdict]).toEqual(['caution', 'caution'])
+  })
+})
+
+describe('evaluateSession — 문장 읽기유창성(어절/10초)', () => {
   const recordedAll = ['p_rw_meaning', 'p_rw_nonsense', 'p_rs01', 'p_rs02', 'p_rs03', 'p_rs04'].map(item_code => ({ item_code }))
-  it('교사 결과표의 문장 읽기 점수는 관리자 결과지와 같은 어절/초다', () => {
+  it('교사 결과표의 문장 읽기 점수는 관리자 결과지와 같은 어절/10초다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, ...READ_SCORED, recordings: recordedAll, ...WRITE_SCORED }))
-    expect(r.scores?.sentenceReading).toBe(2)
+    expect(r.scores?.sentenceReading).toBe(20)
   })
   it('녹음 없는 문장이 섞이면 그 문장은 20초·0어절로 들어간다 — 교사 쪽도 같은 기본값', () => {
-    // 1번 문장만 녹음·채점(7어절 5초), 2~4번 미녹음 → 7 ÷ 65 = 0.11
+    // 1번 문장만 녹음·채점(7어절 5초), 2~4번 미녹음 → 7 ÷ 65 × 10 = 1.08
     const r = evaluateSession(row({ id: 's', child_no: 1,
       recordings: recordedAll.filter(x => !['p_rs02', 'p_rs03', 'p_rs04'].includes(x.item_code)),
       reading_marks: READ_SCORED.reading_marks,
       sentence_scores: [{ item_code: 'rs01', words: 7 }], sentence_times: [{ item_code: 'rs01', seconds: 5 }] }))
     expect(r.status).toBe('scored')
-    expect(r.scores?.sentenceReading).toBe(0.11)
+    expect(r.scores?.sentenceReading).toBe(1.08)
   })
   it('[REGRESSION] 녹음 없는 문장에 예전에 저장한 값이 남아 있어도 20초·0어절로 계산한다 — 관리자 화면이 그 칸을 잠근다', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1,
       recordings: recordedAll.filter(x => !['p_rs02', 'p_rs03', 'p_rs04'].includes(x.item_code)),
       reading_marks: READ_SCORED.reading_marks,
       sentence_scores: READ_SCORED.sentence_scores, sentence_times: READ_SCORED.sentence_times }))
-    expect(r.scores?.sentenceReading).toBe(0.11)   // rs02~04의 7·8·14어절, 4·4.5·5.5초는 보지 않는다
+    expect(r.scores?.sentenceReading).toBe(1.09)   // 7 ÷ (4 + 60) × 10 — rs02~04의 7·8·14어절, 4·4.5·5.5초는 보지 않는다
   })
-  it('G2 세션도 같다 — 정확 어절 35 ÷ 20초 = 1.75', () => {
+  it('G2 세션도 같다 — 정확 어절 35 ÷ 20초 × 10 = 17.5', () => {
     const r = evaluateSession(row({ id: 's', child_no: 1, grade: 2, recordings: recordedAll,
       reading_marks: READ_SCORED.reading_marks,
       sentence_scores: [{ item_code: 'rs01', words: 7 }, { item_code: 'rs02', words: 8 }, { item_code: 'rs03', words: 9 }, { item_code: 'rs04', words: 11 }],
       sentence_times: ['rs01', 'rs02', 'rs03', 'rs04'].map(item_code => ({ item_code, seconds: 5 })) }))
-    expect(r.scores?.sentenceReading).toBe(1.75)
+    expect(r.scores?.sentenceReading).toBe(17.5)
   })
 })
 
@@ -213,7 +222,7 @@ describe('latestSession · childVerdict', () => {
 // 종전에는 표가 최신 세션을, 요약이 받을 수 있는 앞 차수를, 받는 PDF가 또 앞 차수를 봐서 같은 아이를
 // 화면 곳곳이 다르게 말했다(2026-10-12 점검 — 1차 FAIL + 2차 중단인 아이).
 describe('대표 검사 — 접힌 행·판정·정렬·요약이 같은 검사를 본다', () => {
-  it('[REGRESSION] 1차 FAIL(채점 완료) + 2차 중단 → 대표는 1차, 판정 Fail, 정렬에서 Fail 위', () => {
+  it('[REGRESSION] 1차 위험(채점 완료) + 2차 중단 → 대표는 1차, 판정 위험, 정렬에서 위', () => {
     const c = buildChildren([], [
       row({ id: 'p', child_no: 3, ...READ_SCORED, ...WRITE_SCORED }),                                    // 3번 pass
       row({ id: 'f1', child_no: 7, started_at: '2026-09-21T01:00:00.000Z', ...ALL_SCORED_FAIL }),      // 7번 1차 fail
@@ -221,9 +230,9 @@ describe('대표 검사 — 접힌 행·판정·정렬·요약이 같은 검사�
     ])
     const seven = c.find(x => x.childNo === 7)!
     expect(representativeSession(seven)?.id).toBe('f1')
-    expect(childVerdict(seven)).toBe('fail')
+    expect(childVerdict(seven)).toBe('risk')
     expect(c.map(x => x.childNo)).toEqual([7, 3])
-    expect(summarize(c)).toMatchObject({ scored: 2, fail: 1, unsubmitted: 0 })
+    expect(summarize(c)).toMatchObject({ scored: 2, risk: 1, caution: 0, unsubmitted: 0 })
   })
   it('1차 PASS + 2차 제출·채점 중 → 대표는 2차, 판정 없음·채점 중(받을 수는 있다 — 1차)', () => {
     const [c] = buildChildren([], [
@@ -233,7 +242,7 @@ describe('대표 검사 — 접힌 행·판정·정렬·요약이 같은 검사�
     expect(representativeSession(c)?.id).toBe('a2')
     expect(childVerdict(c)).toBeNull()
     expect(latestScored(c)?.id).toBe('a1')
-    expect(summarize([c])).toEqual({ tested: 1, scored: 0, scoring: 1, scanWait: 0, unsubmitted: 0, fail: 0, untested: 0, downloadable: 1 })
+    expect(summarize([c])).toEqual({ tested: 1, scored: 0, scoring: 1, scanWait: 0, unsubmitted: 0, risk: 0, caution: 0, untested: 0, downloadable: 1 })
   })
   it('제출된 검사가 하나도 없으면 최신 검사가 대표다', () => {
     const [c] = buildChildren([], [
@@ -265,7 +274,7 @@ describe('대표 검사 — 접힌 행·판정·정렬·요약이 같은 검사�
       if (rep) badges[sessionLabel(rep, scanTargetSession(x)?.id) as keyof typeof badges]++
     }
     expect(badges).toEqual({ scored: 1, scoring: 2, scanWait: 1, unsubmitted: 1 })
-    expect(summarize(c)).toMatchObject({ ...badges, tested: 5, untested: 1, fail: 1, downloadable: 4 })
+    expect(summarize(c)).toMatchObject({ ...badges, tested: 5, untested: 1, risk: 1, caution: 0, downloadable: 4 })
   })
 })
 
@@ -278,7 +287,7 @@ describe('latestScored — 받을 수 있는 것 중 최신 (전수 점검 2026-
     expect(latestSession(c)?.id).toBe('a2')
     expect(latestScored(c)?.id).toBe('a1')
     // 판정 표시도 중단된 재검사를 보지 않는다 — 대표 검사(가장 최근에 제출된 검사)가 1차다(2026-10-12 점검)
-    expect(childVerdict(c)).toBe('pass')
+    expect(childVerdict(c)).toBe('good')
   })
   it('채점 완료가 하나도 없으면 null', () => {
     const [c] = buildChildren([], [row({ id: 's', child_no: 1, submitted_at: null })])
@@ -304,7 +313,7 @@ describe('summarize — 상단 한 줄', () => {
         row({ id: 's5', child_no: 5, sentence_scores: READ_SCORED.sentence_scores,  // scoring
           recordings: [{ item_code: 'p_rw_meaning' }] }),
       ])
-    expect(summarize(c)).toEqual({ tested: 4, scored: 2, fail: 1, scoring: 1, scanWait: 0, unsubmitted: 1, untested: 1, downloadable: 2 })
+    expect(summarize(c)).toEqual({ tested: 4, scored: 2, risk: 1, caution: 0, scoring: 1, scanWait: 0, unsubmitted: 1, untested: 1, downloadable: 2 })
   })
   it('[REGRESSION] 중단된 재검사가 있어도 「채점 완료」로 센다 — 버튼이 내려받는 것과 같은 기준', () => {
     const c = buildChildren([], [
@@ -313,7 +322,7 @@ describe('summarize — 상단 한 줄', () => {
     ])
     // 칸은 겹치지 않는다 — 이 아이는 「채점 완료」에만 센다(미제출로 두 번 세지 않는다).
     // Fail도 대표 검사(1차) 판정으로 센다 — 받는 결과지가 1차 FAIL인데 Fail 0으로 세지 않는다(2026-10-12 점검)
-    expect(summarize(c)).toEqual({ tested: 1, scored: 1, fail: 1, scoring: 0, scanWait: 0, unsubmitted: 0, untested: 0, downloadable: 1 })
+    expect(summarize(c)).toEqual({ tested: 1, scored: 1, risk: 1, caution: 0, scoring: 0, scanWait: 0, unsubmitted: 0, untested: 0, downloadable: 1 })
   })
 })
 
@@ -440,7 +449,7 @@ describe('summarize — 스캔 대기·받을 수 있는 수', () => {
       row({ id: 'd', child_no: 4, ...UPLOADED, ...READ_SCORED }),             // 채점 중(쓰기 남음)
       row({ id: 'e', child_no: 5, ...UPLOADED, ...READ_SCORED, ...WRITE_SCORED }), // 채점 완료
     ])
-    expect(summarize(c)).toEqual({ tested: 5, scored: 2, scoring: 1, scanWait: 2, unsubmitted: 0, fail: 0, untested: 0, downloadable: 4 })
+    expect(summarize(c)).toEqual({ tested: 5, scored: 2, scoring: 1, scanWait: 2, unsubmitted: 0, risk: 0, caution: 0, untested: 0, downloadable: 4 })
   })
   it('칸의 합은 검사 인원과 같다 — 한 아이를 두 칸에 세지 않는다', () => {
     const c = buildChildren([], [

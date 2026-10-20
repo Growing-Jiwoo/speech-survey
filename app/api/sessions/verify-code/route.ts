@@ -18,7 +18,8 @@
 // 코드 소지가 곧 학급 접근이라는 전제는 그대로다 — 명단 외에 새로 드러나는 개인정보는 없다.
 import { NextResponse } from 'next/server'
 import { childTestState, findClassCode, rosterWithTested } from '@/lib/db'
-import { formForGrade } from '@/lib/forms'
+import { formFor } from '@/lib/forms'
+import { semesterOf } from '@/lib/format'
 import { itemsFor } from '@/lib/items'
 import { classSheetTag, type SheetLayout } from '@/lib/writing-sheet'
 import { verifyCodeSchema } from '@/lib/schema'
@@ -44,7 +45,8 @@ export async function POST(req: Request) {
       teacherName: row.teacher_name, teacherPhone: row.teacher_phone, teacherEmail: row.teacher_email,
     }
     if (parsed.data.childNo === undefined) {
-      const f = itemsFor(formForGrade(row.grade))
+      // 지금 시작하면 받을 양식 — 기록지 칸의 종류·개수와 쓰기 코드는 학기가 달라도 같은 학년이면 같다(ww01~10 / sw01~05)
+      const f = itemsFor(formFor(row.grade, semesterOf(new Date().toISOString())))
       const writingCodes = new Set(f.writingItems.map(i => i.code))
       const [{ roster, scanPending }, tag] = await Promise.all([
         rosterWithTested(row.id, c => writingCodes.has(c)), classSheetTag(row.id),

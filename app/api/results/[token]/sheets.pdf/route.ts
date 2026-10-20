@@ -80,7 +80,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     if (picked.length > MAX_SHEETS)
       return jsonError(`한 번에 ${MAX_SHEETS}장까지 받을 수 있어요. 나눠서 받아 주세요.`, 400)
 
-    // 쪽 순서는 **번호순, 같은 아이는 차수순** — 화면 목록의 「Fail 먼저」(lib/results buildChildren)나
+    // 쪽 순서는 **번호순, 같은 아이는 차수순** — 화면 목록의 「위험·주의 먼저」(lib/results buildChildren)나
     // 선생님이 체크한 순서를 따르지 않는다. 종전에는 그 순서가 그대로 쪽 순서가 돼, 인쇄 묶음을 번호대로
     // 나눠 주려면 다시 추려야 했다.
     picked.sort((a, b) => a.child_no - b.child_no || a.started_at.localeCompare(b.started_at))

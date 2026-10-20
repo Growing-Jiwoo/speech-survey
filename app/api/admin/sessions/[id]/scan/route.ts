@@ -5,7 +5,7 @@
 // (사용자 확정 2026-09-30: 선생님이 결과지 화면을 다시 열지 않으면 요청을 못 본다).
 import { NextResponse } from 'next/server'
 import { sessionState, unlinkWritingScan } from '@/lib/db'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { UUID_RE, jsonError } from '@/lib/request'
 
@@ -19,7 +19,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     // 화면에서 표시한 검사의 쓰기는 검사 중 입력이 유일한 채점 경로다 — 여기서 지우면 되돌릴 길이 없다.
     if (s.writingMode !== 'scan') return jsonError('스캔본으로 채점하는 검사가 아니에요.', 409)
-    const f = itemsFor(formForGrade(s.grade))
+    const f = itemsFor(formOfSession(s))
     await unlinkWritingScan(id, f.writingSection === 'word_writing' ? 'word' : 'sentence', f.writingItems.map(i => i.code))
     // 채점 근거가 사라지는 사건이라 최소 기록을 남긴다(아동 정보 수정·세션 삭제와 같은 방침).
     console.info(`[admin/sessions/:id/scan] 스캔본 연결 해제 id=${id}`)

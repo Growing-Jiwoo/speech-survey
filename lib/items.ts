@@ -192,7 +192,7 @@ function build(form: SurveyForm): FormItems {
   ]
   const sentenceItems: SurveyItem[] = form.sentences.map((text, i) => ({
     code: `rs${pad2(i + 1)}`, orderNo: next(),
-    section: 'sentence_reading' as const, kind: null, text, maxSec: sentenceSec,
+    section: 'sentence_reading' as const, kind: null, text, maxSec: sentenceSec[i],
   }))
 
   const w = form.writing
@@ -228,7 +228,7 @@ function build(form: SurveyForm): FormItems {
       items: readOf('nonsense'), limitSec: wordSec, practice: false },
     ...sentenceItems.map(i => ({
       code: `p_${i.code}`, section: 'sentence_reading' as const, role: 'child' as const,
-      kind: null, items: [i], limitSec: sentenceSec, practice: false,
+      kind: null, items: [i], limitSec: i.maxSec, practice: false,
     })),
     { code: writingSection === 'word_writing' ? 'p_ww' : 'p_sw', section: writingSection,
       role: 'examiner', kind: null, items: writingItems, limitSec: 0, practice: false },

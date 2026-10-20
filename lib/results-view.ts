@@ -22,7 +22,7 @@ export interface ResultsSession {
   status: SessionStatus
   /** scored일 때만. **채점되지 않은 과제도 0이 들어간다** — 그 0은 「0점을 받았다」가 아니므로
    *  `complete`가 false인 과제의 숫자는 화면에 그대로 찍으면 안 된다(아래 complete 주석).
-   *  `sentenceReading`은 점수가 아니라 어절/초다(만점이 없다 — lib/scoring `CountTaskKey`). */
+   *  `sentenceReading`은 점수가 아니라 어절/10초다(만점이 없다 — lib/scoring `CountTaskKey`). */
   scores: Record<TaskKey, number> | null
   /** scored일 때만, 그리고 **세 과제가 모두 채점됐을 때만.** 하나라도 채점 전이면 null —
    *  치르지도 않은 과제의 0점으로 아동을 낙제시키지 않는다(아래 complete 주석). */
@@ -34,7 +34,7 @@ export interface ResultsSession {
    * 검사자가 넣는 값이라 관리자가 나중에 채울 수 없고, 요구하면 그 아이 결과지가 영영 안 나간다. 스캔본 방식은
    * 담당자가 나중에 채우지만 받기 기준은 같다 — 대신 받을 때 「쓰기 채점 전」을 알린다(`awaitsScanWriting`).
    * 그 대가로 `scores.writing`에 0이 들어오는데, **그 0은 「0점을 받았다」가 아니다.**
-   * lib/scoring.ts의 `complete` 주석이 경계하는 그대로다 — "아직 채점 전인 과제까지 0점 Fail로
+   * lib/scoring.ts의 `complete` 주석이 경계하는 그대로다 — "아직 채점 전인 과제까지 0점 위험으로
    * 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다. 화면은 판정을 감추고 인쇄물은
    * 칸을 비운다." 관리자 결과지가 이미 그렇게 하므로 교사 화면도 같아야 한다 — 두 화면이 같은
    * 아이를 다르게 말하면 안 된다(사용자 확정 2026-09-22: 「관리자와 동일」 A안).
@@ -45,7 +45,7 @@ export interface ResultsSession {
   complete: Record<TaskKey, boolean> | null
   /** 과제별 판정(`scoreSession`의 `verdict` 그대로). scored일 때만 채워진다. **`complete[k]`가 false인 과제의
    *  값은 0점 기반이라 쓰면 안 된다** — 화면은 채점된 과제의 기준 미달만 표시한다(사용자 확정 2026-10-08,
-   *  담당자 회신 아님: 같은 정보가 결과보고서 PDF에는 과제별 PASS/FAIL로 이미 나간다). */
+   *  담당자 회신 아님: 같은 정보가 결과보고서 PDF에는 과제별 양호·주의·위험으로 이미 나간다). */
   taskVerdict: Record<TaskKey, Verdict> | null
   /** 쓰기 방식(migration 006) — scan이면 담당자가 스캔본으로 쓰기를 채점한다 */
   writingMode: 'screen' | 'scan'
@@ -127,7 +127,7 @@ export function representativeSession(c: ResultsChild): ResultsSession | null {
  *  「재검사로 대체」로 그려지고 요약 칸이 어긋난다(`summarize`가 `sessionLabel(대표, 대표 id)`에 기댄다). */
 export const scanTargetSession = representativeSession
 
-/** 접힌 행의 판정 = 대표 검사가 채점 완료(scored)일 때만 그 판정. 정렬(Fail 먼저)도 이 값을 본다. */
+/** 접힌 행의 판정 = 대표 검사가 채점 완료(scored)일 때만 그 판정. 정렬(위험 → 주의 먼저)도 이 값을 본다. */
 export function childVerdict(c: ResultsChild): Verdict | null {
   const s = representativeSession(c)
   return s?.status === 'scored' ? s.verdict : null
@@ -152,8 +152,8 @@ export interface ResultsSummary {
   /** 이 네 칸은 서로 겹치지 않는다 — 아이 하나는 한 칸에만 센다(합이 검사 인원과 맞아야 한다).
    *  칸은 **대표 검사의 화면 상태**(접힌 행의 상태 배지와 같은 값)다 */
   scored: number; scoring: number; scanWait: number; unsubmitted: number
-  /** 채점 완료 중 Fail(대표 검사 판정 — 접힌 행의 판정과 같다) */
-  fail: number
+  /** 채점 완료 중 위험·주의(대표 검사 판정 — 접힌 행의 판정과 같다) */
+  risk: number; caution: number
   /** 명단에만 있는 아이 */
   untested: number
   /** **받을 수 있는 결과지가 있는 아이** 수 = [전체 PDF 다운로드]가 세는 것(`latestScored`). 스캔본 방식은 쓰기
@@ -163,7 +163,7 @@ export interface ResultsSummary {
 }
 
 export function summarize(children: ResultsChild[]): ResultsSummary {
-  const s: ResultsSummary = { tested: 0, scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0, fail: 0, untested: 0, downloadable: 0 }
+  const s: ResultsSummary = { tested: 0, scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0, risk: 0, caution: 0, untested: 0, downloadable: 0 }
   for (const c of children) {
     const rep = representativeSession(c)
     if (!rep) { s.untested++; continue }
@@ -173,7 +173,7 @@ export function summarize(children: ResultsChild[]): ResultsSummary {
     // (종전에는 요약이 받을 수 있는 앞 차수를, 표가 최신 세션을 봐 「채점 완료 6」 옆 배지가 5개였다, 2026-10-12 점검).
     // 스캔 대기가 앞서는 것은 sessionLabel이 정한다 — 선생님이 할 일이 남았다(시작 화면 배너의 수와 같다).
     const label = sessionLabel(rep, rep.id)
-    if (label === 'scored') { s.scored++; if (rep.verdict === 'fail') s.fail++ }
+    if (label === 'scored') { s.scored++; if (rep.verdict === 'risk') s.risk++; if (rep.verdict === 'caution') s.caution++ }
     else if (label === 'scoring') s.scoring++
     else if (label === 'scanWait') s.scanWait++
     else s.unsubmitted++   // 대표 검사는 스캔 대상 자신이라 「재검사로 대체」가 되지 않는다 — 남는 것은 미제출뿐

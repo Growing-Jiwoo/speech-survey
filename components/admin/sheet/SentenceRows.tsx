@@ -6,13 +6,13 @@
 // 녹음 없는 문장은 입력 칸 대신 계산에 쓰는 값(제한 시간 · 0어절)을 같은 자리에 고정해 보여 준다(lib/scoring withUnrecordedFixed).
 'use client'
 import { useState } from 'react'
-import { itemMaxWords, parseReadSec } from '@/lib/scoring'
+import { itemMaxWords, parseReadSec, readSecMax } from '@/lib/scoring'
 import { syncSecondsTexts } from '@/lib/sheet-save'
 import type { SurveyItem } from '@/lib/items'
 import { PageAudio, type Attempt } from './PageAudio'
 
 export function SentenceRows({
-  items, sentences, onChange, times, locked, onTimeChange, maxSec, attemptsFor, failedFor, limitSec, onAudioError,
+  items, sentences, onChange, times, locked, onTimeChange, attemptsFor, failedFor, onAudioError,
 }: {
   items: SurveyItem[]
   sentences: Partial<Record<string, number>>
@@ -22,27 +22,29 @@ export function SentenceRows({
   /** 잠긴(녹음 없는) 문항 코드 — 제한 시간 · 0어절로 고정된다 */
   locked: ReadonlySet<string>
   onTimeChange: (code: string, v: number | undefined) => void
-  /** 읽은 시간 입력 상한(초) — 오타 방지용(lib/scoring readSecMax) */
-  maxSec: number
   /** 문항 코드 → 그 문장 페이지의 녹음 시도들 */
   attemptsFor: (code: string) => Attempt[]
   /** 녹음 저장 실패 페이지인지(PageAudio `failed`) */
   failedFor?: (code: string) => boolean
-  limitSec: number
   onAudioError: () => void
 }) {
+  // 제한 시간·입력 상한은 문장마다 다르다(2학기 3·4번 30초) — 문항의 `maxSec`(= 그 문장의 제한 시간)에서 꺼낸다.
+  // 칸의 글자를 값에 맞출 때도 그 문장의 상한으로 읽는다(lib/sheet-save `syncSecondsTexts` 주석 — 가장 큰 상한 하나로 읽었더니
+  // 1·2번 칸에 친 26이 안내 없이 지워졌다, 2026-10-20 최종 점검).
+  const maxByCode = new Map(items.map(i => [i.code, readSecMax(i)]))
+  const maxOf = (code: string) => maxByCode.get(code) ?? Math.max(...maxByCode.values())
   // 시간 칸에 친 글자 — 칸마다 여기서 들고 있다(아래 SecondsInput 주석). 처음 한 번 저장된 값으로 채운다.
-  const [texts, setTexts] = useState<Partial<Record<string, string>>>(() => syncSecondsTexts({}, times, maxSec))
+  const [texts, setTexts] = useState<Partial<Record<string, string>>>(() => syncSecondsTexts({}, times, maxOf))
   // 다른 화면이 저장한 시간이 병합으로 들어오면(lib/sheet-save, 2026-10-12 점검 X8) 그 칸의 글자를 새 값으로 바꾼다 —
   // 그대로 두면 칸에 보이는 글자와 저장할 값이 갈린다. 렌더 중에 맞춘다(효과로 하면 옛 글자가 한 번 그려진다).
   const [prevTimes, setPrevTimes] = useState(times)
   if (prevTimes !== times) {
     setPrevTimes(times)
-    setTexts(t => syncSecondsTexts(t, times, maxSec))
+    setTexts(t => syncSecondsTexts(t, times, maxOf))
   }
   const setText = (code: string, t: string) => {
     setTexts(prev => ({ ...prev, [code]: t }))
-    const v = parseReadSec(t, maxSec)
+    const v = parseReadSec(t, maxOf(code))
     onTimeChange(code, v === null ? undefined : v)
   }
   return (
@@ -50,7 +52,8 @@ export function SentenceRows({
       {items.map((item, i) => {
         const max = itemMaxWords(item)
         const timeErrId = `${item.code}-time-err`
-        const timeInvalid = !locked.has(item.code) && parseReadSec(texts[item.code] ?? '', maxSec) === null
+        const rowMax = readSecMax(item)
+        const timeInvalid = !locked.has(item.code) && parseReadSec(texts[item.code] ?? '', rowMax) === null
         return (
           <div key={item.code} className="border-t border-line/60 px-4 py-3 first:border-t-0">
             {/* 좁은 폭에서는 입력 칸 묶음(시간·어절 ≈ 260px)이 오른쪽 아래로 내려간다 — 한 줄에 두면
@@ -66,7 +69,7 @@ export function SentenceRows({
                 {/* 라벨 없이 플레이어만 — 바로 위에 번호와 문장 전문이 있어 '1번 문장'은 군더더기다 */}
                 <div className="mt-2">
                   <PageAudio attempts={attemptsFor(item.code)} failed={failedFor?.(item.code)}
-                    limitSec={limitSec} onAudioError={onAudioError} />
+                    limitSec={item.maxSec} onAudioError={onAudioError} />
                 </div>
               </div>
               {/* 입력 묶음은 행의 세로 가운데 — 위에 붙이면 문장·플레이어 두 줄 옆에서 떠 보인다.
@@ -74,15 +77,15 @@ export function SentenceRows({
               {locked.has(item.code) ? (
                 // 입력 칸과 같은 크기의 점선 상자 — 행마다 값의 자리가 같아 세로로 훑어 읽힌다
                 <div className="ml-auto flex flex-none items-center gap-1.5 self-center"
-                  title={`녹음이 없어 ${limitSec}초 · 0어절로 계산해요`}>
-                  <FixedCell label={`${i + 1}번 문장 읽은 시간(초), 녹음 없음`} value={limitSec} />
+                  title={`녹음이 없어 ${item.maxSec}초 · 0어절로 계산해요`}>
+                  <FixedCell label={`${i + 1}번 문장 읽은 시간(초), 녹음 없음`} value={item.maxSec} />
                   <span className="mr-3 text-[13px] text-ink-mute">초</span>
                   <FixedCell label={`${i + 1}번 문장 정확 어절 수, 녹음 없음`} value={0} />
                   <span className="w-7 text-[13px] text-ink-mute">/ {max}</span>
                 </div>
               ) : (
               <div className="ml-auto flex flex-none items-center gap-1.5 self-center">
-                <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={maxSec} errorId={timeErrId}
+                <SecondsInput label={`${i + 1}번 문장 읽은 시간(초)`} max={rowMax} errorId={timeErrId}
                   text={texts[item.code] ?? ''} onText={t => setText(item.code, t)} />
                 <span className="mr-3 text-[13px] text-ink-mute">초</span>
                 {/* type="number"가 아니다 — 포인터를 칸 위에 둔 채 휠로 화면을 내리면 값이 조용히 바뀌어 1.5초 뒤 저장됐다
@@ -106,7 +109,7 @@ export function SentenceRows({
                 행 아래 오른쪽(입력 묶음 밑)에 둔다 — 묶음 안에 넣으면 묶음 폭이 늘어 문장 칸이 밀린다(1024px 행 배치 유지) */}
             {timeInvalid && (
               <p id={timeErrId} className="mt-1 text-right text-[12px] font-bold text-rec-deep">
-                0.1초 단위로 {maxSec}초까지 적을 수 있어요
+                0.1초 단위로 {rowMax}초까지 적을 수 있어요
               </p>
             )}
           </div>

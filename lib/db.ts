@@ -1,3 +1,5 @@
+import { formFor } from './forms'
+import { semesterOf } from './format'
 import type { RosterChild } from './roster'
 import type { ScoreRows } from './score-version'
 import { sessionProgress, type SessionProgress } from './session-progress'
@@ -30,15 +32,18 @@ export interface NewSessionInput {
  */
 export async function createSession(s: NewSessionInput): Promise<string> {
   const c = s.classCode
+  const now = new Date().toISOString()
   const { data, error } = await sb().from('sessions').insert({
     class_code_id: c.id, child_no: s.childNo,
     school_region: c.school_region, school_id: c.school_id, school_name: c.school_name,
     grade: c.grade, class_no: c.class_no,
+    // 검사지는 지금 정해 행에 적는다(migration 008) — 학년과 검사일의 학기로 고르고, 이 검사는 끝까지 이 양식이다.
+    form_id: formFor(c.grade, semesterOf(now)).id,
     teacher_name: c.teacher_name, teacher_phone: c.teacher_phone, teacher_email: c.teacher_email,
     birth_ymd: s.birthYmd, gender: s.gender, child_name: s.childName,
     // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
     // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
-    guardian_consented_at: new Date().toISOString(),
+    guardian_consented_at: now,
     ...(s.idemKey ? { idem_key: s.idemKey } : {}),
   }).select('id').single()
 
@@ -260,20 +265,22 @@ async function replaceOwnedRows(
   fail(delErr)
 }
 
-/** 세션 존재·제출 상태 + 학년 조회(업로드/제출 가드용).
- *  학년을 함께 돌려주는 이유: 어떤 문항 코드가 유효한지는 학년(검사지)에 따라 다르므로
- *  라우트가 세션의 양식으로 검증해야 한다. 어차피 같은 행을 읽으니 질의는 늘지 않는다. */
+/** 세션 존재·제출 상태 + 학년·양식 조회(업로드/제출 가드용).
+ *  학년·양식을 함께 돌려주는 이유: 어떤 문항 코드가 유효한지는 세션의 검사지에 따라 다르므로
+ *  라우트가 세션의 양식(`formOfSession`)으로 검증해야 한다. 어차피 같은 행을 읽으니 질의는 늘지 않는다. */
 export async function sessionState(sessionId: string): Promise<{
   state: 'missing' | 'open' | 'submitted'; grade: number
+  /** 검사 당시 양식(migration 008, 이전 세션은 null) — `formOfSession`에 학년과 함께 넘긴다 */
+  form_id: string | null
   /** 쓰기 방식 — 관리자 채점 라우트가 「스캔본 검사만 쓰기를 고칠 수 있다」를 판정한다 */
   writingMode: WritingMode
 }> {
   const { data, error } = await sb().from('sessions')
-    .select('submitted_at, grade, writing_mode').eq('id', sessionId).maybeSingle()
+    .select('submitted_at, grade, form_id, writing_mode').eq('id', sessionId).maybeSingle()
   fail(error)
-  if (!data) return { state: 'missing', grade: 0, writingMode: 'screen' }
+  if (!data) return { state: 'missing', grade: 0, form_id: null, writingMode: 'screen' }
   return {
-    state: data.submitted_at ? 'submitted' : 'open', grade: data.grade as number,
+    state: data.submitted_at ? 'submitted' : 'open', grade: data.grade as number, form_id: (data.form_id as string | null) ?? null,
     writingMode: data.writing_mode === 'scan' ? 'scan' : 'screen',
   }
 }
@@ -341,7 +348,7 @@ export interface WritingScanRow {
 
 /** 스캔본을 올릴 수 있는지 판단할 재료 — 한 번의 조회로 가져온다(라우트가 판정한다). */
 export interface ScanUploadTarget {
-  class_code_id: string; child_no: number; grade: number; submitted_at: string | null; writing_mode: WritingMode
+  class_code_id: string; child_no: number; grade: number; form_id: string | null; submitted_at: string | null; writing_mode: WritingMode
   writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[]
   scan: WritingScanRow | null
 }
@@ -353,14 +360,14 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 
 export async function scanUploadTarget(sessionId: string): Promise<ScanUploadTarget | null> {
   const { data, error } = await sb().from('sessions')
-    .select('class_code_id, child_no, grade, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), '
+    .select('class_code_id, child_no, grade, form_id, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), '
       + 'writing_scans(session_id, path, content_type, bytes, uploaded_at)')
     .eq('id', sessionId).maybeSingle()
   fail(error)
   if (!data) return null
   const r = data as unknown as Omit<ScanUploadTarget, 'scan'> & { writing_scans: WritingScanRow | WritingScanRow[] | null }
   return {
-    class_code_id: r.class_code_id, child_no: r.child_no, grade: r.grade, submitted_at: r.submitted_at, writing_mode: r.writing_mode,
+    class_code_id: r.class_code_id, child_no: r.child_no, grade: r.grade, form_id: r.form_id ?? null, submitted_at: r.submitted_at, writing_mode: r.writing_mode,
     writing_answers: r.writing_answers ?? [], sentence_scores: r.sentence_scores ?? [], scan: one(r.writing_scans),
   }
 }
@@ -718,7 +725,7 @@ export async function findClassCodeById(id: string): Promise<ClassCodeRow | null
 
 /** 교사 결과지용 세션 행 — `lib/results.ts`의 `ResultsSessionRow`와 모양을 맞춘다. */
 export type ClassResultsRow = Pick<SessionRow,
-  'id' | 'child_no' | 'child_name' | 'gender' | 'grade' | 'birth_ymd' | 'checklist' | 'started_at' | 'submitted_at'
+  'id' | 'child_no' | 'child_name' | 'gender' | 'grade' | 'form_id' | 'birth_ymd' | 'checklist' | 'started_at' | 'submitted_at'
   | 'writing_mode'> & {
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
@@ -736,7 +743,7 @@ export type ClassResultsRow = Pick<SessionRow,
  */
 export async function classResults(classCodeId: string): Promise<ClassResultsRow[]> {
   const { data, error } = await sb().from('sessions')
-    .select('id, child_no, child_name, gender, grade, birth_ymd, checklist, started_at, submitted_at, writing_mode, '
+    .select('id, child_no, child_name, gender, grade, form_id, birth_ymd, checklist, started_at, submitted_at, writing_mode, '
       + 'recordings(item_code), reading_marks(item_code, correct), '
       + 'sentence_scores(item_code, words), sentence_times(item_code, seconds), '
       + 'writing_answers(item_code, can_write), writing_scans(uploaded_at)')
@@ -812,6 +819,9 @@ export interface SessionRow {
   child_no: number
   school_region: string; school_id: string; school_name: string
   birth_ymd: string; grade: number; class_no: number; gender: string
+  /** 검사 당시 양식(`SurveyForm.id`, migration 008). null = 그 전에 만든 세션 — 학년만으로 고르던 옛 규칙으로 읽는다
+   *  (lib/forms `formOfSession`). 학년처럼 **고칠 수 없다**: 점수가 이 양식의 문항 코드로 쌓여 있다 */
+  form_id: string | null
   child_name: string; teacher_name: string
   teacher_phone: string | null; teacher_email: string | null
   checklist: string[]
@@ -841,7 +851,7 @@ export interface RecordingRow {
 
 export interface WritingRow { item_code: string; can_write: boolean }
 
-const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode, upload_failed'
+const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, form_id, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode, upload_failed'
 
 export type SessionListRow = SessionRow & {
   recordings: { item_code: string }[]

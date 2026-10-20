@@ -21,7 +21,7 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])
 
 /** 올릴 수 있는 검사 — 이 학급 · 제출됨 · 스캔본 방식 · 담당자 채점 전 · 아직 안 올림 */
 const TARGET = {
-  class_code_id: CID, child_no: 5, grade: 1, submitted_at: '2026-09-30T01:00:00Z', writing_mode: 'scan' as const,
+  class_code_id: CID, child_no: 5, grade: 1, form_id: null, submitted_at: '2026-09-30T01:00:00Z', writing_mode: 'scan' as const,
   writing_answers: [] as { item_code: string }[], sentence_scores: [] as { item_code: string }[],
   scan: null as null | { session_id: string; path: string; content_type: string; bytes: number; uploaded_at: string },
 }

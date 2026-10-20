@@ -11,7 +11,7 @@ import {
 } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession, type SurveyForm } from '@/lib/forms'
 import { AREA_CODES, isRecordingPage, itemsFor } from '@/lib/items'
 import { itemMaxWords } from '@/lib/scoring'
 import { jsonError } from '@/lib/request'
@@ -43,19 +43,19 @@ export async function POST(req: Request) {
   if (!(await verifySessionToken(b.sessionId, b.sessionToken, env('SESSION_SECRET'))))
     return invalidToken()
 
-  // 학년을 알아야 어떤 문항 코드·배점이 유효한지 판정할 수 있다.
-  let grade: number
+  // 세션의 양식을 알아야 어떤 문항 코드·배점이 유효한지 판정할 수 있다.
+  let form: SurveyForm
   try {
     const s = await sessionState(b.sessionId)
     if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     if (s.state === 'submitted') return jsonError('이미 제출된 검사예요.', 409)
-    grade = s.grade
+    form = formOfSession(s)
   } catch (e) {
     console.error('[submit] 세션 조회 실패', e)
     return jsonError('제출하지 못했어요.', 502)
   }
 
-  const f = itemsFor(formForGrade(grade))
+  const f = itemsFor(form)
   // 이 양식의 (연습이 아닌) 녹음 페이지만 남긴다 — 녹음 라우트가 받는 코드와 같은 조건
   const attempted = [...new Set((b.attempted ?? []) as string[])].filter(c => {
     const p = f.pageByCode.get(c)

@@ -141,7 +141,7 @@ describe('POST /api/results/request', () => {
   })
   it('scoredCount는 **받을 수 있는** 수 — 쓰기 스캔본을 기다리는 아이도 읽기 점수는 링크에서 볼 수 있다', async () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
-      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
       started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
       recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
       writing_mode: 'scan' as const, writing_scan: null,
@@ -151,7 +151,7 @@ describe('POST /api/results/request', () => {
   })
   it('채점 완료 수를 함께 돌려준다 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거', async () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
-      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
       started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
       recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
       writing_mode: 'screen' as const, writing_scan: null,
@@ -164,7 +164,7 @@ describe('POST /api/results/request', () => {
 describe('GET /api/results/[token]', () => {
   const listReq = (token: string) => LIST(new Request(`http://x/api/results/${token}`), { params: Promise.resolve({ token }) })
   const SESSION = {
-    id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, birth_ymd: '190312', checklist: [],
+    id: 's1', child_no: 1, child_name: '김가나', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
     started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     writing_mode: 'screen' as const, writing_scan: null,
@@ -182,7 +182,7 @@ describe('GET /api/results/[token]', () => {
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.cls).toEqual({ schoolName: '대구가창초등학교', grade: 1, classNo: 2, teacherName: '김서연' })
-    // 문장 읽기는 만점이 없는 비율(어절/초)이라 taskMax에 없다(lib/scoring CountTaskKey)
+    // 문장 읽기는 만점이 없는 비율(어절/10초)이라 taskMax에 없다(lib/scoring CountTaskKey)
     expect(json.taskMax).toEqual({ wordReading: 14, writing: 10 })
     expect(typeof json.provisional).toBe('boolean')
     expect(json.children).toHaveLength(2)
@@ -244,7 +244,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
   const sheetsReq = (token: string, qs = '') =>
     SHEETS(new Request(`http://x/api/results/${token}/sheets.pdf${qs}`), { params: Promise.resolve({ token }) })
   const scored = (id: string, child_no: number, started_at: string) => ({
-    id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, birth_ymd: '190312', checklist: ['none'],
+    id, child_no, child_name: `아이${child_no}`, gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: ['none'],
     started_at, submitted_at: started_at,
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     writing_mode: 'screen' as const, writing_scan: null,
@@ -347,7 +347,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     const rows = [...ROWS.slice(0, 3), fail5]
     vi.mocked(db.classResults).mockResolvedValue(rows)
     const children = buildChildren([], rows)
-    expect(childVerdict(children[0])).toBe('fail')   // 전제: 화면 목록에서는 5번이 맨 위다
+    expect(childVerdict(children[0])).toBe('risk')   // 전제: 화면 목록에서는 5번이 맨 위다
     expect(children[0].childNo).toBe(5)
     const names = () => vi.mocked(pdf.renderReport).mock.calls.map(c => `${c[0].session.child_name}@${c[0].session.started_at.slice(8, 10)}`)
 

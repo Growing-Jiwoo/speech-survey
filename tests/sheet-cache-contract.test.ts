@@ -96,7 +96,7 @@ const sorted = (d: Detail): Detail => {
 
 /** 화면이 보내는 그대로 저장하고, 서버에 남은 행과 캐시 보정 결과가 같은지 */
 async function expectSameAsServer(grade: number, before: Detail, saved: SavedScores) {
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade, writingMode: 'scan' })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade, form_id: null, writingMode: 'scan' })
   seed(before)
   const body = { ...saved, ...(saved.writing ? { scanUploadedAt: 'T' } : {}) }
   const res = await PUT(new Request('http://x', { method: 'PUT', body: JSON.stringify(body) }), ctx)
@@ -154,7 +154,7 @@ describe('[REGRESSION] 판 충돌 — 낡은 탭의 저장이 다른 탭이 저�
   const secs = (pairs: [string, number][]) => pairs.map(([item_code, seconds]) => ({ item_code, seconds }))
 
   beforeEach(() => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, form_id: null, writingMode: 'screen' })
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) => PUT(new Request(`http://x${url}`, init), ctx))
     return () => { vi.unstubAllGlobals() }
   })
@@ -198,7 +198,7 @@ describe('[REGRESSION] 판 충돌 — 낡은 탭의 저장이 다른 탭이 저�
   })
 
   it('스캔본 쓰기도 칸 단위다 — 다른 탭이 찍은 쓰기 칸은 남고 이 탭이 찍은 칸이 더해진다', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, form_id: null, writingMode: 'scan' })
     seed({ marks: [], sentences: [], times: [], writing: [] })
     const tabA = open()
     const tabB = open()

@@ -371,26 +371,26 @@ describe('PATCH /api/admin/sessions/[id]', () => {
 
 describe('DELETE /api/admin/sessions/[id]/scan — 연결 해제', () => {
   it('스캔본 방식 검사 — 스캔본과 쓰기 채점을 함께 지운다(낱말 쓰기 코드 전부가 소유 범위)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, form_id: null, writingMode: 'scan' })
     const res = await UNLINK(req('DELETE'), ctx(SID))
     expect(res.status).toBe(200)
     expect(db.unlinkWritingScan).toHaveBeenCalledWith(SID, 'word', itemsFor(formForGrade(1)).writingItems.map(i => i.code))
   })
   it('문장 쓰기(G2)는 sentence 종류로', async () => {
-    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 2, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 2, form_id: null, writingMode: 'scan' })
     await UNLINK(req('DELETE'), ctx(SID))
     expect(vi.mocked(db.unlinkWritingScan).mock.calls[0][1]).toBe('sentence')
   })
   it('[핵심] 화면 방식 검사는 409 — 검사 중 입력한 쓰기를 지우면 되돌릴 길이 없다', async () => {
-    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, form_id: null, writingMode: 'screen' })
     expect((await UNLINK(req('DELETE'), ctx(SID))).status).toBe(409)
     expect(db.unlinkWritingScan).not.toHaveBeenCalled()
   })
   it('없는 세션 404 · UUID 아님 400 · 장애 500(내부 문구 비노출)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'missing', grade: 0, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'missing', grade: 0, form_id: null, writingMode: 'screen' })
     expect((await UNLINK(req('DELETE'), ctx(SID))).status).toBe(404)
     expect((await UNLINK(req('DELETE'), ctx('../x'))).status).toBe(400)
-    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValueOnce({ state: 'submitted', grade: 1, form_id: null, writingMode: 'scan' })
     vi.mocked(db.unlinkWritingScan).mockRejectedValueOnce(new Error('storage path leak'))
     const res = await UNLINK(req('DELETE'), ctx(SID))
     expect(res.status).toBe(500)

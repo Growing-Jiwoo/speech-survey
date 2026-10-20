@@ -28,9 +28,9 @@ describe('lib/forms — 키에 따라 실제 문항 · 가짜 문항', () => {
 
   /** 가짜 문항과 모양이 같은 「실제」 문항을 암호문으로 넣고 lib/forms를 새로 읽는다 */
   async function load(content: (f: { id: string; sentences: string[] }) => object) {
-    const { G1 } = await import('@/lib/forms/g1')
-    const { G2 } = await import('@/lib/forms/g2')
-    const forms = Object.fromEntries([G1, G2].map(f => [f.id, { ...f, ...content(f) }]))
+    const all = [(await import('@/lib/forms/g1')).G1, (await import('@/lib/forms/g2')).G2,
+      (await import('@/lib/forms/g1s2')).G1S2, (await import('@/lib/forms/g2s2')).G2S2]
+    const forms = Object.fromEntries(all.map(f => [f.id, { ...f, ...content(f) }]))
     const sealed = seal(JSON.stringify({ forms, sheet: {} }), KEY)
     vi.doMock('@/lib/forms/sealed', () => ({ SEALED: sealed }))
     return import('@/lib/forms')

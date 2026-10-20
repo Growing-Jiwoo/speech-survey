@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  PROVISIONAL_CRITERIA, fluencyLabel, isValidReadSec, itemMaxWords, parseReadSec, readSecLabel, readSecMax,
+  criteriaProvisional, fluencyLabel, isValidReadSec, itemMaxWords, parseReadSec, readSecLabel, readSecMax,
   scoreInputFrom, scoreSession, scoringFor, sheetPdfGate, unrecordedItemCodes, unrecordedTimes, withUnrecordedFixed,
   type ScoreInput,
 } from '@/lib/scoring'
 import { itemsFor } from '@/lib/items'
-import { formForGrade } from '@/lib/forms'
+import { FORMS, formFor, formForGrade, type SurveyForm } from '@/lib/forms'
 
 const G1 = formForGrade(1)
 const G2 = formForGrade(2)
@@ -17,6 +17,9 @@ const WRITE_ALL = g1.writingItems.map(i => i.code)
 
 const empty: ScoreInput = { marks: {}, sentences: {}, times: {}, writing: {} }
 const score = (s: Partial<ScoreInput>, form = G1) => scoreSession(form, { ...empty, ...s })
+/** 기준을 고정한 양식 사본 — 양식의 기준표가 바뀌어도 판정 테스트의 뜻은 그대로다 */
+const withCut = (form: SurveyForm, cutoff: Partial<SurveyForm['cutoff']>): SurveyForm =>
+  ({ ...form, cutoff: { ...form.cutoff, ...cutoff } })
 
 describe('배점 — 검사지 대조', () => {
   it('문항 배점은 어절 수에서 유도된다 — G1 문장 7·7·8·14', () => {
@@ -30,7 +33,7 @@ describe('배점 — 검사지 대조', () => {
     expect(g1.writingItems.map(itemMaxWords)).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
   })
   it('과제별 만점: G1 낱말 14 · 쓰기 10, 문장 정확 어절 36', () => {
-    // 문장 읽기유창성은 어절/초라 만점이 없다 — taskMax에 없고 정확 어절 만점만 따로 있다
+    // 문장 읽기유창성은 10초당 어절이라 만점이 없다 — taskMax에 없고 정확 어절 만점만 따로 있다
     expect(scoringFor(G1).taskMax).toEqual({ wordReading: 14, writing: 10 })
     expect(scoringFor(G1).sentenceWordsMax).toBe(36)
   })
@@ -38,16 +41,24 @@ describe('배점 — 검사지 대조', () => {
     expect(scoringFor(G2).taskMax).toEqual({ wordReading: 14, writing: 10 })
     expect(scoringFor(G2).sentenceWordsMax).toBe(35)
   })
-  it('임시 Pass 기준이 0보다 크고 개수형은 만점보다 작다 (확정 전 표시 대상)', () => {
-    expect(PROVISIONAL_CRITERIA).toBe(true)
-    for (const form of [G1, G2]) {
-      const { passMark, taskMax } = scoringFor(form)
+  it('기준: 위험 값은 주의 값보다 낮고, 개수형 주의 값은 만점보다 작다', () => {
+    for (const form of FORMS) {
+      const { cutoff, taskMax } = scoringFor(form)
       for (const key of ['wordReading', 'writing'] as const) {
-        expect(passMark[key]).toBeGreaterThan(0)
-        expect(passMark[key]).toBeLessThan(taskMax[key])
+        expect(cutoff[key].risk).toBeLessThan(cutoff[key].caution)
+        expect(cutoff[key].caution).toBeLessThan(taskMax[key])
       }
-      expect(passMark.sentenceReading).toBeGreaterThan(0)   // 어절/초 — 만점이 없다
+      expect(cutoff.sentenceReading.risk).toBeLessThan(cutoff.sentenceReading.caution)   // 10초당 어절 — 만점이 없다
     }
+  })
+  it('임시 기준 표시: 1학기 양식(개발 판단 숫자)과 담당 학년이 아닌 폴백 세션은 임시, 2학기 양식은 확정', () => {
+    expect(criteriaProvisional(G1, 1)).toBe(true)
+    expect(criteriaProvisional(G2, 2)).toBe(true)
+    expect(criteriaProvisional(formFor(1, 2), 1)).toBe(false)
+    expect(criteriaProvisional(formFor(2, 2), 2)).toBe(false)
+    // 3학년은 1학년 2학기 양식으로 검사하지만 그 기준은 1학년 것이다
+    expect(formFor(3, 2)).toBe(formFor(1, 2))
+    expect(criteriaProvisional(formFor(3, 2), 3)).toBe(true)
   })
   it('의미·무의미 만점의 합이 과제 만점과 같다 (G1)', () => {
     const { readMax, writeMax, taskMax } = scoringFor(G1)
@@ -128,7 +139,7 @@ describe('G2 문장 쓰기 채점 (어절당 1점)', () => {
     const all = Object.fromEntries(g2.writingItems.map(i => [i.code, 2]))
     const r = scoreSession(G2, { ...empty, writing: all })
     expect(r.writing).toBe(10)
-    expect(r.verdict.writing).toBe('pass')
+    expect(r.verdict.writing).toBe('good')
   })
   it('의미/무의미 소계는 문장 쓰기에 없다 (0으로 남는다)', () => {
     const r = scoreSession(G2, { ...empty, writing: { sw01: 2 } })
@@ -140,22 +151,28 @@ describe('G2 문장 쓰기 채점 (어절당 1점)', () => {
   })
 })
 
-describe('scoreSession — Pass/Fail 판정', () => {
-  it('기준 이상이면 pass, 미만이면 fail', () => {
-    // 36어절 ÷ 0.4초 = 90 어절/초 — 어떤 기준이 와도 넘는 값(임시 기준 숫자에 기대지 않는다)
-    const pass = score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
-      times: { rs01: 0.1, rs02: 0.1, rs03: 0.1, rs04: 0.1 } })
-    expect(pass.sentenceReading).toBe(90)
-    expect(pass.verdict.sentenceReading).toBe('pass')
-    expect(score({}).verdict.sentenceReading).toBe('fail')
+describe('scoreSession — 양호·주의·위험 판정 (기준표 「이하」, 담당자 확정 2026-10-19)', () => {
+  const cut = withCut(G1, {
+    wordReading: { caution: 12, risk: 9 }, sentenceReading: { caution: 8.04, risk: 5.43 }, writing: { caution: 7, risk: 4 },
+  })
+  const marksN = (n: number) => Object.fromEntries(READ_ALL.map((c, k) => [c, k < n]))
+  it('기준을 넘으면 양호, 「주의」 값 이하면 주의, 「위험」 값 이하면 위험', () => {
+    // 36어절 ÷ 0.4초 × 10 = 900 — 어떤 기준이 와도 넘는 값
+    const fast = score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
+      times: { rs01: 0.1, rs02: 0.1, rs03: 0.1, rs04: 0.1 } }, cut)
+    expect(fast.sentenceReading).toBe(900)
+    expect(fast.verdict.sentenceReading).toBe('good')
+    expect(score({}, cut).verdict.sentenceReading).toBe('risk')
+    expect(score({ marks: marksN(10) }, cut).verdict.wordReading).toBe('caution')
   })
 
-  it('기준값과 정확히 같으면 pass (경계 포함)', () => {
-    const mark = scoringFor(G1).passMark.wordReading
-    const marks = Object.fromEntries(READ_ALL.slice(0, mark).map(c => [c, true]))
-    const r = score({ marks })
-    expect(r.wordReading).toBe(mark)
-    expect(r.verdict.wordReading).toBe('pass')
+  it('경계값 자체가 그 판정이다 — 12점은 주의, 13점은 양호, 9점은 위험, 10점은 주의', () => {
+    expect([13, 12, 10, 9].map(n => score({ marks: marksN(n) }, cut).verdict.wordReading))
+      .toEqual(['good', 'caution', 'caution', 'risk'])
+  })
+
+  it('위험 값이 없는 임시 기준(-1)은 주의까지만 낸다 — 1학기 양식', () => {
+    expect(score({}).verdict).toEqual({ wordReading: 'caution', sentenceReading: 'caution', writing: 'caution' })
   })
 
   it('과제별로 따로 판정한다', () => {
@@ -223,7 +240,7 @@ describe('채점 완료 여부 (채점 전을 0점 Fail로 표시하지 않기 �
     expect(r.complete.sentenceReading).toBe(false)
   })
 
-  it('[REGRESSION] 어절이 다 있어도 읽은 시간이 하나라도 없으면 미완료다 — 분모 없이 어절/초를 낼 수 없다', () => {
+  it('[REGRESSION] 어절이 다 있어도 읽은 시간이 하나라도 없으면 미완료다 — 분모 없이 10초당 어절을 낼 수 없다', () => {
     const r = score({ sentences: allSent, times: { rs01: 4, rs02: 4, rs03: 4.5 } })
     expect(r.complete.sentenceReading).toBe(false)
     expect(score({ sentences: allSent }).complete.sentenceReading).toBe(false)
@@ -373,46 +390,46 @@ describe('withUnrecordedFixed — 미녹음은 오반응(X·0점)으로 고정 �
   })
 })
 
-describe('문장 읽기유창성 — 정확 어절 합 ÷ 읽은 시간 합 (담당자 확정 2026-09-29)', () => {
-  /** 기준을 1.0으로 고정한 양식 사본 — 임시 기준이 바뀌어도 판정 경계 테스트의 뜻은 그대로다. */
-  const at1 = { ...G1, passMark: { ...G1.passMark, sentenceReading: 1 } }
+describe('문장 읽기유창성 — 정확 어절 합 ÷ 읽은 시간 합 × 10 (담당자 확정 2026-09-29 · × 10은 2026-10-20)', () => {
+  /** 주의 기준을 9.95로 고정한 양식 사본 — 기준표가 바뀌어도 판정 경계 테스트의 뜻은 그대로다. */
+  const at1 = withCut(G1, { sentenceReading: { caution: 9.95, risk: -1 } })
   const words20 = { rs01: 7, rs02: 7, rs03: 6, rs04: 0 }
 
-  it('담당자 예시 — 4문장 총 10초에 정확 어절 20개면 2점', () => {
+  it('담당자 예시 — 「20어절 ÷ 10초 * 10」 = 20 (10초당 어절)', () => {
     const r = score({ sentences: words20, times: { rs01: 2, rs02: 3, rs03: 3, rs04: 2 } })
-    expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([20, 10, 2])
+    expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([20, 10, 20])
     expect(r.complete.sentenceReading).toBe(true)
   })
 
-  it('소수 둘째 자리에서 반올림한다 — 36어절 ÷ 17초 = 2.1176… → 2.12, 0.125 → 0.13', () => {
+  it('소수 둘째 자리에서 반올림한다 — 36어절 ÷ 17초 × 10 = 21.176… → 21.18, 1 ÷ 80 × 10 = 0.125 → 0.13', () => {
     expect(score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
-      times: { rs01: 4, rs02: 4, rs03: 4.5, rs04: 4.5 } }).sentenceReading).toBe(2.12)
+      times: { rs01: 4, rs02: 4, rs03: 4.5, rs04: 4.5 } }).sentenceReading).toBe(21.18)
     expect(score({ sentences: { rs01: 1, rs02: 0, rs03: 0, rs04: 0 },
-      times: { rs01: 2, rs02: 2, rs03: 2, rs04: 2 } }).sentenceReading).toBe(0.13)
+      times: { rs01: 20, rs02: 20, rs03: 20, rs04: 20 } }).sentenceReading).toBe(0.13)
   })
 
   it('[REGRESSION] 0.1초 단위 시간을 더해도 부동소수 오차가 없다 — 4.1+4.2+4.3+4.4 = 17', () => {
     const r = score({ sentences: words20, times: { rs01: 4.1, rs02: 4.2, rs03: 4.3, rs04: 4.4 } })
     expect(r.sentenceSec).toBe(17)
-    expect(r.sentenceReading).toBe(1.18)   // 20 ÷ 17 = 1.176…
+    expect(r.sentenceReading).toBe(11.76)   // 20 ÷ 17 × 10 = 11.764…
   })
 
-  it('[REGRESSION] 판정은 반올림한 값으로 한다 — 화면의 「1.00」이 기준 1.00에서 Fail이 되지 않는다', () => {
+  it('[REGRESSION] 판정은 반올림한 값으로 한다 — 화면의 「9.95」가 기준 「9.95 이하」에서 양호가 되지 않는다', () => {
     const edge = scoreSession(at1, { ...empty, sentences: words20, times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5.1 } })
-    expect(edge.sentenceReading).toBe(1)       // 20 ÷ 20.1 = 0.995… → 1.00
-    expect(edge.verdict.sentenceReading).toBe('pass')
-    const below = scoreSession(at1, { ...empty, sentences: words20, times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5.2 } })
-    expect(below.sentenceReading).toBe(0.99)   // 20 ÷ 20.2 = 0.990…
-    expect(below.verdict.sentenceReading).toBe('fail')
+    expect(edge.sentenceReading).toBe(9.95)    // 20 ÷ 20.1 × 10 = 9.9502… → 9.95
+    expect(edge.verdict.sentenceReading).toBe('caution')
+    const above = scoreSession(at1, { ...empty, sentences: words20, times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5 } })
+    expect(above.sentenceReading).toBe(10)     // 20 ÷ 20 × 10
+    expect(above.verdict.sentenceReading).toBe('good')
   })
 
   it('[REGRESSION] 녹음 없는 문장은 제한 시간을 분모에 더한다 — 1문장만 읽고 넘긴 아이가 유창해 보이지 않게', () => {
-    // 1번만 5초에 7어절 읽고 2~4번은 「모르겠어요」(녹음 없음): 7 ÷ (5 + 20×3) = 0.107… → 0.11.
-    // 계산에서 빼면 7 ÷ 5 = 1.40으로 4문장을 30초에 다 읽은 아이(1.20)보다 높아진다(lib/scoring 주석).
+    // 1번만 5초에 7어절 읽고 2~4번은 「모르겠어요」(녹음 없음): 7 ÷ (5 + 20×3) × 10 = 1.076… → 1.08.
+    // 계산에서 빼면 7 ÷ 5 × 10 = 14.00으로 4문장을 30초에 다 읽은 아이(12.00)보다 높아진다(lib/scoring 주석).
     const input = withUnrecordedFixed(g1, { ...empty, sentences: { rs01: 7 }, times: { rs01: 5 } },
       code => code === 'p_rs01')
     const r = scoreSession(G1, input)
-    expect(r.sentenceReading).toBe(0.11)
+    expect(r.sentenceReading).toBe(1.08)
     expect(r.complete.sentenceReading).toBe(true)
   })
 
@@ -448,7 +465,15 @@ describe('unrecordedTimes · unrecordedItemCodes — 녹음 없는 문항', () =
 })
 
 describe('읽은 시간 입력 — parseReadSec · isValidReadSec · readSecLabel', () => {
-  const MAX = readSecMax(G1)
+  const MAX = readSecMax(g1.sentenceItems[0])
+
+  it('상한은 문장마다 그 문장의 제한 시간 + 여유다 — 2학기는 1·2번 25초, 3·4번 35초(담당자 확정 2026-10-20 「1, 2번 20초, 3, 4번 30초」)', () => {
+    for (const grade of [1, 2]) {
+      const f = itemsFor(formFor(grade, 2))
+      expect(f.sentenceItems.map(readSecMax)).toEqual([25, 25, 35, 35])
+      expect(f.sentenceItems.map(i => f.pageByCode.get(`p_${i.code}`)!.limitSec)).toEqual([20, 20, 30, 30])
+    }
+  })
 
   it('상한은 녹음 최대 길이 — 제한 20초 + 여유 5초 (채점 규칙이 아니라 오타 방지)', () => {
     expect(MAX).toBe(25)
@@ -490,7 +515,7 @@ describe('읽은 시간 입력 — parseReadSec · isValidReadSec · readSecLabe
 })
 
 describe('문장 읽기유창성 — 경계·예외 상황', () => {
-  const MAX = readSecMax(G1)
+  const MAX = readSecMax(g1.sentenceItems[0])
 
   it('[전수] 어절 0~36 × 시간 0.4~100초(0.1초 간격) 전부 — 둘째 자리까지이고, 참값과 0.005 안이며, 딱 절반이면 올린다', () => {
     const caps = g1.sentenceItems.map(itemMaxWords)            // 7·7·8·14
@@ -506,8 +531,8 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
         const hundredths = r.sentenceReading * 100
         expect(Math.abs(hundredths - Math.round(hundredths))).toBeLessThan(1e-9)          // 둘째 자리까지
         expect(r.sentenceSec * 10).toBe(tenths)                                           // 분모에 오차 없음
-        const num = w * 1000, exactFloor = Math.floor(num / tenths), rem = num % tenths
-        const want = 2 * rem >= tenths ? exactFloor + 1 : exactFloor                     // 반올림(절반은 올림)을 정수로
+        const num = w * 10000, exactFloor = Math.floor(num / tenths), rem = num % tenths
+        const want = 2 * rem >= tenths ? exactFloor + 1 : exactFloor                     // 반올림(절반은 올림)을 정수로 — 10초당 어절의 100배
         if (Math.round(hundredths) !== want) throw new Error(`w=${w} tenths=${tenths}: ${r.sentenceReading} ≠ ${want / 100}`)
         checked++
       }
@@ -515,17 +540,22 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
     expect(checked).toBe(37 * 997)
   })
 
+  it('[REGRESSION] 녹음 없는 문장의 시간은 그 문장의 제한 시간이다 — 2학기 3·4번은 30초', () => {
+    const f = itemsFor(formFor(1, 2))
+    expect(unrecordedTimes(f, () => false)).toEqual({ rs01: 20, rs02: 20, rs03: 30, rs04: 30 })
+  })
+
   it('G2 양식도 같은 규칙 — 정확 어절 만점 35, 미녹음 문장 20초', () => {
     const r = scoreSession(G2, { ...empty, sentences: { rs01: 7, rs02: 8, rs03: 9, rs04: 11 },
       times: { rs01: 5, rs02: 5, rs03: 5, rs04: 5 } })
-    expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([35, 20, 1.75])
+    expect([r.sentenceWords, r.sentenceSec, r.sentenceReading]).toEqual([35, 20, 17.5])
     expect(withUnrecordedFixed(g2, empty, () => false).times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
   })
 
   it('만점을 넘는 어절은 나누기 전에 잘라낸다 — 오입력이 비율을 부풀리지 않는다', () => {
     const r = score({ sentences: { rs01: 99, rs02: 0, rs03: 0, rs04: 0 }, times: { rs01: 1, rs02: 1, rs03: 1, rs04: 1 } })
     expect(r.sentenceWords).toBe(7)
-    expect(r.sentenceReading).toBe(1.75)
+    expect(r.sentenceReading).toBe(17.5)
   })
 
   it('문장 읽기가 아닌 코드의 시간은 분모에 들어가지 않는다', () => {
@@ -539,19 +569,18 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
     expect(out.times).toEqual({ rs01: 20, rs02: 20, rs03: 20, rs04: 20 })
   })
 
-  it('가장 느린 경우 — 네 문장 모두 녹음 상한(25초)에 만점이면 36 ÷ 100 = 0.36', () => {
+  it('가장 느린 경우 — 네 문장 모두 녹음 상한(25초)에 만점이면 36 ÷ 100 × 10 = 3.6', () => {
     const r = score({ sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 },
       times: { rs01: MAX, rs02: MAX, rs03: MAX, rs04: MAX } })
-    expect(r.sentenceReading).toBe(0.36)
+    expect(r.sentenceReading).toBe(3.6)
   })
 
-  it('읽기유창성 판정은 최종결과에 그대로 들어간다 — 다 맞게 읽어도 느리면 FAIL로 세어진다', () => {
-    const at1 = { ...G1, passMark: { ...G1.passMark, sentenceReading: 1 } }
-    const slow = scoreSession(at1, { ...empty,
-      marks: Object.fromEntries(READ_ALL.map(c => [c, false])),                         // 낱말 해독 FAIL
-      sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }, times: { rs01: 20, rs02: 20, rs03: 20, rs04: 20 },
+  it('읽기유창성 판정은 최종결과에 그대로 들어간다 — 다 맞게 읽어도 느리면 주의로 세어진다', () => {
+    const slow = scoreSession(withCut(G1, { sentenceReading: { caution: 9.95, risk: -1 } }), { ...empty,
+      marks: Object.fromEntries(READ_ALL.map(c => [c, false])),                         // 낱말 해독 주의
+      sentences: { rs01: 7, rs02: 7, rs03: 8, rs04: 14 }, times: { rs01: 20, rs02: 20, rs03: 20, rs04: 20 },  // 4.50
       writing: Object.fromEntries(WRITE_ALL.map(c => [c, 1])) })
-    expect(slow.verdict).toEqual({ wordReading: 'fail', sentenceReading: 'fail', writing: 'pass' })
+    expect(slow.verdict).toEqual({ wordReading: 'caution', sentenceReading: 'caution', writing: 'good' })
   })
 
   it('parseReadSec — 전각 숫자·부호·공백 낀 숫자·유니코드 마이너스는 잘못 친 값, 「4.0」「00.5」는 받는다', () => {

@@ -1,4 +1,4 @@
-// lib/forms/g2.ts — KODYS-G2 (초등 2학년) 검사지 정의.
+// lib/forms/g2.ts — KODYS-G2 (초등 2학년 1학기) 검사지 정의.
 //
 // ⚠️ **여기 낱말·문장은 가짜 문항이다** — 실제 문항은 암호문 `sealed.ts`(g1.ts 머리 주석). 모양은 실제와 같다
 // (낱말 7·7, 문장 어절 7·8·9·11, 문장 쓰기 2어절 × 5).
@@ -10,13 +10,16 @@
 //
 // G1과의 구조적 차이: 쓰기 과제가 낱말 쓰기가 아니라 **문장 쓰기**다.
 // 문항마다 O/X가 아니라 어절 수(0~2)로 채점한다.
+//
+// ⚠️ 1학기 문항은 **바뀔 예정이다**(담당자 2026-10-20) — 받으면 새 양식(새 id)을 추가한다. g1.ts 머리 주석 참고.
 import type { SurveyForm } from './index'
 
 export const G2: SurveyForm = {
   id: 'KODYS-G2',
-  title: 'KODYS - G2',
+  title: 'KODYS - G2 (1학기)',
   subtitle: 'Korean Dyslexia Screening Test',
   grades: [2],
+  semester: 1,
   // 가짜 문항(머리 주석) — 실제 문항은 sealed.ts
   readMeaning: ['구두', '공책', '우유', '기차', '달걀', '꽃밭', '풍선'],
   readNonsense: ['서묵', '타곤', '미랍', '쿠벤', '조닉', '허삼', '누걀'],
@@ -33,12 +36,16 @@ export const G2: SurveyForm = {
     sentences: ['꽃이 피어요', '물을 마셔요', '공을 던져요', '손을 씻어요', '문을 닫아요'],
   },
   // 담당자 확정(2026-09-21) — 근거·주의사항은 g1.ts의 같은 줄 주석 참고(두 양식이 같은 값을 쓴다).
-  limits: { wordSec: 20, sentenceSec: 20 },
-  // ⚠️ 담당자 확인 대기 — 확정 아님. G1과 같은 기준표를 받아야 한다.
+  limits: { wordSec: 20, sentenceSec: [20, 20, 20, 20] },
+  // ⚠️ 담당자 확인 대기 — 확정 아님. 1학기 기준표는 새 1학기 문항과 함께 받는다(2026-10-20 회신).
   // **G1의 비율을 그대로 옮긴 것 자체가 개발 판단이다**(사용자 확정 2026-08-11) —
-  // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다.
-  // 문장 읽기유창성(어절/초)의 1.0도 G1과 같은 임시값이다(사용자 확정 2026-09-29, g1.ts 주석).
-  passMark: { wordReading: 9, sentenceReading: 1.0, writing: 6 },
+  // 담당자가 "G2도 G1과 같은 비율"이라고 답한 적은 없다. 옮긴 방식은 g1.ts 주석과 같다.
+  cutoff: {
+    wordReading: { caution: 8, risk: -1 },
+    sentenceReading: { caution: 9.99, risk: -1 },
+    writing: { caution: 5, risk: -1 },
+  },
+  provisional: true,
   // KODYS_G2_결과보고서_양식.docx(담당자 배포 2026-09-28) 실측값. 초록 계열.
   // G1과 다른 곳(머리글 문구·마침표·줄 간격·빈 줄 수)은 담당자 파일이 실제로 그렇다 — 맞추지 말 것.
   report: {

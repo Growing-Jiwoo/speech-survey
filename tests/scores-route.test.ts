@@ -5,7 +5,7 @@ vi.mock('@/lib/db', () => ({
   saveWriting: vi.fn().mockResolvedValue(undefined),
   scanUploadedAt: vi.fn().mockResolvedValue(null),
   scoreRows: vi.fn(),
-  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' }),
+  sessionState: vi.fn().mockResolvedValue({ state: 'open', grade: 1, form_id: null, writingMode: 'screen' }),
 }))
 
 import { PUT } from '@/app/api/admin/sessions/[id]/scores/route'
@@ -25,7 +25,7 @@ const EMPTY: ScoreRows = { marks: [], sentences: [], times: [], writing: [] }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(db.saveScores).mockResolvedValue(undefined)
-  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, writingMode: 'screen' })
+  vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, form_id: null, writingMode: 'screen' })
   vi.mocked(db.scanUploadedAt).mockResolvedValue(null)
   vi.mocked(db.scoreRows).mockResolvedValue(EMPTY)
 })
@@ -96,7 +96,7 @@ describe('PUT /api/admin/sessions/[id]/scores', () => {
   })
 
   it('존재하지 않는 세션은 404 (조용한 no-op 금지)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'missing', grade: 0, form_id: null, writingMode: 'screen' })
     expect((await PUT(req({ marks: {}, sentences: {} }), ctx())).status).toBe(404)
     expect(db.saveScores).not.toHaveBeenCalled()
   })
@@ -162,13 +162,21 @@ describe('PUT …/scores — 문장 읽은 시간(times)', () => {
   })
 
   it('G2 세션도 문장 읽기 코드(rs..)만 받고 상한은 같은 25초', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, form_id: null, writingMode: 'screen' })
     expect((await put({ rs04: 25 })).status).toBe(200)
     expect((await put({ sw01: 3 })).status).toBe(400)
   })
 
+  it('[REGRESSION] 상한은 문장마다 그 문장의 제한 시간 + 5초 — 2학기 3·4번은 35초, 1·2번은 25초까지(담당자 확정 2026-10-20)', async () => {
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 1, form_id: 'KODYS-G1-S2', writingMode: 'screen' })
+    expect((await put({ rs03: 35, rs04: 32.5 })).status).toBe(200)
+    expect((await put({ rs02: 25 })).status).toBe(200)
+    expect((await put({ rs03: 35.1 })).status).toBe(400)
+    expect((await put({ rs01: 25.1 })).status).toBe(400)
+  })
+
   it('담당 양식이 없는 학년(3학년 → G1 폴백)도 같은 규칙', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 3, form_id: null, writingMode: 'screen' })
     expect((await put({ rs01: 4 })).status).toBe(200)
   })
 
@@ -180,7 +188,7 @@ describe('PUT …/scores — 문장 읽은 시간(times)', () => {
 })
 
 describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', () => {
-  beforeEach(() => vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, writingMode: 'screen' }))
+  beforeEach(() => vi.mocked(db.sessionState).mockResolvedValue({ state: 'open', grade: 2, form_id: null, writingMode: 'screen' }))
 
   it('G2 문장은 만점이 다르다 (rs01은 7어절, rs03은 9어절)', async () => {
     expect((await PUT(req({ marks: {}, sentences: { rs03: 9 } }), ctx())).status).toBe(200)
@@ -204,7 +212,7 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
 // 쓰기 스캔본(사용자 확정 2026-09-30) — 담당자가 스캔본을 보고 쓰기를 채점한다. **스캔본 방식 검사만.**
 describe('PUT scores — 스캔본 방식 검사의 쓰기', () => {
   const scanSession = (grade = 1) =>
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade, form_id: null, writingMode: 'scan' })
   const WW = Array.from({ length: 10 }, (_, i) => `ww${String(i + 1).padStart(2, '0')}`)
 
   it('낱말 쓰기(G1) 0/1을 저장한다 — 소유 범위는 쓰기 문항 코드 전부', async () => {
@@ -232,7 +240,7 @@ describe('PUT scores — 스캔본 방식 검사의 쓰기', () => {
     expect(db.saveWriting).not.toHaveBeenCalled()
   })
   it('[핵심] 화면 방식 검사에 쓰기를 실으면 409 — 검사 중 입력이 유일한 채점 경로라 결과지에서 고치지 않는다', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'screen' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, form_id: null, writingMode: 'screen' })
     const res = await PUT(req({ marks: { rw01: true }, sentences: {}, writing: { ww01: 1 } }), ctx())
     expect(res.status).toBe(409)
     expect(db.saveScores).not.toHaveBeenCalled()
@@ -339,7 +347,7 @@ describe('PUT scores — 판(baseVersion) 대조', () => {
   })
 
   it('스캔본이 바뀐 409가 판 대조보다 먼저다 — conflict: scan으로 구별한다(그 쓰기는 판과 무관하게 버려야 한다)', async () => {
-    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, writingMode: 'scan' })
+    vi.mocked(db.sessionState).mockResolvedValue({ state: 'submitted', grade: 1, form_id: null, writingMode: 'scan' })
     vi.mocked(db.scanUploadedAt).mockResolvedValue('2026-10-12T06:00:00Z')
     vi.mocked(db.scoreRows).mockResolvedValue(B_SAVED)
     const res = await PUT(req({

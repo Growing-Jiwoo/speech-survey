@@ -19,7 +19,7 @@ export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
     id: 'id-' + Math.random().toString(36).slice(2),
     class_code_id: '11111111-1111-1111-1111-111111111111', child_no: 3,
     school_region: '서울', school_id: 'sch-1', school_name: '가나초등학교',
-    birth_ymd: '2019-03-01', grade: 1, class_no: 2, gender: '남',
+    birth_ymd: '2019-03-01', grade: 1, form_id: null, class_no: 2, gender: '남',
     child_name: '김테스트', teacher_name: '이담임',
     teacher_phone: null, teacher_email: null,
     checklist: [],

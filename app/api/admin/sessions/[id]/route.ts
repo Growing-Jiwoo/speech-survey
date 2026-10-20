@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { childSessions, deleteSession, sessionDetail, signedAudioUrl, signedScanUrl, updateSessionIdentity } from '@/lib/db'
 import { retestOrdinals } from '@/lib/adminStats'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { sessionEditSchema } from '@/lib/schema'
 import { scoresVersion } from '@/lib/score-version'
 import { UUID_RE, jsonError } from '@/lib/request'
@@ -52,7 +52,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       },
     ) : null
     return NextResponse.json({
-      session, recordings: withUrls, writing, marks, sentences, times, scan: scanView, form: formForGrade(session.grade),
+      session, recordings: withUrls, writing, marks, sentences, times, scan: scanView, form: formOfSession(session),
       version: scoresVersion({ marks, sentences, times, writing }), retest: await retestP,
     })
   } catch (e) {

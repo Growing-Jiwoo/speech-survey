@@ -9,11 +9,12 @@ import { NextResponse } from 'next/server'
 import { verifyResultsToken } from '@/lib/auth'
 import { classResults, findClassCodeById, listRoster } from '@/lib/db'
 import { env } from '@/lib/env'
-import { formForGrade } from '@/lib/forms'
+import { formFor, formOfSession } from '@/lib/forms'
+import { semesterOf } from '@/lib/format'
 import { buildChildren } from '@/lib/results'
 import { classSheetTag } from '@/lib/writing-sheet'
 import { jsonError } from '@/lib/request'
-import { PROVISIONAL_CRITERIA, scoringFor } from '@/lib/scoring'
+import { criteriaProvisional, scoringFor } from '@/lib/scoring'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,12 +27,18 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
     ])
     if (!row) return jsonError('학급 정보가 없어요.', 404)
-    const form = formForGrade(row.grade)
+    // 만점은 학년이 같으면 학기가 달라도 같다(낱말 해독 14 · 쓰기 10) — 지금 학기 양식에서 읽는다.
+    const form = formFor(row.grade, semesterOf(new Date().toISOString()))
+    // 임시 기준 표시: 검사가 있으면 그 검사들의 양식으로, 없으면 지금 시작할 양식으로 — 한 학급에 1학기·2학기 검사가
+    // 섞일 수 있어(양식은 세션마다 정해진다) 하나라도 임시 기준이면 표시한다.
+    const provisional = rows.length > 0
+      ? rows.some(r => criteriaProvisional(formOfSession(r), r.grade))
+      : criteriaProvisional(form, row.grade)
     // 아동 실명·점수·판정이 담긴 응답이다 — 중간 캐시·뒤로가기 복원에 남기지 않는다
     // (PDF 라우트와 같은 방침). 새로고침이 곧 최신 상태여야 한다는 이 라우트의 약속도 이것이 지킨다.
     return NextResponse.json({
       cls: { schoolName: row.school_name, grade: row.grade, classNo: row.class_no, teacherName: row.teacher_name },
-      provisional: PROVISIONAL_CRITERIA,
+      provisional,
       taskMax: scoringFor(form).taskMax,
       children: buildChildren(
         roster.map(r => ({ child_no: r.child_no, child_name: r.child_name, gender: r.gender })),

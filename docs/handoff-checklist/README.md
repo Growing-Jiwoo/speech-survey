@@ -5,7 +5,7 @@
 
 | 파일 | 무엇 |
 |---|---|
-| `선별검사_담당자_확인사항_초안.pdf` | 전달본(A4 5쪽). `checklist.html`을 뽑은 것 |
+| `선별검사_담당자_확인사항_초안.pdf` | 전달본(A4 5쪽, 2026-10-12판). `checklist.html`을 뽑은 것 — 1·5번을 고친 2026-10-20 내용은 아직 다시 뽑지 않았다 |
 | `checklist.html` | PDF 원본. 판면은 `../manuals/src/style.css`를 함께 쓴다 |
 | `checklist.md` | 같은 내용의 글 원본(문구 검토·윤문용). **HTML과 내용을 맞춰 둔다** |
 | `shots/` | 3번 항목의 그림 — ① 신청 화면 안내·동의(운영 `/apply` 빈 화면, 담당자가 확인하지 않은 문구만 노란색으로 칠함) ② 승인 메일(`lib/mail.ts` `approvedMail`을 설명서 예시 값 대구가창초 1-2·김서연·`HN4R8K`로 그린 것) ③ 시작 화면 개인정보 안내(운영에서 시험 학급 코드로 띄운 뒤 안내 카드만 — 명단은 찍히지 않음) ④ 마이크 확인 화면(설명서 `t-05-mic.png`과 같은 것)과 아래 두 줄 확대본 |
@@ -27,13 +27,13 @@ IRB 심의는 받지 않는다(사용자 확정 2026-10-12) — 그래서 안내
 
 | 항목 | 코드 |
 |---|---|
-| 1. 학년·학기별 문항과 Pass 기준 | `lib/forms/g*.ts`(`passMark`·문항), 3~6학년 폴백, `lib/format.ts` `semesterOf` |
+| 1. 학년·학기별 문항과 판정 기준 | `lib/forms/g*.ts`(`cutoff`·`provisional`·문항 — 새 양식은 새 id로 추가), 3~6학년 폴백(`formFor`). 1·2학년 2학기는 2026-10-20 반영 |
 | 2. 쓰기 기록지 양식 | `components/start/WritingSheets.tsx`(임시 양식) |
 | 3. 안내·동의 문구 | `lib/consent.ts`(`SURVEY_NOTICE`·`APPLY_CHECKS`·`CONSENT_NOTICE`·`GUARDIAN_CONSENT_LABEL`·`CHILD_NOTICE`), `app/page.tsx` 시작 화면 안내 둘째 줄, `lib/mail.ts`·`lib/format.ts`(승인 안내 3채널) |
 | 4. 연습 문항 | `lib/items.ts` 연습용 낱말 |
-| 5. 결과보고서 표기 | `lib/pdf/report.ts`(지역 / 학교, 학년 / 학기), `lib/pdf/README.md` |
+| 5. 결과보고서 표기 | `lib/pdf/report.ts`(지역 / 학교), `lib/pdf/README.md` — 학기 구분은 2026-10-20 담당자 확정 |
 
-1번 표의 숫자(문항 수·만점·임시 기준)는 `lib/forms/g1.ts`·`g2.ts`에서 옮겼다. 코드가 바뀌면 표도 고친다.
+1번의 2학기 확인 두 가지(읽기유창성 주의 기준 · 문장당 제한 시간)는 2026-10-20 회신으로 닫혔다(1학년 8.12 · 2학년 8.04, 3·4번 30초 — `lib/forms/g1s2.ts`·`g2s2.ts`). 코드가 바뀌면 이 문서도 고친다.
 
 ## 다시 뽑는 법
 
