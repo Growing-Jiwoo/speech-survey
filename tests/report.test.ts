@@ -250,7 +250,7 @@ describe('interpretation — 담당자 docx 예시 세 개와 글자까지 같�
     expect(run({ wordReading: 'good', sentenceReading: 'caution', writing: 'caution' })).toBe(DOCX.riskTwoCautions)
     expect(run({ wordReading: 'good', sentenceReading: 'risk', writing: 'good' })).toBe(DOCX.riskOne)
   })
-  it('예시에 없는 조합도 같은 규칙 — 없는 묶음은 빼고 양호 → 주의 → 위험 순', () => {
+  it('예시가 없는 조합도 docx 나열 규칙 그대로 — 없는 묶음은 빼고 양호 → 주의 → 위험 순', () => {
     expect(run({ wordReading: 'caution', sentenceReading: 'caution', writing: 'caution' }))
       .toContain(`결과, '해독, 읽기유창성, 쓰기' 영역에서 '주의'로 확인되어 최종결과 '위험'으로`)
     expect(run({ wordReading: 'risk', sentenceReading: 'caution', writing: 'good' }))
