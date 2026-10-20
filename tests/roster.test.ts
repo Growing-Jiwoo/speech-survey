@@ -67,6 +67,57 @@ describe('parseRosterGrid — 번호 칸 표기(toNo)', () => {
   })
 })
 
+describe('parseRosterGrid — 2단 명렬표(번호·이름 묶음이 한 줄에 여러 번)', () => {
+  const head = ['번호', '이름', '성별', '생년월일']
+  const names = (r: ParsedRoster) => kids(r).map(k => `${k.childNo} ${k.name}`)
+
+  it('[REGRESSION] 오른쪽 묶음 아이도 읽는다 — 왼쪽 묶음 위→아래, 이어서 오른쪽 묶음(실제 엑셀 파일)', async () => {
+    // 예전에는 머리글을 왼쪽 것만 찾아 4·5번이 안내 없이 빠졌다(「3명 준비됨」으로 그대로 신청됐다, 2026-10-20)
+    const r = parseRosterGrid(await grid('two-group-roster.xlsx'))
+    if ('error' in r) throw new Error(r.error)
+    expect(names(r)).toEqual(['1 강도윤', '2 권서아', '3 김민준', '4 김하윤', '5 박채아'])
+    expect(kids(r)[3]).toEqual({ childNo: 4, name: '김하윤', gender: '여', birthYmd: '190108' })
+    expect(broken(r)).toHaveLength(0)   // 오른쪽 묶음의 빈 마지막 줄은 줄로 세지 않는다
+  })
+  it('3단, 묶음 사이의 모르는 열, 묶음 안 열 순서가 달라도 묶음별로 읽는다', () => {
+    const r = parseRosterGrid([
+      [...head, '비고', '이름', '번호', '생년월일', '성별', '번호', '이름', '성별', '생년월일'],
+      ['1', '강도윤', '남', '2019-05-14', '', '김하윤', '3', '2019-01-08', '여', '5', '서은우', '남', '2019-10-11'],
+      ['2', '권서아', '여', '2019-11-02', '전학', '박채아', '4', '2019-06-30', '여', '', '', '', ''],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(names(r)).toEqual(['1 강도윤', '2 권서아', '3 김하윤', '4 박채아', '5 서은우'])
+    expect(broken(r)).toHaveLength(0)
+  })
+  it('번호 없이 이름 머리글만 다시 나오는 열(보호자 성명)은 새 묶음이 아니다 — 아이가 늘지 않는다', () => {
+    const r = parseRosterGrid([
+      [...head, '성명(보호자)', '연락처'],
+      ['1', '강도윤', '남', '2019-05-14', '강민수', '010-0000-0000'],
+      ['2', '권서아', '여', '2019-11-02', '권지혜', '010-0000-0000'],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(names(r)).toEqual(['1 강도윤', '2 권서아'])
+  })
+  it('묶음이 다 차기 전에 같은 머리글이 또 나오면 종전처럼 왼쪽 열을 쓴다(출석번호·번호)', () => {
+    const r = parseRosterGrid([
+      ['출석번호', '번호', '이름', '성별', '생년월일'],
+      ['7', '1', '강도윤', '남', '2019-05-14'],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(names(r)).toEqual(['7 강도윤'])
+  })
+  it('오른쪽 묶음의 주민번호도 그 칸만 버리고, 한 묶음에만 없는 열은 missingCols로 알린다', () => {
+    const r = parseRosterGrid([
+      [...head, '번호', '이름', '생년월일'],
+      ['1', '강도윤', '남', '2019-05-14', '2', '권서아', '191102-4000000'],
+    ])
+    if ('error' in r) throw new Error(r.error)
+    expect(r.rrnSeen).toBe(true)
+    expect(r.rows[1]).toEqual({ childNo: '2', name: '권서아', gender: '', birth: '' })
+    expect(r.missingCols).toEqual(['성별'])
+  })
+})
+
 describe('parseRosterGrid — 배포 양식', () => {
   it('안내 문구 5줄 아래의 머리글을 찾는다', async () => {
     const r = parseRosterGrid(await grid('template-filled.xlsx'))

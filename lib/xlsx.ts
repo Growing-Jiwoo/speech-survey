@@ -125,9 +125,34 @@ function firstSheetPart(files: Record<string, Uint8Array>, dec: TextDecoder): st
   return null
 }
 
+/** 1904 날짜 체계와 1900 체계의 일련번호 차이 — 같은 날을 1904 체계는 1462 작게 저장한다(1904-01-01 = 1900 체계 1462). */
+const DATE1904_OFFSET = 1462
+/** 기본 제공 날짜 서식 번호 — 14~17·22, 동아시아 날짜 27~36·50~58(시각만인 18~21·45~47은 날짜가 아니다) */
+const BUILTIN_DATES = new Set([14, 15, 16, 17, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 50, 51, 52, 53, 54, 55, 56, 57, 58])
+/** 사용자 서식 코드가 날짜인지 — 따옴표 글자·[색·조건]·\ 이스케이프를 걷어 낸 뒤 연·일이 있거나, 시·초 없이 월(m)만 있으면 날짜 */
+function isDateCode(code: string): boolean {
+  const c = code.replace(/"[^"]*"|\[[^\]]*\]|\\./g, '')
+  return /[yd]/i.test(c) || (/m/i.test(c) && !/[hs]/i.test(c))
+}
+/** 날짜 서식을 쓰는 셀 서식(`cellXfs`의 순번, 셀의 `s`) 집합 */
+function dateStyles(xml: string): Set<number> {
+  const custom = new Map<number, string>()
+  for (const f of blocks(xml, 'numFmt')) custom.set(Number(attr(f.attrs, 'numFmtId')), unescapeXml(attr(f.attrs, 'formatCode')))
+  const out = new Set<number>()
+  const xfs = [...blocks(xml, 'cellXfs')][0]
+  if (xfs) [...blocks(xfs.inner, 'xf')].forEach((xf, i) => {
+    const id = Number(attr(xf.attrs, 'numFmtId'))
+    if (custom.has(id) ? isDateCode(custom.get(id)!) : BUILTIN_DATES.has(id)) out.add(i)
+  })
+  return out
+}
+
 /**
  * .xlsx의 **첫 시트**(엑셀 탭 순서 — `firstSheetPart`)를 문자열 표로 읽는다. 빈 행은 버린다.
  * 값은 셀에 저장된 그대로다(날짜 일련번호도 숫자 문자열) — 해석은 호출부(normBirth 등)가 한다.
+ * 단 **1904 날짜 체계 통합문서**(옛 맥 엑셀, `workbookPr date1904`)의 날짜 서식 칸은 1900 체계 일련번호로 바꿔 돌려준다 —
+ * normBirth는 1900 체계로 읽으므로 그대로 두면 생년월일이 4년 1일 이르게 읽혔고, 멀쩡한 날짜라 붉은 칸도 뜨지 않았다
+ * (2026-10-20). 날짜 서식이 아닌 숫자(번호)는 건드리지 않는다.
  */
 export async function readXlsx(ab: ArrayBuffer): Promise<string[][]> {
   const files = await unzip(ab)
@@ -141,6 +166,9 @@ export async function readXlsx(ab: ArrayBuffer): Promise<string[][]> {
   const sheetName = firstSheetPart(files, dec) ?? Object.keys(files)
     .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a, b) => sheetNo(a) - sheetNo(b))[0]
   if (!sheetName) throw new Error('시트를 찾지 못했습니다')
+  const wb = files['xl/workbook.xml']
+  const date1904 = !!wb && /<workbookPr\b[^>]*\bdate1904="(1|true)"/.test(dec.decode(wb))
+  const dateXf = date1904 && files['xl/styles.xml'] ? dateStyles(dec.decode(files['xl/styles.xml'])) : new Set<number>()
 
   const rows: string[][] = []
   for (const row of blocks(dec.decode(files[sheetName]), 'row')) {
@@ -154,6 +182,8 @@ export async function readXlsx(ab: ArrayBuffer): Promise<string[][]> {
         const val = [...blocks(c.inner, 'v')][0]
         v = val ? unescapeXml(val.inner) : ''
         if (type === 's') v = shared[+v] ?? ''
+        else if ((type === '' || type === 'n') && v !== '' && dateXf.has(Number(attr(c.attrs, 's') || 0)))
+          v = String(Number(v) + DATE1904_OFFSET)
       }
       while (cells.length < ci) cells.push('')
       cells[ci] = v.trim()
