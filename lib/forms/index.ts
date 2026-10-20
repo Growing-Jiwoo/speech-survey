@@ -74,7 +74,9 @@ export interface SurveyForm {
   sentences: string[]
   writing: WritingTask
   /** 검사지 제한 시간(초) — 채점 기준 */
-  limits: { wordSec: number; sentenceSec: number }
+  /** 문장 읽기의 제한 시간은 **문장마다**다(`sentenceSec[i]` = i번 문장, 길이는 `sentences`와 같다) — 2학기는 1·2번 20초, 3·4번
+   *  30초(담당자 확정 2026-10-20). 낱말은 의미·무의미 페이지 모두 `wordSec`. */
+  limits: { wordSec: number; sentenceSec: readonly number[] }
   /**
    * 과제별 판정 기준(`Cutoff`). 개수형은 점수, 문장 읽기유창성은 어절/10초(lib/scoring `FLUENCY_UNIT`).
    * 기준표가 학년·학기마다 달라 양식 데이터로 둔다. 값의 출처는 양식 파일마다 적는다.

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
 import {
-  FLUENCY_UNIT, criteriaProvisional, cutoffLabel, fluencyLabel, readSecLabel, readSecMax, scoreInputFrom, scoreSession, scoringFor,
+  FLUENCY_UNIT, criteriaProvisional, cutoffLabel, fluencyLabel, readSecLabel, scoreInputFrom, scoreSession, scoringFor,
   sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
@@ -490,9 +490,9 @@ export function ResultSheet({
       <TaskSection title={SECTION_LABEL.sentence_reading}
         hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간">
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
-          times={times} locked={locked} onTimeChange={setTime} maxSec={readSecMax(form)}
+          times={times} locked={locked} onTimeChange={setTime}
           attemptsFor={code => attemptsOf(`p_${code}`)} failedFor={code => uploadFailed.has(`p_${code}`)}
-          limitSec={form.limits.sentenceSec} onAudioError={onAudioError} />
+          onAudioError={onAudioError} />
         <Subtotal
           cells={[
             { label: '정확 어절', value: r.sentenceWords, max: sentenceWordsMax },
@@ -700,7 +700,7 @@ export function ResultSheet({
             // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
             // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes).
             desc: <>녹음이 올라오지 않은 과제예요(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으니 <b>오반응(X ·
-              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나가요. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>제한 시간({form.limits.sentenceSec}초)</b>으로 계산해요.</>,
+              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나가요. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>그 문장의 제한 시간({form.limits.sentenceSec.join('·')}초)</b>으로 계산해요.</>,
           },
           {
             badge: <Badge tone="rec">저장 실패</Badge>,

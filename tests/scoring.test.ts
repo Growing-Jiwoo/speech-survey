@@ -465,7 +465,15 @@ describe('unrecordedTimes · unrecordedItemCodes — 녹음 없는 문항', () =
 })
 
 describe('읽은 시간 입력 — parseReadSec · isValidReadSec · readSecLabel', () => {
-  const MAX = readSecMax(G1)
+  const MAX = readSecMax(g1.sentenceItems[0])
+
+  it('상한은 문장마다 그 문장의 제한 시간 + 여유다 — 2학기는 1·2번 25초, 3·4번 35초(담당자 확정 2026-10-20 「1, 2번 20초, 3, 4번 30초」)', () => {
+    for (const grade of [1, 2]) {
+      const f = itemsFor(formFor(grade, 2))
+      expect(f.sentenceItems.map(readSecMax)).toEqual([25, 25, 35, 35])
+      expect(f.sentenceItems.map(i => f.pageByCode.get(`p_${i.code}`)!.limitSec)).toEqual([20, 20, 30, 30])
+    }
+  })
 
   it('상한은 녹음 최대 길이 — 제한 20초 + 여유 5초 (채점 규칙이 아니라 오타 방지)', () => {
     expect(MAX).toBe(25)
@@ -507,7 +515,7 @@ describe('읽은 시간 입력 — parseReadSec · isValidReadSec · readSecLabe
 })
 
 describe('문장 읽기유창성 — 경계·예외 상황', () => {
-  const MAX = readSecMax(G1)
+  const MAX = readSecMax(g1.sentenceItems[0])
 
   it('[전수] 어절 0~36 × 시간 0.4~100초(0.1초 간격) 전부 — 둘째 자리까지이고, 참값과 0.005 안이며, 딱 절반이면 올린다', () => {
     const caps = g1.sentenceItems.map(itemMaxWords)            // 7·7·8·14
@@ -530,6 +538,11 @@ describe('문장 읽기유창성 — 경계·예외 상황', () => {
       }
     }
     expect(checked).toBe(37 * 997)
+  })
+
+  it('[REGRESSION] 녹음 없는 문장의 시간은 그 문장의 제한 시간이다 — 2학기 3·4번은 30초', () => {
+    const f = itemsFor(formFor(1, 2))
+    expect(unrecordedTimes(f, () => false)).toEqual({ rs01: 20, rs02: 20, rs03: 30, rs04: 30 })
   })
 
   it('G2 양식도 같은 규칙 — 정확 어절 만점 35, 미녹음 문장 20초', () => {

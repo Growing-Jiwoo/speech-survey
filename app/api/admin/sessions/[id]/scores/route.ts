@@ -86,10 +86,11 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   let times: SentenceTime[] | undefined
   if (rawTimes) {
-    const max = readSecMax(form)
     times = []
     for (const [itemCode, seconds] of Object.entries(rawTimes)) {
-      if (!sentenceCodes.includes(itemCode) || !isValidReadSec(seconds, max)) return bad('시간')
+      // 상한은 그 문장의 제한 시간 + 여유다(문장마다 다르다 — 2학기 3·4번은 30초)
+      const item = sentenceCodes.includes(itemCode) ? f.byCode.get(itemCode) : undefined
+      if (!item || !isValidReadSec(seconds, readSecMax(item))) return bad('시간')
       // 0.1초 단위 판정을 통과한 값이라 반올림은 부동소수 꼬리(0.30000000000000004 → 0.3)만 정리한다.
       times.push({ itemCode, seconds: Math.round(seconds * 10) / 10 })
     }

@@ -78,6 +78,12 @@ describe('양식 정의와 문항의 정합', () => {
   it('모든 양식이 문장 4개다(2학기 원본의 빠진 번호는 번호를 잘못 매긴 것 — 담당자 2026-10-20)', () => {
     for (const f of FORMS) expect(f.sentences).toHaveLength(4)
   })
+  it('문장별 제한 시간이 문장마다 하나씩 있다 — 1학기 20·20·20·20, 2학기 20·20·30·30(담당자 확정 2026-10-20)', () => {
+    for (const f of FORMS) expect(f.limits.sentenceSec).toHaveLength(f.sentences.length)
+    expect(formFor(1, 1).limits.sentenceSec).toEqual([20, 20, 20, 20])
+    expect(formFor(1, 2).limits.sentenceSec).toEqual([20, 20, 30, 30])
+    expect(formFor(2, 2).limits.sentenceSec).toEqual([20, 20, 30, 30])
+  })
   it('문항의 제시어가 양식과 같은 순서로 만들어진다', () => {
     for (const form of FORMS) {
       const f = itemsFor(form)
@@ -114,12 +120,12 @@ describe('2학기 공개 양식(가짜 문항)의 모양과 기준표', () => {
     expect(f.sentences.map(words)).toEqual([8, 9, 11, 17])
     expect(f.writing.kind === 'sentence' && f.writing.sentences.map(words)).toEqual([2, 2, 2, 2, 2])
   })
-  it('기준표(담당자 2026-10-19) — 1학년 해독 ≤12/≤9 · 읽기유창성 ≤8.04/≤5.43 · 쓰기 ≤7/≤4', () => {
+  it('기준표(담당자 최종 2026-10-20) — 1학년 해독 ≤12/≤9 · 읽기유창성 ≤8.12/≤5.43 · 쓰기 ≤7/≤4', () => {
     expect(formFor(1, 2).cutoff).toEqual({
-      wordReading: { caution: 12, risk: 9 }, sentenceReading: { caution: 8.04, risk: 5.43 }, writing: { caution: 7, risk: 4 },
+      wordReading: { caution: 12, risk: 9 }, sentenceReading: { caution: 8.12, risk: 5.43 }, writing: { caution: 7, risk: 4 },
     })
   })
-  it('기준표(담당자 2026-10-19) — 2학년 해독 ≤7/≤6 · 읽기유창성 ≤8.04/≤7.10 · 쓰기 ≤5/≤4', () => {
+  it('기준표(담당자 최종 2026-10-20) — 2학년 해독 ≤7/≤6 · 읽기유창성 ≤8.04/≤7.10 · 쓰기 ≤5/≤4', () => {
     expect(formFor(2, 2).cutoff).toEqual({
       wordReading: { caution: 7, risk: 6 }, sentenceReading: { caution: 8.04, risk: 7.1 }, writing: { caution: 5, risk: 4 },
     })

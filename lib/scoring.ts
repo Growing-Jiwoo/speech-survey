@@ -99,12 +99,12 @@ function fluencyOf(words: number, tenths: number): number {
 }
 
 /**
- * 읽은 시간 입력의 상한(초) = 문장 녹음의 최대 길이(제한 시간 + 여유, `maxRecSec`와 같다).
+ * 읽은 시간 입력의 상한(초) = **그 문장** 녹음의 최대 길이(그 문장의 제한 시간 + 여유, `maxRecSec`와 같다 — 문장마다 다르다).
  * **채점 규칙이 아니라 오타 방지용이다** — 20초를 넘겨 읽었을 때 어디까지 셀지는 담당자가 녹음을 듣고
  * 판단하므로 앱이 제한 시간을 강제하지 않는다(사용자 확정 2026-09-29, 담당자 원문 「내가 그냥 듣고
  * 입력하면 돼」). 녹음이 이보다 길 수 없으니 넘는 값은 잘못 친 것이다.
  */
-export const readSecMax = (form: SurveyForm): number => form.limits.sentenceSec + GRACE_SEC
+export const readSecMax = (item: Pick<SurveyItem, 'maxSec'>): number => item.maxSec + GRACE_SEC
 
 /** 저장할 수 있는 읽은 시간인지 — 0초 초과 · 상한 이하 · 0.1초 단위. 저장 라우트와 입력 칸이 같이 쓴다. */
 export function isValidReadSec(v: unknown, max: number): v is number {
