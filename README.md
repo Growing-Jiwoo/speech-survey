@@ -47,6 +47,17 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
 문항 정의는 코드 상수 `lib/forms/g*.ts`에 있고(DB 시드 아님), `lib/items.ts`의 `itemsFor(양식)`이
 문항·페이지·집계 분모를 만든다. **검사지 PDF가 절대 기준이다** — 코드와 다르면 언제나 검사지가 옳다.
 
+🔒 **실제 문항은 암호문으로만 커밋한다**(사용자 확정 2026-10-20 — 저장소를 포트폴리오로 공개해 두려고). `lib/forms/g*.ts`의
+낱말·문장은 **실제와 모양이 같은 가짜 문항**이고, 실제 문항은 `lib/forms/sealed.ts`(AES-256-GCM 암호문)에 있다. 키
+`FORMS_KEY`가 있으면 서버가 모듈을 읽을 때 풀어 갈아 끼운다(`lib/forms/index.ts`) — 키는 Vercel 환경 변수와 개발자
+`.env.local`에만 있다. 키가 없으면 가짜 문항으로 돌고(공개 저장소를 받은 사람·테스트), **Vercel에서 키가 없으면 빌드가
+실패한다**(아이가 가짜 낱말로 검사받지 않게). 검사지 원본 PDF도 저장소에 두지 않는다(`private/`, git 제외).
+
+| 할 일 | 명령 |
+|---|---|
+| 실제 문항 고치기 | `npm run forms:unseal` → `private/forms.json` 수정(문항 `forms`와 검사지 대조값 `sheet` 둘 다) → `npm run forms:seal` → `npm test`(키가 있어야 `tests/forms-sealed.test.ts`가 글자 단위로 대조한다) |
+| 새 PC에서 개발 | `.env.local`에 `FORMS_KEY`(저장소 주인에게 받는다). 검사지 PDF는 따로 받아 `private/forms/`에 |
+
 **문항은 공개 JS에 싣지 않는다.** 화면(검사·검토·관리자)은 `lib/forms`를 import하지 않고 양식을 서버
 응답으로 받는다 — 검사 화면은 세션 토큰을 보내 `POST /api/sessions/form`에서, 관리자 결과지는 상세 API의
 `form`에서. `/_next/static`의 JS 청크는 인증 없이 누구나 받을 수 있기 때문이다. `npm run build`가 끝에
@@ -250,6 +261,8 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
        `.env.local용`(이스케이프된 `\$argon2id\$v=19\$...`)을 반드시 사용할 것 — 원본 해시는 Vercel 등 대시보드
        전용(아래 배포 절 참고).
    - `SESSION_SECRET`: `openssl rand -hex 32`
+   - `FORMS_KEY`: 실제 검사 문항 암호문을 푸는 키(64자리 16진수, 저장소 주인에게 받는다). 비우면 가짜 문항으로 돈다 —
+     ⚠️ 키 없이 운영 DB에 붙여 검사를 만들지 말 것(가짜 낱말로 만든 기록이 실제 문항 자리 번호에 쌓인다).
    - `RESEND_API_KEY`·`MAIL_FROM`·`MAIL_TO_OVERRIDE`: 메일 발송용(선택 — 신청·승인 메일을 쓸 때만).
      운영 Resend 계정의 키를 받으면 `MAIL_FROM`은 `읽기검사 <noreply@lidislab.com>`(인증된 도메인)으로 두고,
      **`MAIL_TO_OVERRIDE`에 본인 주소를 넣어** 모든 수신자를 본인에게 돌려 둔다(로컬에서 실제 교사에게 나가는 것을 막는다).
@@ -359,6 +372,9 @@ docx의 FAIL 문구 「2개 이상의 영역에서…」와 예시 표(PASS·PAS
 3. **환경변수 등록** (Settings → Environment Variables, Production):
    - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase 대시보드 값
    - `SESSION_SECRET` — `openssl rand -hex 32`로 새로 생성 (로컬과 다른 값 권장)
+   - `FORMS_KEY` — 실제 검사 문항 암호문의 키. **로컬 `.env.local`과 같은 값**을 **Production과 Preview 모두**에 넣는다
+     (Preview도 운영 DB를 본다 — 가짜 문항으로 만든 검사가 운영 기록에 섞이면 안 된다). 없으면 빌드가 실패한다(`lib/forms/index.ts`).
+     키를 바꾸면 `npm run forms:unseal`(옛 키) → `.env.local`의 키 교체 → `npm run forms:seal` → 커밋, 그리고 Vercel 값도 같이 바꾼다.
    - `ADMIN_PASSWORD_HASH` — ⚠️ **로컬에서 쓰던 값이나 예시용 약한 비번 금지.** `npm run hash-password -- '강한랜덤비번'` 출력 중
      **"원본 해시"** 줄(이스케이프 없는 `$argon2id$v=19$...`)을 그대로 붙여넣는다. Vercel 대시보드는 셸/dotenv
      파싱을 거치지 않으므로 `$`를 이스케이프하면 안 된다(로컬 `.env.local`용 `\$` 이스케이프 버전과 다름 — 위 셋업 절 참고).

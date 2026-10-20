@@ -56,22 +56,21 @@ describe('itemsFor — 양식별 문항', () => {
     })
   })
 
-  it('PDF 문구 대조 (표본)', () => {
-    expect(g1.byCode.get('rw01')!.text).toBe('어디')
-    expect(g1.byCode.get('rw08')!.text).toBe('아로')
-    expect(g1.byCode.get('rw14')!.text).toBe('붕밥')
-    expect(g1.byCode.get('rs01')!.text).toBe('아이가 아빠와 우유 사러 가서 고기도 사요.')
-    expect(g1.byCode.get('rs04')!.text).toContain('사과를 했어요')
-    expect(g1.byCode.get('ww01')!.text).toBe('우비')
-    expect(g1.byCode.get('ww06')!.text).toBe('오거')
-
-    expect(g2.byCode.get('rw01')!.text).toBe('친구')
-    expect(g2.byCode.get('rw08')!.text).toBe('고춘')
-    expect(g2.byCode.get('rw14')!.text).toBe('딻아')
-    expect(g2.byCode.get('rs01')!.text).toBe('오늘 부모님께서 학교에 오셔서 담임 선생님과 인사하셨어요.')
-    expect(g2.byCode.get('rs04')!.text).toContain('들여다볼 수 있었습니다')
-    expect(g2.byCode.get('sw01')!.text).toBe('집으로 와요')
-    expect(g2.byCode.get('sw05')!.text).toBe('뛰지 않아요')
+  it('문항 코드는 양식 배열의 자리 순서대로 붙는다 — 낱말은 의미 다음 무의미(rw01~07 · rw08~14)', () => {
+    // 문항 글자 자체의 대조는 실제 문항으로 tests/forms-sealed.test.ts가 한다(여기 양식은 공개용 가짜 문항일 수 있다).
+    for (const [f, form] of [[g1, formForGrade(1)], [g2, formForGrade(2)]] as const) {
+      expect(f.byCode.get('rw01')!.text).toBe(form.readMeaning[0])
+      expect(f.byCode.get('rw08')!.text).toBe(form.readNonsense[0])
+      expect(f.byCode.get('rw14')!.text).toBe(form.readNonsense[6])
+      expect(f.byCode.get('rs01')!.text).toBe(form.sentences[0])
+      expect(f.byCode.get('rs04')!.text).toBe(form.sentences[3])
+    }
+    const w1 = formForGrade(1).writing, w2 = formForGrade(2).writing
+    if (w1.kind !== 'word' || w2.kind !== 'sentence') throw new Error('쓰기 과제 종류')
+    expect(g1.byCode.get('ww01')!.text).toBe(w1.meaning[0])
+    expect(g1.byCode.get('ww06')!.text).toBe(w1.nonsense[0])
+    expect(g2.byCode.get('sw01')!.text).toBe(w2.sentences[0])
+    expect(g2.byCode.get('sw05')!.text).toBe(w2.sentences[4])
   })
 
   it('의미/무의미 구분 — 문장 쓰기 문항은 구분이 없다', () => {
@@ -131,26 +130,24 @@ describe('pages (화면·녹음 단위)', () => {
   })
 
   it('낱말 해독 페이지는 의미 7개 / 무의미 7개를 묶는다', () => {
-    expect(g1.pageByCode.get('p_rw_meaning')!.items.map(i => i.text))
-      .toEqual(['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법'])
-    expect(g1.pageByCode.get('p_rw_nonsense')!.items.map(i => i.text))
-      .toEqual(['아로', '부림', '영추', '주곡', '구말', '솔텅', '붕밥'])
-    expect(g2.pageByCode.get('p_rw_meaning')!.items.map(i => i.text))
-      .toEqual(['친구', '무엇', '작품', '친척', '젖다', '닮다', '짧은'])
-    expect(g2.pageByCode.get('p_rw_nonsense')!.items.map(i => i.text))
-      .toEqual(['고춘', '삭핌', '찬축', '닺고', '구말', '앍아', '딻아'])
+    for (const [f, form] of [[g1, formForGrade(1)], [g2, formForGrade(2)]] as const) {
+      expect(f.pageByCode.get('p_rw_meaning')!.items.map(i => i.text)).toEqual([...form.readMeaning])
+      expect(f.pageByCode.get('p_rw_nonsense')!.items.map(i => i.text)).toEqual([...form.readNonsense])
+      expect(form.readMeaning).toHaveLength(7)
+      expect(form.readNonsense).toHaveLength(7)
+    }
   })
 
   it('문장 페이지는 문장 1개씩', () => {
     expect(g1.pageByCode.get('p_rs01')!.items.map(i => i.code)).toEqual(['rs01'])
-    expect(g1.pageByCode.get('p_rs04')!.items[0].text).toContain('사과를 했어요')
+    expect(g1.pageByCode.get('p_rs04')!.items[0].text).toBe(formForGrade(1).sentences[3])
   })
 
   it('쓰기 페이지는 문항 전체를 한 번에 묶는다', () => {
     expect(g1.pageByCode.get('p_ww')!.items).toHaveLength(10)
-    expect(g1.pageByCode.get('p_ww')!.items[0].text).toBe('우비')
+    expect(g1.pageByCode.get('p_ww')!.items[0].text).toBe(g1.writingItems[0].text)
     expect(g2.pageByCode.get('p_sw')!.items).toHaveLength(5)
-    expect(g2.pageByCode.get('p_sw')!.items[0].text).toBe('집으로 와요')
+    expect(g2.pageByCode.get('p_sw')!.items[0].text).toBe(g2.writingItems[0].text)
   })
 
   it('제한 시간(페이지당): 낱말 20초, 문장 20초, 비녹음 0초', () => {
@@ -223,7 +220,7 @@ describe('pages (화면·녹음 단위)', () => {
   it('연습 낱말은 담당자가 확정한 쉬운 실제 낱말이다', () => {
     // 무의미 낱말이 아니라 쉬운 실제 낱말을 쓴다 — "낱말이 쭉 있는 화면"에 익숙해지는 것이 목적이라
     // 연습에서까지 낯선 무의미 낱말을 주면 오히려 당황시킨다.
-    // 길이만 검사하면 '붕밥'·'솔텅' 같은 무의미 낱말도 통과해 이 의도를 전혀 지키지 못한다.
+    // 길이만 검사하면 두 글자 무의미 낱말도 통과해 이 의도를 전혀 지키지 못한다.
     // 값을 고정해 바꾸려면 반드시 의도적으로 바꾸게 한다.
     expect(g1.pageByCode.get('p_practice_rw')!.items.map(i => i.text)).toEqual(['나무', '구름', '바다'])
   })

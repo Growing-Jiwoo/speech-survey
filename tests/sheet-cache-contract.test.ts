@@ -179,7 +179,7 @@ describe('[REGRESSION] 판 충돌 — 낡은 탭의 저장이 다른 탭이 저�
     }))
   })
 
-  it('[REGRESSION] 다른 탭이 「어디」를 X로 저장하면 낡은 탭의 저장이 O로 되돌리지 않는다', async () => {
+  it('[REGRESSION] 다른 탭이 「사과」를 X로 저장하면 낡은 탭의 저장이 O로 되돌리지 않는다', async () => {
     seed({ marks: [{ item_code: 'rw03', correct: true }], sentences: [], times: [], writing: [] })
     const tabA = open()
     const tabB = open()

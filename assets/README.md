@@ -1,14 +1,9 @@
 # assets
 
-## forms/kodys-g1.pdf · forms/kodys-g2.pdf
-담당자 배포 원본 검사지(초등 1·2학년). **문항·배점의 절대 기준**이다 — `lib/forms/g*.ts`는 이 파일을 옮겨
-적은 사본이고, `tests/forms.test.ts`가 낱말을 글자 단위로 대조한다. 출력물의 배경으로는 더 쓰지 않는다
-(2026-09-28부터 내려받는 PDF는 담당자 결과보고서 양식을 `lib/pdf/report.ts`가 그린다).
-**직접 편집하지 말 것** — 개정본을 받으면 이 파일을 교체하고 `lib/forms/g*.ts`의 문항 배열과
-`tests/forms.test.ts`의 `SHEET_G*`를 함께 갱신한다.
-
-⚠️ **kodys-g2.pdf는 아직 「가안」이다**(원본 파일명: 초등 2학년 선별검사 양식（가안）.pdf).
-담당자가 낱말·문장 문항을 학기별로 2026-10-02 통계 후 확정한다고 했다.
+## 검사지 원본(kodys-g1.pdf · kodys-g2.pdf)은 여기 없다
+담당자 배포 원본 검사지(초등 1·2학년, 문항·배점의 절대 기준)는 2026-10-20부터 **저장소에 두지 않는다** — 저장소가 공개라
+누구나 검사지를 미리 볼 수 있었다. 개발자 PC의 `private/forms/`(git 제외)에 두고, 실제 문항은 암호문 `lib/forms/sealed.ts`로만
+커밋한다(README 「문항 구성」 🔒). 2학년 PDF는 아직 「가안」이다.
 
 ## fonts/NanumGothic.ttf · fonts/NanumGothicBold.ttf
 결과보고서 PDF(`lib/pdf/report.ts`)의 글꼴. 양식이 쓰는 맑은 고딕은 Microsoft 전용이라 실을 수 없어

@@ -111,9 +111,9 @@ describe('PAGES (화면·녹음 단위)', () => {
 
   it('낱말 해독 페이지는 의미 7개 / 무의미 7개를 묶는다', () => {
     expect(pageByCode.get('p_rw_meaning')!.items.map(i => i.text))
-      .toEqual(['어디', '바지', '양보', '그늘', '설탕', '장갑', '방법'])
+      .toEqual(['사과', '연필', '의자', '시계', '우산', '모자', '신발'])
     expect(pageByCode.get('p_rw_nonsense')!.items.map(i => i.text))
-      .toEqual(['아로', '부림', '영추', '주곡', '구말', '솔텅', '봉밥'])
+      .toEqual(['가보', '나로', '다무', '라시', '마고', '바누', '사도'])
   })
 
   it('문장 페이지는 문장 1개씩', () => {
@@ -123,7 +123,7 @@ describe('PAGES (화면·녹음 단위)', () => {
 
   it('쓰기 페이지는 낱말 10개를 한 번에 묶는다', () => {
     expect(pageByCode.get('p_ww')!.items).toHaveLength(10)
-    expect(pageByCode.get('p_ww')!.items[0].text).toBe('우비')
+    expect(pageByCode.get('p_ww')!.items[0].text).toBe('하늘')
   })
 
   it('제한 시간(검사지 기준): 낱말 30초, 문장 40초, 비녹음 0초', () => {
