@@ -4,7 +4,7 @@
 // 파일명에 아동 이름이 들어가므로 proxy의 관리자 인증 뒤에서만 접근된다.
 import { NextResponse } from 'next/server'
 import { childSessions, sessionDetail } from '@/lib/db'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { scoreInputFrom, withUnrecordedFixed } from '@/lib/scoring'
 import { renderReport } from '@/lib/pdf/report'
@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { session, recordings, writing, marks, sentences, times } = await sessionDetail(id)
     // 삭제된 세션과 장애를 같은 500으로 뭉뚱그리면 운영자가 "재시도"와 "장애 대응"을 구분할 수 없다.
     if (!session) return jsonError('검사 기록이 없어요.', 404)
-    const form = formForGrade(session.grade)
+    const form = formOfSession(session)
     const f = itemsFor(form)
     // 녹음이 없는 페이지는 오반응(X·0점)으로 채운다 — 관리자 결과지 화면과 같은 함수를 쓴다.
     // 그러지 않으면 채점자가 X를 하나하나 찍어 저장하기 전까지 보고서의 판정 칸이 통째로

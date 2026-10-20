@@ -15,7 +15,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { LineCapStyle, PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import fontkit from '@pdf-lib/fontkit'
-import { finalVerdict, scoreSession, TASK_KEYS, type ScoreInput, type TaskKey, type Verdict } from '@/lib/scoring'
+import { finalVerdict, scoreSession, TASK_KEYS, VERDICT_LABEL, type ScoreInput, type TaskKey, type Verdict } from '@/lib/scoring'
 import type { SurveyForm } from '@/lib/forms'
 import { CHECKLIST_AREAS } from '@/lib/items'
 import { REGIONS, type School } from '@/lib/schools'
@@ -72,24 +72,45 @@ const RULE = { color: 'E4E8EE', width: 0.5 }
 
 const INK = '1B2330'
 const MUTE = '6B7482'
-const PASS = { fill: 'E5F5EA', ink: '1B7A44', rule: 'BFE3CC' }
-const FAIL = { fill: 'FBE9E7', ink: 'B3261E', rule: 'F2C4BE' }
+/** 판정 칸의 색. 양호·위험은 담당자 양식의 PASS·FAIL 색 그대로이고, 주의는 양식에 없어 주황 계열을 더했다
+ *  (사용자 확정 2026-10-20 — 담당자 예시 그림의 주황을 따름, 담당자 회신 아님). */
+const TONE: Record<Verdict, { fill: string; ink: string; rule: string }> = {
+  good: { fill: 'E5F5EA', ink: '1B7A44', rule: 'BFE3CC' },
+  caution: { fill: 'FFF1E3', ink: 'C2560C', rule: 'F5CDA6' },
+  risk: { fill: 'FBE9E7', ink: 'B3261E', rule: 'F2C4BE' },
+}
+
+/** 해석 문장이 영역을 부르는 이름 — 결과 요약 열 머리글과 같다. */
+const AREA_LABEL: Record<TaskKey, string> = { wordReading: '해독', sentenceReading: '읽기유창성', writing: '쓰기' }
+
+/** 판정 뒤 조사 — 「'주의'로」 「'위험'으로」 「'양호'로」(받침 유무). */
+const ro = (v: Verdict) => (v === 'risk' ? '으로' : '로')
 
 /**
- * 결과 해석 및 권고. 담당자 확정(2026-09-28) — 담당자가 `KODYS_G*_결과보고서.docx`에 최종결과
- * PASS/FAIL별로 넣어 둔 문장 그대로다(「최종결과 pass, fail인 경우 멘트는 여기에다가 넣어놨어」).
- * G1·G2가 같은 문장이다. FAIL 문구의 「2개 이상의 영역」은 최종 판정 규칙(FAIL 2개 이상 → FAIL,
- * lib/scoring finalVerdict, 담당자 확정 2026-09-29)과 맞는다.
+ * 결과 해석 및 권고. 담당자 확정(2026-10-19 docx 「결과 해석 및 권고에는 아래와 같이 정리해봤어」) — 문장은 docx 그대로다.
+ * - 양호: 종전 PASS 문장 그대로(「통과」 굵게).
+ * - 주의·위험: 영역을 **양호 → 주의 → 위험** 순으로 묶어 나열하고(docx 「영역별 양호, 주의, 위험으로 나열, 이후 문장은 동일」),
+ *   뒤 문장은 최종결과마다 하나다. 묶음 안의 영역 순서는 결과 요약 열 순서(해독 → 읽기유창성 → 쓰기), 없는 묶음은 뺀다.
+ *   docx 예시 세 개(주의 1개 · 주의 2개 · 위험 1개)가 이 규칙으로 글자까지 같게 나온다(tests/report.test.ts). 예시에 없는
+ *   조합(세 영역 모두 주의 등)도 같은 규칙으로 만든다 — 조합 규칙은 사용자 확정(2026-10-20).
+ * G1·G2가 같은 문장이다.
  */
-const INTERPRETATION: Record<Verdict, Run[]> = {
-  pass: [
+export function interpretation(v: Record<TaskKey, Verdict>, final: Verdict): Run[] {
+  if (final === 'good') return [
     text('본 아동은 한국 난독 선별 검사 결과, '), bold('통과'),
     text('하였습니다. 다만 본 검사는 아동의 발달 수준을 대략적으로 확인하는 선별 검사이므로, 이후에도 가정과 학급에서 읽기·쓰기 발달 상황을 꾸준히 살펴봐 주시기 바랍니다.'),
-  ],
-  fail: [
-    text('본 아동은 한국 난독 선별 검사 결과, 2개 이상의 영역에서 또래보다 느린 수준으로 나타나 '), bold('미통과'),
-    text('하였습니다. 선별 검사는 아동의 대략적인 발달 수준을 확인하는 것을 목적으로 하며, 이 결과만으로 아동의 읽기, 쓰기 어려움을 진단하는 것은 아닙니다. 아동의 정확한 읽기·쓰기 능력을 확인하기 위해 전문 기관에서의 심화 검사를 권고드립니다.'),
-  ],
+  ]
+  const groups = (['good', 'caution', 'risk'] as const)
+    .map(level => ({ level, keys: SUMMARY_COLS.map(c => c.key).filter(k => v[k] === level) }))
+    .filter(g => g.keys.length > 0)
+  const list = groups.map((g, i) =>
+    `'${g.keys.map(k => AREA_LABEL[k]).join(', ')}' 영역에서 '${VERDICT_LABEL[g.level]}'${i === groups.length - 1 ? ro(g.level) : ''}`,
+  ).join(', ')
+  const tail = final === 'caution'
+    ? '가정과 학급에서 아동의 읽기·쓰기 발달 상황을 지속적으로 관찰하고, 추후 재선별을 실시할 것을 권고드립니다.'
+    : '아동의 정확한 읽기·쓰기 능력을 확인하기 위해 전문기관에서의 심화 검사를 권고드립니다.'
+  return [text(`본 아동은 한국 난독 선별 검사 결과, ${list} 확인되어 최종결과 '${VERDICT_LABEL[final]}'${ro(final)} 나타났습니다. `
+    + `선별 검사는 아동의 대략적인 발달 수준을 확인하는 것을 목적으로 하며, 이 결과만으로 아동의 읽기·쓰기 어려움을 진단하는 것은 아닙니다. ${tail}`)]
 }
 
 /** 결과 요약 열 — 양식의 열 순서·머리글. 판정은 lib/scoring의 과제 키를 그대로 쓴다. */
@@ -162,6 +183,13 @@ function layoutWidthOf(f: Fonts, r: Run, t: string): number {
  * 문장 부호(, . ) ·)는 줄 머리에 오지 않게 앞 줄에 붙인다. 줄 끝 공백은 폭에 세지 않는다.
  * 폭은 맑은 고딕 진행 폭(`layoutWidthOf`)으로 재서 Word와 같은 곳에서 나뉘게 한다.
  */
+/**
+ * 줄을 나눌 수 있는 단위. 한글은 글자, 라틴 문자·숫자는 낱말, 공백은 하나씩. 여는 따옴표는 뒤 글자와 한 덩어리로 묶어
+ * 「'\n위험'」처럼 줄 끝에 따옴표만 남지 않게 한다 — 해석 문장이 판정·영역을 따옴표로 감싼다(2026-10-20). 남은 홀로
+ * 따옴표는 닫는 따옴표라 `wrap`이 줄 머리에 두지 않는다.
+ */
+export const atomsOf = (t: string): string[] => t.match(/(?<![^\s(])'[^\s']|[A-Za-z0-9]+|\s|./gu) ?? []
+
 function wrap(f: Fonts, p: Para, width: number): Line[] {
   const lh = (r: Run) => lineHeightOf(sizeOf(r)) * (p.lineMul ?? 1)
   const ascOf = (r: Run) => ASCENT * sizeOf(r)
@@ -190,9 +218,9 @@ function wrap(f: Fonts, p: Para, width: number): Line[] {
   let cur: { run: Run; t: string }[] = []
   let curW = 0
   for (const run of p.runs) {
-    for (const atom of run.t.match(/[A-Za-z0-9]+|\s|./gu) ?? []) {
+    for (const atom of atomsOf(run.t)) {
       const w = layoutWidthOf(f, run, atom)
-      const noStart = /^[,.)·!?:;]$/.test(atom)
+      const noStart = /^[,.)·!?:;']$/.test(atom)
       if (/^\s$/.test(atom) || curW + w <= width || curW === 0 || noStart) {
         cur.push({ run, t: atom }); curW += w
       } else {
@@ -401,7 +429,8 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
     w: TEXT_W, fill: R.accent, border: null, mar: [10, 16, 10, 16],
     paras: [
       { runs: [bold('한국 난독 선별 검사', 16, 'FFFFFF')], after: 2 },
-      { runs: [text(`KODYS – ${form.id.replace('KODYS-', '')} · Korean Dyslexia Screening Test`, 9, R.accentTint)] },
+      // 학년 식별자만 찍는다(`KODYS-G1-S2` → G1) — 학기는 「학년 / 학기」 칸이 말하고, 양식 머리글은 학기마다 같다
+      { runs: [text(`KODYS – ${form.id.split('-')[1]} · Korean Dyslexia Screening Test`, 9, R.accentTint)] },
     ],
   }], y)
   y += EMPTY_LINE + 7
@@ -432,11 +461,11 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
     paras: [{ runs: [bold(label, 9.5, '33404F')], align: 'center' as const }],
   })), y)
   const verdictCell = (v: Verdict | null, size: number, thick: boolean): Cell => {
-    const tone = v === 'pass' ? PASS : v === 'fail' ? FAIL : null
+    const tone = v ? TONE[v] : null
     return {
       w: colW, fill: tone?.fill ?? 'FFFFFF', mar: [7, 3, 7, 3], valign: 'center',
       border: thick && tone ? { color: tone.rule, width: 1.25 } : undefined,
-      paras: [{ runs: [bold(v ? v.toUpperCase() : '', size, tone?.ink)], align: 'center' }],
+      paras: [{ runs: [bold(v ? VERDICT_LABEL[v] : '', size, tone?.ink)], align: 'center' }],
     }
   }
   y = drawRow(page, f, [
@@ -451,8 +480,8 @@ export async function renderReport(input: ReportInput): Promise<Uint8Array> {
     w: TEXT_W, fill: 'FCFDFE', mar: [8, 10, 8, 10],
     // 최종결과가 없으면(채점 전) 상자를 비우되 높이는 통과 문장(2줄)과 같게 — 채점 전 결과보고서만 아래가 당겨지지 않게
     paras: final
-      ? [{ runs: INTERPRETATION[final].map(run => ({ ...run, color: INK })), after: 2, lineMul: R.interpretationLine }]
-      : [{ runs: [text('', INTERPRETATION.pass[0].size)], lineMul: R.interpretationLine }, { runs: [text('', INTERPRETATION.pass[0].size)], after: 2, lineMul: R.interpretationLine }],
+      ? [{ runs: interpretation(r.verdict, final).map(run => ({ ...run, color: INK })), after: 2, lineMul: R.interpretationLine }]
+      : [{ runs: [text('')], lineMul: R.interpretationLine }, { runs: [text('')], after: 2, lineMul: R.interpretationLine }],
   }], y)
   y += R.gapAfterInterpretation * (EMPTY_LINE + 7)
 

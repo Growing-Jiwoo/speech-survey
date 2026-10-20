@@ -2,7 +2,7 @@
 // **서버 전용이다** — 학년별 문항 코드가 필요해 lib/forms를 import한다. 목록 화면(lib/adminStats)에
 // 두면 검사지 문항이 공개 JS 청크에 실리므로, listSessions가 계산해 행(`progress`)에 싣는다.
 import { itemsFor, type FormItems, type Totals } from './items'
-import { formForGrade } from './forms'
+import { formOfSession } from './forms'
 import { scoreInputFrom } from './scoring'
 import type { SessionListRow } from './db'
 
@@ -29,7 +29,7 @@ function writingOf(
  *  쓰기 답은 과제 종류에 따라 저장 위치가 다르다(낱말 쓰기 → writing_answers,
  *  문장 쓰기 → sentence_scores). 양식의 문항 코드로 걸러 어느 쪽이든 같은 수를 센다. */
 export function sessionProgress(s: ProgressInput): SessionProgress {
-  const f = itemsFor(formForGrade(s.grade))
+  const f = itemsFor(formOfSession(s))
   const writing = writingOf(f, s)
   // 녹음도 **이 양식의 페이지 코드만** 센다. 걸러내지 않으면 페이지 모델 도입(2026-08-07) 이전에
   // 문항 단위로 올라간 옛 녹음(rw01…rs04 = 18건)이 그대로 세어져 분자가 분모를 넘는다

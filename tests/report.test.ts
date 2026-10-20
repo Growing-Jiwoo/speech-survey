@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { PDFDocument } from 'pdf-lib'
-import { DUP_LABELS, dupLabels, placeLabel, renderReport, schoolLabel } from '@/lib/pdf/report'
+import { DUP_LABELS, atomsOf, dupLabels, interpretation, placeLabel, renderReport, schoolLabel } from '@/lib/pdf/report'
 import { FORMS, formForGrade, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
-import { finalVerdict } from '@/lib/scoring'
+import { finalVerdict, type TaskKey, type Verdict } from '@/lib/scoring'
 
 /** PDF 1쪽의 글자 조각(빈 조각은 버린다 — pdfjs가 글자 사이에 폭 0짜리 조각을 끼운다). */
 async function textItems(bytes: Uint8Array) {
@@ -13,9 +13,9 @@ async function textItems(bytes: Uint8Array) {
   return items.flatMap(i => ('str' in i && i.str !== '' ? [{ str: i.str, x: i.transform[4], y: i.transform[5] }] : []))
 }
 const textOf = async (bytes: Uint8Array) => (await textItems(bytes)).map(i => i.str).join('')
-/** 결과 요약 값 행의 PASS/FAIL — 왼쪽부터. 머리글 행(해독…)보다 아래(y가 작은) 조각만. */
+/** 결과 요약 값 행의 판정 — 왼쪽부터. 판정 칸은 「양호」 한 조각이라 해석 문장(긴 한 조각)과 섞이지 않는다. */
 async function verdictRow(bytes: Uint8Array) {
-  return (await textItems(bytes)).filter(i => i.str === 'PASS' || i.str === 'FAIL')
+  return (await textItems(bytes)).filter(i => i.str === '양호' || i.str === '주의' || i.str === '위험')
     .sort((a, b) => a.x - b.x).map(i => i.str)
 }
 
@@ -25,9 +25,24 @@ const baseSession = {
   checklist: ['none'],
 }
 const sessionFor = (form: SurveyForm) => ({ ...baseSession, grade: form.grades[0] })
+/** 기준을 고정한 양식 사본 — 양식의 기준표가 바뀌어도 판정 테스트의 뜻은 그대로다(1학년 2학기 기준표 값). */
+const withCut = (form: SurveyForm): SurveyForm => ({ ...form, cutoff: {
+  wordReading: { caution: 12, risk: 9 }, sentenceReading: { caution: 8.04, risk: 5.43 }, writing: { caution: 7, risk: 4 },
+} })
+/** 낱말 해독을 n개만 맞힌 O/X */
+const marksN = (form: SurveyForm, n: number) => Object.fromEntries(itemsFor(form).readItems.map((i, k) => [i.code, k < n]))
+/** 쓰기를 n점 받은 입력 — 앞 문항부터 문항 만점까지 채운다(낱말 쓰기 1점 · 문장 쓰기 2점) */
+function writingN(form: SurveyForm, n: number) {
+  const out: Record<string, number> = {}
+  for (const i of itemsFor(form).writingItems) {
+    const max = i.text.trim().split(/\s+/).length
+    out[i.code] = Math.min(max, n); n -= out[i.code]
+  }
+  return out
+}
 const blank = { marks: {}, sentences: {}, times: {}, writing: {} }
 /** 세 과제를 전부 채점한 입력. ok면 만점, 아니면 0점. 문장은 문장마다 1초 —
- *  만점이면 어절/초가 기준보다 훨씬 크고(G1 36 ÷ 4 = 9.00), 0어절이면 0.00이다. */
+ *  만점이면 10초당 어절이 기준보다 훨씬 크고(G1 36 ÷ 4 × 10 = 90.00), 0어절이면 0.00이다. */
 function scored(form: SurveyForm, ok: { read: boolean; sentence: boolean; write: boolean }) {
   const f = itemsFor(form)
   return {
@@ -62,7 +77,8 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
   it('머리글에 학년 식별자·인적사항이 양식 표기대로 찍힌다', async () => {
     const text = await textOf(await renderReport({ form, session, ...blank }))
     expect(text).toContain('한국 난독 선별 검사')
-    expect(text).toContain(`KODYS – ${form.id.replace('KODYS-', '')} · Korean Dyslexia Screening Test`)
+    // 학기는 머리글이 아니라 「학년 / 학기」 칸이 말한다 — KODYS-G1-S2도 「G1」
+    expect(text).toContain(`KODYS – G${form.grades[0]} · Korean Dyslexia Screening Test`)
     expect(text).toContain('춘천 교동초등학교')       // 학교 목록의 소재지(춘천시 → 춘천) + 학교명
     expect(text).toContain(`${form.grades[0]}학년 2학기`) // 9월 검사 → 2학기
     expect(text).toContain('김가나')
@@ -71,39 +87,46 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     expect(text).toContain('2026. 09. 19.')
   })
 
-  it('세 과제가 다 채점되면 과제별 판정과 최종결과가 PASS/FAIL로 찍힌다', async () => {
-    const all = await verdictRow(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: true }) }))
-    expect(all).toEqual(['PASS', 'PASS', 'PASS', 'PASS'])
-    // 담당자 확정(2026-09-29): FAIL 2개 이상이어야 최종 FAIL — 쓰기 하나만 FAIL이면 최종 PASS(docx 예시와 같다)
-    const oneFail = await verdictRow(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: false }) }))
-    expect(oneFail).toEqual(['PASS', 'PASS', 'FAIL', 'PASS'])
-    const twoFail = await verdictRow(await renderReport({ form, session, ...scored(form, { read: false, sentence: false, write: true }) }))
-    expect(twoFail).toEqual(['FAIL', 'FAIL', 'PASS', 'FAIL'])
+  it('세 과제가 다 채점되면 과제별 판정과 최종결과가 양호·주의·위험으로 찍힌다', async () => {
+    const cut = withCut(form)
+    const all = scored(cut, { read: true, sentence: true, write: true })
+    const row = async (x: typeof all) => verdictRow(await renderReport({ form: cut, session, ...x }))
+    expect(await row(all)).toEqual(['양호', '양호', '양호', '양호'])
+    // 담당자 확정(2026-10-19): 주의 1개 → 최종 주의
+    expect(await row({ ...all, marks: marksN(cut, 10) })).toEqual(['주의', '양호', '양호', '주의'])
+    // 주의 2개 → 최종 위험(종전 「FAIL 2개 → FAIL」)
+    expect(await row({ ...all, marks: marksN(cut, 10), writing: writingN(cut, 6) })).toEqual(['주의', '양호', '주의', '위험'])
+    // 위험 1개 → 최종 위험. 경계값 자체가 그 판정이다(쓰기 4점 = 「4점 이하」 위험)
+    expect(await row({ ...all, writing: writingN(cut, 4) })).toEqual(['양호', '양호', '위험', '위험'])
+    expect(await row({ ...all, marks: marksN(cut, 12) })).toEqual(['주의', '양호', '양호', '주의'])
+    expect(await row({ ...all, marks: marksN(cut, 13) })).toEqual(['양호', '양호', '양호', '양호'])
   })
 
-  it('[REGRESSION] 읽기유창성 판정은 어절 수가 아니라 어절/초로 한다 — 다 맞게 읽어도 오래 걸리면 FAIL', async () => {
-    // 기준을 1.0으로 고정한 양식 사본 — 임시 기준(passMark)이 바뀌어도 이 테스트의 뜻은 그대로다.
-    const at1 = { ...form, passMark: { ...form.passMark, sentenceReading: 1 } }
-    const all = scored(at1, { read: true, sentence: true, write: true })
-    const slow = { ...all, times: Object.fromEntries(Object.keys(all.times).map(c => [c, 20])) }  // 만점 ÷ 80초 < 0.5
-    expect(await verdictRow(await renderReport({ form: at1, session, ...slow }))).toEqual(['PASS', 'FAIL', 'PASS', 'PASS'])
+  it('[REGRESSION] 읽기유창성 판정은 어절 수가 아니라 10초당 어절로 한다 — 다 맞게 읽어도 오래 걸리면 위험', async () => {
+    const cut = withCut(form)
+    const all = scored(cut, { read: true, sentence: true, write: true })
+    // 문장마다 25초 — 만점 어절(35~48) ÷ 100초 × 10 = 3.5~4.8 ≤ 5.43
+    const slow = { ...all, times: Object.fromEntries(Object.keys(all.times).map(c => [c, 25])) }
+    expect(await verdictRow(await renderReport({ form: cut, session, ...slow }))).toEqual(['양호', '위험', '양호', '위험'])
   })
 
-  it('[REGRESSION] 채점이 끝나지 않은 과제의 판정 칸은 비고, 최종결과·해석 문단도 비운다 — 미채점은 FAIL이 아니다', async () => {
+  it('[REGRESSION] 채점이 끝나지 않은 과제의 판정 칸은 비고, 최종결과·해석 문단도 비운다 — 미채점은 위험이 아니다', async () => {
     const half = scored(form, { read: true, sentence: true, write: true })
     const bytes = await renderReport({ form, session, marks: half.marks, sentences: half.sentences, times: half.times, writing: {} })
-    expect(await verdictRow(bytes)).toEqual(['PASS', 'PASS'])
+    expect(await verdictRow(bytes)).toEqual(['양호', '양호'])
     const text = await textOf(bytes)
     expect(text).not.toContain('통과하였습니다')
-    expect(text).not.toContain('미통과')
+    expect(text).not.toContain('나타났습니다')
   })
 
-  it('결과 해석 문구는 최종결과에 따라 담당자 문장 그대로다', async () => {
-    const pass = await textOf(await renderReport({ form, session, ...scored(form, { read: true, sentence: true, write: true }) }))
-    expect(pass).toContain('본 아동은 한국 난독 선별 검사 결과, 통과하였습니다.')
-    const fail = await textOf(await renderReport({ form, session, ...scored(form, { read: false, sentence: false, write: false }) }))
-    expect(fail).toContain('또래보다 느린 수준으로 나타나 미통과하였습니다.')
-    expect(fail).toContain('전문 기관에서의 심화 검사를 권고드립니다.')
+  it('결과 해석 문구가 최종결과에 맞게 찍힌다', async () => {
+    const cut = withCut(form)
+    const all = scored(cut, { read: true, sentence: true, write: true })
+    const good = await textOf(await renderReport({ form: cut, session, ...all }))
+    expect(good).toContain('본 아동은 한국 난독 선별 검사 결과, 통과하였습니다.')
+    const risk = await textOf(await renderReport({ form: cut, session, ...all, writing: writingN(cut, 0) }))
+    expect(risk).toContain(`'해독, 읽기유창성' 영역에서 '양호', '쓰기' 영역에서 '위험'으로 확인되어 최종결과 '위험'으로 나타났습니다.`)
+    expect(risk).toContain('전문기관에서의 심화 검사를 권고드립니다.')
   })
 
   it('체크리스트 다섯 영역이 양식 문구로 전부 찍힌다', async () => {
@@ -201,11 +224,60 @@ describe('renderReport — 같은 입력이면 언제 만들어도 같은 바이
   }, 20_000)
 })
 
-describe('finalVerdict — 담당자 확정(2026-09-29) 「3개 중에 2개 이상이 fail이면 최종 fail」', () => {
-  it('fail이 2개 이상일 때만 fail — 하나만 fail이면 pass', () => {
-    expect(finalVerdict({ wordReading: 'pass', sentenceReading: 'pass', writing: 'pass' })).toBe('pass')
-    expect(finalVerdict({ wordReading: 'pass', sentenceReading: 'pass', writing: 'fail' })).toBe('pass')
-    expect(finalVerdict({ wordReading: 'fail', sentenceReading: 'fail', writing: 'pass' })).toBe('fail')
-    expect(finalVerdict({ wordReading: 'fail', sentenceReading: 'fail', writing: 'fail' })).toBe('fail')
+describe('finalVerdict — 담당자 확정(2026-10-19 docx)', () => {
+  const v = (wordReading: Verdict, sentenceReading: Verdict, writing: Verdict) => ({ wordReading, sentenceReading, writing })
+  it('위험이 하나라도 있거나 주의가 2개 이상이면 위험, 주의 1개면 주의, 나머지는 양호', () => {
+    expect(finalVerdict(v('good', 'good', 'good'))).toBe('good')
+    expect(finalVerdict(v('good', 'caution', 'good'))).toBe('caution')
+    expect(finalVerdict(v('caution', 'good', 'caution'))).toBe('risk')
+    expect(finalVerdict(v('good', 'good', 'risk'))).toBe('risk')
+    expect(finalVerdict(v('caution', 'caution', 'caution'))).toBe('risk')
+  })
+})
+
+/** 담당자 docx(2026-10-19) 「결과 해석 및 권고」 예시 문장 원문 — 글자 하나까지 같아야 한다. */
+const TAIL_COMMON = '선별 검사는 아동의 대략적인 발달 수준을 확인하는 것을 목적으로 하며, 이 결과만으로 아동의 읽기·쓰기 어려움을 진단하는 것은 아닙니다. '
+const DOCX = {
+  caution: `본 아동은 한국 난독 선별 검사 결과, '해독, 쓰기' 영역에서 '양호', '읽기유창성' 영역에서 '주의'로 확인되어 최종결과 '주의'로 나타났습니다. ${TAIL_COMMON}가정과 학급에서 아동의 읽기·쓰기 발달 상황을 지속적으로 관찰하고, 추후 재선별을 실시할 것을 권고드립니다.`,
+  riskTwoCautions: `본 아동은 한국 난독 선별 검사 결과, '해독' 영역에서 '양호', '읽기유창성, 쓰기' 영역에서 '주의'로 확인되어 최종결과 '위험'으로 나타났습니다. ${TAIL_COMMON}아동의 정확한 읽기·쓰기 능력을 확인하기 위해 전문기관에서의 심화 검사를 권고드립니다.`,
+  riskOne: `본 아동은 한국 난독 선별 검사 결과, '해독, 쓰기' 영역에서 '양호', '읽기유창성' 영역에서 '위험'으로 확인되어 최종결과 '위험'으로 나타났습니다. ${TAIL_COMMON}아동의 정확한 읽기·쓰기 능력을 확인하기 위해 전문기관에서의 심화 검사를 권고드립니다.`,
+}
+
+describe('interpretation — 담당자 docx 예시 세 개와 글자까지 같다', () => {
+  const run = (v: Record<TaskKey, Verdict>) => interpretation(v, finalVerdict(v)).map(r => r.t).join('')
+  it('주의 1개 · 주의 2개 · 위험 1개', () => {
+    expect(run({ wordReading: 'good', sentenceReading: 'caution', writing: 'good' })).toBe(DOCX.caution)
+    expect(run({ wordReading: 'good', sentenceReading: 'caution', writing: 'caution' })).toBe(DOCX.riskTwoCautions)
+    expect(run({ wordReading: 'good', sentenceReading: 'risk', writing: 'good' })).toBe(DOCX.riskOne)
+  })
+  it('예시에 없는 조합도 같은 규칙 — 없는 묶음은 빼고 양호 → 주의 → 위험 순', () => {
+    expect(run({ wordReading: 'caution', sentenceReading: 'caution', writing: 'caution' }))
+      .toContain(`결과, '해독, 읽기유창성, 쓰기' 영역에서 '주의'로 확인되어 최종결과 '위험'으로`)
+    expect(run({ wordReading: 'risk', sentenceReading: 'caution', writing: 'good' }))
+      .toContain(`결과, '쓰기' 영역에서 '양호', '읽기유창성' 영역에서 '주의', '해독' 영역에서 '위험'으로 확인되어`)
+  })
+  it('27가지 판정 조합 전부 — 과제별 판정과 최종결과가 칸에 맞게 찍히고, 줄 끝에 여는 따옴표만 남지 않는다', async () => {
+    const form = formForGrade(1)
+    const levels: Verdict[] = ['good', 'caution', 'risk']
+    const marks = { good: 14, caution: 10, risk: 0 }, write = { good: 10, caution: 6, risk: 0 }, sec = { good: 1, caution: 13, risk: 25 }   // 36어절 ÷ 52초 × 10 = 6.92
+    const cut = withCut(form)
+    for (const a of levels) for (const b of levels) for (const c of levels) {
+      const all = scored(cut, { read: true, sentence: true, write: true })
+      const bytes = await renderReport({ form: cut, session: sessionFor(form), ...all, marks: marksN(cut, marks[a]),
+        times: Object.fromEntries(Object.keys(all.times).map(k => [k, sec[b]])), writing: writingN(cut, write[c]) })
+      expect(await verdictRow(bytes), `${a}·${b}·${c}`).toEqual([a, b, c, finalVerdict({ wordReading: a, sentenceReading: b, writing: c })]
+        .map(v => ({ good: '양호', caution: '주의', risk: '위험' })[v]))
+      for (const it of await textItems(bytes)) expect(it.str.trimEnd(), `${a}·${b}·${c}`).not.toMatch(/(^|\s)'$/)
+    }
+  }, 60_000)
+  it('[REGRESSION] 줄 나눔 단위 — 여는 따옴표는 뒤 글자와 붙고, 닫는 따옴표는 홀로 남아 줄 머리에 오지 않는다', () => {
+    expect(atomsOf(`'위험'으로`)).toEqual([`'위`, '험', `'`, '으', '로'])
+    expect(atomsOf(`영역에서 '주의'`)).toEqual(['영', '역', '에', '서', ' ', `'주`, '의', `'`])
+    expect(atomsOf('KODYS G1')).toEqual(['KODYS', ' ', 'G1'])
+  })
+  it('양호는 종전 PASS 문장 그대로이고 「통과」만 굵다', () => {
+    const runs = interpretation({ wordReading: 'good', sentenceReading: 'good', writing: 'good' }, 'good')
+    expect(runs.map(r => r.t).join('')).toBe('본 아동은 한국 난독 선별 검사 결과, 통과하였습니다. 다만 본 검사는 아동의 발달 수준을 대략적으로 확인하는 선별 검사이므로, 이후에도 가정과 학급에서 읽기·쓰기 발달 상황을 꾸준히 살펴봐 주시기 바랍니다.')
+    expect(runs.filter(r => r.bold).map(r => r.t)).toEqual(['통과'])
   })
 })

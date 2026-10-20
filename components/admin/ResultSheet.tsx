@@ -8,7 +8,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
 import {
-  FLUENCY_UNIT, PROVISIONAL_CRITERIA, fluencyLabel, readSecLabel, readSecMax, scoreInputFrom, scoreSession, scoringFor,
+  FLUENCY_UNIT, criteriaProvisional, cutoffLabel, fluencyLabel, readSecLabel, readSecMax, scoreInputFrom, scoreSession, scoringFor,
   sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
@@ -19,6 +19,7 @@ import {
   type SaveOutcome, type ScoreRows, type SheetScores,
 } from '@/lib/sheet-save'
 import { Badge } from '@/components/Badge'
+import { VerdictBadge } from '@/components/VerdictBadge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BadgeLegend } from './BadgeLegend'
 import { StatusBadge } from './StatusBadge'
@@ -193,7 +194,9 @@ export function ResultSheet({
     return () => ro.disconnect()
   }, [])
 
-  const { taskMax, sentenceWordsMax, readMax, writeMax, passMark } = scoringFor(form)
+  const { taskMax, sentenceWordsMax, readMax, writeMax, cutoff } = scoringFor(form)
+  // 양식의 기준이 임시값이거나 이 학년의 양식이 아니면(3~6학년 폴백) 임시 — lib/scoring criteriaProvisional
+  const provisional = criteriaProvisional(form, session.grade)
   // 결과보고서 PDF 라우트·교사 결과지와 같은 함수로 미녹음을 고정한 뒤 계산한다 — 저장 전에도 화면과 인쇄물이 같다.
   const entered = { marks, sentences, times, writing: scanMode ? written : writing }
   const r = scoreSession(form, session.submitted_at ? withUnrecordedFixed(f, entered, hasRecording) : entered)
@@ -439,16 +442,16 @@ export function ResultSheet({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 sm:flex-col sm:items-end sm:gap-2">
-            {/* 양식은 학년이 정한다 — 어떤 검사지로 채점했는지 기록에 남기는 식별자라 작게라도 늘 보인다 */}
+            {/* 양식은 검사를 시작할 때 학년·학기로 정해져 세션에 남는다 — 어떤 검사지로 채점했는지 기록에 남기는 식별자라 작게라도 늘 보인다 */}
             <span title={form.subtitle}
               className="rounded-md border border-line px-2 py-0.5 text-[12px] font-bold tracking-tight text-ink-mute">
               {form.title}
             </span>
             <div className="flex flex-wrap gap-1.5 sm:justify-end">
               <StatusBadge submitted={!!session.submitted_at} incomplete={incomplete} />
-              {/* 임시 기준으로 나온 Pass/Fail이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
-                  PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 기준표 전에는 이 화면이 유일한 경고다. */}
-              {PROVISIONAL_CRITERIA && <Badge tone="amber">임시 기준 · 확정 전</Badge>}
+              {/* 임시 기준으로 나온 판정이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
+                  PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 임시 기준 세션에는 이 화면이 유일한 경고다. */}
+              {provisional && <Badge tone="amber">임시 기준 · 확정 전</Badge>}
             </div>
           </div>
         </div>
@@ -681,7 +684,7 @@ export function ResultSheet({
         </p>
       </ConfirmDialog>
 
-      {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
+      {/* 「채점 전」이 0점으로, 판정이 확정 판정으로 읽히면 임상적 오독이다 — 화면에 상시 둔다.
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}
       <BadgeLegend
         columns={1}
@@ -708,26 +711,29 @@ export function ResultSheet({
           {
             badge: (
               <span className="flex gap-1">
-                <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
+                <VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" />
               </span>
             ),
-            desc: <>과제별 기준 점수에 따른 판정이에요. 채점이 끝난 과제에만 나오고 결과보고서 PDF의
-              결과 요약에 <b>PASS/FAIL</b>로 찍혀요. 최종결과는 셋 중 둘 이상 Fail이면 Fail이에요.</>,
+            // 판정 규칙은 담당자 확정(2026-10-19 docx) — lib/scoring verdictOf·finalVerdict
+            desc: <>과제별 기준에 따른 판정이에요 — 낱말 해독 {cutoffLabel(cutoff.wordReading, v => `${v}점`)} ·
+              문장 읽기유창성 {cutoffLabel(cutoff.sentenceReading, fluencyLabel)}({FLUENCY_UNIT}) ·
+              {' '}{writingLabel} {cutoffLabel(cutoff.writing, v => `${v}점`)}. 채점이 끝난 과제에만 나오고 결과보고서 PDF의
+              결과 요약에도 같은 글자로 찍혀요. 최종결과는 <b>위험이 하나라도 있거나 주의가 둘 이상이면 위험</b>, 주의가
+              하나면 주의예요.</>,
           },
-          ...(PROVISIONAL_CRITERIA ? [{
+          ...(provisional ? [{
             badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-            desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요 —
-              낱말 해독 {passMark.wordReading} / {taskMax.wordReading} ·
-              문장 읽기유창성 {fluencyLabel(passMark.sentenceReading)} {FLUENCY_UNIT} ·
-              {' '}{writingLabel} {passMark.writing} / {taskMax.writing}.
-              기준표를 받으면 숫자만 바뀌어요. 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
+            desc: <>{form.grades.includes(session.grade)
+              ? <>판정 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요.</>
+              : <>{session.grade}학년 검사지가 아직 없어 <b>{form.grades[0]}학년 검사지와 기준</b>으로 검사·판정했다는 표시예요.</>}
+              {' '}기준표를 받으면 숫자만 바뀌어요. 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
           }] : []),
         ]}
         // 「기준 시간 이후 반응은 채점하지 않는다」는 낱말 해독에만 남긴다 — 문장은 20초를 넘겨 읽었을 때
         // 어디까지 셀지 담당자가 듣고 판단한다(lib/scoring readSecMax 주석). 앱이 규칙을 대신 말하지 않는다.
         note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초 내 정확 반응 수예요. 녹음은 마지막 반응이
           잘리지 않게 조금 더 담기 때문에 기준 시간 이후 반응은 채점하지 않아요. 문장 읽기유창성은 정확하게 읽은
-          어절 수의 합을 읽은 시간(초)의 합으로 나눈 값({FLUENCY_UNIT})이에요.</>}
+          어절 수의 합을 읽은 시간(초)의 합으로 나눈 뒤 10을 곱한 값({FLUENCY_UNIT})이에요.</>}
       />
     </section>
   )

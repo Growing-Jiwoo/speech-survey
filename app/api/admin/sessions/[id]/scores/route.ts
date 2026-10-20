@@ -28,7 +28,7 @@ import { NextResponse } from 'next/server'
 import {
   saveScores, saveWriting, scanUploadedAt, scoreRows, sessionState, type ReadingMark, type SentenceScore, type SentenceTime,
 } from '@/lib/db'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { isValidReadSec, itemMaxWords, readSecMax } from '@/lib/scoring'
 import { scoresVersion } from '@/lib/score-version'
@@ -54,18 +54,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const rawWriting = b.writing === undefined ? undefined : asRecord(b.writing)
   if (!rawMarks || !rawSentences || rawTimes === null || rawWriting === null) return jsonError('채점 형식이 올바르지 않아요.', 400)
 
-  let grade: number
+  let form: SurveyForm
   try {
     const s = await sessionState(id)
     if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     if (rawWriting && s.writingMode !== 'scan') return jsonError('화면에서 표시한 쓰기는 고칠 수 없어요.', 409)
-    grade = s.grade
+    form = formOfSession(s)
   } catch (e) {
     console.error('[admin/scores] 세션 조회 실패', e)
     return jsonError('채점을 저장하지 못했어요.', 502)
   }
 
-  const form = formForGrade(grade)
   const f = itemsFor(form)
   const readCodes = new Set(f.readItems.map(i => i.code))
   const sentenceCodes = f.sentenceItems.map(i => i.code)

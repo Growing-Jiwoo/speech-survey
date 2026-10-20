@@ -1,7 +1,7 @@
 // components/results/ResultsView.tsx — 교사 결과 페이지(클라이언트).
 // GET /api/results/<token>을 읽어 요약·아이별 행·다운로드 버튼을 그린다. 데이터는 토큰이 아니라
 // 매 요청 DB에서 오므로 새로고침이 곧 최신 상태다.
-// 판정 표기는 관리자 화면과 같은 Pass/Fail(사용자 확정 2026-09-22). 받을 수 있는 검사(status scored)만 체크·다운로드.
+// 판정 표기는 관리자 화면과 같은 양호·주의·위험(종전 Pass/Fail — 사용자 확정 2026-09-22 「관리자와 같게」). 받을 수 있는 검사(status scored)만 체크·다운로드.
 // 쓰기 스캔본(사용자 확정 2026-09-30): 올리기 입구(ScanUpload)와 「스캔 대기 → 채점 중 → 채점 완료」 상태,
 // 받을 때 「쓰기 채점 전」 경고를 이 화면이 맡는다.
 // 아이 행(접힌 행)은 **대표 검사**(가장 최근에 제출된 검사 — lib/results-view representativeSession)를 그린다.
@@ -24,13 +24,14 @@ import {
   awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
   summarize, type ResultsChild, type ResultsSession, type SessionLabel,
 } from '@/lib/results-view'
-import { FLUENCY_UNIT, fluencyLabel, type CountTaskKey, type TaskKey } from '@/lib/scoring'
+import { FLUENCY_UNIT, VERDICT_LABEL, fluencyLabel, type CountTaskKey, type TaskKey, type Verdict } from '@/lib/scoring'
+import { VerdictBadge } from '@/components/VerdictBadge'
 import { ScanUpload } from './ScanUpload'
 
 interface Payload {
   cls: { schoolName: string; grade: number; classNo: number; teacherName: string }
   provisional: boolean
-  /** 개수형 과제의 만점. 문장 읽기는 비율(어절/초)이라 만점이 없다 */
+  /** 개수형 과제의 만점. 문장 읽기는 비율(어절/10초)이라 만점이 없다 */
   taskMax: Record<CountTaskKey, number>
   children: ResultsChild[]
   /** 쓰기 기록지 QR의 반 표시 — 올린 스캔본이 이 반 것인지 가린다(lib/writing-sheet) */
@@ -39,7 +40,7 @@ interface Payload {
 
 const TASKS: { key: TaskKey; label: string }[] = [
   { key: 'wordReading', label: '낱말 해독' },
-  // 칸에는 숫자만 찍으므로(「2.12」) 단위는 머리글이 말한다.
+  // 칸에는 숫자만 찍으므로(「21.20」) 단위는 머리글이 말한다.
   { key: 'sentenceReading', label: `문장 읽기(${FLUENCY_UNIT})` },
   { key: 'writing', label: '쓰기' },
 ]
@@ -56,11 +57,14 @@ const STATUS_BADGE: Record<SessionLabel, { tone: 'blue' | 'amber' | 'rec' | 'mut
 
 const kstDate = (iso: string) => new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' })
 
-/** Pass/Fail 배지 — 관리자 결과지와 같은 색(pass=mint, fail=rec). 세 과제가 다 채점돼야 값이 온다. */
-function VerdictPill({ v }: { v: 'pass' | 'fail' | null }) {
+/** 최종 판정 배지 — 관리자 결과지와 같은 색(VerdictBadge). 세 과제가 다 채점돼야 값이 온다. */
+function VerdictPill({ v }: { v: Verdict | null }) {
   if (!v) return <span className="text-ink-mute">-</span>
-  return <Badge tone={v === 'pass' ? 'mint' : 'rec'} size="sm">{v === 'pass' ? 'Pass' : 'Fail'}</Badge>
+  return <VerdictBadge v={v} size="sm" />
 }
+
+/** 과제 점수의 글자 색 — 주의는 주황, 위험은 빨강(배지와 같은 차례). 양호는 기본색. */
+const SCORE_INK: Record<Verdict, string | null> = { good: null, caution: 'text-amber', risk: 'text-rec-deep' }
 
 /**
  * 점수 한 칸. **채점되지 않은 과제는 숫자를 찍지 않는다.**
@@ -92,14 +96,15 @@ function Check({ checked, indeterminate = false, disabled, label, onChange }: {
 function ScoreCell({ s, task, taskMax }: { s: ResultsSession | null; task: TaskKey; taskMax: Payload['taskMax'] }) {
   if (!s?.scores) return <span className="text-ink-mute">-</span>
   if (s.complete?.[task] === false) return <Badge tone="mute" size="sm">채점 전</Badge>
-  // 기준에 못 미친 과제는 숫자를 붉게 — 판정만 Pass로 보여서는 어느 과제가 모자랐는지 알 수 없었다(사용자 확정
-  // 2026-10-08, 담당자 회신 아님. 같은 정보가 결과보고서 PDF에는 과제별 PASS/FAIL로 이미 나간다). 채점 전 과제는
+  // 주의·위험인 과제는 숫자에 색을 — 최종 판정만 보여서는 어느 과제가 모자랐는지 알 수 없었다(사용자 확정
+  // 2026-10-08, 담당자 회신 아님. 같은 정보가 결과보고서 PDF에는 과제별 판정으로 이미 나간다). 채점 전 과제는
   // 위에서 걸러졌다 — 그 0점 기반 판정을 칠하면 치르지도 않은 과제에서 미달한 아이가 된다(ResultsSession.taskVerdict).
-  const fail = s.taskVerdict?.[task] === 'fail'
+  const tv = s.taskVerdict?.[task]
+  const ink = tv ? SCORE_INK[tv] : null
   // 문장 읽기는 만점이 없는 비율이다 — 「2.12/36」처럼 척도를 섞어 찍지 않는다(lib/scoring CountTaskKey).
   const value = task === 'sentenceReading' ? fluencyLabel(s.scores[task]) : `${s.scores[task]}/${taskMax[task]}`
-  const shown = fail
-    ? <span className="font-bold text-rec-deep">{value}<span className="sr-only"> (기준 미달)</span></span>
+  const shown = tv && ink
+    ? <span className={`font-bold ${ink}`}>{value}<span className="sr-only"> ({VERDICT_LABEL[tv]})</span></span>
     : <>{value}</>
   // 스캔본으로 채점한 쓰기는 담당자가 넣은 점수다 — 선생님이 화면에서 표시한 점수와 구별되게 작은 표시를 붙인다
   if (task === 'writing' && s.writingMode === 'scan')
@@ -278,7 +283,8 @@ export function ResultsView({ token }: { token: string }) {
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
         <span>검사 <b>{summary.tested}</b>명</span>
         <span>· 채점 완료 <b>{summary.scored}</b>명</span>
-        <span>· <b className="text-rec-deep">Fail {summary.fail}</b>명</span>
+        <span>· <b className="text-rec-deep">위험 {summary.risk}</b>명</span>
+        <span>· <b className="text-amber">주의 {summary.caution}</b>명</span>
         {summary.scoring > 0 && <span>· 채점 중 {summary.scoring}명</span>}
         {summary.scanWait > 0 && <span className="font-bold text-amber">· 스캔 대기 {summary.scanWait}명</span>}
         {summary.unsubmitted > 0 && <span>· 미제출 {summary.unsubmitted}명</span>}
@@ -425,7 +431,7 @@ export function ResultsView({ token }: { token: string }) {
               </table>
             </div>
 
-            {/* 「채점 전」이 0점으로, Pass/Fail이 확정 판정으로 읽히면 임상적 오독이다 — 관리자 결과지와
+            {/* 「채점 전」이 0점으로, 판정이 확정 판정으로 읽히면 임상적 오독이다 — 관리자 결과지와
                 같은 범례를 교사 화면에도 상시 둔다(관리자 전용 조작 설명은 뺀다).
                 설명이 한 문장으로 끝나지 않아 1열. */}
             <BadgeLegend
@@ -448,20 +454,24 @@ export function ResultsView({ token }: { token: string }) {
                 {
                   badge: (
                     <span className="flex gap-1">
-                      <Badge tone="mint">Pass</Badge><Badge tone="rec">Fail</Badge>
+                      <VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" />
                     </span>
                   ),
-                  desc: <>과제별 기준 점수에 따른 판정이에요. <b>세 과제가 모두 채점돼야</b> 나오고,
-                    결과보고서 PDF의 결과 요약에 <b>PASS/FAIL</b>로 찍혀요. 최종결과는 셋 중 둘 이상 Fail이면 Fail이에요.</>,
+                  desc: <>세 과제를 함께 본 최종 판정이에요. <b>세 과제가 모두 채점돼야</b> 나오고, 결과보고서 PDF에도 같은
+                    글자로 찍혀요. <b>위험이 하나라도 있거나 주의가 둘 이상이면 위험</b>, 주의가 하나면 주의예요.</>,
                 },
                 {
-                  badge: <span className="font-bold text-rec-deep tabular-nums">0.65</span>,
-                  desc: <>붉은 점수는 그 과제의 기준에 못 미친 점수예요. 판정은 세 과제를 함께 본 결과라,
-                    한 과제가 붉어도 Pass일 수 있어요.</>,
+                  badge: (
+                    <span className="flex gap-2 tabular-nums">
+                      <span className="font-bold text-amber">8.04</span><span className="font-bold text-rec-deep">5.43</span>
+                    </span>
+                  ),
+                  desc: <>주황 점수는 그 과제가 주의, 빨강 점수는 위험이라는 뜻이에요. 최종 판정은 세 과제를 함께 본 결과라,
+                    한 과제가 주황이어도 최종은 주의일 수 있어요.</>,
                 },
                 ...(provisional ? [{
                   badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-                  desc: <>Pass 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요.
+                  desc: <>판정 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요(아직 검사지가 없는 학년은 1학년 기준으로 판정해요).
                     기준표를 받으면 숫자만 바꾸고, 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
                 }] : []),
               ]}

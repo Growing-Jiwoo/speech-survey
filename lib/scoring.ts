@@ -1,16 +1,16 @@
-// lib/scoring.ts — 검사지 채점 규칙(배점·합산·Pass/Fail). 순수 함수만 둔다.
+// lib/scoring.ts — 검사지 채점 규칙(배점·합산·양호/주의/위험 판정). 순수 함수만 둔다.
 // 화면·저장 API·인쇄가 모두 이 파일 하나로 점수를 계산해, 표시되는 값과 저장되는 값이 어긋나지 않게 한다.
 // 배점은 학년별 검사지(lib/forms)에서 나온다 — 숫자를 여기 적어 두지 않는다.
 import { GRACE_SEC, itemsFor, type FormItems, type SurveyItem } from './items'
-import type { SurveyForm } from './forms'
+import type { Cutoff, SurveyForm } from './forms'
 
 /**
  * 문항 배점 = **어절 수**. 검사지의 숫자를 따로 적어두지 않고 문항 텍스트에서 유도한다
  * — 문항이 바뀌면 배점이 자동으로 따라간다.
  *
  * 세 과제가 모두 같은 규칙이다:
- * · 문장 읽기유창성 — 문장별 "정확하게 읽은 어절 수"의 상한 (G1 7·7·8·14 / G2 7·8·9·11).
- *   과제 총점은 어절 수가 아니라 어절/초다(`fluencyOf`).
+ * · 문장 읽기유창성 — 문장별 "정확하게 읽은 어절 수"의 상한 (예: G1 1학기 7·7·8·14 / 2학기 7·8·15·18).
+ *   과제 총점은 어절 수가 아니라 10초당 어절 수다(`fluencyOf`).
  * · 낱말 쓰기(G1)   — "정확하게 쓴 낱말은 1점" → 낱말 하나가 곧 한 어절이라 문항 만점 1
  * · 문장 쓰기(G2)   — "정확하게 쓴 어절은 1점" → 두 어절 문장이라 문항 만점 2
  */
@@ -19,41 +19,59 @@ export function itemMaxWords(item: SurveyItem): number {
 }
 
 /**
- * ⚠️ 담당자 확인 대기 — 확정 아님. Pass 기준은 아직 **임시값**이다(양식별 `passMark`).
- * 담당자 회신(2026-08-07, 계획서 docs/superpowers/plans/2026-08-07-admin-scoring-report.md): "점수 기준이 아직 명확하지
- * 않은데 대강 입력해둬도 괜찮다." — 2026-08-11 회신은 임시값을 그대로 두는 것까지 승낙한 것이다.
- * — 즉 담당자가 승낙한 것은 "임시값을 써도 된다"까지이고, **숫자 자체는 개발 판단이다**
- * (만점의 약 65%, 사용자 확정 2026-08-11).
- * 임의의 숫자이므로 이 플래그가 true인 동안 **화면**에 "임시 기준 · 확정 전"을 함께 표시한다
- * (시범 운영 중 나온 판정이 실제 판정으로 학교에 전달되는 것을 막기 위함). 결과보고서 PDF는
- * 담당자 양식을 1:1로 따르므로 이 표시를 싣지 않는다 — 기준표(2026-10-02 예정) 전에는 내려받은
- * PDF의 PASS/FAIL이 임시 기준에 의한 것임을 관리자 화면의 표시로만 알 수 있다.
- * 실제 기준표가 오면 양식의 숫자만 바꾸면 되고, 이미 채점한 세션도 저장된 점수로 다시 계산된다.
+ * 기준이 임시값인 세션인지 — 「임시 기준 · 확정 전」 표시(관리자·교사 화면)가 이것을 본다.
+ *
+ * 양식의 기준이 개발 판단으로 정한 임시값이거나(`SurveyForm.provisional` — 1학기 양식, 사용자 확정 2026-08-11 「임시로
+ * 일단 해두고 나중에 바꾼다」), **세션의 학년이 양식의 담당 학년이 아니면**(3~6학년이 1학년 양식으로 폴백) 임시다.
+ * 폴백 세션은 1학년 기준으로 판정되므로, 양식의 기준이 확정이어도 그 학년의 판정으로는 확정이 아니다.
+ * 결과보고서 PDF는 담당자 양식을 1:1로 따르므로 이 표시를 싣지 않는다 — 시범 운영 중 나온 판정이 실제 판정으로
+ * 학교에 전달되는 것을 막는 것은 화면의 표시뿐이다.
  */
-export const PROVISIONAL_CRITERIA = true
+export function criteriaProvisional(form: SurveyForm, grade: number): boolean {
+  return form.provisional || !form.grades.includes(grade)
+}
 
 export type TaskKey = 'wordReading' | 'sentenceReading' | 'writing'
-export type Verdict = 'pass' | 'fail'
+/**
+ * 판정 3단계 — 양호 · 주의(영역별 Fail) · 위험(완전 Fail). 담당자 확정(2026-10-19 docx 「영역별fail은 주의, 완전 fail은
+ * 위험으로 제시」, 2026-10-20 「이전에 줬던 템플릿으로 해도 돼 — 어제 그거는 용어 때문에 예시로 만들어서 준 거야」).
+ * 종전 PASS/FAIL(2026-09-28)을 대신한다.
+ */
+export type Verdict = 'good' | 'caution' | 'risk'
+export const VERDICT_LABEL: Record<Verdict, string> = { good: '양호', caution: '주의', risk: '위험' }
 
 export const TASK_KEYS: TaskKey[] = ['wordReading', 'sentenceReading', 'writing']
 
-/**
- * 최종결과: **세 영역 중 FAIL이 2개 이상이면 FAIL, 아니면 PASS.**
- *
- * 담당자 확정(2026-09-29) — 원문 「3개 중에 2개 이상이 fail이면 최종 fail로 할려고」. 2026-09-28 회신
- * 「1개 이상이 fail이면 fail」은 담당자가 「내가 잘못 얘기했다」며 정정했다. 담당자가 배포한 결과보고서
- * 예시(`KODYS_G*_결과보고서.docx`: PASS·PASS·FAIL → 최종 PASS, 미통과 문구 「2개 이상의 영역에서」)와
- * 일치한다. 교사 결과 화면(`lib/results.ts`)과 결과보고서 PDF(`lib/pdf/report.ts`)가 같이 쓴다.
- */
-export function finalVerdict(v: Record<TaskKey, Verdict>): Verdict {
-  return TASK_KEYS.filter(k => v[k] === 'fail').length >= 2 ? 'fail' : 'pass'
+/** 기준 표기 — 「주의 12 이하 · 위험 9 이하」. 위험 값이 없는 임시 기준(-1)은 주의만 쓴다. `fmt`가 숫자와 단위를 붙인다. */
+export function cutoffLabel(c: Cutoff, fmt: (v: number) => string): string {
+  return c.risk < 0 ? `주의 ${fmt(c.caution)} 이하` : `주의 ${fmt(c.caution)} 이하 · 위험 ${fmt(c.risk)} 이하`
+}
+
+/** 과제 하나의 판정 — 기준표 표기 그대로 「이하」(경계값이 그 판정이다). 위험이 주의보다 먼저다(위험 값이 더 낮다). */
+export function verdictOf(v: number, c: Cutoff): Verdict {
+  return v <= c.risk ? 'risk' : v <= c.caution ? 'caution' : 'good'
 }
 
 /**
- * 문장 읽기유창성 총점 = **정확하게 읽은 어절 수의 합 ÷ 읽은 시간(초)의 합** (어절/초).
+ * 최종결과: **위험이 하나라도 있거나 주의 이상이 2개 이상이면 위험, 주의가 1개면 주의, 나머지는 양호.**
  *
- * 담당자 확정(2026-09-29) — 원문 「총점은 (정확하게 읽은 어절 수 / 읽은 총 시간) 이 되어야 할 것 같아」,
- * 예시 「문장 4개 읽는데 총 10초가 걸렸고, 정확하게 읽은 어절이 20개면 (20/10)=2점」. 시간은 관리자가
+ * 담당자 확정(2026-10-19 docx) — 원문 「영역별 fail 3개 영역 중 2개 이상 시 최종 fail」 「완전 fail 3개 영역 중 1개만
+ * 나와도 최종 fail」 「영역별 fail이 1개라서 최종판정에는 fail이 안 되는 경우 '최종결과'에는 '주의'」. 종전 규칙
+ * 「FAIL 2개 이상 → FAIL」(담당자 확정 2026-09-29)은 위험 조건 안에 그대로 남는다.
+ * 교사 결과 화면(`lib/results.ts`)과 결과보고서 PDF(`lib/pdf/report.ts`)가 같이 쓴다.
+ */
+export function finalVerdict(v: Record<TaskKey, Verdict>): Verdict {
+  const all = TASK_KEYS.map(k => v[k])
+  if (all.includes('risk') || all.filter(x => x !== 'good').length >= 2) return 'risk'
+  return all.includes('caution') ? 'caution' : 'good'
+}
+
+/**
+ * 문장 읽기유창성 총점 = **정확하게 읽은 어절 수의 합 ÷ 읽은 시간(초)의 합 × 10** (10초당 어절 수).
+ *
+ * 담당자 확정(2026-09-29) — 원문 「총점은 (정확하게 읽은 어절 수 / 읽은 총 시간) 이 되어야 할 것 같아」.
+ * **× 10은 담당자 확정(2026-10-20)** — 원문 「10초당 정확하게 읽은 어절 수! 20어절 ÷ 10초 * 10 으로 계산했어」.
+ * 9/29 예시(20어절 · 10초 = 2점)는 1초당이었고, 기준표(8.04 등)는 10초당으로 계산한 값이라 그쪽에 맞췄다. 시간은 관리자가
  * 녹음을 듣고 문장마다 직접 넣는다 — 녹음 길이(recordings.duration_sec)로 채우지 않는다(원문 「녹음된 초를
  * 넣기에는 정확하지가 않을 것 같아서」). 검사지 인쇄 문구(「정확하게 읽은 어절 수로 채점」, 총점 /36)와
  * 다른 것은 의도된 것이다(CLAUDE.md 2절).
@@ -66,18 +84,18 @@ export type CountTaskKey = Exclude<TaskKey, 'sentenceReading'>
 /**
  * 소수 둘째 자리까지(셋째 자리에서 반올림) — 담당자 확정(2026-09-29), 원문 「cut-off를 소수점
  * 둘쨋자리까지 (셋째에서 반올림) 봐」. **판정도 반올림한 값으로 한다** — cut-off를 같은 자리에서
- * 보므로, 화면에 「1.00」이 찍혔는데 기준 1.00에서 Fail이 나오는 모순도 막는다.
+ * 보므로, 화면에 「8.04」가 찍혔는데 기준 「8.04 이하」에서 양호가 나오는 모순도 막는다.
  */
 export const FLUENCY_DECIMALS = 2
-export const FLUENCY_UNIT = '어절/초'
+export const FLUENCY_UNIT = '어절/10초'
 export const fluencyLabel = (v: number): string => v.toFixed(FLUENCY_DECIMALS)
 
-/** 어절 ÷ 시간. 시간은 0.1초 단위 정수(tenths)로 받는다 — 초를 소수로 더하면 17.000000000000004 같은
- *  부동소수 오차가 생겨 반올림 경계에서 한 자리가 뒤집힐 수 있다. 시간이 0이면 0. */
+/** 10초당 어절 = 어절 ÷ (tenths ÷ 10) × 10 = 어절 × 100 ÷ tenths. 시간은 0.1초 단위 정수(tenths)로 받는다 — 초를
+ *  소수로 더하면 17.000000000000004 같은 부동소수 오차가 생겨 반올림 경계에서 한 자리가 뒤집힐 수 있다. 시간이 0이면 0. */
 function fluencyOf(words: number, tenths: number): number {
   if (tenths <= 0) return 0
   const scale = 10 ** FLUENCY_DECIMALS
-  return Math.round((words * 10 * scale) / tenths) / scale
+  return Math.round((words * 100 * scale) / tenths) / scale
 }
 
 /**
@@ -115,8 +133,8 @@ export interface FormScoring {
   readMax: { meaning: number; nonsense: number }
   /** 낱말 쓰기(G1)의 의미/무의미 소계 만점. 문장 쓰기 양식에서는 0이다. */
   writeMax: { meaning: number; nonsense: number }
-  /** 과제별 Pass 기준 — 개수형은 점수, 문장 읽기유창성은 어절/초 */
-  passMark: Record<TaskKey, number>
+  /** 과제별 판정 기준(「이하」) — 개수형은 점수, 문장 읽기유창성은 어절/10초 */
+  cutoff: Record<TaskKey, Cutoff>
 }
 
 const SCORING = new WeakMap<SurveyForm, FormScoring>()
@@ -135,7 +153,7 @@ export function scoringFor(form: SurveyForm): FormScoring {
     sentenceWordsMax: sum(f.sentenceItems),
     readMax: { meaning: f.meaningReadCodes.length, nonsense: f.nonsenseReadCodes.length },
     writeMax: { meaning: maxOf(f.meaningWriteCodes), nonsense: maxOf(f.nonsenseWriteCodes) },
-    passMark: form.passMark,
+    cutoff: form.cutoff,
   }
   SCORING.set(form, built)
   return built
@@ -156,7 +174,7 @@ export interface ScoreResult {
   wordMeaning: number
   wordNonsense: number
   wordReading: number
-  /** 문장 읽기유창성 총점 — 어절/초, `FLUENCY_DECIMALS` 자리 반올림. 판정도 이 값으로 한다 */
+  /** 문장 읽기유창성 총점 — 10초당 어절, `FLUENCY_DECIMALS` 자리 반올림. 판정도 이 값으로 한다 */
   sentenceReading: number
   /** 문장 읽기유창성의 정확 어절 합(총점의 분자) */
   sentenceWords: number
@@ -172,7 +190,7 @@ export interface ScoreResult {
    * 과제별 채점 완료 여부. 이것이 false면 **숫자도 판정도 확정된 값이 아니다.**
    *
    * 없는 데이터를 0으로 세는 것과 "0점을 받았다"는 전혀 다르다. 아직 채점 전인 과제까지
-   * 0점 Fail로 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다.
+   * 0점 위험으로 표시하면, 치르지도 않은 과제에서 낙제한 아동으로 기록된다.
    * 화면은 판정을 감추고 인쇄물은 칸을 비운다.
    */
   complete: Record<TaskKey, boolean>
@@ -280,8 +298,8 @@ export function withUnrecordedFixed(
  *
  * 담당자 확정(2026-09-29) — 원문 「20초로 치고 0어절로 계산하면 될 듯」. 「모르겠어요」·업로드 실패를
  * 가리지 않는다(서버는 둘을 구분하지 않는다). 계산에서 빼지 않는 이유: 빼면 총점이 비율이라
- * 못 읽은 문장이 점수를 깎지 않는다 — 1번만 5초에 7어절 읽고 나머지를 넘긴 아이가 7÷5 = 1.40으로,
- * 4문장을 30초에 다 읽은 아이(36÷30 = 1.20)보다 높아진다. 제한 시간으로 치면 7÷65 = 0.11.
+ * 못 읽은 문장이 점수를 깎지 않는다 — 1번만 5초에 7어절 읽고 나머지를 넘긴 아이가 7÷5×10 = 14.00으로,
+ * 4문장을 30초에 다 읽은 아이(36÷30×10 = 12.00)보다 높아진다. 제한 시간으로 치면 7÷65×10 = 1.08.
  * 어절 0점(검사지 「제한시간 내 읽지 못한 어절은 0점」)과 같은 생각이다.
  *
  * **이 값은 저장하지 않고 채점할 때마다 파생한다** — 관리자 결과지는 잠긴 칸에 보여 주기만 하고
@@ -321,7 +339,7 @@ const allAnswered = (codes: Iterable<string>, m: Partial<Record<string, unknown>
 
 export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const f = itemsFor(form)
-  const { passMark } = scoringFor(form)
+  const { cutoff } = scoringFor(form)
   // 읽은 것·쓴 것은 전부 산입한다 — 중단 규칙으로 뒤 과제를 채점에서 빼던 파생은 폐기됐다.
   // 담당자 회신("가정이 필요없을 것 같아")이 근거이나, **사후 채점 파생까지 걷어내는
   // 폐기 범위는 사용자 확정(2026-08-13)이다** — 담당자가 그 범위까지 답한 것은 아니다.
@@ -342,7 +360,7 @@ export function scoreSession(form: SurveyForm, s: ScoreInput): ScoreResult {
   const writeMeaning = total(f.meaningWriteCodes)
   const writeNonsense = total(f.nonsenseWriteCodes)
   const writing = total(f.writingItems.map(i => i.code))
-  const at = (v: number, key: TaskKey): Verdict => (v >= passMark[key] ? 'pass' : 'fail')
+  const at = (v: number, key: TaskKey): Verdict => verdictOf(v, cutoff[key])
   return {
     wordMeaning, wordNonsense, wordReading,
     sentenceReading, sentenceWords, sentenceSec: sentenceTenths / 10,

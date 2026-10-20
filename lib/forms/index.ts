@@ -1,7 +1,9 @@
-// lib/forms/index.ts — 학년별 검사지 정의 레지스트리.
-// 검사지(종이)가 학년마다 다르므로, 문항·배점·머리글을 양식 데이터로 두고
+// lib/forms/index.ts — 학년·학기별 검사지 정의 레지스트리.
+// 검사지가 학년과 학기마다 다르므로, 문항·배점·머리글을 양식 데이터로 두고
 // 검사 진행·채점·결과지·인쇄가 모두 이 정의로부터 만들어진다.
-// 새 학년 = 양식 파일(g*.ts, 가짜 문항) + 실제 문항(private/forms.json → `npm run forms:seal`) + FORMS 등록.
+// 새 양식 = 양식 파일(g*.ts, 가짜 문항) + 실제 문항(private/forms.json → `npm run forms:seal`) + FORMS 등록.
+// 양식은 **세션을 만들 때 정해 세션 행에 적는다**(`sessions.form_id`, migration 008) — 이미 끝난 검사는
+// 그 뒤에 양식이 늘거나 학기 규칙이 바뀌어도 검사 당시 양식으로 다시 그려진다(`formOfSession`).
 //
 // **실제 문항은 암호문으로만 커밋한다**(sealed.ts — 저장소가 공개라서, 사용자 확정 2026-10-20). 키 FORMS_KEY가 있으면
 // 모듈을 읽을 때 한 번 풀어 양식의 문항 네 칸(`RealContent`)을 갈아 끼우고, 없으면 g*.ts의 가짜 문항으로 돈다
@@ -9,6 +11,8 @@
 // 실패하는 편이 낫다(빌드 끝의 scripts/check-client-bundle.ts가 이 모듈을 읽으므로 키가 빠진 배포는 빌드에서 멈춘다).
 import { G1 } from './g1'
 import { G2 } from './g2'
+import { G1S2 } from './g1s2'
+import { G2S2 } from './g2s2'
 import { unseal } from './seal'
 import { SEALED } from './sealed'
 
@@ -45,8 +49,17 @@ export type WritingTask =
   | { kind: 'word'; meaning: string[]; nonsense: string[] }
   | { kind: 'sentence'; sentences: string[] }
 
+/**
+ * 과제 하나의 판정 기준. 담당자 기준표의 표기 그대로 **「이 값 이하면」**이다(경계값 자체가 해당 판정).
+ * - `caution` = 영역별 Fail(Youden) → **주의**
+ * - `risk` = 완전 Fail(−1SD) → **위험**
+ * 이하가 아니면 양호. 판정 규칙은 lib/scoring `verdictOf`·`finalVerdict`.
+ */
+export interface Cutoff { caution: number; risk: number }
+
 export interface SurveyForm {
-  /** 결과지에 표기되는 양식 식별자 — 어떤 검사지로 채점했는지 기록에 남긴다 */
+  /** 결과지에 표기되는 양식 식별자 — 어떤 검사지로 채점했는지 기록에 남긴다. **세션 행(`form_id`)에 저장되므로
+   *  한 번 쓴 id는 바꾸지 말 것**(바꾸면 그 id로 검사한 세션이 양식을 잃는다) */
   id: string
   /** 결과지 머리글 큰 제목 (예: 'KODYS - G1') */
   title: string
@@ -54,6 +67,8 @@ export interface SurveyForm {
   subtitle: string
   /** 이 양식이 담당하는 학년 */
   grades: number[]
+  /** 이 양식이 담당하는 학기 — 새 세션은 검사일의 학기(lib/format `semesterOf`)로 고른다 */
+  semester: 1 | 2
   readMeaning: string[]
   readNonsense: string[]
   sentences: string[]
@@ -61,18 +76,21 @@ export interface SurveyForm {
   /** 검사지 제한 시간(초) — 채점 기준 */
   limits: { wordSec: number; sentenceSec: number }
   /**
-   * ⚠️ 담당자 확인 대기 — 확정 아님. 담당자에게 실제 Pass 기준표를 받기 전까지 쓰는 값이며,
-   * 숫자는 만점의 약 65%로 잡은 개발 판단이다(사용자 확정 2026-08-11). 문장 읽기유창성만 단위가
-   * 어절/초이고 만점이 없어 임시값 1.0을 따로 정했다(사용자 확정 2026-09-29).
-   * 기준표가 학년마다 다를 수 있어 양식 데이터로 둔다.
-   * `PROVISIONAL_CRITERIA`가 true인 동안 관리자 화면에 "임시 기준 · 확정 전"이 붙는다.
+   * 과제별 판정 기준(`Cutoff`). 개수형은 점수, 문장 읽기유창성은 어절/10초(lib/scoring `FLUENCY_UNIT`).
+   * 기준표가 학년·학기마다 달라 양식 데이터로 둔다. 값의 출처는 양식 파일마다 적는다.
    */
-  passMark: { wordReading: number; sentenceReading: number; writing: number }
+  cutoff: { wordReading: Cutoff; sentenceReading: Cutoff; writing: Cutoff }
+  /**
+   * 기준이 **개발 판단으로 정한 임시값**인지. true면 관리자·교사 화면에 「임시 기준 · 확정 전」이 붙는다
+   * (결과보고서 PDF는 담당자 양식이라 싣지 않는다). 담당 학년이 아닌 세션(3~6학년 폴백)도 임시로 본다 —
+   * lib/scoring `criteriaProvisional`.
+   */
+  provisional: boolean
   /** 결과보고서 PDF에서 학년마다 다른 서식 */
   report: ReportStyle
 }
 
-/** 암호문 안의 실제 문항 — 양식에서 이 네 칸만 갈아 끼운다(배점·제한 시간·서식은 공개 양식 그대로). */
+/** 암호문 안의 실제 문항 — 양식에서 이 네 칸만 갈아 끼운다(배점·제한 시간·기준·서식은 공개 양식 그대로). */
 export type RealContent = Pick<SurveyForm, 'readMeaning' | 'readNonsense' | 'sentences' | 'writing'>
 
 /** 평문 private/forms.json의 모양. `sheet`는 검사지를 따로 옮겨 적은 대조값(tests/forms-sealed.test.ts) — 앱은 쓰지 않는다. */
@@ -103,19 +121,41 @@ function withReal(f: SurveyForm, real: Record<string, RealContent> | null): Surv
 
 const REAL = realContents()
 
-export const FORMS: SurveyForm[] = [G1, G2].map(f => withReal(f, REAL))
+export const FORMS: SurveyForm[] = [G1, G2, G1S2, G2S2].map(f => withReal(f, REAL))
 
 /** 실제 문항으로 돌고 있는지(키가 있는지). false면 가짜 문항이다 — 공개 저장소·테스트 */
 export const REAL_FORMS = REAL !== null
 
-/** 담당 양식이 없는 학년의 폴백. */
-export const DEFAULT_FORM = FORMS[0]
+const byId = (id: string): SurveyForm => FORMS.find(f => f.id === id)!
+
+/** 담당 양식이 없는 학년의 폴백(학년만으로 고르던 때의 규칙). */
+export const DEFAULT_FORM = byId(G1.id)
 
 /**
- * 학년에 해당하는 검사지를 돌려준다.
- * 담당 양식이 없는 학년(3~6)은 DEFAULT_FORM으로 폴백한다 — 그 학년 검사지를 아직 받지
- * 못했기 때문이다. 결과지·인쇄물에 form.id가 찍혀 어떤 양식으로 검사·채점했는지 드러난다.
+ * **학년만으로 고르던 옛 규칙** — `form_id`가 없는 세션(migration 008 이전에 만든 검사)을 읽을 때만 쓴다.
+ * 새 세션의 양식은 `formFor(학년, 학기)`가 정한다. 담당 양식이 없는 학년(3~6)은 DEFAULT_FORM이었다.
  */
 export function formForGrade(grade: number): SurveyForm {
-  return FORMS.find(f => f.grades.includes(grade)) ?? DEFAULT_FORM
+  return [byId(G1.id), byId(G2.id)].find(f => f.grades.includes(grade)) ?? DEFAULT_FORM
+}
+
+/**
+ * 새 세션의 양식 — 학년과 검사일의 학기로 고른다(학기 경계 3~8월 1학기·9~2월 2학기는 담당자 확정 2026-10-20).
+ * 담당 양식이 없는 학년(3~6)은 **같은 학기의 1학년 양식**으로 폴백한다 — 그 학년 검사지를 아직 받지 못했다.
+ * 그 세션의 판정은 1학년 기준이라 임시로 표시한다(lib/scoring `criteriaProvisional`).
+ */
+export function formFor(grade: number, semester: 1 | 2): SurveyForm {
+  const of = (g: number) => FORMS.find(f => f.semester === semester && f.grades.includes(g))
+  return of(grade) ?? of(1) ?? DEFAULT_FORM
+}
+
+/**
+ * 세션의 양식 — 세션 행에 적힌 `form_id` 그대로다. 없으면(migration 008 이전 세션) 옛 규칙으로 읽는다.
+ * 모르는 id는 던진다 — 다른 양식으로 그려 다른 낱말·기준으로 판정하느니 결과지를 못 여는 편이 낫다.
+ */
+export function formOfSession(s: { grade: number; form_id?: string | null }): SurveyForm {
+  if (s.form_id == null) return formForGrade(s.grade)
+  const f = FORMS.find(x => x.id === s.form_id)
+  if (!f) throw new Error(`알 수 없는 양식: ${s.form_id}`)
+  return f
 }

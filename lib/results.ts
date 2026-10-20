@@ -2,7 +2,7 @@
 // 목록 라우트·PDF 라우트·테스트가 공유한다. 채점은 관리자 결과지와 **같은 함수 사슬**을 쓴다 —
 // scoreInputFrom → (제출됨이면) withUnrecordedFixed → scoreSession → sheetPdfGate.
 // 여기서 규칙을 새로 만들지 않는다: 관리자와 교사가 다른 점수를 보면 그 자체가 사고다.
-import { formForGrade, type SurveyForm } from './forms'
+import { formOfSession, type SurveyForm } from './forms'
 import { itemsFor } from './items'
 import { pad2 } from './format'
 import {
@@ -23,6 +23,8 @@ export interface ResultsSessionRow {
   child_name: string
   gender: string
   grade: number
+  /** 검사 당시 양식(migration 008, 이전 세션은 null) — lib/forms `formOfSession` */
+  form_id: string | null
   started_at: string
   submitted_at: string | null
   /** 결과보고서 PDF 머리글이 찍는다(renderReport). **목록 API 응답에는 싣지 않는다** — buildChildren이 옮기지 않는다. */
@@ -61,7 +63,7 @@ export function maskEmail(email: string): string {
  * 제출된 세션만 미녹음 고정값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
  */
 export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: ScoreInput } {
-  const form = formForGrade(r.grade)
+  const form = formOfSession(r)
   const f = itemsFor(form)
   const raw = scoreInputFrom(f, {
     marks: r.reading_marks, sentences: r.sentence_scores, times: r.sentence_times, writing: r.writing_answers,
@@ -92,7 +94,7 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
   // 쓰기만 남은 채로 통과한 세션은 `result.writing`이 0인데 그것은 미채점이지 0점이 아니다.
   // 그 0으로 fail을 만들면 치르지도 않은 과제에서 낙제한 아동이 된다(ResultsSession.complete 주석).
   const allScored = TASK_KEYS.every(k => result.complete[k])
-  // 최종 판정 규칙(FAIL 2개 이상 → FAIL)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
+  // 최종 판정 규칙(위험 1개 이상 또는 주의 2개 이상 → 위험)은 lib/scoring의 finalVerdict 하나가 정한다 — PDF와 같아야 한다.
   const verdict: Verdict | null = allScored ? finalVerdict(result.verdict) : null
   return {
     status: 'scored',
@@ -106,9 +108,9 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
 }
 
 /**
- * 명단 ∪ 세션 → 아이당 한 줄. 정렬은 **Fail 먼저, 그 안에서 번호순**(사용자 확정 ④).
- * Fail은 대표 검사의 판정(`childVerdict` — 가장 최근에 제출된 검사)이다. 화면의 접힌 행·요약과 같은 검사를
- * 봐야 한다 — 1차 FAIL 뒤 2차를 중단한 아이가 Fail 위로 올라가지 않았다(2026-10-12 점검).
+ * 명단 ∪ 세션 → 아이당 한 줄. 정렬은 **위험 → 주의 → 나머지, 그 안에서 번호순**(사용자 확정 ④ 「Fail 먼저」를
+ * 3단계로 옮긴 것, 2026-10-20). 판정은 대표 검사의 판정(`childVerdict` — 가장 최근에 제출된 검사)이다. 화면의 접힌 행·요약과
+ * 같은 검사를 봐야 한다 — 1차 위험 뒤 2차를 중단한 아이가 위로 올라가지 않았다(2026-10-12 점검).
  * - 명단에만 있음 → sessions 빈 행(미실시)
  * - 세션만 있음(직접 입력·명단 없는 학급) → 세션의 이름·성별
  * - 둘 다 → 이름·성별은 **최신 세션** 값(임상 기록이 명단보다 우선 — 관리자가 고친 값이 여기 있다)
@@ -129,7 +131,8 @@ export function buildChildren(roster: ResultsRosterRow[], rows: ResultsSessionRo
     byNo.set(r.child_no, c)
   }
 
-  const rank = (c: ResultsChild) => (childVerdict(c) === 'fail' ? 0 : 1)
+  const RANK = { risk: 0, caution: 1 } as const
+  const rank = (c: ResultsChild) => { const v = childVerdict(c); return v === 'risk' || v === 'caution' ? RANK[v] : 2 }
   return [...byNo.values()].sort((a, b) => rank(a) - rank(b) || a.childNo - b.childNo)
 }
 

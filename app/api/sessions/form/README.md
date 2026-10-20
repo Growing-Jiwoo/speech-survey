@@ -1,7 +1,7 @@
 # app/api/sessions/form/ — 진행 중인 세션의 검사지
 
 `route.ts`(`POST`) 한 파일. 바디 `{ sessionId, sessionToken }`을 받아 세션 토큰을 검증하고,
-**세션 행의 학년**으로 고른 검사지(`formForGrade`)를 `{ form }`으로 내려준다. 검사 화면(`/survey`)과
+**세션 행의 양식**(`form_id` — 세션을 만들 때 학년·학기로 정한 것, `formOfSession`)을 `{ form }`으로 내려준다. 검사 화면(`/survey`)과
 검토 화면(`/review`)이 `hooks/useSurveyForm`으로 부른다.
 
 ## 왜 있나

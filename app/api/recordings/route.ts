@@ -6,7 +6,7 @@ import { audioExt } from '@/lib/audio-ext'
 import { isAllowedAudioMime, sniffAudio, safeContentType } from '@/lib/audio-validate'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { isRecordingPage, itemsFor } from '@/lib/items'
 import { UUID_RE, jsonError } from '@/lib/request'
 
@@ -49,16 +49,16 @@ export async function POST(req: Request) {
 
   try {
     // 제출 완료 후 업로드 차단(검사 증적 사후 변조 방지). 세션 미존재도 여기서 걸러낸다.
-    const { state, grade } = await sessionState(sessionId)
-    if (state === 'missing')
+    const s = await sessionState(sessionId)
+    if (s.state === 'missing')
       return jsonError('검사 기록이 없어요.', 404)
-    if (state === 'submitted')
+    if (s.state === 'submitted')
       return jsonError('이미 제출된 검사예요.', 409)
     // 녹음 단위는 페이지다(검사지: 한 페이지 전체를 제한 시간 안에 읽는다).
-    // 어떤 페이지가 존재하는지는 **세션의 학년(검사지)** 이 정한다 — 다른 학년의 페이지 코드로
+    // 어떤 페이지가 존재하는지는 **세션의 검사지(양식)** 가 정한다 — 다른 학년의 페이지 코드로
     // 올라온 녹음은 어느 화면에서도 읽히지 않는 고아 파일이 된다.
     // 연습 페이지는 아동 연습용이라 서버에 남기지 않는다.
-    const page = itemsFor(formForGrade(grade)).pageByCode.get(itemCode)
+    const page = itemsFor(formOfSession(s)).pageByCode.get(itemCode)
     if (!page || !isRecordingPage(page) || page.practice)
       return jsonError('빠진 항목이 있어요.', 400)
     if ((await countSessionRecordings(sessionId)) >= MAX_PER_SESSION)

@@ -14,7 +14,7 @@ import {
   latestSubmittedSessionId, removeScanObjects, restoreWritingScan, scanUploadTarget, uploadScanObject, upsertWritingScan,
 } from '@/lib/db'
 import { env } from '@/lib/env'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { imageExt, sniffImage } from '@/lib/image-validate'
 import { UUID_RE, createRateLimiter, jsonError } from '@/lib/request'
@@ -49,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     if (!t || t.class_code_id !== classCodeId) return jsonError('검사 기록이 없어요.', 404)
     if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사예요.', 409)
     if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사예요.', 409)
-    const writingCodes = new Set(itemsFor(formForGrade(t.grade)).writingItems.map(i => i.code))
+    const writingCodes = new Set(itemsFor(formOfSession(t)).writingItems.map(i => i.code))
     const scored = (x: { writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[] }) =>
       x.writing_answers.some(w => writingCodes.has(w.item_code)) || x.sentence_scores.some(s => writingCodes.has(s.item_code))
     if (scored(t)) return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없어요.', 409)

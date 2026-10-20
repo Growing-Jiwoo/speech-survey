@@ -2,10 +2,11 @@
 // 종이 검사지와 같이 연한 배경 띠 위에 '의미 __/7 · 무의미 __/7 · 총 __/14'를 둔다.
 // 채점 결과가 잘 안 보인다는 피드백에 따라 숫자를 본문보다 크게, 총점은 색으로 강조한다.
 import { Badge } from '@/components/Badge'
+import { VerdictBadge } from '@/components/VerdictBadge'
 import type { Verdict } from '@/lib/scoring'
 
 /** 척도는 둘 중 하나다 — 만점이 있는 점수(`12 / 14`), 또는 만점 없이 단위만 있는 값
- *  (문장 읽기유창성의 `17 초`·`2.12 어절/초`). 둘을 섞어 `2.12 / 36`이 찍히지 않게 유니온으로 둔다. */
+ *  (문장 읽기유창성의 `17 초`·`21.20 어절/10초`). 둘을 섞어 `2.12 / 36`이 찍히지 않게 유니온으로 둔다. */
 type Cell = { label: string; value: number | string } & ({ max: number; unit?: never } | { unit: string; max?: never })
 
 const scaleOf = (c: Cell) => (c.max !== undefined ? ` / ${c.max}` : ` ${c.unit}`)
@@ -44,12 +45,10 @@ export function Subtotal({ cells, total, verdict, complete = true }: {
           <span className="font-normal text-ink-mute">{total.max !== undefined ? `${total.max}점 만점` : total.unit}</span>
         )}
       </span>
-      {/* 배지 우선순위: 채점 전 → Pass/Fail (스펙 "낱말 해독 — …" 절) */}
+      {/* 배지 우선순위: 채점 전 → 양호·주의·위험 (스펙 "낱말 해독 — …" 절) */}
       {!complete
         ? <Badge tone="mute" size="lg">채점 전</Badge>
-        : verdict && (verdict === 'pass'
-          ? <Badge tone="mint" size="lg">Pass</Badge>
-          : <Badge tone="rec" size="lg">Fail</Badge>)}
+        : verdict && <VerdictBadge v={verdict} size="lg" />}
     </div>
   )
 }

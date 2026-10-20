@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server'
 import { sessionState } from '@/lib/db'
 import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
-import { formForGrade } from '@/lib/forms'
+import { formOfSession } from '@/lib/forms'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -26,8 +26,8 @@ export async function POST(req: Request) {
     if (s.state === 'missing') return jsonError('검사 기록이 없어요.', 404)
     // 제출된 검사는 다시 진행할 수 없으니(제출·업로드가 모두 409) 문항을 줄 이유도 없다.
     if (s.state === 'submitted') return jsonError('이미 제출된 검사예요.', 409)
-    // 학년은 클라이언트가 아니라 세션 행이 정한다 — 제출 라우트와 같은 규칙.
-    return NextResponse.json({ form: formForGrade(s.grade) }, { headers: { 'Cache-Control': 'no-store' } })
+    // 양식은 클라이언트가 아니라 세션 행(검사를 시작할 때 정한 form_id)이 정한다 — 제출 라우트와 같은 규칙.
+    return NextResponse.json({ form: formOfSession(s) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e) {
     console.error('[sessions/form] 세션 조회 실패', e)
     return jsonError('검사 문항을 불러오지 못했어요.', 502)

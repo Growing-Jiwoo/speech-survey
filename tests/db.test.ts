@@ -696,6 +696,22 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     expect(consentedAt).toBeGreaterThanOrEqual(before)
     expect(consentedAt).toBeLessThanOrEqual(Date.now())
   })
+  it('검사지를 지금 정해 form_id로 적는다 — 학년 + 검사일의 학기(3~8월 1학기 · 9~2월 2학기, KST)', async () => {
+    // CLASS_CODE는 3학년 — 담당 양식이 없어 같은 학기의 1학년 양식으로 폴백한다(lib/forms formFor)
+    const at = async (iso: string) => {
+      vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(iso))
+      try {
+        enqueue('sessions', { data: { id: SID }, error: null })
+        await createSession({ classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개' })
+        const rows = insertCallsByTable.get('sessions')!
+        return (rows[rows.length - 1] as Record<string, unknown>).form_id
+      } finally { vi.useRealTimers() }
+    }
+    expect(await at('2026-10-20T01:00:00.000Z')).toBe('KODYS-G1-S2')
+    expect(await at('2027-03-02T01:00:00.000Z')).toBe('KODYS-G1')
+    expect(await at('2026-08-31T15:00:00.000Z')).toBe('KODYS-G1-S2')   // KST 9월 1일 00:00
+    expect(await at('2026-08-31T14:59:00.000Z')).toBe('KODYS-G1')      // KST 8월 31일 23:59
+  })
   it('idemKey를 주면 idem_key 컬럼으로 실린다', async () => {
     enqueue('sessions', { data: { id: SID }, error: null })
     await createSession({
@@ -996,7 +1012,7 @@ describe('scanUploadTarget — 올릴 수 있는지 판단할 재료', () => {
       writing_answers: [{ item_code: 'ww01' }], sentence_scores: null, writing_scans: [scan],
     }, error: null })
     expect(await scanUploadTarget(SID)).toEqual({
-      class_code_id: 'c1', child_no: 5, grade: 1, submitted_at: 'T', writing_mode: 'scan',
+      class_code_id: 'c1', child_no: 5, grade: 1, form_id: null, submitted_at: 'T', writing_mode: 'scan',
       writing_answers: [{ item_code: 'ww01' }], sentence_scores: [], scan,
     })
   })
