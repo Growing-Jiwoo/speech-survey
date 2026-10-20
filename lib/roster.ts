@@ -94,25 +94,41 @@ const toNo = (v: string): number | null => {
   return n >= 1 && n <= 99 ? n : null
 }
 
+type Field = keyof typeof COL_LABEL
+type Cols = Partial<Record<Field, number>>
+
+/**
+ * 머리글 줄 하나를 **묶음**(아이 한 명을 이루는 번호·이름·성별·생년월일 열)으로 나눈다. 2단·3단 명렬표는 한 줄에
+ * 묶음이 여러 번 나란히 있다(1~15번 | 16~30번) — 종전에는 왼쪽 묶음만 찾아 **오른쪽 묶음 아이들이 안내 없이 빠졌다**
+ * (2026-10-20, 「N명 준비됨」만 보고 그대로 신청된다).
+ * 왼쪽부터 훑으며 역할을 채우다가, 번호·이름이 다 찬 묶음에서 이미 있는 역할이 또 나오면 거기서 새 묶음을 연다.
+ * 다 차기 전에 같은 역할이 또 나오면(「출석번호」와 「번호」가 둘 다 있는 표) 왼쪽 열을 쓰고 뒤 열은 무시한다 — 종전 동작.
+ * 번호와 이름이 다 있는 묶음만 돌려준다 — 「성명(보호자)」처럼 이름 머리글만 다시 나온 열은 아이를 만들지 않는다.
+ */
+function headerGroups(cells: string[]): Cols[] {
+  const groups: Cols[] = []
+  let cur: Cols = {}
+  cells.forEach((c, i) => {
+    const field = (Object.keys(HEADERS) as Field[]).find(f => HEADERS[f].includes(c))
+    if (!field) return
+    if (cur[field] !== undefined) {
+      if (cur.childNo === undefined || cur.name === undefined) return
+      groups.push(cur)
+      cur = {}
+    }
+    cur[field] = i
+  })
+  groups.push(cur)
+  return groups.filter(g => g.childNo !== undefined && g.name !== undefined)
+}
+
 export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: string } {
-  // 머리글 행 찾기 — 번호·이름 열이 둘 다 있는 첫 줄
+  // 머리글 행 찾기 — 번호·이름이 다 있는 묶음이 하나라도 있는 첫 줄
   let headRow = -1
-  const col: Partial<Record<keyof typeof COL_LABEL, number>> = {}
+  let groups: Cols[] = []
   for (let i = 0; i < Math.min(grid.length, HEAD_SCAN_ROWS); i++) {
-    const cells = grid[i].map(key)
-    const found: typeof col = {}
-    // 별칭이 같은 행에 두 번 나오면(예: "출석번호"와 "번호"가 둘 다 있는 표) 별칭 우선순위가
-    // 아니라 **왼쪽 열이 이긴다** — findIndex가 앞에서부터 훑기 때문. 의도한 동작은 아니고
-    // 그런 표가 실제로 없어 지금은 문제되지 않는다.
-    for (const [field, names] of Object.entries(HEADERS) as [keyof typeof COL_LABEL, string[]][]) {
-      const at = cells.findIndex(c => names.includes(c))
-      if (at >= 0) found[field] = at
-    }
-    if (found.childNo !== undefined && found.name !== undefined) {
-      headRow = i
-      Object.assign(col, found)
-      break
-    }
+    groups = headerGroups(grid[i].map(key))
+    if (groups.length > 0) { headRow = i; break }
   }
   if (headRow < 0)
     return { error: '번호·이름 머리글을 찾지 못했어요. 나이스 명렬표나 배포된 양식 파일인지 확인해 주세요.' }
@@ -124,14 +140,17 @@ export function parseRosterGrid(grid: string[][]): ParsedRoster | { error: strin
   const bannedCols = new Set(
     grid[headRow].map((c, i) => (BANNED.some(b => key(c).includes(key(b))) ? i : -1)).filter(i => i >= 0))
 
+  // 한 묶음에라도 없는 열이면 알린다 — 그 묶음 아이들의 칸은 붉게 남아 어느 줄인지 보인다
   const missingCols = (['gender', 'birthYmd'] as const)
-    .filter(f => col[f] === undefined).map(f => COL_LABEL[f])
+    .filter(f => groups.some(g => g[f] === undefined)).map(f => COL_LABEL[f])
 
   const rows: RosterCells[] = []
-  let rrnSeen = bannedCols.size > 0
+  const lines = grid.slice(headRow + 1)
+  const rrnSeen = bannedCols.size > 0 || lines.some(line => line.some(c => isRrn(c)))
 
-  for (const line of grid.slice(headRow + 1)) {
-    if (line.some(c => isRrn(c))) rrnSeen = true
+  // 묶음마다 위에서 아래로 — 왼쪽 묶음(1~15번)을 다 읽고 오른쪽 묶음(16~30번)으로 간다. 명렬표의 번호 순서이자
+  // 교사가 종이를 읽는 순서라 「줄 순서는 올리신 파일 그대로」가 여전히 맞다.
+  for (const col of groups) for (const line of lines) {
     // 값 칸의 주민번호는 그 칸만 버린다 — 실제로 새는 것을 막는 유일한 층(위 bannedCols는
     // 열 이름 매칭이라 값 자체는 안 막는다). 이름·생년월일 칸에 주민번호가 섞여 들어와도
     // 이 칸만 빈 값으로 취급한다.

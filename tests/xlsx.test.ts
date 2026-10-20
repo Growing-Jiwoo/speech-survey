@@ -149,6 +149,30 @@ describe('readXlsx — 탭 순서 첫 시트', () => {
   })
 })
 
+describe('readXlsx — 1904 날짜 체계(옛 맥 엑셀)', () => {
+  it('[REGRESSION] 1904 체계 통합문서의 날짜 칸을 1900 체계 일련번호로 바꿔 생년월일이 어긋나지 않는다(실제 엑셀 파일)', async () => {
+    // 1904 체계는 같은 날을 1462 작은 수로 저장한다 — 그대로 읽으면 2019-05-14가 2015-05-13이 됐고 붉은 칸도 뜨지 않았다(2026-10-20)
+    const rows = await readXlsx(load('date1904-roster.xlsx'))
+    expect(rows.slice(1).map(r => [r[0], normBirth(r[3])])).toEqual([['1', '2019-05-14'], ['2', '2019-11-02']])
+  })
+  it('날짜 서식이 아닌 숫자(번호)는 그대로 두고, 기본 날짜 서식(14)·사용자 날짜 서식은 바꾼다', async () => {
+    const sheet = `<worksheet ${NS}><sheetData><row r="1">` +
+      `<c r="A1" s="0"><v>3</v></c><c r="B1" s="1"><v>42137</v></c><c r="C1" s="2"><v>42137</v></c><c r="D1" s="3"><v>42137</v></c>` +
+      `</row></sheetData></worksheet>`
+    const styles = `<styleSheet ${NS}><numFmts count="2"><numFmt numFmtId="164" formatCode="yyyy&quot;년&quot; m&quot;월&quot; d&quot;일&quot;"/>` +
+      `<numFmt numFmtId="165" formatCode="0.00"/></numFmts>` +
+      `<cellXfs count="4"><xf numFmtId="0"/><xf numFmtId="14"/><xf numFmtId="164"/><xf numFmtId="165"/></cellXfs></styleSheet>`
+    const book = (date1904: boolean) => zipOf({
+      'xl/workbook.xml': workbookXml([['명단', 'rId1']]).replace('<sheets>', `<workbookPr${date1904 ? ' date1904="1"' : ''}/><sheets>`),
+      'xl/_rels/workbook.xml.rels': relsXml([['rId1', 'worksheets/sheet1.xml']]),
+      'xl/worksheets/sheet1.xml': sheet,
+      'xl/styles.xml': styles,
+    })
+    expect(await readXlsx(book(true))).toEqual([['3', '43599', '43599', '42137']])
+    expect(await readXlsx(book(false))).toEqual([['3', '42137', '42137', '42137']])   // 1900 체계는 종전 그대로
+  })
+})
+
 describe('readXlsx — 잘못된 입력', () => {
   it('[REGRESSION] zip이 아닌 파일은 명확한 오류를 낸다 (Numbers 파일 등)', async () => {
     const notZip = new TextEncoder().encode('이건 엑셀이 아닙니다').buffer
