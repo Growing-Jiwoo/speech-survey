@@ -196,6 +196,28 @@ function SurveyInner() {
     setPaused(true)
   }, [])
 
+  // 녹음 중에 화면이 가려지면(태블릿 홈 버튼·알림·화면 잠금·다른 앱) 일시정지를 누른 것과 같이 멈춘다. 가려진 동안
+  // 마이크가 끊겨 뒤가 빈 녹음이 「녹음이 완료됐어요」로 저장됐다 — 소리 판정은 가장 큰 소리만 보므로 앞에 읽은 소리가
+  // 있으면 통과한다. 녹음 중이 아니면 아무 일도 하지 않는다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden' && stopRecording.current) pause() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [pause])
+
+  // 뒤로 가기(아이패드 Safari의 화면 왼쪽 가장자리 쓸기 포함)는 검사를 떠나지 않고 일시정지로 바꾼다 — 아이 손이 가장자리를
+  // 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 그 칸으로 돌아오면 다시 쌓는다.
+  // 떠나는 길은 헤더의 [저장하고 나가기]다. 문항 단계에서만 건다 — 마이크 확인·연습 선택에는 덮을 일시정지 화면이 없다
+  // (사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+  const phase = st?.phase
+  useEffect(() => {
+    if (phase !== 'page') return
+    history.pushState(history.state, '', location.href)
+    const onPop = () => { history.pushState(history.state, '', location.href); pause() }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [phase, pause])
+
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
   const patch = useCallback((p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) => {
     setSt(prev => {
@@ -432,7 +454,10 @@ function SurveyInner() {
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
     // 화면 높이가 낮으면(short — app/globals.css) 위아래 여백을 줄인다 — 녹음 뒤 알림이 밴드 안에 남게(2026-10-12 점검)
-    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6 short:pb-3 short:pt-3 lg:short:pt-3">
+    // 넓은 배치는 md(768px)부터다 — 검사 화면(components/survey/*)이 모두 같은 기준을 쓴다. 종전 lg(1024px)에서는 세로로 놓은
+    // 태블릿(744~834px)이 휴대폰 배치로 떨어져 낱말이 44px 대신 26px, 읽기판이 400px였고, 문장이 문장 중간에서 접혔다.
+    // 검사 도중 태블릿을 돌리면 자극 크기가 바뀌었다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 md:max-w-4xl md:pt-6 short:pb-3 short:pt-3 md:short:pt-3">
       <header className="flex-none">
         <div className="mb-2 flex items-center justify-between gap-2">
           {st.childName ? (
