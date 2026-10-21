@@ -50,7 +50,8 @@ export function OtherTabNotice({ kind = 'otherChild' }: { kind?: Exclude<OtherTa
         <p className="mt-3 text-sm leading-relaxed text-ink-soft">
           {kind === 'sameChild'
             ? <>한 학생의 검사는 한 탭에서만 할 수 있어요. <b className="text-ink">이 탭은 닫고</b>, 새로 연 탭에서 이어 주세요.</>
-            : <>한 컴퓨터에서는 한 번에 한 학생만 검사할 수 있어요. <b className="text-ink">이 탭은 닫고</b>, 새로 시작한 탭에서
+            // 「컴퓨터」가 아니라 「기기」 — 태블릿으로도 검사한다(사용자 확정 2026-10-21)
+            : <>한 기기에서는 한 번에 한 학생만 검사할 수 있어요. <b className="text-ink">이 탭은 닫고</b>, 새로 시작한 탭에서
               이어 주세요. 이 탭의 학생을 다시 검사하려면 그 검사가 끝난 뒤 시작 화면에서 다시 골라 주세요.</>}
           {/* 녹음 중에 막혔다면 그 시도는 저장되지 않았다(useRecorder — 화면을 떠난 녹음은 버린다) */}
           <span className="mt-2 block text-[12.5px] text-ink-mute">녹음 중이었다면 그 녹음은 저장되지 않았어요.</span>
