@@ -420,9 +420,10 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
                         </p>
                       )}
                       {/* 스캔 파일에는 아이 이름과 필적이 있다 — 올린 뒤 교실 PC에 남기지 않게 한 줄 알린다.
-                          다시 올릴 쪽이 남았으면 아직 파일이 필요할 수 있어 알리지 않는다 */}
+                          다시 올릴 쪽이 남았으면 아직 파일이 필요할 수 있어 알리지 않는다. 「컴퓨터」가 아니라 「기기」 — 태블릿·휴대폰 사진으로도
+                          올린다(사용자 확정 2026-10-21) */}
                       {uploadedOk > 0 && retryable.length === 0 && (
-                        <p className="mt-1 text-[12px] text-ink-mute">컴퓨터에 남은 스캔 파일은 지워 주세요. 종이 기록지는 채점이 끝날 때까지 보관해 주세요.</p>
+                        <p className="mt-1 text-[12px] text-ink-mute">기기에 남은 스캔 파일은 지워 주세요. 종이 기록지는 채점이 끝날 때까지 보관해 주세요.</p>
                       )}
                     </div>
                   ) : (
