@@ -28,6 +28,7 @@ import { normBirth } from '@/lib/birth'
 import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
+import { hasHangul, qwertyFromHangul } from '@/lib/hangul-keys'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState, storageWritable } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
 import type { ScanTargetState } from '@/lib/scan-mapping'
@@ -243,7 +244,9 @@ export default function StartPage() {
   const daysInMonth = year && month ? new Date(Number(year), Number(month), 0).getDate() : 31
   const DAYS = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
-  const cleanCode = code.trim().toUpperCase()
+  // 한글 자판으로 친 코드는 같은 자리의 영문으로 읽는다(lib/hangul-keys — 한국어 아이패드는 코드 칸에 한글 키보드가 먼저 뜬다).
+  // 칸의 글자는 입력 중인 한글 조합을 깨지 않게 그대로 두고, 칸을 떠날 때(onBlur) 바꿔 보여 준다.
+  const cleanCode = qwertyFromHangul(code).trim().toUpperCase()
   /** 직접 입력 단계에서 코드를 고친 뒤 그 학급을 다시 불러올 수 있는가. 고치는 순간 옛 학급은 비우는데(코드 칸 onChange)
    *  예전에는 [확인](아동 정보를 다 채워야 켜진다)만 새 학급을 조회해, 명단 없는 학급 다음에 명단 있는 학급 코드를 넣은
    *  선생님이 명단에서 고르지 못하고 아이 정보를 손으로 다 넣어야 했다(2026-10-13 운영 점검). */
@@ -496,6 +499,7 @@ export default function StartPage() {
           <input id="code" data-field="code" name="code" value={code} maxLength={8}
             placeholder="ABC234" autoCapitalize="characters" spellCheck={false}
             aria-describedby={errors.code ? 'err-code' : undefined} aria-invalid={!!errors.code}
+            onBlur={() => { if (hasHangul(code)) setCode(qwertyFromHangul(code).toUpperCase()) }}
             onKeyDown={e => {
               // 코드를 고친 직접 입력 단계에서는 Enter가 [확인](아동 정보 확인) 대신 그 학급을 불러온다
               if (e.key === 'Enter' && canRecheckCode && !busy) { e.preventDefault(); void lookupCode() }

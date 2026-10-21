@@ -5,7 +5,12 @@
    (2026-10-12 점검). */
 @custom-variant short (@media (max-height: 800px));
 
+/* 태블릿 폭(700px~) — 검사 화면(app/survey, components/survey)의 넓은 배치 기준. 세로로 놓은 태블릿(iPad mini 744 ~ 834px)이
+   lg(1024px)에 못 미쳐 휴대폰 배치로 떨어졌다(2026-10-21 태블릿 점검). md(768px)는 iPad mini 세로를 놓친다.
+   휴대폰 세로(~430px)는 들지 않는다. 아래 @theme의 --breakpoint-tab이 `tab:` 변형을 만든다. */
+
 @theme {
+  --breakpoint-tab: 43.75rem;
   --color-blue: #2F6BFF;
   --color-blue-deep: #1E4FCC;
   --color-rec: #E5484D;
@@ -68,9 +73,15 @@ button:not(:disabled), label:has(> input[type="checkbox"]), select:not(:disabled
 :where(button):not(:disabled):hover { filter: brightness(0.97); }
 :where(button):not(:disabled):active { filter: brightness(0.93); }
 
-/* 터치 반응성: 더블탭 줌 대기 제거(연타하는 아동 화면 필수) + iOS 탭 하이라이트 제거 */
-button, a, label {
+/* 터치 반응성: 두 번 톡 확대와 그 대기를 없앤다(연타하는 아동 화면 필수). 페이지 전체에 건다 — 버튼에만 걸었을 때는
+   아이가 읽기판이나 빈 곳을 두 번 치면 Safari가 화면을 확대한 채 검사가 이어질 수 있었다(2026-10-21 태블릿 점검).
+   manipulation은 두 손가락 확대·스크롤은 그대로 둔다. 모든 요소에 거는 이유: touch-action은 물려받지 않고, 브라우저가
+   조상 값을 모으는 사슬이 스크롤 구역(검사 화면 가운데 밴드)에서 끊길 수 있어 html 한 곳만으로는 밴드 안이 빠진다. */
+html, html * {
   touch-action: manipulation;
+}
+/* iOS 탭 하이라이트 제거 */
+button, a, label {
   -webkit-tap-highlight-color: transparent;
 }
 

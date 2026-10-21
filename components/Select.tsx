@@ -12,9 +12,13 @@ export interface SelectOption {
   badge?: string
 }
 
-// 목록 최대 높이(max-h-56 = 224px)와 옵션당 추정 높이 — 아래 공간이 부족하면 위로 펼치기 위한 계산용
+// 목록 최대 높이와 옵션당 추정 높이 — 아래 공간이 부족하면 위로 펼치기 위한 계산용
 const MAX_LIST_H = 224
 const EST_OPTION_H = 41
+// 'lg'(시작 화면의 학생 고르기·생년월일)는 화면 높이의 45%까지(최대 440px), 한 줄 44px(손가락 기준)로 키운다 — 224px로는
+// 28명 반에서 한 번에 5명 남짓만 보여 큰 태블릿 화면에서도 목록을 여러 번 쓸어내려야 했다(2026-10-21 태블릿 점검)
+const MAX_LIST_H_LG = 440
+const EST_OPTION_H_LG = 45
 
 /**
  * 목록은 document.body에 포탈 렌더한다 — 조상 요소의 overflow-hidden(카드형 컨테이너 등)에
@@ -45,7 +49,7 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
   const [open, setOpen] = useState(false)
   // 키보드 하이라이트 위치(마우스 hover와 공유). 목록을 열 때 현재 선택값으로 초기화된다.
   const [active, setActive] = useState(-1)
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxH: number } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
@@ -112,11 +116,16 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
       const r = triggerRef.current?.getBoundingClientRect()
       if (!r) return
       // 아래 공간이 목록 높이보다 작고 위 공간이 더 넓으면 위로 펼친다(뷰포트 하단 행에서 잘림 방지).
-      const estH = Math.min(options.length * EST_OPTION_H + 8, MAX_LIST_H)
+      const lg = size === 'lg'
+      const maxH = lg ? Math.min(Math.max(MAX_LIST_H, Math.round(window.innerHeight * 0.45)), MAX_LIST_H_LG) : MAX_LIST_H
+      const estH = Math.min(options.length * (lg ? EST_OPTION_H_LG : EST_OPTION_H) + 8, maxH)
       const spaceBelow = window.innerHeight - r.bottom
       const flipUp = spaceBelow < estH + 12 && r.top > spaceBelow
-      const top = flipUp ? Math.max(8, r.top - 6 - estH) : r.bottom + 6
-      setPos({ top, left: r.left, width: r.width })
+      // 펼친 쪽의 남은 공간보다 길면 그만큼 줄인다 — 위아래 어느 쪽에도 다 안 들어가는 낮은 화면에서 목록이 트리거를 덮지 않게
+      const room = Math.max(120, (flipUp ? r.top : spaceBelow) - 14)
+      const h = Math.min(estH, room)
+      const top = flipUp ? Math.max(8, r.top - 6 - h) : r.bottom + 6
+      setPos({ top, left: r.left, width: r.width, maxH: Math.min(maxH, room) })
     }
     measure()
     window.addEventListener('scroll', measure, true)
@@ -125,7 +134,7 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
       window.removeEventListener('scroll', measure, true)
       window.removeEventListener('resize', measure)
     }
-  }, [isOpen, options.length])
+  }, [isOpen, options.length, size])
 
   const selected = selectedIdx >= 0 ? options[selectedIdx] : undefined
   // 'grid'는 표 안의 한 칸이라 옆 input(h-10 · rounded-lg · text-[14px])과 정확히 같은
@@ -165,13 +174,13 @@ export function Select({ id, value, options, placeholder, onChange, ariaLabel, a
       </button>
       {isOpen && pos && createPortal(
         <ul ref={listRef} id={listboxId} role="listbox" aria-label={ariaLabel}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width }}
-          className="z-50 max-h-56 overflow-y-auto rounded-xl border border-line bg-white py-1 shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH }}
+          className="z-50 overflow-y-auto rounded-xl border border-line bg-white py-1 shadow-[0_20px_44px_-28px_rgba(14,21,38,.35)]">
           {options.map((o, i) => (
             <li key={o.value} id={optionId(i)} role="option" aria-selected={o.value === value}
               onPointerEnter={() => setActive(i)}
               onClick={() => choose(i)}
-              className={`flex cursor-pointer items-center gap-1.5 px-4 py-2.5 text-left text-sm ${
+              className={`flex cursor-pointer items-center gap-1.5 px-4 py-2.5 text-left ${size === 'lg' ? 'min-h-11 text-[15px]' : 'text-sm'} ${
                 i === active ? 'bg-well' : ''} ${o.value === value ? 'font-bold text-blue' : 'text-ink'}`}>
               <span className="min-w-0 truncate">{o.label}</span>
               {o.badge && <Badge text={o.badge} />}

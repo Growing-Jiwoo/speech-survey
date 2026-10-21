@@ -163,6 +163,12 @@ export function RosterEditor({ onChange }: {
           나이스 명렬표를 그대로 올리셔도 되고, 아래 양식을 받아 채우셔도 돼요.<br />
           파일은 이 화면에서만 읽고 서버로 보내지 않아요.
         </p>
+        {/* 아이패드 Numbers로 양식을 채우면 .numbers로 저장되고, 파일 고르기 창이 그 파일을 흐리게 막아 오류 문구도 뜨지 않는다 —
+            안내는 고르기 전에 둔다. 위 FILE_ERR의 「앱별 판별은 넣지 않는다」(2026-08-18, 교사 현장은 윈도우)는 그대로이고,
+            안내 영상이 QR로 휴대폰·태블릿 신청을 권하게 되어 이 한 줄만 더했다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님) */}
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-mute">
+          아이패드 Numbers로 채웠다면 <b className="font-bold text-ink-soft">내보내기 → Excel</b>로 저장해 올려 주세요.
+        </p>
         {/* 양식을 화면에서 받을 수 있게 둔다 — 종전에는 "배포된 양식(.xlsx)"을 안내하면서
             그 파일을 받을 길이 없었다(저장소에도 실물이 없었다). 따로 전달한 파일을 교사가
             잃으면 신청 자체가 막힌다(사용자 지적 2026-08-21).
@@ -264,7 +270,9 @@ export function RosterEditor({ onChange }: {
                             const v = e.target.value
                             patch(r.id, { birth: normBirth(v) ?? v })
                           }}
-                          className={`${cellCls} w-36 min-w-36 ${has('생년월일') ? badCls : okCls}`} />
+                          // appearance-none — 아이패드 Safari는 기본 모양의 날짜 칸을 지정한 폭보다 넓게 그려 옆 [삭제] 버튼 밑으로
+                          // 파고들었다(iPad 시뮬레이터, 2026-10-21 태블릿 점검). 기본 모양을 끄면 폭을 따르고, 누르면 날짜 고르기는 그대로 뜬다
+                          className={`${cellCls} w-36 min-w-36 appearance-none text-left ${has('생년월일') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1 text-right">
                         <button type="button" aria-label={`${i + 1}번째 줄 삭제`}

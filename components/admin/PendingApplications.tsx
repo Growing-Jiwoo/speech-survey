@@ -7,7 +7,10 @@ import { approvalNoticeText, gradeClassLabel } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { adminKeys, useRosterQuery, type ClassCodeItem } from '@/hooks/useAdminQueries'
 
-const btnCls = 'rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40'
+// 버튼 모양은 그대로 두고 누르는 범위만 위아래로 넓힌다(투명한 ::after, 테두리 안쪽 기준 6px — 테두리 밖으로 4.5px). 높이 24~27px라
+// 태블릿에서 맞히기 어려웠다 — 특히 [승인]은 누르면 바로 메일이 나간다(2026-10-21 태블릿 점검).
+const HIT = "relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+const btnCls = `rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40 ${HIT}`
 
 /** 승인 결과 — 행이 active 목록으로 옮겨가 사라진 뒤에도 관리자가 결과와 복사 버튼을 볼 수
  *  있어야 하므로 이 섹션이 붙잡아 둔다(발급 폼의 `issued` 패널과 같은 이유). */
@@ -139,11 +142,11 @@ export function PendingApplications({
                     덮여 사라지고, 앞 응답이 먼저 오면 아직 진행 중인 행의 [삭제]가 살아났다(2026-10-08 야간 점검). */}
                 <button type="button" disabled={busyId !== null || locked}
                   onClick={() => void approve(c)}
-                  className="rounded-lg bg-blue px-3 py-1 text-xs font-bold text-white transition disabled:opacity-40">
+                  className={`rounded-lg bg-blue px-3 py-1 text-xs font-bold text-white transition disabled:opacity-40 ${HIT}`}>
                   {busyId === c.id ? '승인 중…' : '승인'}
                 </button>
                 <button type="button" disabled={busyId !== null || locked} onClick={() => onDelete(c)}
-                  className="rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40">
+                  className={`rounded-lg border-[1.5px] border-rec/40 bg-rec/5 px-2.5 py-1 text-xs font-bold text-rec-deep transition hover:border-rec disabled:opacity-40 ${HIT}`}>
                   삭제
                 </button>
               </div>

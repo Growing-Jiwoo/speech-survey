@@ -19,6 +19,7 @@ import { Spinner } from '@/components/Spinner'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { gradeClassLabel } from '@/lib/format'
+import { dispositionFilename, saveBlobAs } from '@/lib/download'
 import { requestJson } from '@/lib/http'
 import {
   awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
@@ -86,10 +87,14 @@ function Check({ checked, indeterminate = false, disabled, label, onChange }: {
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate }, [indeterminate])
+  // 상자 둘레까지 눌리게 label로 감싼다 — 16px 상자만 눌려 태블릿·휴대폰에서 손가락으로 맞히기 어려웠다(2026-10-21 태블릿 점검).
+  // 음수 여백으로 표 줄 높이는 그대로 둔다.
   return (
-    <input ref={ref} type="checkbox" aria-label={label} checked={checked} disabled={disabled}
-      onChange={e => onChange(e.target.checked)}
-      className="h-4 w-4 accent-[var(--color-blue)] disabled:opacity-40" />
+    <label className="-m-2.5 inline-flex cursor-pointer p-2.5">
+      <input ref={ref} type="checkbox" aria-label={label} checked={checked} disabled={disabled}
+        onChange={e => onChange(e.target.checked)}
+        className="h-5 w-5 accent-[var(--color-blue)] disabled:opacity-40" />
+    </label>
   )
 }
 
@@ -195,15 +200,8 @@ export function ResultsView({ token }: { token: string }) {
         const j = await res.json().catch(() => ({})) as { error?: string }
         setDlErr(j.error ?? '결과지를 만들지 못했어요. 다시 시도해 주세요.'); return
       }
-      const blob = await res.blob()
-      const cd = res.headers.get('content-disposition') ?? ''
-      const name = decodeURIComponent(cd.match(/filename\*=UTF-8''([^;]+)/)?.[1] ?? 'results.pdf')
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob); a.download = name
-      // 문서에 붙였다 떼고, URL은 잠시 뒤에 푼다 — click 직후 바로 풀면 Safari 등에서 다운로드가 시작되기 전에
-      // 주소가 사라져 조용히 받지 못하는 사례가 있다(선생님 기기는 Mac·iPad일 수 있다)
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+      // 저장은 관리자 결과보고서와 같은 함수다(lib/download — URL 해제 시점·아이패드 Safari 처리가 거기 있다)
+      saveBlobAs(await res.blob(), dispositionFilename(res.headers.get('content-disposition'), 'results.pdf'))
     } catch {
       setDlErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally {
@@ -352,7 +350,7 @@ export function ResultsView({ token }: { token: string }) {
                     const expandButton = () => (
                       <button type="button" aria-expanded={expanded}
                         onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(c.childNo)) n.delete(c.childNo); else n.add(c.childNo); return n })}
-                        className="text-[12px] font-bold text-blue underline underline-offset-2">
+                        className="-my-2 py-2 text-[12px] font-bold text-blue underline underline-offset-2">
                         {expanded ? '▾' : '▸'} 재검사 {c.sessions.length}회
                       </button>
                     )

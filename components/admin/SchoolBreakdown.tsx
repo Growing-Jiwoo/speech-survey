@@ -51,8 +51,9 @@ export function SchoolBreakdown({ stats, activeSchool, onSelect }: {
         </span>
       </p>
       {stats.length > VISIBLE && (
+        // 위 여백(종전 mt-2)을 안쪽 여백으로 옮기고 아래도 같이 넓혀 누르는 범위를 32px로(-mb-2로 자리는 그대로, 2026-10-21 태블릿 점검)
         <button type="button" onClick={() => setExpanded(v => !v)}
-          className="mt-2 text-xs font-bold text-blue">
+          className="-mb-2 py-2 text-xs font-bold text-blue">
           {expanded ? '접기' : `전체 ${stats.length}개 학교 보기`}
         </button>
       )}

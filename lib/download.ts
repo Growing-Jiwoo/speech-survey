@@ -36,7 +36,9 @@ export async function fetchFile(url: string, fallbackName: string, fallbackError
  *  다운로드가 시작되기 전에 주소가 사라져 조용히 받지 못한다(교사 결과지와 같은 처리). */
 export function saveBlobAs(blob: Blob, name: string): void {
   const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob); a.download = name
+  // 형식을 「일반 파일」로 넘긴다 — 아이패드 Safari는 PDF를 받지 않고 새 탭에 열어, 탭 이름이 임시 주소가 되고 공유로 저장하면
+  // 붙여 둔 파일 이름(03_이름_날짜.pdf)이 사라졌다(iPad 시뮬레이터, 2026-10-21 태블릿 점검). 일반 파일이면 이름 그대로 받는다
+  a.href = URL.createObjectURL(new Blob([blob], { type: 'application/octet-stream' })); a.download = name
   document.body.appendChild(a); a.click(); a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
 }

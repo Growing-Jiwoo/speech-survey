@@ -196,6 +196,38 @@ function SurveyInner() {
     setPaused(true)
   }, [])
 
+  // 녹음 중에 화면이 가려지면(태블릿 홈 버튼·알림·화면 잠금·다른 앱) 일시정지를 누른 것과 같이 멈춘다. 가려진 동안
+  // 마이크가 끊겨 뒤가 빈 녹음이 「녹음이 완료됐어요」로 저장됐다 — 소리 판정은 가장 큰 소리만 보므로 앞에 읽은 소리가
+  // 있으면 통과한다. 녹음 중이 아니면 아무 일도 하지 않는다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden' && stopRecording.current) pause() }
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [pause])
+
+  // 뒤로 가기(아이패드 Safari의 화면 왼쪽 가장자리 쓸기·안드로이드 뒤로 버튼 포함)는 검사를 떠나지 않고 일시정지로 바꾼다 — 아이
+  // 손이 가장자리를 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 뒤로 가면 **앞으로 한 칸
+  // 되돌린다**(그 자리에서 다시 쌓지 않는다 — 검토 화면에서 `?p=N`으로 들어온 검사는 아래 칸의 주소에 옛 p가 남아 있어, 그 주소로
+  // 다시 쌓으면 새로고침 때 저장된 위치 대신 옛 문항으로 튀었다). 떠나는 길은 헤더의 [저장하고 나가기]다.
+  // ⚠️ 칸은 **화면을 누른 순간**(click) 쌓는다 — Safari·크롬은 사용자가 누르지 않은 채 스크립트가 쌓은 기록을 뒤로 가기 버튼·제스처에서
+  // 건너뛴다(뒤로 가기 가로채기 차단). 화면이 뜰 때 쌓았더니 아이패드 Safari의 [<]가 그 칸을 건너뛰어 검사를 떠났다(iPad 시뮬레이터
+  // 2026-10-21 — 스크립트의 history.back()은 건너뛰지 않아 브라우저 패널 시험에서는 통과로 보였다). 검사는 선생님이 [시작하기]부터
+  // 눌러 진행하므로 첫 누름에 칸이 생긴다.
+  // 문항 화면이 떠 있을 때만 건다 — 마이크 확인·연습 선택·양식을 못 받은 화면·이어 할 수 없는 화면·다른 탭 알림에는
+  // 덮을 일시정지 화면이 없어, 뒤로 가기가 아무 반응 없이 삼켜진다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+  const trapBack = st?.phase === 'page' && !!form && !fatal && !otherTab
+  useEffect(() => {
+    if (!trapBack) return
+    const arm = () => history.pushState(history.state, '', location.href)
+    document.addEventListener('click', arm, { capture: true, once: true })
+    const onPop = () => { history.forward(); pause() }
+    window.addEventListener('popstate', onPop)
+    return () => {
+      document.removeEventListener('click', arm, { capture: true })
+      window.removeEventListener('popstate', onPop)
+    }
+  }, [trapBack, pause])
+
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
   const patch = useCallback((p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) => {
     setSt(prev => {
@@ -432,7 +464,10 @@ function SurveyInner() {
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
     // 화면 높이가 낮으면(short — app/globals.css) 위아래 여백을 줄인다 — 녹음 뒤 알림이 밴드 안에 남게(2026-10-12 점검)
-    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 lg:max-w-4xl lg:pt-6 short:pb-3 short:pt-3 lg:short:pt-3">
+    // 넓은 배치는 tab(700px — app/globals.css)부터다 — 검사 화면(components/survey/*)이 모두 같은 기준을 쓴다. 종전 lg(1024px)에서는
+    // 세로로 놓은 태블릿(iPad mini 744 ~ 834px)이 휴대폰 배치로 떨어져 낱말이 26px, 읽기판이 400px였고 문장이 문장 중간에서 접혔다.
+    // 검사 도중 태블릿을 돌리면 자극 크기가 바뀌었다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님). 낱말 크기는 ReadingPage 주석
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 tab:max-w-4xl tab:pt-6 short:pb-3 short:pt-3 tab:short:pt-3">
       <header className="flex-none">
         <div className="mb-2 flex items-center justify-between gap-2">
           {st.childName ? (

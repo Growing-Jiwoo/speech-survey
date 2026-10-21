@@ -50,8 +50,9 @@ export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyC
       <div className="flex gap-1.5">
         {[...STATUS_TABS, ...(scanReadyCount > 0 || filters.status === 'scanReady'
           ? [{ key: 'scanReady' as const, label: `스캔본 채점 ${scanReadyCount}` }] : [])].map(t => (
+          // 누르는 범위만 위아래로 6px씩 넓힌다(투명한 ::after — 알약 모양은 그대로). 높이 28px라 태블릿에서 맞히기 어려웠다(2026-10-21)
           <button key={t.key} type="button" onClick={() => onFilters({ status: t.key })} aria-pressed={filters.status === t.key}
-            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition ${
+            className={`relative rounded-full px-3.5 py-1.5 text-xs font-bold transition after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] ${
               filters.status === t.key ? 'bg-blue text-white' : 'bg-well text-ink-soft'}`}>
             {t.label}
           </button>

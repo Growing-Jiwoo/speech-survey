@@ -31,7 +31,7 @@ export function WritingModeToggle({ mode, onChange }: { mode: WritingMode; onCha
   const opt = (m: WritingMode, label: string) => (
     <button type="button" role="radio" aria-checked={mode === m} onClick={() => onChange(m)}
       data-mode={m} tabIndex={mode === m ? 0 : -1}
-      className={`h-10 flex-1 rounded-[10px] px-2 text-[13px] font-bold transition lg:text-sm ${
+      className={`h-10 flex-1 rounded-[10px] px-2 text-[13px] font-bold transition tab:text-sm ${
         mode === m ? 'bg-white text-blue shadow-sm ring-[1.5px] ring-blue' : 'text-ink-mute hover:text-ink-soft'}`}>
       {label}
     </button>
@@ -67,11 +67,11 @@ export function ScanWritingPanel({ toggle, items, kind, childNo, childName, scre
   // 번호는 기록지 칸 번호다(검사지 전체 순번 orderNo가 아니다 — lib/writing-sheet sheetBoxNo)
   const no = sheetBoxNo(items)
   return (
-    <div className="card mx-auto w-full max-w-2xl p-5 lg:p-7">
+    <div className="card mx-auto w-full max-w-2xl p-5 tab:p-7">
       {toggle}
       <div className="mt-4 rounded-xl border-[1.5px] border-blue/25 bg-blue/[0.05] px-4 py-3.5">
-        <p className="text-sm font-bold text-blue lg:text-base">이 학생은 기록지 스캔본으로 채점해요</p>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-ink-soft lg:text-sm">
+        <p className="text-sm font-bold text-blue tab:text-base">이 학생은 기록지 스캔본으로 채점해요</p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px] leading-relaxed text-ink-soft tab:text-sm">
           <li>종이의 이름이 <b className="text-ink">{childNo}번 {childName}</b>인지 확인하고 건네 주세요. 다른 아이 종이에 쓰면 그 아이 기록으로 올라가요.</li>
           <li>반 전체 검사가 끝나면 <b className="text-ink">결과지 화면</b>에서 스캔본을 올려 주세요.</li>
           <li>스캔본을 보고 <b className="text-ink">담당자가 채점</b>해요.</li>
@@ -90,7 +90,7 @@ export function ScanWritingPanel({ toggle, items, kind, childNo, childName, scre
         {items.map(i => (
           <li key={i.code} className="flex items-center gap-2.5 rounded-lg border border-line bg-white px-3 py-1.5">
             <span className="w-5 flex-none text-xs font-bold text-ink-mute">{no.get(i.code)}</span>
-            <span className="font-read min-w-0 flex-1 text-[18px] font-bold lg:text-[20px]">{i.text}</span>
+            <span className="font-read min-w-0 flex-1 text-[18px] font-bold tab:text-[20px]">{i.text}</span>
           </li>
         ))}
       </ol>

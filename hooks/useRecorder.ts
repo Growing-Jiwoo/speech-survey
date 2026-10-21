@@ -16,6 +16,8 @@ export function pickMimeType(): string {
 /** 녹음 버튼 연타 방어(ms) — 시작 직후의 두 번째 누름(멈춤)과 멈춘 직후의 두 번째 누름(새 녹음 시작)을 무시한다.
  *  아이·선생님이 큰 버튼을 두 번 톡톡 누르면 0.2초짜리 시도나 무음 시도가 「마지막 녹음」이 됐다(2026-10-08 야간 점검). */
 const TAP_GUARD_MS = 500
+/** 소리 처리기가 켜지기를 기다리는 최대 시간(ms) — 아래 start()의 소리 처리기 주석 */
+const RESUME_WAIT_MS = 1500
 
 export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) {
   const [state, setState] = useState<RecState>('idle')
@@ -65,30 +67,53 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
     if (typeof MediaRecorder === 'undefined' || mime === '')
       throw new RecorderError('unsupported', '이 브라우저는 녹음을 지원하지 않습니다.')
 
+    // 소리 처리기(레벨미터·소리 크기 판정)는 **누른 그 순간** 만들고 켠다 — iOS Safari는 사용자 조작 안에서만 AudioContext를
+    // 켜 주는데, 처음 검사하는 기기는 마이크 권한 창을 기다리는 사이 조작 시간이 지나 resume()이 끝나지 않았다. 그러면 [허용]을
+    // 눌러도 녹음이 시작되지 않고 버튼이 아무 안내 없이 처음으로 돌아갔고, 열린 마이크는 닫히지 않았다(iPad 시뮬레이터에서 재현,
+    // 2026-10-21 태블릿 점검).
+    let ctx = new AudioContext()
+    const resumed = ctx.resume().catch(() => {})
+    // 「여는 중」은 녹음이 실제로 시작될 때까지다(권한 창 + 소리 처리기 대기) — 그동안 일시정지가 누르면 시작을 취소한다(stop).
+    // 권한 창이 끝나는 순간 거뒀다면, 소리 처리기를 기다리는 사이 누른 일시정지가 아무것도 멈추지 못해 오버레이 뒤에서 녹음이 시작됐다.
     startingRef.current = true; cancelStartRef.current = false; setStarting(true)
+    const opened = () => { startingRef.current = false; setStarting(false) }
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true }) // 거부 시 throw
-    } finally {
-      startingRef.current = false; setStarting(false)
+    } catch (e) {
+      opened(); void ctx.close()
+      throw e
     }
-    // 여는 사이 일시정지를 눌렀거나 화면을 떠났다 — 마이크를 바로 닫고 녹음하지 않는다
-    if (cancelStartRef.current || discardRef.current) { stream.getTracks().forEach(t => t.stop()); return }
     // 스트림 확보 즉시 정리 콜백 등록 → 이후 어느 줄에서 throw해도 마이크 트랙 정지
     let raf = 0
-    let ctx: AudioContext | null = null
     cleanupRef.current = () => {
       cancelAnimationFrame(raf)
-      if (ctx && ctx.state !== 'closed') void ctx.close()
+      if (ctx.state !== 'closed') void ctx.close()
       stream.getTracks().forEach(t => t.stop())
+    }
+    // 여는 사이 일시정지를 눌렀거나 화면을 떠났다 — 마이크를 바로 닫고 녹음하지 않는다
+    const cancelled = () => cancelStartRef.current || discardRef.current
+    if (cancelled()) { opened(); cleanupRef.current(); return }
+    /** 레벨미터 연결 — 켜지기를 RESUME_WAIT_MS까지만 기다린다. 그래도 안 켜지면 녹음은 그대로 시작한다(MediaRecorder는 소리
+     *  처리기와 무관하다). 그 녹음은 레벨이 0이라 「잘 안 담긴 것 같아요」가 뜰 수 있지만, 다시 누르면(새 조작) 켜진다. */
+    const meter = async (c: AudioContext, ready: Promise<void>) => {
+      await Promise.race([ready, new Promise(r => setTimeout(r, RESUME_WAIT_MS))])
+      const a = c.createAnalyser()
+      a.fftSize = 256
+      c.createMediaStreamSource(stream).connect(a)
+      return a
     }
 
     try {
-      ctx = new AudioContext()
-      await ctx.resume() // iOS: suspended로 시작하면 레벨미터가 0 고정되는 문제 방지
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
-      ctx.createMediaStreamSource(stream).connect(analyser)
+      let analyser: AnalyserNode
+      try { analyser = await meter(ctx, resumed) }
+      catch {
+        // 마이크를 연 뒤 장치 설정이 바뀌어 미리 만든 처리기에 스트림을 붙이지 못하면(표본률 차이 등) 그때 새로 만든다 — 종전 방식
+        void ctx.close()
+        ctx = new AudioContext()
+        analyser = await meter(ctx, ctx.resume().catch(() => {}))
+      }
+      if (cancelled()) { opened(); cleanupRef.current(); return }
       const buf = new Uint8Array(analyser.frequencyBinCount)
       const tick = () => {
         analyser.getByteTimeDomainData(buf)
@@ -120,11 +145,13 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
       peakRef.current = 0
       startedRef.current = Date.now()
       rec.start() // NotSupportedError 등은 아래 catch에서 분류
+      opened()
       tick()
       setState('recording')
       setElapsedMs(0)
       timerRef.current = setTimeout(stop, maxSec * 1000)
     } catch (e) {
+      opened()
       cleanupRef.current()
       setState('idle'); setLevel(0); setElapsedMs(0)
       // MediaRecorder 생성/시작 실패는 미지원으로 분류(iOS start() NotSupportedError 포함)

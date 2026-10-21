@@ -8,18 +8,18 @@ import { Blip } from '@/components/Blip'
 // 곧 읽을 낱말을 미리 노출하면 연습의 의미가 준다.
 export function PracticeAsk({ onChoose }: { onChoose: (practice: boolean) => void }) {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10 lg:max-w-2xl lg:justify-center lg:pt-6">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10 tab:max-w-2xl tab:justify-center tab:pt-6">
       <div className="flex items-center gap-2">
         <Blip variant="logo" className="h-8 w-8" />
         <span className="text-sm font-bold text-ink-soft">읽기 검사</span>
       </div>
-      <p className="mt-12 text-xs font-bold text-blue lg:mt-8 lg:text-sm">검사자 확인</p>
-      <h1 className="mt-1 text-2xl font-bold lg:text-3xl">연습을 먼저 할까요?</h1>
+      <p className="mt-12 text-xs font-bold text-blue tab:mt-8 tab:text-sm">검사자 확인</p>
+      <h1 className="mt-1 text-2xl font-bold tab:text-3xl">연습을 먼저 할까요?</h1>
       <p className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
         연습은 <b>점수에 들어가지 않아요.</b> 녹음 버튼 사용법을 익히는 단계예요.<br />
         이미 해 본 아동이라면 바로 시작해도 괜찮아요.
       </p>
-      <div className="mt-auto flex w-full flex-col gap-2.5 pb-2 pt-10 lg:mt-10 lg:max-w-md lg:pb-0">
+      <div className="mt-auto flex w-full flex-col gap-2.5 pb-2 pt-10 tab:mt-10 tab:max-w-md tab:pb-0">
         <button type="button" onClick={() => onChoose(true)} className="cta">
           연습부터 하기
         </button>
