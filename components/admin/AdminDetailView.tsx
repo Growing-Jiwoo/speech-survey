@@ -105,7 +105,7 @@ export function AdminDetailView() {
   // 처음부터 받지 못했을 때만 쓰고, 다시 받기 실패는 아래 배너로 알린다.
   if (!data) return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-10">
-      <Link href={listHref} className="text-sm text-ink-mute underline">← 목록</Link>
+      <Link href={listHref} className="-my-2 inline-block py-2 text-sm text-ink-mute underline">← 목록</Link>
       <div className="mt-6 flex flex-col items-start gap-3">
         <p className="text-sm text-ink-soft">
           {notFound ? '이 검사 기록이 없어요. 이미 삭제됐을 수 있어요.'
@@ -301,7 +301,8 @@ function NavBar({ listHref, nav, go, goHref }: {
   return (
     <div className="flex items-center justify-between gap-2 print:hidden">
       <a href={listHref} onClick={e => { e.preventDefault(); go(listHref) }}
-        className="text-sm text-ink-mute underline">← 목록</a>
+        // 누르는 범위만 위아래로 넓힌다(-my-2 py-2 — 자리는 그대로). 글자 높이 20px라 태블릿에서 맞히기 어려웠다(2026-10-21)
+        className="-my-2 inline-block py-2 text-sm text-ink-mute underline">← 목록</a>
       <div className="flex items-center gap-1.5">
         <button type="button" disabled={!nav.prev} className={btn}
           onClick={() => nav.prev && go(goHref(nav.prev))}>◀ 이전 아동</button>

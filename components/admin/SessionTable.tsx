@@ -289,9 +289,11 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
                     <th key={h.id} scope="col"
                       aria-sort={on ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                       className={`font-medium ${meta?.thClassName ?? 'px-4'}`}>
+                      {/* 누르는 범위는 머리글 줄 높이만큼 넓힌다(-my-3 py-3 — 줄 높이·모양은 그대로). 글자만 눌려 높이 16px라
+                          태블릿에서 정렬을 바꾸기 어려웠다(2026-10-21 태블릿 점검) */}
                       {sortKey !== undefined ? (
                         <button type="button" onClick={() => onSort(sortKey)}
-                          className={`inline-flex items-center gap-0.5 transition-colors hover:text-ink ${on ? 'font-bold text-ink' : ''}`}>
+                          className={`-my-3 inline-flex items-center gap-0.5 py-3 transition-colors hover:text-ink ${on ? 'font-bold text-ink' : ''}`}>
                           {label}
                           {/* 정렬 방향 화살표(활성). 비활성 헤더에는 흐린 ↕로 정렬 가능함을 상시 표시. */}
                           {on

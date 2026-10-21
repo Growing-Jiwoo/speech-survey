@@ -275,7 +275,8 @@ export function CodeIssuer() {
                             : !c.teacher_phone && <span>—</span>}
                           {/* 이메일 없는 옛 코드(필수화 전 발급)도 여기서 채운다 — 채우기 전엔 그 학급이 결과지를 받을 수 없다 */}
                           <button type="button" onClick={() => { setEditId(c.id); setEditEmail(c.teacher_email ?? ''); setEditErr('') }}
-                            className="flex-none whitespace-nowrap text-[11.5px] font-bold text-blue underline underline-offset-2">
+                            // 누르는 범위만 넓힌다(-m/p — 자리는 그대로). 글자만 눌려 21×16px였다(2026-10-21 태블릿 점검)
+                            className="-mx-1.5 -my-2 flex-none whitespace-nowrap px-1.5 py-2 text-[11.5px] font-bold text-blue underline underline-offset-2">
                             {c.teacher_email ? '수정' : '이메일 등록'}
                           </button>
                         </span>
