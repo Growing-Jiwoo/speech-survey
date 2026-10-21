@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { approvedMail, applyNoticeMail, resultsLinkMail, escapeHtml, sendMail } from '@/lib/mail'
 import { approvalNoticeText } from '@/lib/format'
+import { formFor } from '@/lib/forms'
 
 const okResponse = (id = 'msg_1') =>
   new Response(JSON.stringify({ id }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -175,6 +176,22 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
       expect(out).toContain('결과지 받는 방법')
       expect(out).toContain('[결과지 받기]')
       expect(out).toContain('등록된 선생님 이메일로')
+    }
+  })
+
+  // 담당자 요청(2026-10-20 — 스캔본으로 할 때 문항을 미리 알아야 하지 않나)에 문항 대신 진행 순서만 넣기로 했다(lib/format scanGuideLines)
+  it('두 채널 모두 「쓰기를 기록지(스캔본)로 하실 때」를 담는다 — 1학년은 낱말·2학년은 문장, 문항 자체는 싣지 않는다', () => {
+    for (const [grade, what] of [[1, '낱말'], [2, '문장']] as const) {
+      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+      const writing = formFor(grade, 2).writing
+      const items = writing.kind === 'word' ? [...writing.meaning, ...writing.nonsense] : [...writing.sentences]
+      for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
+        expect(out).toContain('쓰기를 기록지(스캔본)로 하실 때')
+        expect(out).toContain('[쓰기 기록지 인쇄 →]')
+        expect(out).toContain(`불러 줄 ${what}이`)
+        expect(out).toContain('쓰기 스캔본 올리기')
+        for (const t of items) expect(out).not.toContain(t)
+      }
     }
   })
 
