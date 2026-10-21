@@ -6,7 +6,7 @@
 //  ③ 결과지 링크 → 교사(학급 코드에 등록된 주소로만)
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
-import { RESULTS_GUIDE_LINES, gradeClassLabel } from './format'
+import { RESULTS_GUIDE_LINES, SCAN_GUIDE_TITLE, gradeClassLabel, scanGuideLines } from './format'
 
 const ENDPOINT = 'https://api.resend.com/emails'
 
@@ -185,6 +185,9 @@ export function approvedMail(v: {
         '등록하신 학생 명단이 나옵니다. 검사할 학생을 고르세요.',
         '이름·생년월일을 확인하고 검사를 시작합니다.',
       ])}
+
+      ${H(SCAN_GUIDE_TITLE)}
+      ${UL(scanGuideLines(v.grade))}
 
       ${H('결과지 받는 방법')}
       ${UL([...RESULTS_GUIDE_LINES])}
