@@ -3,7 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { approvedMail, applyNoticeMail, resultsLinkMail, escapeHtml, sendMail } from '@/lib/mail'
 import { approvalNoticeText } from '@/lib/format'
-import { formFor } from '@/lib/forms'
+import { formFor, writingPrompts } from '@/lib/forms'
+
+// 받아쓰기 문항 — 테스트는 키가 없어 가짜 양식 문항이다(실제 낱말을 테스트에 적지 않는다, tests/README)
+const W = (grade: number) => ({ semester: 2 as const, items: writingPrompts(formFor(grade, 2)) })
 
 const okResponse = (id = 'msg_1') =>
   new Response(JSON.stringify({ id }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -98,7 +101,7 @@ describe('MAIL_REPLY_TO — 답장 받을 곳', () => {
 
 describe('문구', () => {
   it('승인 메일에 학급 코드가 제목과 본문 모두에 들어간다', () => {
-    const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' })
+    const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) })
     expect(m.subject).toContain('K7M2P9')
     expect(m.html).toContain('K7M2P9')
   })
@@ -111,7 +114,7 @@ describe('문구', () => {
   })
 
   it('[REGRESSION] 학교명·교사명은 이스케이프한다 — 그대로 본문에 들어가는 값이다', () => {
-    const m = approvedMail({ teacherName: '<script>x</script>', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123', surveyUrl: 'https://x.test' })
+    const m = approvedMail({ teacherName: '<script>x</script>', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123', surveyUrl: 'https://x.test', writing: W(1) })
     expect(m.html).not.toContain('<script>')
     expect(m.html).toContain('&lt;script&gt;')
   })
@@ -130,10 +133,17 @@ describe('문구', () => {
     expect(m.html).toContain('href="https://evil.test/&quot;&gt;&lt;script&gt;x&lt;/script&gt;"')
   })
 
+  it('[REGRESSION] 받아쓰기 문항도 이스케이프한다 — 양식 데이터가 메일 HTML에 그대로 들어간다', () => {
+    const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123', surveyUrl: 'https://x.test',
+      writing: { semester: 2, items: ['<b>x</b>'] } })
+    expect(m.html).toContain('&lt;b&gt;x&lt;/b&gt;')
+    expect(m.html).not.toContain('<b>x</b>')
+  })
+
   it('[REGRESSION] surveyUrl도 같은 이유로 이스케이프한다 — 교사에게 나가는 메일이다', () => {
     const m = approvedMail({
       teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123',
-      surveyUrl: 'https://evil.test/"><script>x</script>',
+      surveyUrl: 'https://evil.test/"><script>x</script>', writing: W(1),
     })
     expect(m.html).not.toContain('"><script>')
   })
@@ -144,7 +154,7 @@ describe('문구', () => {
 // 검사를 시작할 수 없는 **필수 정보의 존재**만 고정한다.
 describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => {
   it('두 채널이 같은 정보를 담는다 — 교사명·학교·학급·코드·검사 주소', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }
     const html = approvedMail(v).html
     const text = approvalNoticeText(v)
     for (const s of [v.teacherName, v.schoolName, '1-3', v.code, v.surveyUrl, '결과지 받기']) {
@@ -157,7 +167,7 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
   // 신청 화면에서 교사가 이미 읽고 체크한 것이므로 두 채널 모두 담지 않는다(사용자 확정
   // 2026-08-22). 한쪽에만 되살아나면 채널에 따라 안내가 갈리므로 **둘 다 없음**을 핀한다.
   it('[REGRESSION] 두 채널 모두 검사 안내를 중복해 담지 않는다', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }
     for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
       expect(out).not.toContain('15~20분')
       expect(out).not.toContain('헤드셋')
@@ -165,13 +175,13 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
   })
 
   it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(2) }
     expect(approvedMail(v).html).toContain('2학년 단일학급')
     expect(approvalNoticeText(v)).toContain('2학년 단일학급')
   })
 
   it('두 채널 모두 「결과지 받는 방법」을 담는다 — 검사 주소에서 코드 입력 후 [결과지 받기], 등록된 이메일로 링크', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }
     for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
       expect(out).toContain('결과지 받는 방법')
       expect(out).toContain('[결과지 받기]')
@@ -179,25 +189,29 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     }
   })
 
-  // 담당자 요청(2026-10-20 — 스캔본으로 할 때 문항을 미리 알아야 하지 않나)에 문항 대신 진행 순서만 넣기로 했다(lib/format scanGuideLines)
-  it('두 채널 모두 「쓰기를 기록지(스캔본)로 하실 때」를 담는다 — 1학년은 낱말·2학년은 문장, 문항 자체는 싣지 않는다', () => {
+  // 담당자 요청(2026-10-20 — 스캔본으로 하면 문항을 미리 알아야 한다, 코드 전달 때 문항을 알려 달라)대로 진행 순서 뒤에 문항을 싣는다
+  it('두 채널 모두 「쓰기를 기록지(스캔본)로 하실 때」와 받아쓰기 문항을 칸 번호 순서로 담는다 — 1학년은 낱말·2학년은 문장', () => {
     for (const [grade, what] of [[1, '낱말'], [2, '문장']] as const) {
-      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
-      const writing = formFor(grade, 2).writing
-      const items = writing.kind === 'word' ? [...writing.meaning, ...writing.nonsense] : [...writing.sentences]
+      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(grade) }
+      const items = v.writing.items
+      expect(items.length).toBeGreaterThan(0)
       for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
         expect(out).toContain('쓰기를 기록지(스캔본)로 하실 때')
         expect(out).toContain('[쓰기 기록지 인쇄 →]')
-        expect(out).toContain(`불러 줄 ${what}이`)
+        expect(out).toContain(`받아쓰기는 아래 ${what}로 진행해 주세요(2학기 검사지`)
         expect(out).toContain('쓰기 스캔본 올리기')
-        for (const t of items) expect(out).not.toContain(t)
+        // 문항이 빠짐없이, 기록지 칸 번호 순서대로
+        let at = -1
+        for (const t of items) { const i = out.indexOf(t, at + 1); expect(i).toBeGreaterThan(at); at = i }
       }
+      const text = approvalNoticeText(v)
+      items.forEach((t, i) => expect(text).toContain(`${i + 1}. ${t}`))
     }
   })
 
   // 평문은 카톡·문자로도 간다 — 「이 메일 주소로」는 가리킬 메일이 없다(2026-10-12 점검)
   it('[REGRESSION] 받는 주소를 「이 메일 주소」라고 부르지 않는다 — 평문 채널에는 메일이 없다', () => {
-    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }
     for (const out of [approvedMail(v).html, approvalNoticeText(v)]) expect(out).not.toContain('이 메일 주소로')
   })
 })
@@ -205,7 +219,7 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
 describe('꼬리말 — 메일마다 받는 주소의 출처가 다르다', () => {
   // 셋 다 「신청하신 주소로」라고 적어, 관리자 알림과 직접 발급 학급의 결과지 메일이 틀린 말을 했다(2026-10-12 점검)
   it('[REGRESSION] 승인 안내만 「신청하신 주소」, 결과지 링크는 학급에 등록된 담임 주소, 신청 알림은 관리자 알림 주소', () => {
-    const approved = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }).html
+    const approved = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }).html
     const results = resultsLinkMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, resultsUrl: 'https://x.test/results/abc' }).html
     const notice = applyNoticeMail({ schoolName: '예시초', grade: 1, classNo: 2, teacherName: '김담임', childCount: 1, adminUrl: 'https://x.test/admin/codes' }).html
     expect(approved).toContain('이 메일은 신청하신 주소로 발송됐습니다.')
@@ -248,7 +262,7 @@ describe('메일 속 링크는 새 탭으로 연다', () => {
   // 실제로 밟았다(2026-10-12, 관리자 알림 메일). 헤더를 풀지 말고 링크를 새 탭으로 연다.
   const all = [
     applyNoticeMail({ schoolName: '예시초', grade: 1, classNo: 2, teacherName: '김담임', childCount: 1, adminUrl: 'https://x.test/admin/codes' }),
-    approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test' }),
+    approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(1) }),
     resultsLinkMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, resultsUrl: 'https://x.test/results/abc' }),
   ]
   it('[REGRESSION] 세 메일의 모든 <a>에 target="_blank" rel="noopener noreferrer"', () => {

@@ -20,6 +20,8 @@
 // 검사를 시작할 수 없다는 뜻이다. 그래서 origin의 단일 소스를 이 응답으로 못박는다.
 import { NextResponse } from 'next/server'
 import { approveClassCode } from '@/lib/db'
+import { semesterOf, type WritingNotice } from '@/lib/format'
+import { formFor, writingPrompts } from '@/lib/forms'
 import { approvedMail, sendMail } from '@/lib/mail'
 import { jsonError, UUID_RE } from '@/lib/request'
 
@@ -36,20 +38,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     // 메일을 보내지 않는 경로(already·이메일 없음)에서도 응답에 실어야 하므로 밖에서 정한다.
     const origin = process.env.APP_URL?.trim() || new URL(req.url).origin
+    // 받아쓰기 문항 — 승인한 날의 학기 양식(새 세션이 고르는 규칙과 같다, lib/forms formFor). 메일과 [안내 문구 복사]가 같은 값을
+    // 쓰도록 응답에도 싣는다(화면 코드는 양식을 import하지 않는다 — 실제 문항이 공개 번들에 실린다)
+    const semester = semesterOf(new Date().toISOString())
+    const writing: WritingNotice = { semester, items: writingPrompts(formFor(row.grade, semester)) }
 
     let mailed = false
     if (!already && row.teacher_email) {
       const mail = approvedMail({
         teacherName: row.teacher_name, schoolName: row.school_name,
         grade: row.grade, classNo: row.class_no,
-        code: row.code, surveyUrl: origin,
+        code: row.code, surveyUrl: origin, writing,
       })
       const sent = await sendMail({ ...mail, to: row.teacher_email })
       if (sent.ok) mailed = true
       else console.error('[admin/codes/:id/approve] 승인 메일 발송 실패', sent.error)
     }
 
-    return NextResponse.json({ ok: true, already, mailed, code: row.code, surveyUrl: origin })
+    return NextResponse.json({ ok: true, already, mailed, code: row.code, surveyUrl: origin, writing })
   } catch (e) {
     console.error('[admin/codes/:id/approve] 승인 실패', e)
     return jsonError('승인하지 못했어요.', 502)

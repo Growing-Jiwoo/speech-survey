@@ -3,7 +3,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { approvalNoticeText, gradeClassLabel } from '@/lib/format'
+import { approvalNoticeText, gradeClassLabel, type WritingNotice } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { adminKeys, useRosterQuery, type ClassCodeItem } from '@/hooks/useAdminQueries'
 
@@ -19,6 +19,8 @@ interface Approved {
   /** 검사 주소 — 라우트가 실제로 쓴 origin(APP_URL 우선)을 그대로 받는다.
    *  `window.location.origin`으로 다시 만들면 서버의 fallback만 흉내내 메일과 갈릴 수 있다. */
   surveyUrl: string
+  /** 받아쓰기 문항 — 승인 라우트가 메일에 넣은 값 그대로(이 화면은 양식을 import하지 않는다) */
+  writing: WritingNotice
   already: boolean; mailed: boolean
 }
 
@@ -42,14 +44,14 @@ export function PendingApplications({
 
   async function approve(c: ClassCodeItem) {
     setBusyId(c.id); setErr('')
-    const r = await postJson<{ already: boolean; mailed: boolean; code: string; surveyUrl: string }>(
+    const r = await postJson<{ already: boolean; mailed: boolean; code: string; surveyUrl: string; writing: WritingNotice }>(
       `/api/admin/codes/${c.id}/approve`, undefined, '승인하지 못했어요. 다시 시도해 주세요.')
     setBusyId(null)
     if (!r.ok) { setErr(r.error); return }
     setApproved({
       code: r.data.code, teacherName: c.teacher_name, schoolName: c.school_name,
       grade: c.grade, classNo: c.class_no,
-      surveyUrl: r.data.surveyUrl, already: r.data.already, mailed: r.data.mailed,
+      surveyUrl: r.data.surveyUrl, writing: r.data.writing, already: r.data.already, mailed: r.data.mailed,
     })
     setCopied(false)
     setOpenId(null)
@@ -61,6 +63,7 @@ export function PendingApplications({
       teacherName: a.teacherName, schoolName: a.schoolName, code: a.code,
       grade: a.grade, classNo: a.classNo,
       surveyUrl: a.surveyUrl,   // 승인 응답이 준 값 — 메일에 찍힌 주소와 반드시 같아야 한다
+      writing: a.writing,       // 문항도 승인 응답이 준 값(메일과 같다)
     })
     void navigator.clipboard.writeText(text).then(() => setCopied(true))
   }

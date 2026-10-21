@@ -152,6 +152,15 @@ export function formFor(grade: number, semester: 1 | 2): SurveyForm {
 }
 
 /**
+ * 쓰기 문항 — 불러 주는 순서 = 기록지 칸 번호 순서(`lib/items`의 쓰기 문항과 같은 순서: 낱말은 의미 → 무의미).
+ * 승인 안내가 싣는다(담당자 요청 2026-10-20 — 스캔본으로 하는 선생님이 문항을 미리 알아야 한다). **실제 문항이 나오므로
+ * 서버에서만 부를 것** — 화면 코드가 이 모듈을 import하면 문항이 공개 번들에 실린다(빌드 끝의 check-client-bundle이 막는다).
+ */
+export function writingPrompts(f: SurveyForm): string[] {
+  return f.writing.kind === 'word' ? [...f.writing.meaning, ...f.writing.nonsense] : [...f.writing.sentences]
+}
+
+/**
  * 세션의 양식 — 세션 행에 적힌 `form_id` 그대로다. 없으면(migration 008 이전 세션) 옛 규칙으로 읽는다.
  * 모르는 id는 던진다 — 다른 양식으로 그려 다른 낱말·기준으로 판정하느니 결과지를 못 여는 편이 낫다.
  */

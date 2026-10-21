@@ -21,7 +21,7 @@
 
 | 파일 | 역할 |
 |---|---|
-| `index.ts` | `SurveyForm` 타입 · `Cutoff`(판정 기준 「이하」) · `FORMS` 레지스트리 · `formFor(학년, 학기)` · `formOfSession(세션)` · `formForGrade(학년)`(옛 세션 전용) · `WritingTask` 판별 유니온 · `ReportStyle`(결과보고서에서 학년마다 다른 서식) |
+| `index.ts` | `SurveyForm` 타입 · `Cutoff`(판정 기준 「이하」) · `FORMS` 레지스트리 · `formFor(학년, 학기)` · `formOfSession(세션)` · `formForGrade(학년)`(옛 세션 전용) · `writingPrompts(양식)`(쓰기 문항을 기록지 칸 번호 순서로 — 승인 안내가 싣는다, 서버 전용) · `WritingTask` 판별 유니온 · `ReportStyle`(결과보고서에서 학년마다 다른 서식) |
 | `g1s2.ts` / `g2s2.ts` | KODYS-G1-S2 · KODYS-G2-S2 — 1·2학년 **2학기**(담당자 docx 2026-10-19). 판정 기준은 담당자 기준표, 결과보고서 서식은 같은 학년 1학기 양식 것 |
 | `g1.ts` / `g2.ts` | KODYS-G1(초1) · KODYS-G2(초2) **1학기** 양식 데이터 — 낱말·문장·쓰기 과제·제한 시간·임시 판정 기준·결과보고서 서식(`report`) |
 

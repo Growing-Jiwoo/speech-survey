@@ -6,7 +6,7 @@
 //  ③ 결과지 링크 → 교사(학급 코드에 등록된 주소로만)
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
-import { RESULTS_GUIDE_LINES, SCAN_GUIDE_TITLE, gradeClassLabel, scanGuideLines } from './format'
+import { RESULTS_GUIDE_LINES, SCAN_GUIDE_TITLE, gradeClassLabel, scanGuideLines, writingNoticeLead, type WritingNotice } from './format'
 
 const ENDPOINT = 'https://api.resend.com/emails'
 
@@ -156,7 +156,7 @@ export function applyNoticeMail(v: {
  *  (lib/format.ts)·결과 링크 메일(resultsLinkMail)·결과 페이지 만료 화면이 함께 따른다. */
 export function approvedMail(v: {
   teacherName: string; schoolName: string; grade: number; classNo: number
-  code: string; surveyUrl: string
+  code: string; surveyUrl: string; writing: WritingNotice
 }): Mail {
   const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
   return {
@@ -188,6 +188,9 @@ export function approvedMail(v: {
 
       ${H(SCAN_GUIDE_TITLE)}
       ${UL(scanGuideLines(v.grade))}
+      <p style="margin:12px 0 6px;font-size:14px;color:${C.soft};line-height:1.75">${escapeHtml(writingNoticeLead(v.grade, v.writing.semester))}</p>
+      <ol style="margin:0;padding:0 0 0 26px;font-size:15px;line-height:1.8">${
+        v.writing.items.map(t => `<li style="margin:0 0 2px">${escapeHtml(t)}</li>`).join('')}</ol>
 
       ${H('결과지 받는 방법')}
       ${UL([...RESULTS_GUIDE_LINES])}

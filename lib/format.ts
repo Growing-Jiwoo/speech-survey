@@ -103,11 +103,13 @@ export const SCAN_GUIDE_TITLE = '쓰기를 기록지(스캔본)로 하실 때'
 
 /**
  * 승인 안내의 쓰기 스캔본 진행 순서 — 메일(`approvedMail`)과 평문(`approvalNoticeText`)이 함께 쓰는 단일 소스.
- * **문항(불러 줄 낱말·문장)은 싣지 않는다** — 메일은 전달·보관되며 퍼질 수 있고, 문항은 학년·학기마다 다르며 바뀐다
- * (기록지 인쇄물에 문항을 싣지 않은 것과 같은 이유, 2026-09-30). 대신 검사 중 쓰기 단계 화면에 문항이 나온다는 것을 알린다.
- * 담당자 요청(2026-10-20 「스캔본 업로드로 할 경우 문항을 미리 알고 계셔야 할 것 같음 — 코드 전달할 때 문항을 알려 드리면?」)에
- * 「문항 대신 진행 순서만 넣자」고 답했고 담당자가 「응응!! 고마워!!」로 받았다. 아래 문구 자체는 담당자에게 확인받지 않은
- * 사용자 확정(2026-10-21)이다. 2학년 쓰기는 문장 쓰기다(lib/forms — 학년이 쓰기 과제를 정한다).
+ * 진행 순서 뒤에 **받아쓰기 문항**(`WritingNotice` — 승인한 날의 학기 양식, 기록지 칸 번호 순서)을 싣는다. 담당자 요청
+ * (2026-10-20 「스캔본 업로드로 할 경우 문항을 미리 알고 계셔야 할 것 같음. 코드 전달 드릴 때 검사 문항을 알려 드리는 건 어떨지 —
+ * 예: 쓰기 스캔본 업로드로 진행하실 경우 받아쓰기는 아래 문항으로 진행 부탁드립니다. 쓰기 기록지는 ~(안내)」) 그대로다.
+ * 처음(2026-10-21 오전)에는 메일이 퍼질 것을 걱정해 문항을 빼고 순서만 넣었는데, 요청과 달라 같은 날 문항을 넣었다(사용자 지시).
+ * 문항은 화면 코드에 두지 않는다 — 승인 라우트가 서버에서 양식(`lib/forms` `writingPrompts`)을 풀어 메일에 넣고, 같은 값을 응답으로
+ * 내려 관리자 [안내 문구 복사]가 쓴다. 안내 문구 자체는 담당자에게 확인받지 않은 사용자 확정(2026-10-21)이다.
+ * 2학년 쓰기는 문장 쓰기다(lib/forms — 학년이 쓰기 과제를 정한다).
  */
 export function scanGuideLines(grade: number): string[] {
   const what = grade === 1 ? '낱말' : '문장'
@@ -116,6 +118,14 @@ export function scanGuideLines(grade: number): string[] {
     `검사의 쓰기 단계에서 「스캔본으로 올리기」를 고르면, 불러 줄 ${what}이 기록지 칸 번호와 함께 화면에 나와요. 화면을 보고 불러 주세요.`,
     '반 전체 검사가 끝나면 결과지 화면의 「쓰기 스캔본 올리기」에서 기록지를 스캔한 파일을 올려 주세요. 담당자가 스캔본을 보고 채점해요.',
   ]
+}
+
+/** 승인 안내에 싣는 받아쓰기 문항 — 승인 라우트가 서버에서 만든다(위 주석) */
+export interface WritingNotice { semester: 1 | 2; items: string[] }
+
+/** 받아쓰기 문항 목록 앞의 한 줄 — 두 채널이 같은 말을 쓴다. 학기를 적는 이유: 문항은 학기마다 다르다(승인한 날의 학기 양식) */
+export function writingNoticeLead(grade: number, semester: 1 | 2): string {
+  return `받아쓰기는 아래 ${grade === 1 ? '낱말' : '문장'}로 진행해 주세요(${semester}학기 검사지 · 기록지 칸 번호 순서).`
 }
 
 /**
@@ -133,7 +143,7 @@ export function scanGuideLines(grade: number): string[] {
  */
 export function approvalNoticeText(v: {
   teacherName: string; schoolName: string; grade: number; classNo: number
-  code: string; surveyUrl: string
+  code: string; surveyUrl: string; writing: WritingNotice
 }): string {
   const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
   return [
@@ -148,6 +158,9 @@ export function approvalNoticeText(v: {
     '',
     SCAN_GUIDE_TITLE,
     ...scanGuideLines(v.grade).map(l => `- ${l}`),
+    '',
+    writingNoticeLead(v.grade, v.writing.semester),
+    ...v.writing.items.map((t, i) => `${i + 1}. ${t}`),
     '',
     '결과지 받는 방법',
     ...RESULTS_GUIDE_LINES.map(l => `- ${l}`),
