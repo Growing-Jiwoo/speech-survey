@@ -21,6 +21,7 @@ import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
 import { GET as ROSTER } from '@/app/api/admin/codes/[id]/roster/route'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
+import { formFor, writingPrompts } from '@/lib/forms'
 
 const ROW = {
   id: '11111111-1111-1111-1111-111111111111', code: 'K7M2P9',
@@ -136,6 +137,10 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     expect(json.surveyUrl).toBe('http://x')
     expect(vi.mocked(mail.approvedMail).mock.calls[0][0].surveyUrl).toBe('http://x')
     expect(mail.sendMail).toHaveBeenCalledTimes(1)
+    // 받아쓰기 문항(담당자 요청 2026-10-20) — 메일 인자와 응답(→ [안내 문구 복사])이 같은 값이고, 그 학년 양식의 쓰기 문항이다
+    const w = vi.mocked(mail.approvedMail).mock.calls[0][0].writing
+    expect(json.writing).toEqual(w)
+    expect(w.items).toEqual(writingPrompts(formFor(PENDING_ROW.grade, w.semester)))
     const call = vi.mocked(mail.sendMail).mock.calls[0][0]
     expect(call.to).toBe('teacher@example.com')
     expect(call.html).toMatch(ROW.code)
@@ -158,6 +163,7 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     expect(json).toMatchObject({ ok: true, already: true, mailed: false, code: ROW.code })
     // 메일을 보내지 않는 경로에서도 surveyUrl은 실려야 한다 — 여기서만 [안내 문구 복사]가 유일한 전달 경로다.
     expect(json.surveyUrl).toBe('http://x')
+    expect(json.writing.items.length).toBeGreaterThan(0)   // 메일이 안 가는 경로라 복사 문구가 문항을 전하는 유일한 길이다
     expect(mail.sendMail).not.toHaveBeenCalled()
   })
 
