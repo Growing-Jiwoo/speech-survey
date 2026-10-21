@@ -7,12 +7,12 @@ import { Blip } from '@/components/Blip'
 export function PracticeEnd() {
   return (
     <div className="flex flex-col items-center text-center">
-      <span className="rounded-full bg-mint/15 px-4 py-1.5 text-sm font-bold text-mint md:text-base">
+      <span className="rounded-full bg-mint/15 px-4 py-1.5 text-sm font-bold text-mint tab:text-base">
         연습 끝
       </span>
-      <Blip variant="idle" className="mt-6 h-24 w-[100px] md:h-32 md:w-[136px]" />
-      <h2 className="mt-6 text-3xl font-bold md:text-5xl">연습이 끝났어요</h2>
-      <p className="mt-3 text-base leading-relaxed text-ink-soft md:text-xl">
+      <Blip variant="idle" className="mt-6 h-24 w-[100px] tab:h-32 tab:w-[136px]" />
+      <h2 className="mt-6 text-3xl font-bold tab:text-5xl">연습이 끝났어요</h2>
+      <p className="mt-3 text-base leading-relaxed text-ink-soft tab:text-xl">
         이제 진짜 검사를 시작해요.<br />준비되면 아래 버튼을 눌러 주세요.
       </p>
     </div>

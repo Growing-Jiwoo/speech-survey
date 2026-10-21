@@ -86,10 +86,14 @@ function Check({ checked, indeterminate = false, disabled, label, onChange }: {
 }) {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate }, [indeterminate])
+  // 상자 둘레까지 눌리게 label로 감싼다 — 16px 상자만 눌려 태블릿·휴대폰에서 손가락으로 맞히기 어려웠다(2026-10-21 태블릿 점검).
+  // 음수 여백으로 표 줄 높이는 그대로 둔다.
   return (
-    <input ref={ref} type="checkbox" aria-label={label} checked={checked} disabled={disabled}
-      onChange={e => onChange(e.target.checked)}
-      className="h-4 w-4 accent-[var(--color-blue)] disabled:opacity-40" />
+    <label className="-m-2.5 inline-flex cursor-pointer p-2.5">
+      <input ref={ref} type="checkbox" aria-label={label} checked={checked} disabled={disabled}
+        onChange={e => onChange(e.target.checked)}
+        className="h-5 w-5 accent-[var(--color-blue)] disabled:opacity-40" />
+    </label>
   )
 }
 
@@ -352,7 +356,7 @@ export function ResultsView({ token }: { token: string }) {
                     const expandButton = () => (
                       <button type="button" aria-expanded={expanded}
                         onClick={() => setOpen(prev => { const n = new Set(prev); if (n.has(c.childNo)) n.delete(c.childNo); else n.add(c.childNo); return n })}
-                        className="text-[12px] font-bold text-blue underline underline-offset-2">
+                        className="-my-2 py-2 text-[12px] font-bold text-blue underline underline-offset-2">
                         {expanded ? '▾' : '▸'} 재검사 {c.sessions.length}회
                       </button>
                     )

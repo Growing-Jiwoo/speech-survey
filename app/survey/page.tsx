@@ -206,17 +206,19 @@ function SurveyInner() {
   }, [pause])
 
   // 뒤로 가기(아이패드 Safari의 화면 왼쪽 가장자리 쓸기 포함)는 검사를 떠나지 않고 일시정지로 바꾼다 — 아이 손이 가장자리를
-  // 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 그 칸으로 돌아오면 다시 쌓는다.
-  // 떠나는 길은 헤더의 [저장하고 나가기]다. 문항 단계에서만 건다 — 마이크 확인·연습 선택에는 덮을 일시정지 화면이 없다
-  // (사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
-  const phase = st?.phase
+  // 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 뒤로 가면 **앞으로 한 칸 되돌린다**
+  // (그 자리에서 다시 쌓지 않는다 — 검토 화면에서 `?p=N`으로 들어온 검사는 아래 칸의 주소에 옛 p가 남아 있어, 그 주소로 다시
+  // 쌓으면 새로고침 때 저장된 위치 대신 옛 문항으로 튀었다). 떠나는 길은 헤더의 [저장하고 나가기]다.
+  // 문항 화면이 떠 있을 때만 건다 — 마이크 확인·연습 선택·양식을 못 받은 화면·이어 할 수 없는 화면·다른 탭 알림에는
+  // 덮을 일시정지 화면이 없어, 뒤로 가기가 아무 반응 없이 삼켜진다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
+  const trapBack = st?.phase === 'page' && !!form && !fatal && !otherTab
   useEffect(() => {
-    if (phase !== 'page') return
+    if (!trapBack) return
     history.pushState(history.state, '', location.href)
-    const onPop = () => { history.pushState(history.state, '', location.href); pause() }
+    const onPop = () => { history.forward(); pause() }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
-  }, [phase, pause])
+  }, [trapBack, pause])
 
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */
   const patch = useCallback((p: Partial<SurveyState> | ((prev: SurveyState) => Partial<SurveyState>)) => {
@@ -454,10 +456,10 @@ function SurveyInner() {
   return (
     // 고정 3분할 레이아웃: 헤더(상단 고정) · 콘텐츠(가운데 밴드) · 내비(하단 고정).
     // 화면 높이가 낮으면(short — app/globals.css) 위아래 여백을 줄인다 — 녹음 뒤 알림이 밴드 안에 남게(2026-10-12 점검)
-    // 넓은 배치는 md(768px)부터다 — 검사 화면(components/survey/*)이 모두 같은 기준을 쓴다. 종전 lg(1024px)에서는 세로로 놓은
-    // 태블릿(744~834px)이 휴대폰 배치로 떨어져 낱말이 44px 대신 26px, 읽기판이 400px였고, 문장이 문장 중간에서 접혔다.
-    // 검사 도중 태블릿을 돌리면 자극 크기가 바뀌었다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
-    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 md:max-w-4xl md:pt-6 short:pb-3 short:pt-3 md:short:pt-3">
+    // 넓은 배치는 tab(700px — app/globals.css)부터다 — 검사 화면(components/survey/*)이 모두 같은 기준을 쓴다. 종전 lg(1024px)에서는
+    // 세로로 놓은 태블릿(iPad mini 744 ~ 834px)이 휴대폰 배치로 떨어져 낱말이 26px, 읽기판이 400px였고 문장이 문장 중간에서 접혔다.
+    // 검사 도중 태블릿을 돌리면 자극 크기가 바뀌었다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님). 낱말 크기는 ReadingPage 주석
+    <main className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden px-6 pb-6 pt-8 tab:max-w-4xl tab:pt-6 short:pb-3 short:pt-3 tab:short:pt-3">
       <header className="flex-none">
         <div className="mb-2 flex items-center justify-between gap-2">
           {st.childName ? (

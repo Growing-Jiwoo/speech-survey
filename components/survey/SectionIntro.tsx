@@ -14,12 +14,12 @@ export function SectionIntro({ section, sections }: {
   const step = sections.indexOf(section) + 1
   return (
     <div className="flex flex-col items-center text-center">
-      <span className="rounded-full bg-blue/10 px-4 py-1.5 text-sm font-bold text-blue md:text-base">
+      <span className="rounded-full bg-blue/10 px-4 py-1.5 text-sm font-bold text-blue tab:text-base">
         {step}단계 · 총 {sections.length}단계
       </span>
-      <Blip variant="idle" className="mt-6 h-24 w-[100px] md:h-32 md:w-[136px]" />
-      <h2 className="mt-6 text-3xl font-bold md:text-5xl">{intro.title}</h2>
-      <p className="mt-3 text-base leading-relaxed text-ink-soft md:text-xl">{intro.desc}</p>
+      <Blip variant="idle" className="mt-6 h-24 w-[100px] tab:h-32 tab:w-[136px]" />
+      <h2 className="mt-6 text-3xl font-bold tab:text-5xl">{intro.title}</h2>
+      <p className="mt-3 text-base leading-relaxed text-ink-soft tab:text-xl">{intro.desc}</p>
     </div>
   )
 }

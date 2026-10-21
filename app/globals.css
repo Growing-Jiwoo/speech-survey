@@ -5,7 +5,12 @@
    (2026-10-12 점검). */
 @custom-variant short (@media (max-height: 800px));
 
+/* 태블릿 폭(700px~) — 검사 화면(app/survey, components/survey)의 넓은 배치 기준. 세로로 놓은 태블릿(iPad mini 744 ~ 834px)이
+   lg(1024px)에 못 미쳐 휴대폰 배치로 떨어졌다(2026-10-21 태블릿 점검). md(768px)는 iPad mini 세로를 놓친다.
+   휴대폰 세로(~430px)는 들지 않는다. 아래 @theme의 --breakpoint-tab이 `tab:` 변형을 만든다. */
+
 @theme {
+  --breakpoint-tab: 43.75rem;
   --color-blue: #2F6BFF;
   --color-blue-deep: #1E4FCC;
   --color-rec: #E5484D;

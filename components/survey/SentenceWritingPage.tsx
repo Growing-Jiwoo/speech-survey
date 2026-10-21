@@ -20,9 +20,9 @@ export function SentenceWritingPage({ items, value, onChange, toggle }: {
   const required = items.length
 
   return (
-    <div className="card mx-auto w-full max-w-2xl p-5 md:max-w-4xl md:p-7">
+    <div className="card mx-auto w-full max-w-2xl p-5 tab:max-w-4xl tab:p-7">
       {toggle && <div className="mb-4">{toggle}</div>}
-      <p className="text-sm font-bold text-blue md:text-base">학생이 아래 문장을 정확하게 썼나요?</p>
+      <p className="text-sm font-bold text-blue tab:text-base">학생이 아래 문장을 정확하게 썼나요?</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-mute">
         정확하게 쓴 어절의 개수를 골라 주세요. 어절 하나가 1점이에요.
         {/* [다음]이 꺼진 이유 — 목록 아래에 두면 1024×768에서 접힌 아래로 밀려 보이지 않았다(2026-10-12 점검) */}
@@ -41,7 +41,7 @@ export function SentenceWritingPage({ items, value, onChange, toggle }: {
               <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {words.map((w, i) => (
                   <span key={i}
-                    className="font-read rounded-lg bg-well px-2 py-1 text-[20px] font-bold md:text-[24px]">
+                    className="font-read rounded-lg bg-well px-2 py-1 text-[20px] font-bold tab:text-[24px]">
                     {w}
                   </span>
                 ))}

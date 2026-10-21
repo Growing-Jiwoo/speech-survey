@@ -30,10 +30,10 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
   }
 
   return (
-    <div className="card mx-auto w-full max-w-2xl p-5 md:max-w-4xl md:p-7">
+    <div className="card mx-auto w-full max-w-2xl p-5 tab:max-w-4xl tab:p-7">
       {toggle && <div className="mb-4">{toggle}</div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-bold text-blue md:text-base">학생이 아래 낱말을 정확하게 썼나요?</p>
+        <p className="text-sm font-bold text-blue tab:text-base">학생이 아래 낱말을 정확하게 썼나요?</p>
         <div className="flex gap-1.5">
           {([['예', 1], ['아니오', 0]] as const).map(([label, v]) => (
             <button key={label} type="button" onClick={() => onSetAll(v)} disabled={answered === required}
@@ -50,17 +50,17 @@ export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
         </p>
       )}
 
-      <div className="mt-4 flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-5">
+      <div className="mt-4 flex flex-col gap-3 tab:grid tab:grid-cols-2 tab:gap-5">
         {groups.map((group, gi) => (
           // 묶음이 바뀌는 지점에 구분선 — 한 열(좁은 화면)에서만. 두 열이면 열 자체가 나눈다.
-          <div key={group[0].code} className={gi > 0 ? 'border-t border-line pt-3 md:border-t-0 md:pt-0' : ''}>
+          <div key={group[0].code} className={gi > 0 ? 'border-t border-line pt-3 tab:border-t-0 tab:pt-0' : ''}>
             <p className="mb-1.5 text-[12px] font-bold text-ink-mute">{KIND_LABEL[group[0].kind!]} 낱말</p>
             <ul className="flex flex-col gap-2">
               {group.map(item => (
                 <li key={item.code}>
                   <div className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2">
                     <span className="w-5 flex-none text-xs font-bold text-ink-mute">{item.orderNo}</span>
-                    <span className="font-read min-w-0 flex-1 truncate text-[22px] font-bold md:text-[28px]">{item.text}</span>
+                    <span className="font-read min-w-0 flex-1 truncate text-[22px] font-bold tab:text-[28px]">{item.text}</span>
                     <div className="flex flex-none gap-1.5">
                       {([['예', 1], ['아니오', 0]] as const).map(([label, v]) => (
                         <button key={label} type="button"
