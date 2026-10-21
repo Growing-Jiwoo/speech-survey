@@ -23,6 +23,14 @@ export const CLASS_OPTIONS = [
   ...Array.from({ length: MAX_CLASS_NO }, (_, i) => ({ value: String(i + 1), label: `${i + 1}반` })),
 ]
 
+/** 교사 신청(/apply)이 받는 학년 — 1·2학년만. 담당자 확정(2026-10-22, 회신은 사용자 전달 「신청은 1~2학년만 열어놓도록
+ *  하면 된다네」): 3~6학년 검사지는 곧 따로 준다. 그 전에는 3~6학년이 1학년 검사지·임시 기준으로 검사되고 결과보고서에는
+ *  임시 표시가 없다(README 「결과보고서 PDF」). 화면 선택지와 서버 검증(`applySchema`)이 이 배열 하나를 쓴다.
+ *  관리자 직접 발급(CodeIssuer·classCodeCreateSchema)은 1~6학년 그대로다 — 담당자가 직접 정하는 경로다.
+ *  3~6학년 검사지가 오면 그 양식을 넣은 뒤 여기에 학년을 더한다. */
+export const APPLY_GRADES: readonly number[] = [1, 2]
+export const APPLY_GRADE_OPTIONS = APPLY_GRADES.map(g => ({ value: String(g), label: `${g}학년` }))
+
 /** 학년·반 표기. 반 0은 "단일학급(반 없음)" — 학년당 한 학급인 학교를 위해 010에서 허용했다. */
 export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`

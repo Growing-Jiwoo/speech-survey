@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { REGION_NAMES } from './schools'
+import { APPLY_GRADES } from './format'
 
 /** 이름: 완성형 한글·영문만, 단어 사이 단일 공백, 1~30자. (호출 전 trim·연속공백 정규화 전제) */
 export const NAME_RE = /^[가-힣a-zA-Z]+( [가-힣a-zA-Z]+)*$/
@@ -170,6 +171,8 @@ export type RosterChildInput = z.infer<typeof rosterChildSchema>
 /** POST /api/apply 바디 — 교사 신청. 직접 발급과 달리 **이메일이 필수**다:
  *  승인 메일이 유일한 코드 전달 경로라서다(신청 완료 화면은 코드를 보여주지 않는다 — 스펙). */
 export const applySchema = classCodeFields.extend({
+  // 신청은 1·2학년만(lib/format `APPLY_GRADES` — 담당자 확정 2026-10-22). 화면 선택지만 줄이면 공개 라우트로 3~6학년이 들어온다.
+  grade: gradeSchema.refine(g => APPLY_GRADES.includes(g), '지금은 1·2학년만 신청할 수 있어요.'),
   teacherEmail: requiredEmail,
   // .max(99)는 child_no 범위(1~99)+중복 검사로 보면 도달 불가능해 보이지만, zod는 array().max()를
   // refine보다 먼저 평가한다 — 수천 행짜리 잘못된 파일이 Set 중복 검사를 돌기 전에 여기서 바로 끊긴다.

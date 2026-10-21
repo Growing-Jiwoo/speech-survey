@@ -177,6 +177,11 @@ describe('applySchema — 신청 폼', () => {
   it('이메일이 없으면 거부한다 — 승인 메일이 유일한 코드 전달 경로다', () => {
     expect(applySchema.safeParse({ ...base, teacherEmail: '' }).success).toBe(false)
   })
+  it('신청은 1·2학년만 받는다 — 3~6학년 검사지가 오기 전까지(관리자 직접 발급은 1~6 그대로)', () => {
+    expect(applySchema.safeParse({ ...base, grade: 2 }).success).toBe(true)
+    for (const grade of [0, 3, 6]) expect(applySchema.safeParse({ ...base, grade }).success).toBe(false)
+    expect(classCodeCreateSchema.safeParse({ ...base, grade: 6 }).success).toBe(true)
+  })
   it('학교 ID는 20자까지 — 공개 라우트로 임의 길이 문자열이 DB에 실리지 않게', () => {
     expect(applySchema.safeParse({ ...base, schoolId: 'B000002497' }).success).toBe(true)
     expect(applySchema.safeParse({ ...base, schoolId: 'x'.repeat(21) }).success).toBe(false)

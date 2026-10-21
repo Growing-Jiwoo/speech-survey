@@ -10,7 +10,7 @@ import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
 import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { APPLY_CHECKS, SURVEY_NOTICE } from '@/lib/consent'
-import { CLASS_OPTIONS } from '@/lib/format'
+import { APPLY_GRADE_OPTIONS, CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import type { RosterChild } from '@/lib/roster'
 import { validEmail, validName, validPhone } from '@/lib/validate'
@@ -127,7 +127,7 @@ export default function ApplyPage() {
               <label className={labelCls} htmlFor="ap-grade">학년</label>
               <div className="mt-1.5">
                 <Select id="ap-grade" ariaLabel="학년" placeholder="학년 선택" value={grade} onChange={setGrade}
-                  options={[1, 2, 3, 4, 5, 6].map(g => ({ value: String(g), label: `${g}학년` }))} />
+                  options={APPLY_GRADE_OPTIONS} />
               </div>
             </div>
             <div className="flex-1">
