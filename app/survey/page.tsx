@@ -205,19 +205,27 @@ function SurveyInner() {
     return () => document.removeEventListener('visibilitychange', onHide)
   }, [pause])
 
-  // 뒤로 가기(아이패드 Safari의 화면 왼쪽 가장자리 쓸기 포함)는 검사를 떠나지 않고 일시정지로 바꾼다 — 아이 손이 가장자리를
-  // 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 뒤로 가면 **앞으로 한 칸 되돌린다**
-  // (그 자리에서 다시 쌓지 않는다 — 검토 화면에서 `?p=N`으로 들어온 검사는 아래 칸의 주소에 옛 p가 남아 있어, 그 주소로 다시
-  // 쌓으면 새로고침 때 저장된 위치 대신 옛 문항으로 튀었다). 떠나는 길은 헤더의 [저장하고 나가기]다.
+  // 뒤로 가기(아이패드 Safari의 화면 왼쪽 가장자리 쓸기·안드로이드 뒤로 버튼 포함)는 검사를 떠나지 않고 일시정지로 바꾼다 — 아이
+  // 손이 가장자리를 쓸면 시작 화면으로 나가고 녹음 중이던 시도는 버려졌다. 같은 주소를 한 칸 더 쌓아 두고, 뒤로 가면 **앞으로 한 칸
+  // 되돌린다**(그 자리에서 다시 쌓지 않는다 — 검토 화면에서 `?p=N`으로 들어온 검사는 아래 칸의 주소에 옛 p가 남아 있어, 그 주소로
+  // 다시 쌓으면 새로고침 때 저장된 위치 대신 옛 문항으로 튀었다). 떠나는 길은 헤더의 [저장하고 나가기]다.
+  // ⚠️ 칸은 **화면을 누른 순간**(click) 쌓는다 — Safari·크롬은 사용자가 누르지 않은 채 스크립트가 쌓은 기록을 뒤로 가기 버튼·제스처에서
+  // 건너뛴다(뒤로 가기 가로채기 차단). 화면이 뜰 때 쌓았더니 아이패드 Safari의 [<]가 그 칸을 건너뛰어 검사를 떠났다(iPad 시뮬레이터
+  // 2026-10-21 — 스크립트의 history.back()은 건너뛰지 않아 브라우저 패널 시험에서는 통과로 보였다). 검사는 선생님이 [시작하기]부터
+  // 눌러 진행하므로 첫 누름에 칸이 생긴다.
   // 문항 화면이 떠 있을 때만 건다 — 마이크 확인·연습 선택·양식을 못 받은 화면·이어 할 수 없는 화면·다른 탭 알림에는
   // 덮을 일시정지 화면이 없어, 뒤로 가기가 아무 반응 없이 삼켜진다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님)
   const trapBack = st?.phase === 'page' && !!form && !fatal && !otherTab
   useEffect(() => {
     if (!trapBack) return
-    history.pushState(history.state, '', location.href)
+    const arm = () => history.pushState(history.state, '', location.href)
+    document.addEventListener('click', arm, { capture: true, once: true })
     const onPop = () => { history.forward(); pause() }
     window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
+    return () => {
+      document.removeEventListener('click', arm, { capture: true })
+      window.removeEventListener('popstate', onPop)
+    }
   }, [trapBack, pause])
 
   /** 상태 갱신 + localStorage 저장(항상 함께 — 저장 누락으로 재개 위치가 어긋나지 않도록) */

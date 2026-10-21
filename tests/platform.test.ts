@@ -24,7 +24,9 @@ describe('detectPlatform', () => {
 
 describe('micPermissionHint — 플랫폼별 해제 절차 안내', () => {
   it('iOS는 설정 앱 경로를 안내', () => expect(micPermissionHint(IPHONE)).toContain('설정 앱'))
-  it('Android는 주소창 자물쇠 경로를 안내', () => expect(micPermissionHint(ANDROID)).toContain('자물쇠'))
-  it('아이패드(데스크톱 UA)도 iOS 안내', () => expect(micPermissionHint(IPAD_SAFARI, 5)).toContain('웹 사이트 설정'))
+  it('Android는 주소창 아이콘 → 권한 경로를 안내', () => expect(micPermissionHint(ANDROID)).toContain('권한에서 마이크'))
+  it('Android는 Chrome 앱 자체 권한 창도 안내', () => expect(micPermissionHint(ANDROID)).toContain('앱 사용 중에만 허용'))
+  // 두 번 거부한 탭은 새로고침해도 다시 묻지 않는다 — 새 탭이 해법(iPadOS 26 Safari, 2026-10-21)
+  it('아이패드(데스크톱 UA)도 iOS 안내 — 새 탭으로 다시 열기', () => expect(micPermissionHint(IPAD_SAFARI, 5)).toContain('새 탭'))
   it('그 외는 일반 안내', () => expect(micPermissionHint(DESKTOP)).toContain('사이트 설정'))
 })

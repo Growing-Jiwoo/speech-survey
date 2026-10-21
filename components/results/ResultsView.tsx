@@ -19,6 +19,7 @@ import { Spinner } from '@/components/Spinner'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { gradeClassLabel } from '@/lib/format'
+import { dispositionFilename, saveBlobAs } from '@/lib/download'
 import { requestJson } from '@/lib/http'
 import {
   awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
@@ -199,15 +200,8 @@ export function ResultsView({ token }: { token: string }) {
         const j = await res.json().catch(() => ({})) as { error?: string }
         setDlErr(j.error ?? '결과지를 만들지 못했어요. 다시 시도해 주세요.'); return
       }
-      const blob = await res.blob()
-      const cd = res.headers.get('content-disposition') ?? ''
-      const name = decodeURIComponent(cd.match(/filename\*=UTF-8''([^;]+)/)?.[1] ?? 'results.pdf')
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob); a.download = name
-      // 문서에 붙였다 떼고, URL은 잠시 뒤에 푼다 — click 직후 바로 풀면 Safari 등에서 다운로드가 시작되기 전에
-      // 주소가 사라져 조용히 받지 못하는 사례가 있다(선생님 기기는 Mac·iPad일 수 있다)
-      document.body.appendChild(a); a.click(); a.remove()
-      setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+      // 저장은 관리자 결과보고서와 같은 함수다(lib/download — URL 해제 시점·아이패드 Safari 처리가 거기 있다)
+      saveBlobAs(await res.blob(), dispositionFilename(res.headers.get('content-disposition'), 'results.pdf'))
     } catch {
       setDlErr('연결에 문제가 생겼어요. 다시 시도해 주세요.')
     } finally {

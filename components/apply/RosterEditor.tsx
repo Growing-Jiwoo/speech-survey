@@ -270,7 +270,9 @@ export function RosterEditor({ onChange }: {
                             const v = e.target.value
                             patch(r.id, { birth: normBirth(v) ?? v })
                           }}
-                          className={`${cellCls} w-36 min-w-36 ${has('생년월일') ? badCls : okCls}`} />
+                          // appearance-none — 아이패드 Safari는 기본 모양의 날짜 칸을 지정한 폭보다 넓게 그려 옆 [삭제] 버튼 밑으로
+                          // 파고들었다(iPad 시뮬레이터, 2026-10-21 태블릿 점검). 기본 모양을 끄면 폭을 따르고, 누르면 날짜 고르기는 그대로 뜬다
+                          className={`${cellCls} w-36 min-w-36 appearance-none text-left ${has('생년월일') ? badCls : okCls}`} />
                       </td>
                       <td className="px-1 py-1 text-right">
                         <button type="button" aria-label={`${i + 1}번째 줄 삭제`}

@@ -37,6 +37,8 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
   const [lowVolume, setLowVolume] = useState(false)
   const [micErr, setMicErr] = useState<RecorderErrorKind | null>(null)
   const words = page.section === 'word_reading'
+  // 한 줄이 안 차는 낱말 페이지(연습 3개) — 아래 격자 주석
+  const partialRow = words && page.items.length < 4
   const hardStopSec = maxRecSec(page)
 
   const recorder = useRecorder(hardStopSec, (rec: Recording) => {
@@ -101,9 +103,13 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
         {/* 낱말 크기: 휴대폰 26px · 태블릿 폭(tab, 700~1023px) 38px · 그 이상 44px(높이가 낮으면 38px). 태블릿은 **세로든 가로든 38px**이다 —
             가로 태블릿은 높이가 낮아(short) 38px이라, 세로를 44px로 두면 검사 도중 돌릴 때마다 크기가 바뀌었다. 실제 낱말은 38px에서
             가장 긴 것이 66px로 가장 좁은 태블릿 열(145px)에 넉넉히 든다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님) */}
+        {/* 한 줄이 안 차는 연습 페이지(3개)는 본 검사와 **같은 칸 너비**로 가운데에 모은다 — 4칸 격자에 왼쪽부터 채우면 오른쪽 한 칸이
+            비어 낱말이 한쪽으로 쏠려 보였다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님). 본 검사(7개)는 검사지처럼 4+3 그대로다.
+            칸 너비 = (폭 − 칸 사이 3개 × gap-x-2) ÷ 4 — gap-x-2를 바꾸면 1.5rem도 같이 바꿀 것 */}
         <div className="flex min-h-[152px] items-center justify-center tab:min-h-[176px] short:min-h-[120px] tab:short:min-h-[124px]">
           {words ? (
-            <div className="grid w-full grid-cols-4 gap-x-2 gap-y-4 tab:gap-y-7 tab:short:gap-y-4">
+            <div className={`grid w-full gap-x-2 gap-y-4 tab:gap-y-7 tab:short:gap-y-4 ${partialRow ? 'justify-center' : 'grid-cols-4'}`}
+              style={partialRow ? { gridTemplateColumns: `repeat(${page.items.length}, calc((100% - 1.5rem) / 4))` } : undefined}>
               {page.items.map(i => (
                 <span key={i.code}
                   className="no-select-callout font-read break-keep text-center text-[26px] font-medium leading-tight tab:text-[38px] lg:text-[44px] lg:short:text-[38px]">
