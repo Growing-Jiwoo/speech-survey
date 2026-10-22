@@ -126,7 +126,9 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
             // (800px)보다 길어 마지막 어절만 셋째 줄로 넘어갔다 — 원문 「한 문장이 한 줄에는 들어오면 좋겠는데」. 맞춘 크기는 양식마다 다르다
             // (2학년 2학기 PC 약 24px·세로 태블릿 20~22px, 1학년 2학기 PC 26px 그대로·세로 태블릿 21~24px). 휴대폰(tab 미만)은 22px
             // 그대로 접힌다 — 한 줄에 넣으면 9px 안팎이 된다.
-            // 줄 하나의 폭은 글꼴 실측으로 계산한다(lib/items `sentenceFitEm`) — cqi는 이 칸(@container)의 폭이다
+            // 줄 하나의 폭은 글꼴 실측으로 계산한다(lib/items `sentenceFitEm`) — cqi는 이 칸(@container)의 폭이다.
+            // 크기 규칙(칸 폭의 97% · 최대 26px · 네 문장이 같은 크기 · 휴대폰 제외)은 사용자 확정(2026-10-22, 담당자 회신 아님 — 담당자는 「글자를 아주아주 조금만
+            // 줄이거나, 다른 방법」과 「한 문장이 한 줄」만 말했다)
             <p className="no-select-callout font-read whitespace-pre-line break-keep text-center text-[22px] font-medium leading-relaxed tab:[font-size:min(26px,calc(97cqi/var(--fit-em,1)))]"
               style={{ '--fit-em': fitEm } as React.CSSProperties}>
               {page.items[0].text}

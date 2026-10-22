@@ -187,7 +187,7 @@ export type ApplyInput = z.infer<typeof applySchema>
  *  요청하는 것이고, 있으면 "명단에 없는 학생" 폴백이 그 번호 하나의 중복 검사 상태를 묻는 것이다. */
 export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: childNoSchema.optional() })
 
-/** POST /api/results/request 바디 — 교사 결과지 링크 요청. 코드만 받는다. 이메일은 받지 않는다 —
- *  요청자가 주소를 정할 수 있으면 코드가 곧 결과지 열쇠가 된다(스펙 2026-09-22 「왜 매직링크인가」). */
-/** POST /api/results/request — `purpose`는 어느 버튼인지(결과지 받기 / 쓰기 스캔본 올리기, 2026-10-22). 없으면 결과지(옛 화면) */
+/** POST /api/results/request 바디 — 교사 결과지 링크 요청. 코드와 버튼 종류(`purpose` — 결과지 받기 / 쓰기 스캔본 올리기,
+ *  2026-10-22. 없으면 결과지 — 옛 화면)만 받는다. 이메일은 받지 않는다 — 요청자가 주소를 정할 수 있으면 코드가 곧 결과지
+ *  열쇠가 된다(스펙 2026-09-22 「왜 매직링크인가」). */
 export const resultsRequestSchema = z.object({ code: classCodeSchema, purpose: z.enum(['results', 'scan']).default('results') })

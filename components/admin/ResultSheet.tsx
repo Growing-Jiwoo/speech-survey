@@ -458,7 +458,8 @@ export function ResultSheet({
         <p className="mt-4 border-t border-line pt-2.5 text-[12px] text-ink-mute">
           담임 {session.teacher_name} · {contactLabel(session.teacher_phone, session.teacher_email)}
           {' · '}
-          {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) — 도입 전 수집분은 '기록 없음' */}
+          {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2). 명단 아동은 학급 신청일이다(검사할 때는 동의를 받지 않는다 — 2026-10-22).
+              「기록 없음」은 도입 전 수집분, 명단 밖 직접 입력 아동, 관리자 직접 발급 학급의 아동이다(lib/db createSession `consentedAt`) */}
           {session.guardian_consented_at
             ? `보호자 동의 확인 ${reportDateLabel(session.guardian_consented_at)}`
             : '보호자 동의 기록 없음'}

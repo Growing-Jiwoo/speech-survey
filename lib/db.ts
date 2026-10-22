@@ -830,7 +830,9 @@ export interface SessionRow {
   teacher_phone: string | null; teacher_email: string | null
   checklist: string[]
   started_at: string; submitted_at: string | null
-  guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
+  /** 법정대리인 동의 확인 시각. null은 확인 기록이 없다는 뜻이다 — 도입 전 수집분, 그리고 2026-10-22부터는 명단 밖 직접 입력 아동과
+   *  관리자 직접 발급 학급의 아동(검사할 때 동의를 받지 않고 신청 때 명단 아동만 확인한다 — createSession `consentedAt`) */
+  guardian_consented_at: string | null
   /** 아동 식별값을 관리자가 고친 시각. null이면 한 번도 고치지 않았다 */
   edited_at: string | null
   /** 최초 수정 직전의 아동 식별값. 두 번째 수정부터는 덮어쓰지 않는다 —

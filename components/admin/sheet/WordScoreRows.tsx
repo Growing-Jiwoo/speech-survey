@@ -7,7 +7,8 @@
 //
 // 플레이어 바를 sticky로 두는 이유: 행이 세로로 길어져(7행) 스크롤 중 플레이어가 화면
 // 밖으로 나간다 — "들으면서 찍기"가 이 화면의 핵심 동선이므로 지금 듣는 그룹의 플레이어가
-// 항상 보여야 한다. 그룹 래퍼가 relative라 다음 그룹에 닿으면 자연스럽게 교대한다.
+// 항상 보여야 한다. 그룹 래퍼가 relative라 그룹을 벗어나면 바도 따라 올라간다 — 두 그룹은 640px부터 나란히
+// 놓이고(ResultSheet) 그보다 좁으면 위아래로 쌓여 다음 그룹 바와 교대한다.
 'use client'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { SurveyItem } from '@/lib/items'

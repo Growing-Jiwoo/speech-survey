@@ -1,6 +1,7 @@
 // components/start/LinkByMail.tsx — 시작 화면의 [결과지 받기]·[쓰기 스캔본 올리기]. 등록된 담임 메일로 학급 결과 화면 링크를
 // 보낼 뿐 이 화면에서는 아무것도 열리지 않는다 — 아이 앞 공용 기기라 그래야 한다(결과지 사용자 확정 2026-09-22, 스캔본은
-// 사용자·담당자 확정 2026-10-22: 코드만으로 올리게 하면 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다).
+// 담당자 확정 2026-10-22 — 사용자의 「이메일에 링크를 첨부하는 방식으로 할게」에 담당자 「알겠어!!」, 회신은 사용자 전달:
+// 코드만으로 올리게 하면 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다).
 // 이메일은 입력·수정할 수 없다 — 요청자가 주소를 정하면 코드가 곧 열쇠다. 쿨다운은 종류마다 코드당 60초(서버가 센다).
 // 학급이 바뀌면 상태가 남지 않게 호출부가 `key`에 학급 코드를 준다 — 「d***@exa***.com 로 보냈어요」는 그 학급 것이다.
 'use client'
@@ -54,7 +55,8 @@ export function LinkByMail({ code, purpose, label }: {
   return (
     <>
       <button type="button" onClick={() => void request()} disabled={busy || cooldown > 0}
-        className="btn-outline mt-3 h-[44px] w-full text-[14px] disabled:opacity-60">
+        // 꺼진 버튼은 60%로 — .btn-outline:disabled(40%)가 Tailwind 레이어 밖이라 `!` 없이는 이기지 못한다(카운트다운 글자가 흐려졌다)
+        className="btn-outline mt-3 h-[44px] w-full text-[14px] disabled:opacity-60!">
         {busy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : label}
       </button>
       {/* 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색 */}

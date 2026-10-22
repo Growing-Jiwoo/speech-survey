@@ -150,7 +150,7 @@ describe('POST /api/results/request', () => {
     expect(json.scoredCount).toBe(1)
   })
   // 담당자 요청(2026-10-22): 시작 화면에 「쓰기 스캔본 올리기」 블록 — 결과지처럼 담임 메일로 링크를 보낸다(코드만으로 올리게 하면
-  // 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다 — 사용자·담당자 확정 같은 날).
+  // 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다 — 담당자 확정 같은 날, 사용자 제안에 「알겠어!!」).
   it('스캔본 올리기(purpose: scan)는 같은 결과지 화면 링크에 ?scan=1을 붙여 스캔본 메일로 보낸다', async () => {
     const res = await REQUEST(reqFor({ code: fresh(), purpose: 'scan' }))
     expect(res.status).toBe(200)

@@ -613,7 +613,7 @@ export default function StartPage() {
             <section className="card p-5">
               <h2 className={blockTitleCls}>쓰기 기록지</h2>
               <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
-                쓰기를 기록지(스캔본)로 할 때, 이름이 찍힌 기록지를 아이마다 한 장씩 뽑아 나눠 주세요.
+                쓰기를 기록지(스캔본)로 할 때, 기록지를 아이마다 한 장씩 뽑아 나눠 주세요.
               </p>
               <button type="button" onClick={() => setSheetOpen(true)} className="btn-outline mt-3 h-[44px] w-full text-[14px]">
                 쓰기 기록지 인쇄
