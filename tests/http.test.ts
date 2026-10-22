@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { NETWORK_ERR_MSG, fetchJson, postJson, requestJson } from '@/lib/http'
+import { NETWORK_ERR_MSG, REQUEST_TIMEOUT_MS, fetchJson, postJson, requestJson } from '@/lib/http'
 
 const fetchMock = vi.fn()
 beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset() })
@@ -53,6 +53,40 @@ describe('postJson / requestJson — 던지지 않는 클라이언트 요청 헬
     fetchMock.mockResolvedValueOnce(json({ ok: true }))
     await requestJson('/api/admin/sessions/abc', { method: 'DELETE' })
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE')
+  })
+})
+
+describe('요청 시간 상한(REQUEST_TIMEOUT_MS) — 응답이 오지 않는 와이파이에서 화면이 멈추지 않게(2026-10-22)', () => {
+  afterEach(() => { vi.useRealTimers() })
+  /** 끊을 때까지 응답하지 않는 fetch — 끊기면 브라우저처럼 AbortError로 거절한다 */
+  const hang = () => fetchMock.mockImplementationOnce((_u: string, init: RequestInit) => new Promise((_, rej) => {
+    init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))
+  }))
+
+  it('[REGRESSION] 응답이 상한을 넘기면 끊고 네트워크 오류로 돌려준다 — 제출 확인 창이 로딩인 채 멈추던 경로', async () => {
+    vi.useFakeTimers()
+    hang()
+    const p = postJson('/api/sessions/submit', {})
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+    expect(await p).toEqual({ ok: false, status: 0, error: NETWORK_ERR_MSG })
+  })
+
+  it('상한 안에 오면 그대로 성공 — 끊는 타이머는 남기지 않는다', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockResolvedValueOnce(json({ ok: true }))
+    expect(await postJson('/x', {})).toEqual({ ok: true, status: 200, data: { ok: true } })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('본문을 받다가 끊기면 빈 본문으로 성공 처리하지 않는다', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementationOnce((_u: string, init: RequestInit) => Promise.resolve({
+      ok: true, status: 200,
+      json: () => new Promise((_, rej) => init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))),
+    }))
+    const p = postJson('/x', {})
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS)
+    expect(await p).toEqual({ ok: false, status: 0, error: NETWORK_ERR_MSG })
   })
 })
 
