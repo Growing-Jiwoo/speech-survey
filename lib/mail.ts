@@ -71,8 +71,10 @@ export function escapeHtml(s: string): string {
 // 사용자 확정 2026-08-22. 이전 판은 "개발용 초안"이었고 교사가 실제로 묻는 것(얼마나 걸리나 ·
 // 무엇이 필요하나 · 코드를 잃으면)에 답하지 않았다.
 //
-// ⚠️ 여전히 연구윤리 검토본 대기 중이다 — 검토본이 오면 이 절만 교체하면 되고 발송 경로는
-// 건드릴 필요가 없다.
+// 말투는 **「-다」체**다 — 담당자 확정(인계 확인 사항 PDF 2026-10-12판 회신, 2026-10-22 사용자 전달 — 회신 날짜는 저장소에 없다)
+// 「승인 메일에서 '-요', '-다'체가 섞여있어서, '-다'체로 일괄 수정되면 좋겠습니다」. 부탁은 「~해 주시기 바랍니다」, 인사도
+// 「안녕하십니까」. lib/format의 승인 안내 문장(평문·[안내 문구 복사]가 함께 쓴다)도 같다 — tests/mail.test.ts가 두 채널을 핀한다.
+// 받아쓰기 문항(2학년은 「…요」 문장)은 검사지 원문이라 손대지 않는다.
 //
 // ⚠️ 승인 메일은 **코드 전달이 목적**이라 짧게 유지한다. 소요 시간·준비물·보호자 동의 조건을
 // 담은 「검사 전에 확인해 주세요」 블록은 실제 발송본을 검수한 뒤 뺐다(사용자 확정 2026-08-22)
@@ -163,9 +165,9 @@ export function approvedMail(v: {
     to: '', // 호출부가 교사 주소를 채운다
     subject: `[읽기 선별검사] ${where} 학급 코드 ${v.code}`,
     html: WRAP(`
-      <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
+      <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하십니까.</p>
       <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 읽기 선별검사 신청을 확인했습니다.<br>
-        아래 학급 코드로 검사를 시작하실 수 있어요.</p>
+        아래 학급 코드로 검사를 시작하실 수 있습니다.</p>
 
       <div style="border:1.5px solid ${C.blue};background:${C.blueWell};border-radius:12px;
         padding:16px 18px;margin:0 0 20px">
@@ -182,7 +184,7 @@ export function approvedMail(v: {
       ${H('시작하는 방법')}
       ${UL([
         '검사 주소로 들어가 학급 코드를 입력합니다.',
-        '등록하신 학생 명단이 나옵니다. 검사할 학생을 고르세요.',
+        '등록하신 학생 명단이 나옵니다. 검사할 학생을 골라 주시기 바랍니다.',
         '이름·생년월일을 확인하고 검사를 시작합니다.',
       ])}
 
@@ -197,7 +199,7 @@ export function approvedMail(v: {
 
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
-        <b>이 메일을 보관해 주세요.</b> 학급 코드는 이 메일로만 전달되고,<br>
+        <b>이 메일을 보관해 주시기 바랍니다.</b> 학급 코드는 이 메일로만 전달되고,<br>
         다시 받으려면 담당자에게 문의하셔야 합니다.</p>`, FOOTER.applied),
   }
 }

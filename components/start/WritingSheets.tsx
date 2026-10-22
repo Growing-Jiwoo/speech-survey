@@ -1,6 +1,6 @@
 // components/start/WritingSheets.tsx — 인쇄되는 쓰기 기록지(아이가 글씨를 쓰는 종이). A4 한 장에 한 아이.
 //
-// 이 판이 정식 양식이다 — 사용자 확정(2026-10-22 — 사용자가 「이제 그게 정식버전」이라고 전달. 담당자 회신 원문은 저장소에 없어 담당자 확정으로 적지 않는다).
+// 이 판이 정식 양식이다 — 담당자 확정(인계 확인 사항 PDF 2026-10-12판 회신 2번, 2026-10-22 사용자 전달) — 원문 「제목만 수정하면 그대로 가도 될 것 같아(현: 쓰기 기록지, 변경: 받아쓰기)」 「2학년은 1~5번 문항만 남기고 가로 폭만 더 길어지면」. 그래서 머리 작은 글씨가 「받아쓰기」다.
 // 종전에는 담당자가 양식을 따로 주기로 해 임시본으로 두었다. 양식을 다시 바꾸더라도 바뀌지 않는 것:
 // · QR(lib/writing-sheet) — 스캔본을 아이와 맞추는 표시. 반 표시와 번호만 담는다(학급 코드·이름·주소 없음).
 // · 목표 낱말·문장은 인쇄하지 않는다(받아쓰기).
@@ -35,7 +35,7 @@ export function WritingSheet({ cls, tag, layout, entry }: {
       <div className="flex items-start justify-between border-b-[0.6mm] border-[#0e1526] pb-[3mm]">
         <div>
           <h1 className="text-[24pt] font-bold leading-tight">{layout.kind === 'word' ? '낱말 쓰기' : '문장 쓰기'}</h1>
-          <p className="mt-[1mm] text-[9pt] text-[#6e7994]">쓰기 기록지</p>
+          <p className="mt-[1mm] text-[9pt] text-[#6e7994]">받아쓰기</p>
         </div>
         <SheetQr text={sheetQrText(tag, entry.childNo)} />
       </div>
