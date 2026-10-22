@@ -650,7 +650,7 @@ export async function rosterWithTested(
     /** 쓰기 상태(가장 최근에 제출된 검사 기준) — 기록지 인쇄 창이 「화면 입력함·스캔 올림·스캔 대기」를 보인다. 검사가 없으면 null */
     writing: ScanTargetState | null
   }[]
-  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, 위 쓰기 상태 기준) — 시작 화면 배너 */
+  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, 위 쓰기 상태 기준) — 시작 화면 「현재 검사 상황」 블록 */
   scanPending: number
 }> {
   const roster = await listRoster(classCodeId)
