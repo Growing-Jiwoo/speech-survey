@@ -6,7 +6,7 @@ import { approvalNoticeText } from '@/lib/format'
 import { formFor, writingPrompts } from '@/lib/forms'
 
 // 받아쓰기 문항 — 테스트는 키가 없어 가짜 양식 문항이다(실제 낱말을 테스트에 적지 않는다, tests/README)
-const W = (grade: number) => ({ semester: 2 as const, items: writingPrompts(formFor(grade, 2)) })
+const W = (grade: number) => { const f = formFor(grade, 2); return { semester: 2 as const, kind: f.writing.kind, items: writingPrompts(f) } }
 
 const okResponse = (id = 'msg_1') =>
   new Response(JSON.stringify({ id }), { status: 200, headers: { 'Content-Type': 'application/json' } })
@@ -135,7 +135,7 @@ describe('문구', () => {
 
   it('[REGRESSION] 받아쓰기 문항도 이스케이프한다 — 양식 데이터가 메일 HTML에 그대로 들어간다', () => {
     const m = approvedMail({ teacherName: '김담임', schoolName: '예시초', grade: 1, classNo: 3, code: 'ABC123', surveyUrl: 'https://x.test',
-      writing: { semester: 2, items: ['<b>x</b>'] } })
+      writing: { semester: 2, kind: 'word', items: ['<b>x</b>'] } })
     expect(m.html).toContain('&lt;b&gt;x&lt;/b&gt;')
     expect(m.html).not.toContain('<b>x</b>')
   })
@@ -178,7 +178,7 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
   // '-다'체로 일괄 수정되면 좋겠습니다」. 받아쓰기 문항(2학년은 「…요」 문장)은 검사지 원문이라 빼고 본다.
   it('두 채널 모두 「-다」체다 — 「-요」로 끝나는 안내 문장이 없다', () => {
     for (const grade of [1, 2]) {
-      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: { semester: 2 as const, items: [] } }
+      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: { semester: 2 as const, kind: grade === 1 ? 'word' as const : 'sentence' as const, items: [] } }
       for (const out of [approvedMail(v).html.replace(/<[^>]+>/g, ' '), approvalNoticeText(v)]) {
         expect(out).not.toMatch(/요[.(\s]|요$/m)
         expect(out).not.toContain('세요')
@@ -186,10 +186,25 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     }
   })
 
-  it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다', () => {
+  it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다 — 「단일학급 학급」으로 겹치지 않는다(2026-10-22)', () => {
     const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(2) }
-    expect(approvedMail(v).html).toContain('2학년 단일학급')
-    expect(approvalNoticeText(v)).toContain('2학년 단일학급')
+    for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
+      expect(out).toContain('예시초 2학년 단일학급의 읽기 선별검사 신청을 확인했습니다.')
+      expect(out).not.toContain('단일학급 학급')
+    }
+    expect(approvalNoticeText({ ...v, classNo: 3 })).toContain('예시초 2-3 학급의 읽기 선별검사 신청을 확인했습니다.')
+    const link = resultsLinkMail({ teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, resultsUrl: 'https://x.test/results/abc' }).html
+    expect(link).toContain('예시초 2학년 단일학급의 검사 결과지를 받으실 수 있어요.')
+  })
+
+  it('[REGRESSION] 낱말·문장은 학년이 아니라 양식의 쓰기 과제로 고른다 — 3학년은 1학년 양식(낱말 쓰기)이다', () => {
+    const v = { teacherName: '김담임', schoolName: '예시초', grade: 3, classNo: 1, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(3) }
+    expect(v.writing.kind).toBe('word')
+    for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
+      expect(out).toContain('받아쓰기는 아래 낱말로 진행해')
+      expect(out).toContain('불러 줄 낱말이')
+      expect(out).not.toContain('불러 줄 문장')
+    }
   })
 
   it('두 채널 모두 「결과지 받는 방법」을 담는다 — 검사 주소에서 코드 입력 후 [결과지 받기], 등록된 이메일로 링크', () => {
@@ -211,7 +226,9 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
         expect(out).toContain('쓰기를 기록지(스캔본)로 하실 때')
         // 시작 화면의 버튼 이름 그대로(2026-10-22 블록으로 바뀜) — 스캔본은 결과지 화면이 아니라 시작 화면 버튼이 보내는 메일 링크에서 올린다
         expect(out).toContain('[쓰기 기록지 인쇄]')
-        expect(out).toContain(`받아쓰기는 아래 ${what}로 진행해 주시기 바랍니다(2학기 검사지`)
+        // 조사는 받침에 맞춘다 — 「낱말로」·「문장으로」(「문장로」로 나가던 것, 2026-10-22)
+        expect(out).toContain(`받아쓰기는 아래 ${what === '낱말' ? '낱말로' : '문장으로'} 진행해 주시기 바랍니다(2학기 검사지`)
+        expect(out).toContain(`불러 줄 ${what}이 기록지 칸 번호와 함께`)
         expect(out).toContain('[쓰기 스캔본 올리기]')
         expect(out).not.toContain('결과지 화면')
         // 문항이 빠짐없이, 기록지 칸 번호 순서대로

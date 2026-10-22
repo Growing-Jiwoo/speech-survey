@@ -6,7 +6,7 @@
 //  ③ 결과지 링크 → 교사(학급 코드에 등록된 주소로만)
 // 문구는 templates 절에 모아 두고, 담당자 확정본이 오면 그 함수만 갈아 끼운다.
 import { env } from './env'
-import { RESULTS_GUIDE_LINES, SCAN_GUIDE_TITLE, gradeClassLabel, scanGuideLines, writingNoticeLead, type WritingNotice } from './format'
+import { RESULTS_GUIDE_LINES, SCAN_GUIDE_TITLE, classPhrase, gradeClassLabel, scanGuideLines, writingNoticeLead, type WritingNotice } from './format'
 
 const ENDPOINT = 'https://api.resend.com/emails'
 
@@ -166,7 +166,7 @@ export function approvedMail(v: {
     subject: `[읽기 선별검사] ${where} 학급 코드 ${v.code}`,
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하십니까.</p>
-      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 읽기 선별검사 신청을 확인했습니다.<br>
+      <p style="margin:0 0 20px">${escapeHtml(classPhrase(v.schoolName, v.grade, v.classNo))}의 읽기 선별검사 신청을 확인했습니다.<br>
         아래 학급 코드로 검사를 시작하실 수 있습니다.</p>
 
       <div style="border:1.5px solid ${C.blue};background:${C.blueWell};border-radius:12px;
@@ -189,8 +189,8 @@ export function approvedMail(v: {
       ])}
 
       ${H(SCAN_GUIDE_TITLE)}
-      ${UL(scanGuideLines(v.grade))}
-      <p style="margin:12px 0 6px;font-size:14px;color:${C.soft};line-height:1.75">${escapeHtml(writingNoticeLead(v.grade, v.writing.semester))}</p>
+      ${UL(scanGuideLines(v.writing.kind))}
+      <p style="margin:12px 0 6px;font-size:14px;color:${C.soft};line-height:1.75">${escapeHtml(writingNoticeLead(v.writing))}</p>
       <ol style="margin:0;padding:0 0 0 26px;font-size:15px;line-height:1.8">${
         v.writing.items.map(t => `<li style="margin:0 0 2px">${escapeHtml(t)}</li>`).join('')}</ol>
 
@@ -223,7 +223,7 @@ export function resultsLinkMail(v: {
     subject: `[읽기 선별검사] ${where} ${scan ? '쓰기 스캔본 올리기' : '결과지'}`,
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
-      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 ${scan ? '쓰기 기록지 스캔본을 올리실' : '검사 결과지를 받으실'} 수 있어요.</p>
+      <p style="margin:0 0 20px">${escapeHtml(classPhrase(v.schoolName, v.grade, v.classNo))}의 ${scan ? '쓰기 기록지 스캔본을 올리실' : '검사 결과지를 받으실'} 수 있어요.</p>
       <p style="margin:0"><a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.resultsUrl)}"
         style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
         display:inline-block;font-weight:700;font-size:14px">${scan ? '스캔본 올리기' : '결과지 보기'}</a></p>
