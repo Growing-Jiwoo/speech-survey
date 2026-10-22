@@ -5,10 +5,11 @@
 //
 // 한 줄로 이어 붙이지 않는다 — 배지와 설명이 뒤섞이면 어디까지가 한 항목인지 읽히지 않는다.
 // 항목마다 한 행, 배지는 왼쪽에 세로로 맞춰 눈이 배지 열만 훑어도 찾게 한다.
+// 제목(「표시 읽는 법」·「상태 읽는 법」)은 두지 않는다 — 담당자 요청(2026-10-22, 사용자 전달) 「그 텍스트가 없어도 이해가 잘
+// 되도록 구성되어 있어서」.
 import { Fragment, type ReactNode } from 'react'
 
-export function BadgeLegend({ title = '표시 읽는 법', items, note, columns = 2 }: {
-  title?: string
+export function BadgeLegend({ items, note, columns = 2 }: {
   items: { badge: ReactNode; desc: ReactNode }[]
   /** 배지로는 설명되지 않는 보충 (예: 진행률 분모 기준) */
   note?: ReactNode
@@ -20,11 +21,10 @@ export function BadgeLegend({ title = '표시 읽는 법', items, note, columns 
 }) {
   return (
     <div className="border-t border-line bg-well px-4 py-3.5">
-      <p className="text-[12.5px] font-bold text-ink-soft">{title}</p>
       {/* 넓은 화면에서 2열 — 항목이 3~4개라 한 열로 두면 세로로 길어지기만 한다.
           배지 열을 dl 전체가 공유하는 auto 트랙으로 둬야(항목마다 별도 grid로 두지 않고)
           배지 폭이 제각각이어도 설명의 왼쪽 끝이 한 줄로 맞는다 — 눈이 설명 열만 훑을 수 있다. */}
-      <dl className={`mt-2 grid grid-cols-[auto_1fr] items-baseline gap-x-2.5 gap-y-2 ${
+      <dl className={`grid grid-cols-[auto_1fr] items-baseline gap-x-2.5 gap-y-2 ${
         columns === 2 ? 'sm:grid-cols-[auto_1fr_auto_1fr]' : ''}`}>
         {items.map((it, i) => (
           <Fragment key={i}>
