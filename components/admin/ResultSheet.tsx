@@ -467,15 +467,18 @@ export function ResultSheet({
 
       <ScoreBand form={form} result={r} />
 
-      {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
+      {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다. 의미(왼쪽)·무의미(오른쪽)를 한 열씩 나란히 둔다
+          (담당자 요청 2026-10-22). 640px 미만에서만 위아래로 쌓는다 — 세로 아이패드(744px)에서 쌓으면 한 행이 넓어져 낱말과 O/X가 멀어진다 */}
       <TaskSection title={SECTION_LABEL.word_reading}
         hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
-        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
-          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')} failed={uploadFailed.has('p_rw_meaning')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
-        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
-          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')} failed={uploadFailed.has('p_rw_nonsense')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-line">
+          <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
+            audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')} failed={uploadFailed.has('p_rw_meaning')}
+              limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+          <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
+            audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')} failed={uploadFailed.has('p_rw_nonsense')}
+              limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        </div>
         <Subtotal
           cells={[
             { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },
