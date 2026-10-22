@@ -174,6 +174,18 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
     }
   })
 
+  // 담당자 확정(인계 확인 사항 PDF 2026-10-12판 회신 3번, 2026-10-22 사용자 전달) — 「승인 메일에서 '-요', '-다'체가 섞여있어서,
+  // '-다'체로 일괄 수정되면 좋겠습니다」. 받아쓰기 문항(2학년은 「…요」 문장)은 검사지 원문이라 빼고 본다.
+  it('두 채널 모두 「-다」체다 — 「-요」로 끝나는 안내 문장이 없다', () => {
+    for (const grade of [1, 2]) {
+      const v = { teacherName: '김담임', schoolName: '예시초', grade, classNo: 3, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: { semester: 2 as const, items: [] } }
+      for (const out of [approvedMail(v).html.replace(/<[^>]+>/g, ' '), approvalNoticeText(v)]) {
+        expect(out).not.toMatch(/요[.(\s]|요$/m)
+        expect(out).not.toContain('세요')
+      }
+    }
+  })
+
   it('[REGRESSION] 반이 0인 단일학급도 두 채널이 같게 표기한다', () => {
     const v = { teacherName: '김담임', schoolName: '예시초', grade: 2, classNo: 0, code: 'K7M2P9', surveyUrl: 'https://x.test', writing: W(2) }
     expect(approvedMail(v).html).toContain('2학년 단일학급')
@@ -198,7 +210,7 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
       for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
         expect(out).toContain('쓰기를 기록지(스캔본)로 하실 때')
         expect(out).toContain('[쓰기 기록지 인쇄 →]')
-        expect(out).toContain(`받아쓰기는 아래 ${what}로 진행해 주세요(2학기 검사지`)
+        expect(out).toContain(`받아쓰기는 아래 ${what}로 진행해 주시기 바랍니다(2학기 검사지`)
         expect(out).toContain('쓰기 스캔본 올리기')
         // 문항이 빠짐없이, 기록지 칸 번호 순서대로
         let at = -1
