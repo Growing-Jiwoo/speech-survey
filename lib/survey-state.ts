@@ -85,16 +85,27 @@ export interface SurveyState {
    * 2026-10-12 점검). 스키마 버전을 올리지 않는다 — 없으면 저장된 녹음 수에서 시작한다.
    */
   tries?: Record<string, number>
+  /**
+   * 앞 시도는 저장돼 있는데 **다시 녹음한 시도가 끊겨 사라진** 페이지(`settleLostUploads`가 적고, 그 페이지를 다시 녹음하면 뺀다).
+   * 저장 수가 0이 아니라 「저장되지 않은 녹음」(`unsavedPages`의 시도 기록)으로는 잡히지 않아, 다시 녹음하던 중 새로고침하면 아무
+   * 안내 없이 앞 시도가 마지막 녹음으로 남았다 — 선생님은 다시 읽힌 녹음이 저장된 줄 알았다(2026-10-22 출시 전 점검. 아이패드
+   * Safari는 새로고침 경고도 띄우지 않는다). 스키마 버전을 올리지 않는다 — 없으면 그런 페이지가 없다.
+   */
+  lostLatest?: string[]
 }
 
 /**
- * 녹음을 **시도했는데 저장된 녹음이 없는** 페이지 — 다시 보낼 녹음(`retryable`, lib/upload-flight)이 있는 것은 뺀다.
+ * 녹음을 **시도했는데 저장되지 않은** 페이지 — 다시 보낼 녹음(`retryable`, lib/upload-flight)이 있는 것은 뺀다.
  * 아이는 읽었고 저장만 안 됐다(올리기 실패를 다시 보내지 못한 채 새로고침·탭 닫기, 끊긴 업로드, 그 녹음만 저장할 수 없음).
- * 「모르겠어요」가 아니라 **다시 녹음할 페이지**다 — 검사·검토 화면이 같은 판정으로 알리고, 이 페이지에는 [모르겠어요]가
+ * 저장된 녹음이 하나도 없는 페이지와, 앞 시도는 있는데 마지막으로 다시 녹음한 것이 끊긴 페이지(`lostLatest`) 둘 다다.
+ * 「모르겠어요」가 아니라 **다시 녹음할 페이지**다 — 검사·검토 화면이 같은 판정으로 알리고, 저장된 녹음이 없는 페이지에는 [모르겠어요]가
  * 없다(lib/survey-flow `recordingNav` — 2026-10-12 점검: 「모르겠어요」로 넘기면 검토는 완료로 보고 관리자는 「저장 실패」로 보았다).
  */
-export function unsavedPages(s: Pick<SurveyState, 'recorded' | 'attempted'>, retryable: Record<string, unknown> = {}): string[] {
-  return (s.attempted ?? []).filter(c => (s.recorded[c] ?? 0) === 0 && !(c in retryable))
+export function unsavedPages(
+  s: Pick<SurveyState, 'recorded' | 'attempted' | 'lostLatest'>, retryable: Record<string, unknown> = {},
+): string[] {
+  const none = (s.attempted ?? []).filter(c => (s.recorded[c] ?? 0) === 0)
+  return [...new Set([...none, ...(s.lostLatest ?? [])])].filter(c => !(c in retryable))
 }
 
 /** 다음 녹음의 시도 번호 — 저장된 수와 매긴 적 있는 번호 중 큰 것 다음(위 `tries`) */
@@ -217,7 +228,10 @@ export function settleLostUploads(
     if (running.length) rest[code] = running
   }
   if (lost.length === 0) return { state: s, lost }
-  return { state: { ...s, recorded, pendingUploads: rest }, lost }
+  // 앞 시도가 남은 페이지는 저장 수로는 알 수 없다 — 따로 적어 두어 다시 녹음할 때까지 알린다(위 `lostLatest`)
+  const keptEarlier = lost.filter(c => (recorded[c] ?? 0) > 0)
+  const lostLatest = [...new Set([...(s.lostLatest ?? []), ...keptEarlier])]
+  return { state: { ...s, recorded, pendingUploads: rest, ...(lostLatest.length ? { lostLatest } : {}) }, lost }
 }
 
 /** 진행 상태 파기. 최종 제출 성공 시·새 검사 시작 직전에 호출해

@@ -130,7 +130,7 @@ export function useRecorder(maxSec: number, onComplete: (r: Recording) => void) 
       rec.ondataavailable = e => chunks.push(e.data)
       rec.onstop = () => {
         cleanupRef.current()
-        // 녹음 중에 화면을 떠났다(헤더 링크·브라우저 뒤로가기) — 그 시도는 버린다. 트랙을 끄면 브라우저가 stop을 내보내
+        // 녹음 중에 화면을 떠났다(헤더 링크 등 — 문항 화면의 뒤로 가기는 일시정지로 바뀌어 여기 오지 않는다) — 그 시도는 버린다. 트랙을 끄면 브라우저가 stop을 내보내
         // 잘린 녹음이 「마지막 시도」로 올라갔는데 이 기기의 진행 기록에는 남지 않았다(2026-10-08 야간 점검).
         if (discardRef.current) return
         setState('idle'); setLevel(0); setElapsedMs(0)

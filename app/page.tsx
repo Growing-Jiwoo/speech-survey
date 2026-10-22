@@ -107,6 +107,10 @@ interface Confirmed {
   name: string
   /** 직접 입력한 번호가 명단의 다른 아이 번호와 같으면 그 아이 이름 — 확인 창이 알린다(아래 verify 주석) */
   rosterClash?: string | null
+  /** 확인 창을 연 학급 코드와 단계 — 세션은 **이 값으로** 만든다(누르는 순간의 코드 칸·단계가 아니라). 창이 열린 사이 늦게 온
+   *  조회 응답이 단계를 바꾸거나 코드 칸이 바뀌어도, 창에 보인 학급·아이와 다른 세션이 생기지 않게(2026-10-22 출시 전 점검) */
+  code: string
+  mode: 'roster' | 'direct'
   /** 이 확인 모달 한 번에 대응하는 멱등 키. **모달을 열 때 만들고 재시도 동안 유지한다** —
    *  `begin()` 안에서 만들면 실패 후 다시 누를 때마다 새 키가 나와 서버가 재시도를 구분할
    *  수 없다(연타·재전송이 그대로 세션 두 개가 된다). 모달을 닫고 다시 열면 새 키가 되므로
@@ -122,7 +126,7 @@ export default function StartPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>('code')
   const [code, setCode] = useState('')
-  // 코드 조회 결과 — 명단 모드 머리글과 확인 모달이 쓴다
+  // 코드 조회 결과 — 「현재 검사 상황」 블록과 확인 모달이 쓴다
   const [cls, setCls] = useState<ClassInfo | null>(null)
   /** `cls`가 **어느 코드로** 조회된 것인지. 직접 입력 모드는 코드를 고쳐도 단계를 되돌리지
    *  않으므로(아래 onChange 주석), 이것이 없으면 옛 학급 블록이 새 코드 위에 남는다 —
@@ -175,6 +179,13 @@ export default function StartPage() {
    *  클로저가 **최신 값**을 읽어야 하기 때문 — state였다면 마운트 시점 값에 갇힌다.)
    */
   const codeTouched = useRef(false)
+  /** 코드 칸이 바뀔 때마다 1씩 는다 — 조회를 보낸 뒤 코드가 바뀌었으면 그 응답은 **다른 학급 것**이라 버린다(lookupCode·verify).
+   *  자동 조회만 버리던 때(위 codeTouched)는 직접 누른 조회의 늦은 응답이 고친 코드 위에 옛 학급 명단을 그렸고, 그 명단에서 고른
+   *  아이로는 [확인]이 아무 반응도 하지 않았다(2026-10-22 출시 전 점검 — 느린 망에서 코드를 고치는 사이). */
+  const codeEpoch = useRef(0)
+  /** 코드 조회 순번 — 나중에 보낸 조회가 있으면 앞 조회의 응답은 버린다. 자동 조회가 직접 누른 조회보다 늦게 오면 고른 아이를 풀고
+   *  직접 입력 화면을 명단 단계로 되돌렸다(같은 점검) */
+  const lookupSeq = useRef(0)
   /** 이 브라우저가 진행 상태를 저장하지 못한다 — 검사를 시작할 수 없으니 처음부터 알리고 세션을 만들지 않는다(storageWritable) */
   const [storageBlocked, setStorageBlocked] = useState(false)
 
@@ -188,8 +199,8 @@ export default function StartPage() {
     // 채워만 두지 않고 **조회까지 한다**(담당자 확정 2026-09-21: "코드 재입력 삭제"). 이전에는
     // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
     // 받기 위한 것이었다 — 자동 조회도 서버를 다시 부르므로 그 목적은 그대로 달성된다.
-    // 갇히지 않는다: 코드 칸은 모든 단계에서 화면에 남아 있고, 한 글자라도 고치면 아래
-    // onChange가 1단계로 되돌리며 명단·선택을 전부 비운다(다른 학급으로 전환).
+    // 갇히지 않는다: 코드 칸은 모든 단계에서 화면에 남아 있고, 한 글자라도 고치면 아래 onChange가 명단·선택·학급 블록을
+    // 비운다(명단 단계는 1단계로 되돌리고, 직접 입력 단계는 입력하던 칸을 둔다 — 다른 학급으로 전환).
     const last = loadClassCode()
     if (last) { setCode(last); void lookupCode(last) }
     // 마운트 1회만 — lookupCode는 매 렌더 새로 만들어지므로 의존성에 넣으면 조회가 반복된다.
@@ -216,7 +227,7 @@ export default function StartPage() {
    *  선생님이 명단에서 고르지 못하고 아이 정보를 손으로 다 넣어야 했다(2026-10-13 운영 점검). */
   const canRecheckCode = step === 'direct' && cleanCode !== clsCode && validClassCode(cleanCode)
   /** 확인 중인 아이가 이 컴퓨터에서 진행 중인 바로 그 아이인가 — 학급과 번호가 모두 같아야 한다(위 `resume`) */
-  const isResumeChild = (childNo: number) => resume !== null && resume.classCode === cleanCode && resume.childNo === childNo
+  const isResumeChild = (c: Pick<Confirmed, 'code' | 'childNo'>) => resume !== null && resume.classCode === c.code && resume.childNo === c.childNo
   const cleanName = name.trim().replace(/\s+/g, ' ')
   const childNoNum = Number(childNo)
   const birthYmd = year && month && day
@@ -244,11 +255,15 @@ export default function StartPage() {
     // 고치려던 검사자가 그동안 아무것도 할 수 없다 — 바로 그 순간을 막으려고 codeTouched를
     // 둔 것인데 화면이 잠겨 있으면 손 댈 길 자체가 없다. 명단이 나타나는 것이 곧 피드백이다.
     if (!auto) setBusy(true)
+    const seq = ++lookupSeq.current
+    const epoch = codeEpoch.current
     const r = await postJson<CodeLookup>('/api/sessions/verify-code',
       { code: target }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
     if (!auto) setBusy(false)
-    // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched 주석).
+    // 검사자가 그 사이 코드를 고쳤으면 이 응답은 **다른 학급 것**이다 — 버린다(codeTouched·codeEpoch 주석).
+    // 그 뒤 다른 조회를 보냈어도 버린다 — 늦게 온 앞 조회가 화면을 되돌리지 않게(lookupSeq)
     if (auto && codeTouched.current) return
+    if (epoch !== codeEpoch.current || seq !== lookupSeq.current) return
     if (!r.ok) {
       if (auto) return
       // 미승인(pending) 코드도 미존재와 같은 404다 — 사유를 구분하지 않는 것이 서버 방침이다.
@@ -276,7 +291,7 @@ export default function StartPage() {
     if (!child || !cls || clsCode !== cleanCode) return
     setConfirmErr('')
     setConfirm({
-      cls, childNo: child.childNo, name: child.name,
+      cls, code: cleanCode, mode: 'roster', childNo: child.childNo, name: child.name,
       // 생년월일은 저장형(YYMMDD)이 아니라 읽는 형(YYYY-MM-DD)으로 보여준다 — 검사자가
       // 명단·출석부와 눈으로 대조하는 값이라 `190509`는 대조가 안 된다(사용자 확정 2026-08-21).
       // 변환은 lib/birth의 normBirth를 쓴다(실사례 29개가 테스트로 고정된 함수) — 못 읽으면
@@ -300,12 +315,17 @@ export default function StartPage() {
     if (Object.keys(next).length > 0) { focusFirstError(next); return }
 
     setFormErr(''); setBusy(true)
+    // 응답을 기다리는 사이 코드 칸이 바뀌면 이 확인은 버린다 — 확인 창이 옛 학급을 보인 채 새 코드로 세션이 생기지 않게(codeEpoch)
+    const epoch = codeEpoch.current
+    const stale = () => { if (epoch === codeEpoch.current) return false; setBusy(false); return true }
     // 코드를 고친 뒤라면(onChange가 옛 학급을 비웠다) 그 학급을 먼저 다시 받는다 — 학급 블록·교사용 블록과
     // 아래 번호 겹침 경고가 **지금 코드의 학급** 기준이어야 한다.
     let rosterNow = roster
     if (clsCode !== cleanCode) {
+      ++lookupSeq.current   // 이 조회가 가장 나중 — 늦게 온 앞 조회(자동 조회 등)가 덮지 않게
       const look = await postJson<CodeLookup>('/api/sessions/verify-code',
         { code: cleanCode }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
+      if (stale()) return
       if (!look.ok) {
         setBusy(false)
         if (look.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
@@ -319,6 +339,7 @@ export default function StartPage() {
     const r = await postJson<ClassInfo & { alreadyTested: Confirmed['tested'] }>(
       '/api/sessions/verify-code',
       { code: cleanCode, childNo: childNoNum }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
+    if (stale()) return
     setBusy(false)
     if (!r.ok) {
       if (r.status === 404) { setErrors({ code: '코드를 확인해 주세요.' }); focusFirstError({ code: '!' }) }
@@ -331,7 +352,7 @@ export default function StartPage() {
     // (2026-10-08 야간 점검). 막지는 않는다 — 명단이 틀렸을 수도 있다.
     const clash = rosterNow.find(c => c.childNo === childNoNum && c.name !== cleanName)
     setConfirm({
-      cls: r.data, childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
+      cls: r.data, code: cleanCode, mode: 'direct', childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
       identity: null, tested: r.data.alreadyTested,
       idemKey: crypto.randomUUID(),
     })
@@ -349,16 +370,17 @@ export default function StartPage() {
     // 저장이 막힌 브라우저는 검사 화면이 진행 상태를 못 읽어 곧바로 처음 화면으로 돌아온다 — 세션을 만들기 전에 막는다
     if (!storageWritable()) { setStorageBlocked(true); setConfirmErr(STORAGE_BLOCKED_MSG); return }
     setBusy(true)
+    // 코드·모드는 확인 창을 연 때의 값이다(Confirmed.code·mode 주석) — 지금 코드 칸·단계를 다시 읽지 않는다
     const r = await postJson<{ sessionId: string; sessionToken: string; grade: number }>('/api/sessions',
-      step === 'roster'
-        ? { fromRoster: true, code: cleanCode, childNo: c.childNo, idemKey: c.idemKey }
+      c.mode === 'roster'
+        ? { fromRoster: true, code: c.code, childNo: c.childNo, idemKey: c.idemKey }
         : {
-          code: cleanCode, childNo: c.childNo, name: c.name, gender, birthYmd,
+          code: c.code, childNo: c.childNo, name: c.name, gender, birthYmd,
           // 모달을 열 때 만든 키를 그대로 쓴다 — 재시도가 같은 키여야 서버가 멱등을 판정한다
           idemKey: c.idemKey,
         })
     if (!r.ok) { setBusy(false); setConfirmErr(r.error); return }
-    saveClassCode(cleanCode)
+    saveClassCode(c.code)
     clearState() // 공용 기기에 남아 있을 이전 검사 흔적 제거(세션별 키 누적 방지)
     saveState(newState(r.data.sessionId, c.name, c.childNo, r.data.sessionToken, r.data.grade))
     router.push('/survey')
@@ -447,8 +469,12 @@ export default function StartPage() {
             onChange={e => {
               // 자동 조회가 아직 날아오는 중일 수 있다 — 이 표시가 그 응답을 버리게 한다.
               codeTouched.current = true
+              // 직접 누른 조회도 아직 날아오는 중일 수 있다 — 고치기 전 코드의 응답은 버린다(codeEpoch)
+              codeEpoch.current++
               setCode(e.target.value.toUpperCase())
               clearError('code')
+              // 고치기 전 코드의 조회 실패 문구(「연결에 문제가…」 등)도 거둔다 — 남아 있으면 고친 코드가 실패한 것으로 읽힌다
+              setFormErr('')
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
@@ -662,7 +688,7 @@ export default function StartPage() {
             ? `${confirm.childNo}번은 진행 중인 검사가 있어요`
             : confirm.tested ? `${confirm.childNo}번은 이미 검사했어요` : '이 정보가 맞나요?'}
           confirmLabel={confirm.tested
-            ? (isResumeChild(confirm.childNo) ? '그래도 새로 검사' : '네, 다시 검사할게요')
+            ? (isResumeChild(confirm) ? '그래도 새로 검사' : '네, 다시 검사할게요')
             : '맞아요, 시작하기'}
           cancelLabel="아니에요"
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
@@ -699,20 +725,20 @@ export default function StartPage() {
             {/* 진행 중인 검사가 **이 컴퓨터의 것**이면(이어하기 카드의 그 아이) 「다른 기기」 안내는 틀리다 — 이어하기를 가리킨다 */}
             {/* 제출 뒤 재검사가 이 기기에서 진행 중인 아이(목록 배지 「검사함」)도 같다 — 버튼만 「그래도 새로 검사」로
                 바뀌고 까닭이 없었다(2026-10-12 점검). 「컴퓨터」가 아니라 「기기」 — 태블릿으로도 검사한다(사용자 확정 2026-10-21) */}
-            {isResumeChild(confirm.childNo) && (
+            {isResumeChild(confirm) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 기기에서 진행 중인 검사예요. 이어서 하려면 이 창을 닫고 위의 <b>[이어서 하기]</b>를 눌러 주세요.<br />
                 새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.
               </p>
             )}
-            {confirm.tested === 'inProgress' && !isResumeChild(confirm.childNo) && (
+            {confirm.tested === 'inProgress' && !isResumeChild(confirm) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
                 다른 기기에서 검사 중일 수 있어요.
               </p>
             )}
             {/* 다른 아이를 시작하면 이 컴퓨터에서 진행 중이던 아이의 검사는 이어갈 수 없게 된다 — 확인 없이 사라지지 않게 */}
-            {resume && !isResumeChild(confirm.childNo) && (
+            {resume && !isResumeChild(confirm) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 진행 중인 <b>{resume.childNo}번{resume.childName ? ` ${resume.childName}` : ''}</b> 학생의 검사는 새로 시작하면
                 이어갈 수 없게 돼요.
