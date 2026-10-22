@@ -249,6 +249,8 @@ function SurveyInner() {
         recorded: { ...prev.recorded, [code]: (prev.recorded[code] ?? 0) + 1 },
         skipped: prev.skipped.filter(c => c !== code),
         tries: { ...prev.tries, [code]: Math.max(prev.tries?.[code] ?? 0, attemptNo) },
+        // 다시 녹음했으면 「다시 녹음한 것이 끊겨 사라졌다」는 표시도 거둔다(lib/survey-state `lostLatest`)
+        lostLatest: (prev.lostLatest ?? []).filter(c => c !== code),
       }
       // 올리는 녹음이면 「시도함」도 적는다 — 제출 때 서버가 저장 실패를 가린다(lib/survey-state `attempted`)
       return uploads
@@ -418,7 +420,7 @@ function SurveyInner() {
     if (r.ok) {
       // 이미 올라갔다 — 저장 상태를 직접 고친다(그사이 검토 화면으로 옮겨 이 화면이 사라졌어도 「녹음 완료」가 남게)
       const saved = (s: SurveyState) => ({ ...s, recorded: { ...s.recorded, [code]: (s.recorded[code] ?? 0) + 1 },
-        skipped: s.skipped.filter(c => c !== code) })
+        skipped: s.skipped.filter(c => c !== code), lostLatest: (s.lostLatest ?? []).filter(c => c !== code) })
       updateSavedState(sessionId, saved)
       setSt(prev => prev && prev.sessionId === sessionId ? saved(prev) : prev)
       clearFailedUpload(sessionId, code)

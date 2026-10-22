@@ -328,6 +328,21 @@ describe('끊긴 업로드 — pendingUploads·settleLostUploads (사용자 확�
     const s = base()
     expect(settleLostUploads(s, () => false)).toEqual({ state: s, lost: [] })
   })
+  it('[REGRESSION] 앞 시도가 남은 페이지의 다시 녹음이 끊기면 lostLatest에 적는다 — 저장 수만으로는 알릴 수 없었다(2026-10-22)', () => {
+    // 문장 1번: 1회차 저장됨(수 1) → 다시 녹음(수 2, 2회차 올리는 중) → 새로고침
+    const s = withPendingUpload({ ...base(), recorded: { p_rs01: 2 } }, 'p_rs01', 2)
+    const { state, lost } = settleLostUploads(s, () => false)
+    expect(lost).toEqual(['p_rs01'])
+    expect(state.recorded.p_rs01).toBe(1)
+    expect(state.lostLatest).toEqual(['p_rs01'])
+    expect(unsavedPages(state)).toEqual(['p_rs01'])         // 검사·검토 화면이 「녹음이 저장되지 않았어요」로 알린다
+  })
+  it('끊긴 시도뿐이라 저장 수가 0이 된 페이지는 lostLatest에 넣지 않는다 — 시도 기록(attempted)이 이미 알린다', () => {
+    const s = withPendingUpload({ ...base(), recorded: { p_rs02: 1 }, attempted: ['p_rs02'] }, 'p_rs02', 1)
+    const { state } = settleLostUploads(s, () => false)
+    expect(state.lostLatest).toBeUndefined()
+    expect(unsavedPages(state)).toEqual(['p_rs02'])
+  })
   it('updateSavedState는 세션 id로 찾아 그 세션만 고치고 LAST_KEY는 건드리지 않는다', () => {
     saveState(base())
     saveState({ ...newState('sid-2', '김영희', 4, 'tok2', 1) })   // 다른 탭이 다른 아이를 시작
@@ -403,5 +418,10 @@ describe('저장되지 않은 녹음 페이지 — 다시 녹음할 곳 (2026-10
   it('시도하지 않은 페이지(녹음 없이 넘김)는 들지 않는다 — 시도 기록이 없는 옛 진행 상태도', () => {
     expect(unsavedPages({ recorded: {}, attempted: [] })).toEqual([])
     expect(unsavedPages({ recorded: {} })).toEqual([])
+  })
+  it('앞 시도가 남았는데 다시 녹음한 것이 끊긴 페이지(lostLatest)도 든다 — 겹치면 한 번, 다시 보낼 녹음이 있으면 뺀다', () => {
+    const s = { recorded: { p_rw_meaning: 0, p_rs01: 1 }, attempted: ['p_rw_meaning', 'p_rs01'], lostLatest: ['p_rs01', 'p_rw_meaning'] }
+    expect(unsavedPages(s)).toEqual(['p_rw_meaning', 'p_rs01'])
+    expect(unsavedPages(s, { p_rs01: {} })).toEqual(['p_rw_meaning'])
   })
 })
