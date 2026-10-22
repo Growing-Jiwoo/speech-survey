@@ -224,7 +224,7 @@ export function CodeIssuer() {
       </div></div>
 
       {/* 신청 대기(pending) — 대기 건이 없으면 스스로 아무것도 그리지 않는다. 목록이 낡았으면 승인·삭제를 잠근다(위 stale) */}
-      <PendingApplications items={(codes ?? []).filter(c => c.status === 'pending')} locked={stale}
+      <PendingApplications items={(codes ?? []).filter(c => c.status === 'pending')} all={codes ?? []} locked={stale}
         onDelete={c => { setDelErr(''); setToDelete(c) }} />
 
       {/* 발급된 코드(active) — 받아 둔 목록이 있으면 다시 받기가 실패해도 그대로 보인다(위 띠가 알린다) */}

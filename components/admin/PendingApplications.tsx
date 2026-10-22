@@ -24,10 +24,18 @@ interface Approved {
   already: boolean; mailed: boolean
 }
 
+/** 같은 학교·학년·반의 다른 코드 — 신청 대기든 발급된 것이든. 같은 반에 코드가 둘이면 결과지·스캔본 올리기(반 표시가 코드마다
+ *  다르다)가 둘로 나뉜다. 직접 발급 화면(CodeIssuer)이 같은 기준으로 묻는다 */
+function sameClassCodes(c: ClassCodeItem, all: ClassCodeItem[]): ClassCodeItem[] {
+  return all.filter(o => o.id !== c.id && o.school_id === c.school_id && o.grade === c.grade && o.class_no === c.class_no)
+}
+
 export function PendingApplications({
-  items, onDelete, locked = false,
+  items, all = [], onDelete, locked = false,
 }: {
   items: ClassCodeItem[]
+  /** 발급된 코드까지 포함한 전체 목록 — 같은 학급의 다른 코드를 찾는다(위 `sameClassCodes`) */
+  all?: ClassCodeItem[]
   /** 삭제(반려) 확인 모달은 발급 목록과 공유하므로 부모(CodeIssuer)가 소유한다 */
   onDelete: (c: ClassCodeItem) => void
   /** 목록 다시 받기가 실패해 이 목록이 낡았다 — 승인·삭제를 잠근다(그사이 다른 탭이 승인·삭제했을 수 있고, 로그인이 끝났으면
@@ -40,9 +48,15 @@ export function PendingApplications({
   const [err, setErr] = useState('')
   const [approved, setApproved] = useState<Approved | null>(null)
   const [copied, setCopied] = useState(false)
+  /** 같은 학급의 다른 코드가 있는 신청을 한 번 눌렀다 — 다음 [승인]은 그대로 승인한다(직접 발급의 중복 확인과 같은 두 번 누르기).
+   *  선생님이 메일을 기다리다 다시 신청하면 같은 반 신청이 둘이 되고, 둘 다 승인하면 반의 결과지가 둘로 나뉜다(2026-10-22 출시 전 점검).
+   *  막지는 않는다 — 담임이 바뀌어 새로 받는 경우도 있다 */
+  const [dupAck, setDupAck] = useState<string | null>(null)
   const roster = useRosterQuery(openId)
 
   async function approve(c: ClassCodeItem) {
+    if (sameClassCodes(c, all).length > 0 && dupAck !== c.id) { setDupAck(c.id); return }
+    setDupAck(null)
     setBusyId(c.id); setErr('')
     const r = await postJson<{ already: boolean; mailed: boolean; code: string; surveyUrl: string; writing: WritingNotice }>(
       `/api/admin/codes/${c.id}/approve`, undefined, '승인하지 못했어요. 다시 시도해 주세요.')
@@ -130,6 +144,15 @@ export function PendingApplications({
                     </dd>
                   </div>
                 </dl>
+                {sameClassCodes(c, all).length > 0 && (
+                  <p role={dupAck === c.id ? 'alert' : undefined}
+                    className={`mt-1.5 text-[12px] leading-relaxed ${dupAck === c.id ? 'font-bold text-rec-deep' : 'text-amber'}`}>
+                    같은 학급의 코드가 이미 있어요(
+                    {sameClassCodes(c, all).map(d => `${d.code} · ${d.status === 'pending' ? '신청 대기' : '발급됨'} · 담임 ${d.teacher_name}`).join(', ')}).
+                    {' '}같은 반에 코드가 둘이면 결과지가 나뉘어요.
+                    {dupAck === c.id && ' 다시 신청한 것이면 이 신청을 삭제해 주세요. 그래도 승인하려면 [승인]을 한 번 더 누르세요.'}
+                  </p>
+                )}
               </div>
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 {/* 승인 요청은 메일 발송까지 끝난 뒤에 응답하므로 1~2초 머문다. 그 사이 같은 행의
