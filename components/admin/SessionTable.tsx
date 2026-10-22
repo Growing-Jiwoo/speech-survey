@@ -334,7 +334,6 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         </table>
       </div>
       <BadgeLegend
-        title="상태 읽는 법"
         items={[
           { badge: <Badge tone="mute">진행 중</Badge>, desc: '아직 제출하지 않은 검사예요.' },
           {
