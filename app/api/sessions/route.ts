@@ -58,12 +58,16 @@ export async function POST(req: Request) {
       sessionId = await createSession({
         classCode, childNo: child.child_no,
         birthYmd: child.birth_ymd, gender: child.gender, childName: child.child_name,
+        // 검사할 때는 동의를 받지 않는다(담당자 요청 2026-10-22) — 명단 아동은 신청 때 확인했다(lib/db consentedAt)
+        consentedAt: classCode.applied_at,
         idemKey: d.idemKey,
       })
     } else {
       sessionId = await createSession({
         classCode, childNo: d.childNo,
         birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
+        // 명단 밖 아동은 신청 때 확인한 대상이 아니다 — 확인 기록 없음(관리자 결과지 「보호자 동의 기록 없음」)
+        consentedAt: null,
         idemKey: d.idemKey,
       })
     }

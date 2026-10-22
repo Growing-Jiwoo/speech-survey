@@ -9,7 +9,7 @@ import { RosterEditor } from '@/components/apply/RosterEditor'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { Select } from '@/components/Select'
 import { useFileDropGuard } from '@/hooks/useFileDropGuard'
-import { APPLY_CHECKS, SURVEY_NOTICE } from '@/lib/consent'
+import { APPLY_CHECKS, CONSENT_NOTICE, SURVEY_NOTICE } from '@/lib/consent'
 import { APPLY_GRADE_OPTIONS, CLASS_OPTIONS } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import type { RosterChild } from '@/lib/roster'
@@ -201,6 +201,21 @@ export default function ApplyPage() {
               </li>
             ))}
           </ul>
+
+          {/* 개인정보 수집·이용 안내 — 종전에는 검사 시작 화면에서 아이마다 보이고 법정대리인 동의 확인을 받았는데, 신청할 때
+              한 번만 받기로 했다(담당자 요청 2026-10-22 「교사가 신청할 때 한 번만 받고, 검사 실시할 때는 빼는게 어떨까?」).
+              아래 동의 3번(법정대리인의 동의를 받은 학생만 명단에 등록)이 이 안내를 받은 확인이다. 문구는 lib/consent 그대로. */}
+          <div className="mt-4 rounded-xl border-[1.5px] border-line bg-well px-4 py-3.5">
+            <p className="text-[13px] font-bold text-ink-soft">개인정보 수집·이용 안내</p>
+            <dl className="mt-2 flex flex-col gap-1.5">
+              {CONSENT_NOTICE.map(row => (
+                <div key={row.label} className="flex gap-2 text-xs leading-relaxed">
+                  <dt className="w-20 flex-none font-bold text-ink-mute">{row.label}</dt>
+                  <dd className="min-w-0 text-ink-soft">{row.value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
 
           <div className="mt-4 flex flex-col gap-2">
             {APPLY_CHECKS.map((c, i) => (

@@ -660,11 +660,10 @@ describe('findClassCode', () => {
 describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르게 배선된다', () => {
   it('코드 행의 각 필드가 올바른 컬럼으로 가고, 아동 정보·guardian_consented_at도 함께 기록된다', async () => {
     enqueue('sessions', { data: { id: SID }, error: null })
-    const before = Date.now()
 
     const id = await createSession({
       classCode: CLASS_CODE, childNo: 7,
-      birthYmd: '180101', gender: '여', childName: '아무개',
+      birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: '2026-10-20T01:00:00.000Z',
     })
 
     expect(id).toBe(SID)
@@ -690,11 +689,16 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     expect(row.gender).toBe('여')
     expect(row.child_name).toBe('아무개')
 
-    // 법정대리인 동의 확인 시각(제22조의2) — 세션 생성 시점에 기록되는지 직접 확인.
-    expect(typeof row.guardian_consented_at).toBe('string')
-    const consentedAt = new Date(row.guardian_consented_at as string).getTime()
-    expect(consentedAt).toBeGreaterThanOrEqual(before)
-    expect(consentedAt).toBeLessThanOrEqual(Date.now())
+    // 법정대리인 동의 확인 시각(제22조의2) — 라우트가 정한 값 그대로(명단 아동은 학급 신청 시각). 검사할 때는 동의를
+    // 받지 않으므로(담당자 요청 2026-10-22) 세션을 만든 시각을 찍으면 확인하지 않은 것을 확인했다고 남긴다.
+    expect(row.guardian_consented_at).toBe('2026-10-20T01:00:00.000Z')
+  })
+  it('동의 확인 기록이 없는 아동(직접 입력·직접 발급 학급)은 guardian_consented_at이 null이다', async () => {
+    enqueue('sessions', { data: { id: SID }, error: null })
+    await createSession({
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null,
+    })
+    expect((insertCallsByTable.get('sessions')![0] as Record<string, unknown>).guardian_consented_at).toBeNull()
   })
   it('검사지를 지금 정해 form_id로 적는다 — 학년 + 검사일의 학기(3~8월 1학기 · 9~2월 2학기, KST)', async () => {
     // CLASS_CODE는 3학년 — 담당 양식이 없어 같은 학기의 1학년 양식으로 폴백한다(lib/forms formFor)
@@ -702,7 +706,7 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
       vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(iso))
       try {
         enqueue('sessions', { data: { id: SID }, error: null })
-        await createSession({ classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개' })
+        await createSession({ classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null })
         const rows = insertCallsByTable.get('sessions')!
         return (rows[rows.length - 1] as Record<string, unknown>).form_id
       } finally { vi.useRealTimers() }
@@ -716,7 +720,7 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     enqueue('sessions', { data: { id: SID }, error: null })
     await createSession({
       classCode: CLASS_CODE, childNo: 7,
-      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+      birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null, idemKey: 'key-1',
     })
     const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
     expect(row.idem_key).toBe('key-1')
@@ -725,7 +729,7 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
   it('idemKey가 없으면 idem_key 컬럼을 아예 보내지 않는다 (null 행이 unique를 다투지 않게)', async () => {
     enqueue('sessions', { data: { id: SID }, error: null })
     await createSession({
-      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null,
     })
     const row = insertCallsByTable.get('sessions')![0] as Record<string, unknown>
     expect('idem_key' in row).toBe(false)
@@ -737,7 +741,7 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     enqueue('sessions', { data: { id: 'first-session' }, error: null })
     const id = await createSession({
       classCode: CLASS_CODE, childNo: 7,
-      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+      birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null, idemKey: 'key-1',
     })
     expect(id).toBe('first-session')
     expect(fromCalls).toEqual(['sessions', 'sessions'])   // insert 시도 1 + 조회 1
@@ -748,14 +752,14 @@ describe('createSession — 학급 코드 필드가 sessions 컬럼에 올바르
     enqueue('sessions', { data: null, error: null })   // 조회 결과 없음
     await expect(createSession({
       classCode: CLASS_CODE, childNo: 7,
-      birthYmd: '180101', gender: '여', childName: '아무개', idemKey: 'key-1',
+      birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null, idemKey: 'key-1',
     })).rejects.toThrow('sessions_pkey 위반')
   })
 
   it('idemKey가 없으면 23505도 그대로 던진다 (멱등 해석 대상이 아니다)', async () => {
     enqueue('sessions', { data: null, error: { code: '23505', message: 'duplicate key value' } })
     await expect(createSession({
-      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개',
+      classCode: CLASS_CODE, childNo: 7, birthYmd: '180101', gender: '여', childName: '아무개', consentedAt: null,
     })).rejects.toThrow('duplicate key value')
   })
 

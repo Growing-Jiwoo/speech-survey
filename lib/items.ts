@@ -94,6 +94,20 @@ export const isRecordingPage = (p: SurveyPage): boolean => p.limitSec > 0
 /** 녹음 자동 종료 시각(초) = 검사지 제한 + 여유 */
 export const maxRecSec = (p: SurveyPage): number => p.limitSec + GRACE_SEC
 
+/** 문장 읽기 화면 글자 폭(1em 기준) — `public/fonts` 실측: 한글 0.92(Noto Sans KR 500), 공백 0.28·마침표 0.228(Lexend 500). */
+const SENTENCE_EM: Record<string, number> = { ' ': 0.28, '.': 0.228 }
+
+/**
+ * 문장들 가운데 가장 긴 **줄**의 폭(em) — 줄은 `\n`으로 나뉜다(2학기 3·4번은 두 문장이 한 문항). 검사 화면이 이 값으로 문장
+ * 글자 크기를 정해, 가장 긴 줄도 한 줄에 들게 한다(ReadingPage). 담당자 테스트(2026-10-22): 26px에서 2학년 2학기 4번 둘째 줄이
+ * PC 화면의 문장 칸(800px)보다 길어 마지막 어절만 셋째 줄로 넘어갔다 — 원문 「한 문장이 한 줄에는 들어오면 좋겠는데」.
+ * 표에 없는 글자는 한글 폭으로 넉넉히 센다(실제 문장은 한글·공백·마침표뿐이다 — 넘쳐 접히는 쪽보다 조금 작아지는 쪽이 낫다).
+ */
+export function sentenceFitEm(texts: string[]): number {
+  return Math.max(0, ...texts.flatMap(t => t.split('\n')).map(line =>
+    [...line.trim()].reduce((w, c) => w + (SENTENCE_EM[c] ?? 0.92), 0)))
+}
+
 /** 연습용 낱말 — 검사 문항이 아닌 **쉬운 실제 낱말**. 이 배열이 정식이다 — 담당자 확정(인계 확인 사항 PDF 2026-10-12판 회신 4번, 2026-10-22 사용자 전달) — 원문 「연습 문항 종류는 어떤 것이든 상관 없고, 실제 쉬운 단어면 괜찮아요. 오이 우유 가지 나비 다리 → 이런 것들이면 됩니다」.
  *
  *  종전에는 담당자 원문 "가짜 단어들 보여주고 테스트 하는 거야"가 (a) 쉬운 실제 낱말 / (b) 무의미 낱말 두 갈래로

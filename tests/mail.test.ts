@@ -209,9 +209,11 @@ describe('승인 안내 두 채널(approvedMail ↔ approvalNoticeText)', () => 
       expect(items.length).toBeGreaterThan(0)
       for (const out of [approvedMail(v).html, approvalNoticeText(v)]) {
         expect(out).toContain('쓰기를 기록지(스캔본)로 하실 때')
-        expect(out).toContain('[쓰기 기록지 인쇄 →]')
+        // 시작 화면의 버튼 이름 그대로(2026-10-22 블록으로 바뀜) — 스캔본은 결과지 화면이 아니라 시작 화면 버튼이 보내는 메일 링크에서 올린다
+        expect(out).toContain('[쓰기 기록지 인쇄]')
         expect(out).toContain(`받아쓰기는 아래 ${what}로 진행해 주시기 바랍니다(2학기 검사지`)
-        expect(out).toContain('쓰기 스캔본 올리기')
+        expect(out).toContain('[쓰기 스캔본 올리기]')
+        expect(out).not.toContain('결과지 화면')
         // 문항이 빠짐없이, 기록지 칸 번호 순서대로
         let at = -1
         for (const t of items) { const i = out.indexOf(t, at + 1); expect(i).toBeGreaterThan(at); at = i }
@@ -255,6 +257,20 @@ describe('resultsLinkMail — 교사 결과지 링크', () => {
     expect(html).toContain('14일')
     expect(html).toContain('[결과지 받기]')
     expect(html).toContain('담당자에게 문의')
+  })
+  it('스캔본 올리기 링크(purpose: scan) — 제목·버튼이 스캔본이고, 다시 받는 길은 시작 화면의 [쓰기 스캔본 올리기]다', () => {
+    const m = resultsLinkMail({ ...v, purpose: 'scan' })
+    expect(m.subject).toContain('예시초 1-3')
+    expect(m.subject).toContain('쓰기 스캔본')
+    expect(m.subject).not.toContain('결과지')
+    expect(m.html).toContain(`href="${v.resultsUrl}"`)
+    expect(m.html).toContain('스캔본 올리기</a>')
+    expect(m.html).toContain('14일')
+    expect(m.html).toContain('[쓰기 스캔본 올리기]')
+    expect(m.html).toContain('담당자에게 문의')
+  })
+  it('purpose를 주지 않으면 결과지 메일 그대로다', () => {
+    expect(resultsLinkMail(v)).toEqual(resultsLinkMail({ ...v, purpose: 'results' }))
   })
   it('[REGRESSION] resultsUrl에 큰따옴표가 있어도 href 속성을 벗어나지 못한다', () => {
     const html = resultsLinkMail({ ...v, resultsUrl: 'https://x.test/"><script>1</script>' }).html

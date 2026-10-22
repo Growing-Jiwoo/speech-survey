@@ -90,8 +90,8 @@ export interface SurveyState {
 /**
  * 녹음을 **시도했는데 저장된 녹음이 없는** 페이지 — 다시 보낼 녹음(`retryable`, lib/upload-flight)이 있는 것은 뺀다.
  * 아이는 읽었고 저장만 안 됐다(올리기 실패를 다시 보내지 못한 채 새로고침·탭 닫기, 끊긴 업로드, 그 녹음만 저장할 수 없음).
- * 「모르겠어요」가 아니라 **다시 녹음할 페이지**다 — 검사·검토 화면이 같은 판정으로 알리고, 이 페이지의 주 버튼은 「모르겠어요」가
- * 되지 않는다(2026-10-12 점검: 그대로 「모르겠어요」로 넘기면 검토는 완료로 보고 관리자는 「저장 실패」로 보았다).
+ * 「모르겠어요」가 아니라 **다시 녹음할 페이지**다 — 검사·검토 화면이 같은 판정으로 알리고, 이 페이지에는 [모르겠어요]가
+ * 없다(lib/survey-flow `recordingNav` — 2026-10-12 점검: 「모르겠어요」로 넘기면 검토는 완료로 보고 관리자는 「저장 실패」로 보았다).
  */
 export function unsavedPages(s: Pick<SurveyState, 'recorded' | 'attempted'>, retryable: Record<string, unknown> = {}): string[] {
   return (s.attempted ?? []).filter(c => (s.recorded[c] ?? 0) === 0 && !(c in retryable))

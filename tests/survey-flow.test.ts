@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { visiblePages, canAdvance } from '@/lib/survey-flow'
+import { visiblePages, canAdvance, recordingNav, skippedAfter } from '@/lib/survey-flow'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 
@@ -90,3 +90,39 @@ describe('canAdvance — 쓰기 방식(스캔본, 2026-09-30)', () => {
   })
 })
 
+
+// 담당자 요청(2026-10-22): 녹음을 멈춘 뒤에도 [모르겠어요]를 누를 수 있게 — 「이전, 모르겠어요, 다음」.
+describe('recordingNav — 녹음 페이지 아래 [모르겠어요]·[다음]', () => {
+  const page = g1.pageByCode.get('p_rw_meaning')!
+  const fresh = { recorded: {}, attempted: [] }
+  const base = { fromReview: false, isLast: false, retrying: false }
+
+  it('녹음 전: [모르겠어요]만 누를 수 있다 — [다음]은 꺼진다(오터치 한 번으로 조용히 넘어가지 않게)', () => {
+    expect(recordingNav(page, fresh, base)).toEqual({ skip: true, next: false })
+  })
+  it('녹음 뒤: [모르겠어요]와 [다음]을 둘 다 누를 수 있다', () => {
+    expect(recordingNav(page, { recorded: { p_rw_meaning: 1 }, attempted: ['p_rw_meaning'] }, base))
+      .toEqual({ skip: true, next: true })
+  })
+  it('올리기에 실패해 다시 보낼 녹음이 있는 화면은 [모르겠어요]가 없다 — 아이는 읽었다', () => {
+    expect(recordingNav(page, fresh, { ...base, retrying: true })).toEqual({ skip: false, next: true })
+  })
+  it('녹음을 시도했는데 저장된 것이 없는 화면도 [모르겠어요]가 없다 — 다시 녹음할 화면이다', () => {
+    expect(recordingNav(page, { recorded: {}, attempted: ['p_rw_meaning'] }, base)).toEqual({ skip: false, next: true })
+  })
+  it('연습 화면·검토에서 온 화면·녹음 없는 화면은 [모르겠어요]가 없다', () => {
+    expect(recordingNav(g1.pageByCode.get('p_practice_rw')!, fresh, base)).toEqual({ skip: false, next: true })
+    expect(recordingNav(page, fresh, { ...base, fromReview: true })).toEqual({ skip: false, next: true })
+    expect(recordingNav(g1.pageByCode.get('p_cl')!, fresh, base)).toEqual({ skip: false, next: true })
+  })
+})
+
+describe('skippedAfter — [모르겠어요]를 누른 뒤 남길 「모르겠어요」 표시', () => {
+  it('녹음이 없으면 그 화면을 남긴다(한 번만)', () => {
+    expect(skippedAfter({ recorded: {}, skipped: ['p_rs01'] }, 'p_rs02')).toEqual(['p_rs01', 'p_rs02'])
+    expect(skippedAfter({ recorded: {}, skipped: ['p_rs02'] }, 'p_rs02')).toEqual(['p_rs02'])
+  })
+  it('녹음이 있으면 남기지 않는다 — 녹음이 채점 근거다. 남기면 그 녹음 올리기가 실패했을 때 검토가 빠진 화면으로 세지 않는다', () => {
+    expect(skippedAfter({ recorded: { p_rs02: 1 }, skipped: [] }, 'p_rs02')).toEqual([])
+  })
+})

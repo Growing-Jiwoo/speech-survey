@@ -458,7 +458,8 @@ export function ResultSheet({
         <p className="mt-4 border-t border-line pt-2.5 text-[12px] text-ink-mute">
           담임 {session.teacher_name} · {contactLabel(session.teacher_phone, session.teacher_email)}
           {' · '}
-          {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2) — 도입 전 수집분은 '기록 없음' */}
+          {/* 법정대리인 동의 확인 기록(개인정보보호법 제22조의2). 명단 아동은 학급 신청일이다(검사할 때는 동의를 받지 않는다 — 2026-10-22).
+              「기록 없음」은 도입 전 수집분, 명단 밖 직접 입력 아동, 관리자 직접 발급 학급의 아동이다(lib/db createSession `consentedAt`) */}
           {session.guardian_consented_at
             ? `보호자 동의 확인 ${reportDateLabel(session.guardian_consented_at)}`
             : '보호자 동의 기록 없음'}
@@ -467,15 +468,18 @@ export function ResultSheet({
 
       <ScoreBand form={form} result={r} />
 
-      {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다 */}
+      {/* 낱말 해독 — 그룹별 sticky 플레이어 아래에서 듣면서 찍는다. 의미(왼쪽)·무의미(오른쪽)를 한 열씩 나란히 둔다
+          (담당자 요청 2026-10-22). 640px 미만에서만 위아래로 쌓는다 — 세로 아이패드(744px)에서 쌓으면 한 행이 넓어져 낱말과 O/X가 멀어진다 */}
       <TaskSection title={SECTION_LABEL.word_reading}
         hint={`${form.limits.wordSec}초 동안 정확하게 읽은 낱말 수`}>
-        <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
-          audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')} failed={uploadFailed.has('p_rw_meaning')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
-        <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
-          audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')} failed={uploadFailed.has('p_rw_nonsense')}
-            limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        <div className="grid sm:grid-cols-2 sm:divide-x sm:divide-line">
+          <WordScoreRows items={readItemsOf('meaning')} marks={marks} onMark={setMark} locked={groupLocked('meaning')}
+            audio={<PageAudio label={`${KIND_LABEL.meaning} 낱말`} attempts={attemptsOf('p_rw_meaning')} failed={uploadFailed.has('p_rw_meaning')}
+              limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+          <WordScoreRows items={readItemsOf('nonsense')} marks={marks} onMark={setMark} locked={groupLocked('nonsense')}
+            audio={<PageAudio label={`${KIND_LABEL.nonsense} 낱말`} attempts={attemptsOf('p_rw_nonsense')} failed={uploadFailed.has('p_rw_nonsense')}
+              limitSec={form.limits.wordSec} onAudioError={onAudioError} />} />
+        </div>
         <Subtotal
           cells={[
             { label: '의미 점수', value: r.wordMeaning, max: readMax.meaning },

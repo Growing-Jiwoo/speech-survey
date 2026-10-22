@@ -123,7 +123,11 @@ const TASK_SHORT: Record<TaskKey, string> = { wordReading: '해독', sentenceRea
 /** 상태 코드로 실패를 나눈다 — 401(만료·변조)은 재시도해 봐야 소용없고 404는 학급이 사라진 것. */
 class ResultsError extends Error { constructor(readonly status: number) { super('results') } }
 
-export function ResultsView({ token }: { token: string }) {
+export function ResultsView({ token, scanLink = false }: {
+  token: string
+  /** 시작 화면 [쓰기 스캔본 올리기]의 메일 링크로 왔다(`?scan=1`) — 올릴 기록지가 없어도 스캔본 칸에 그렇다고 알린다 */
+  scanLink?: boolean
+}) {
   // 데이터 로딩은 관리자 화면과 같은 react-query(app/providers.tsx가 전역 클라이언트를 준다) —
   // useEffect + setState로 직접 받으면 효과 안의 동기 setState가 된다.
   const queryClient = useQueryClient()
@@ -314,10 +318,10 @@ export function ResultsView({ token }: { token: string }) {
 
           {/* 스캔본 방식 검사가 있는 반만. 입구 카드는 올릴 수 있는 아이(스캔 대기·이미 올림)가 있을 때만 보인다 —
               조건을 여기서 걸면 확인 중에 다시 받은 목록에서 대상이 사라질 때 창이 통째로 닫힌다(고른 것이 사라진다). */}
-          {hasScan && (
+          {(hasScan || scanLink) && (
             <ScanUpload token={token} sheetTag={sheetTag} targets={targets} onUploaded={() => void refetch()}
               // 파일을 고르면 목록을 다시 받아 짝짓는다 — 열어 둔 지 오래된 탭은 그사이 제출·재검사된 아이를 모른다
-              refreshTargets={refreshTargets} />
+              refreshTargets={refreshTargets} emptyNotice={scanLink} />
           )}
 
           <section className="card mt-4 overflow-hidden">

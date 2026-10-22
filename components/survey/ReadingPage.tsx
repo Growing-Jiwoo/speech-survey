@@ -14,8 +14,11 @@ import { micPermissionHintHere } from '@/lib/platform'
 import { LevelMeter } from '@/components/LevelMeter'
 import { RecordButton } from '@/components/RecordButton'
 
-export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange, stopRef }: {
+export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange, stopRef, fitEm }: {
   page: SurveyPage
+  /** 문장 페이지만 — 이 양식 문장 가운데 가장 긴 줄의 폭(em, lib/items `sentenceFitEm`). 넓은 배치에서 글자 크기를 그 줄이 한 줄에
+   *  들게 맞춘다(아래 문장 주석). 양식 전체의 값이라 네 문장이 같은 크기다 */
+  fitEm?: number
   /** 이 페이지에서 이미 완료된 녹음 수(상위 진행 상태) */
   attemptCount: number
   /** 녹음 완료 — 상위가 완료 표시와 업로드를 맡는다(연습 페이지는 업로드하지 않는다) */
@@ -106,7 +109,7 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
         {/* 한 줄이 안 차는 연습 페이지(3개)는 본 검사와 **같은 칸 너비**로 가운데에 모은다 — 4칸 격자에 왼쪽부터 채우면 오른쪽 한 칸이
             비어 낱말이 한쪽으로 쏠려 보였다(사용자 확정 2026-10-21 — 태블릿 점검, 담당자 회신 아님). 본 검사(7개)는 검사지처럼 4+3 그대로다.
             칸 너비 = (폭 − 칸 사이 3개 × gap-x-2) ÷ 4 — gap-x-2를 바꾸면 1.5rem도 같이 바꿀 것 */}
-        <div className="flex min-h-[152px] items-center justify-center tab:min-h-[176px] short:min-h-[120px] tab:short:min-h-[124px]">
+        <div className="@container flex min-h-[152px] items-center justify-center tab:min-h-[176px] short:min-h-[120px] tab:short:min-h-[124px]">
           {words ? (
             <div className={`grid w-full gap-x-2 gap-y-4 tab:gap-y-7 tab:short:gap-y-4 ${partialRow ? 'justify-center' : 'grid-cols-4'}`}
               style={partialRow ? { gridTemplateColumns: `repeat(${page.items.length}, calc((100% - 1.5rem) / 4))` } : undefined}>
@@ -118,7 +121,16 @@ export function ReadingPage({ page, attemptCount, onRecorded, onRecordingChange,
               ))}
             </div>
           ) : (
-            <p className="no-select-callout font-read whitespace-pre-line break-keep text-center text-[22px] font-medium leading-relaxed tab:text-[26px]">
+            // 넓은 배치(tab)에서는 글자 크기를 이 양식의 가장 긴 줄이 한 줄에 드는 크기로 둔다(최대 26px — 칸 폭의 97%를 그 줄의 폭(em)으로
+            // 나눈다. 3%는 반올림·글꼴 차이의 여유). 담당자 테스트(2026-10-22): 26px에서 2학년 2학기 4번 둘째 줄(약 830px)이 PC 화면의 칸
+            // (800px)보다 길어 마지막 어절만 셋째 줄로 넘어갔다 — 원문 「한 문장이 한 줄에는 들어오면 좋겠는데」. 맞춘 크기는 양식마다 다르다
+            // (2학년 2학기 PC 약 24px·세로 태블릿 20~22px, 1학년 2학기 PC 26px 그대로·세로 태블릿 21~24px). 휴대폰(tab 미만)은 22px
+            // 그대로 접힌다 — 한 줄에 넣으면 9px 안팎이 된다.
+            // 줄 하나의 폭은 글꼴 실측으로 계산한다(lib/items `sentenceFitEm`) — cqi는 이 칸(@container)의 폭이다.
+            // 크기 규칙(칸 폭의 97% · 최대 26px · 네 문장이 같은 크기 · 휴대폰 제외)은 사용자 확정(2026-10-22, 담당자 회신 아님 — 담당자는 「글자를 아주아주 조금만
+            // 줄이거나, 다른 방법」과 「한 문장이 한 줄」만 말했다)
+            <p className="no-select-callout font-read whitespace-pre-line break-keep text-center text-[22px] font-medium leading-relaxed tab:[font-size:min(26px,calc(97cqi/var(--fit-em,1)))]"
+              style={{ '--fit-em': fitEm } as React.CSSProperties}>
               {page.items[0].text}
             </p>
           )}

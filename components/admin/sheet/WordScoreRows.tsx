@@ -7,7 +7,8 @@
 //
 // 플레이어 바를 sticky로 두는 이유: 행이 세로로 길어져(7행) 스크롤 중 플레이어가 화면
 // 밖으로 나간다 — "들으면서 찍기"가 이 화면의 핵심 동선이므로 지금 듣는 그룹의 플레이어가
-// 항상 보여야 한다. 그룹 래퍼가 relative라 다음 그룹에 닿으면 자연스럽게 교대한다.
+// 항상 보여야 한다. 그룹 래퍼가 relative라 그룹을 벗어나면 바도 따라 올라간다 — 두 그룹은 640px부터 나란히
+// 놓이고(ResultSheet) 그보다 좁으면 위아래로 쌓여 다음 그룹 바와 교대한다.
 'use client'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { SurveyItem } from '@/lib/items'
@@ -53,9 +54,9 @@ export function WordScoreRows({ audio, items, marks, onMark, locked = false }: {
       <div ref={barRef} className="sticky top-0 z-10 border-b-2 border-line bg-white px-4 py-2.5">
         {audio}
       </div>
-      {/* 640px부터 2열 — 세로 길이를 절반으로 줄이고, 한 행이 넓어져 낱말과 O/X가
-          멀어지는 것도 막는다(행 폭이 좁을수록 낱말↔버튼 시선 이동이 짧다) */}
-      <ul className="grid gap-x-10 px-4 py-3 sm:grid-cols-2">
+      {/* 그룹 안은 한 열이다 — 의미·무의미 두 그룹을 결과지(ResultSheet)가 나란히 놓는다(담당자 요청 2026-10-22
+          「의미 낱말을 한 줄로 세우고 의미 옆에 무의미를」 — 그룹 안을 2열(4+3)로 접었더니 읽은 순서대로 따라 내려가기 어려웠다) */}
+      <ul className="flex flex-col px-4 py-3">
         {items.map(item => {
           const v = locked ? false : marks[item.code]
           return (

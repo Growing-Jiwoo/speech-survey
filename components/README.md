@@ -2,7 +2,7 @@
 
 루트에는 화면을 가리지 않는 **공용 컴포넌트**, 하위 폴더에 도메인별 컴포넌트를 둔다
 (`survey/` 참여자 검사 화면, `admin/` 관리자 화면, `apply/` 교사 신청 화면, `results/` 교사 결과지
-화면, `start/` 시작 화면의 쓰기 기록지 인쇄). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
+화면, `start/` 시작 화면의 교사용 블록). 로직은 넣지 않는다 — 계산·검증은 `lib/`,
 데이터 로딩은 `hooks/`.
 
 ## 공용
@@ -30,7 +30,7 @@
 | `admin/` | 관리자(채점자) 화면 — [admin/README.md](admin/README.md) |
 | `apply/` | 교사 신청 화면(`/apply`) — [apply/README.md](apply/README.md). `RosterEditor.tsx`(명단 업로드·고정 4칸 표) 하나뿐 |
 | `results/` | 교사 결과지 화면(`/results/[token]`) — [results/README.md](results/README.md). `ResultsView.tsx`와 쓰기 스캔본 올리기(`ScanUpload.tsx`) |
-| `start/` | 시작 화면(`app/page.tsx`)의 쓰기 기록지 인쇄 — [start/README.md](start/README.md) |
+| `start/` | 시작 화면(`app/page.tsx`)의 교사용 블록 — 쓰기 기록지 인쇄 · [쓰기 스캔본 올리기]·[결과지 받기] 메일 링크 — [start/README.md](start/README.md) |
 
 ## 스타일 관례
 

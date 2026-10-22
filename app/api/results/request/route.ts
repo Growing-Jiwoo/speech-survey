@@ -1,6 +1,10 @@
 // POST /api/results/request — 교사 결과지 링크 요청(공개). 학급 코드만 받아 **등록된 담임 이메일로**
 // 학급 스코프 토큰 링크를 보낸다. 이메일은 바디에서 받지 않는다 — 요청자가 주소를 정할 수 있으면
 // 코드가 곧 결과지 열쇠가 된다(사용자 확정 2026-09-22).
+// 시작 화면의 [결과지 받기]와 [쓰기 스캔본 올리기](`purpose: 'scan'`, 2026-10-22)가 함께 쓴다 — 같은 화면 링크이고 메일 제목·
+// 버튼만 다르다. 스캔본 링크는 `?scan=1`을 붙인다(올릴 기록지가 없으면 화면이 알린다). 스캔본을 시작 화면에서 코드만으로 올리게
+// 하지 않는 것은 담당자 확정(2026-10-22 — 사용자의 「이메일에 링크를 첨부하는 방식으로 할게」에 담당자 「알겠어!!」,
+// 회신은 사용자 전달) — 그러면 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다.
 //
 // 이 버튼은 아이 앞 교실 PC의 시작 화면에 있다. 아이가 눌러도 담임 메일함에 링크가 갈 뿐이지만,
 // 연타하면 메일함을 채울 수는 있다 → **코드당 60초 1회**. 키가 IP가 아닌 이유: 학교 건물은 IP
@@ -21,7 +25,8 @@ export const runtime = 'nodejs'
 const ipLimited = createRateLimiter(VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS)
 
 /** 코드당 쿨다운(사용자 확정 2026-09-22: 1분 1회). 발송에 **성공한** 시각만 기록한다 —
- *  실패 뒤 곧바로 다시 누를 수 있어야 한다. */
+ *  실패 뒤 곧바로 다시 누를 수 있어야 한다. 결과지·스캔본은 **따로 센다** — 결과지를 받은 직후 스캔본 링크를 누르면 막힌
+ *  까닭(방금 받은 결과지 링크에서도 올릴 수 있다)을 화면이 설명해야 했다. 따로 세도 연타는 종류마다 1분 1통이다. */
 const COOLDOWN_MS = 60_000
 const lastSentAt = new Map<string, number>()
 
@@ -31,9 +36,10 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const parsed = resultsRequestSchema.safeParse(body)
   if (!parsed.success) return jsonError('코드를 확인해 주세요.', 400)
-  const code = parsed.data.code
+  const { code, purpose } = parsed.data
+  const key = `${code}:${purpose}`
 
-  const waited = Date.now() - (lastSentAt.get(code) ?? 0)
+  const waited = Date.now() - (lastSentAt.get(key) ?? 0)
   if (waited < COOLDOWN_MS) {
     const retryAfterSec = Math.ceil((COOLDOWN_MS - waited) / 1000)
     return NextResponse.json(
@@ -57,14 +63,14 @@ export async function POST(req: Request) {
     const origin = process.env.APP_URL?.trim() || new URL(req.url).origin
     const m = resultsLinkMail({
       teacherName: row.teacher_name, schoolName: row.school_name, grade: row.grade, classNo: row.class_no,
-      resultsUrl: `${origin}/results/${token}`,
+      resultsUrl: `${origin}/results/${token}${purpose === 'scan' ? '?scan=1' : ''}`, purpose,
     })
     const sent = await sendMail({ ...m, to: row.teacher_email })
     if (!sent.ok) {
       console.error('[results/request] 메일 발송 실패', sent.error)
       return jsonError('메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.', 502)
     }
-    lastSentAt.set(code, Date.now())
+    lastSentAt.set(key, Date.now())
 
     // 받을 수 있는 결과지 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 여기서 필요 없다
     // (세션만으로 센다 — 미실시는 채점 수와 무관). 「채점 완료」 칸이 아니라 받을 수 있는 수를 쓴다 — 스캔본

@@ -232,7 +232,7 @@ button, a, label {
   /* .result-sheet 자신도 <section>이라 위 138행의 일반 section 규칙으로 이미 break-inside: avoid를 받는다.
      138행을 바꿀 때 이 의존을 놓치지 않도록 여기 적어둔다. */
 
-  /* 쓰기 기록지 인쇄(시작 화면 [쓰기 기록지 인쇄 →], components/start/WritingSheetDialog) —
+  /* 쓰기 기록지 인쇄(시작 화면 [쓰기 기록지 인쇄], components/start/WritingSheetDialog) —
      인쇄 전용 뿌리만 남기고 화면(인쇄 확인 창 포함)은 전부 숨긴다. 한 장에 한 아이, 장마다 쪽을 넘긴다. */
   body.printing-sheets > :not(#sheet-print-root) { display: none !important; }
   body.printing-sheets { background: #fff; }

@@ -45,7 +45,7 @@ const SKIP_REASON: Record<Exclude<PageProblem, 'unreadable' | 'duplicate' | 'ret
 const monthDay = (iso: string) =>
   new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' })
 
-export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTargets }: {
+export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTargets, emptyNotice = false }: {
   token: string
   /** 이 반의 기록지 QR 반 표시 */
   sheetTag: string
@@ -55,6 +55,8 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
   onUploaded: () => void
   /** 결과 목록을 다시 받아 대상을 돌려준다(실패하면 null — 가진 목록으로 짝짓고, 서버가 대상을 다시 확인한다) */
   refreshTargets?: () => Promise<ScanTarget[] | null>
+  /** 올릴 아이가 없을 때도 「지금 올릴 쓰기 기록지가 없어요」를 보인다 — 시작 화면 [쓰기 스캔본 올리기]의 메일 링크(`?scan=1`)로 왔을 때 */
+  emptyNotice?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [phase, setPhase] = useState<Phase | null>(null)
@@ -287,6 +289,13 @@ export function ScanUpload({ token, sheetTag, targets, onUploaded, refreshTarget
           onChange={e => { const l = [...(e.target.files ?? [])]; e.target.value = ''; void start(l) }} />
         {readErr && <p role="alert" className="w-full text-[13px] text-rec-deep">{readErr}</p>}
       </section>}
+      {/* 시작 화면 [쓰기 스캔본 올리기]의 메일 링크로 왔는데 올릴 아이가 없다 — 입구가 숨어 있으면 그 버튼으로 온 까닭을 찾지 못한다 */}
+      {emptyNotice && !targets.some(isEligible) && (
+        <p className="card mt-4 p-4 text-[13px] leading-relaxed text-ink-soft">
+          <b className="text-ink">지금 올릴 쓰기 기록지가 없어요.</b><br />
+          쓰기를 「스캔본으로 올리기」로 한 검사가 제출되면 여기서 기록지 스캔본을 올릴 수 있어요.
+        </p>
+      )}
 
       {open && (
         // 바깥을 눌러도 닫지 않는다 — 쪽마다 고른 것이 한 번에 사라진다. 닫기는 [취소]로만(다 올린 뒤에는 [닫기]·Esc).

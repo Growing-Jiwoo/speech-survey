@@ -149,6 +149,29 @@ describe('POST /api/results/request', () => {
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
   })
+  // 담당자 요청(2026-10-22): 시작 화면에 「쓰기 스캔본 올리기」 블록 — 결과지처럼 담임 메일로 링크를 보낸다(코드만으로 올리게 하면
+  // 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다 — 담당자 확정 같은 날, 사용자 제안에 「알겠어!!」).
+  it('스캔본 올리기(purpose: scan)는 같은 결과지 화면 링크에 ?scan=1을 붙여 스캔본 메일로 보낸다', async () => {
+    const res = await REQUEST(reqFor({ code: fresh(), purpose: 'scan' }))
+    expect(res.status).toBe(200)
+    const arg = vi.mocked(mail.resultsLinkMail).mock.calls[0][0]
+    expect(arg.purpose).toBe('scan')
+    expect(arg.resultsUrl).toMatch(new RegExp(`^http://x/results/${CID}\\.\\d+\\.[0-9a-f]{64}\\?scan=1$`))
+  })
+  it('purpose가 없으면 결과지 메일이다 — 옛 화면 호환', async () => {
+    await REQUEST(reqFor({ code: fresh() }))
+    expect(vi.mocked(mail.resultsLinkMail).mock.calls[0][0].purpose).toBe('results')
+  })
+  it('결과지와 스캔본은 쿨다운을 따로 센다 — 결과지를 받은 직후에도 스캔본 링크는 받는다. 같은 것을 다시 누르면 429', async () => {
+    const code = fresh()
+    expect((await REQUEST(reqFor({ code }))).status).toBe(200)
+    expect((await REQUEST(reqFor({ code, purpose: 'scan' }))).status).toBe(200)
+    expect((await REQUEST(reqFor({ code, purpose: 'scan' }))).status).toBe(429)
+    expect(mail.sendMail).toHaveBeenCalledTimes(2)
+  })
+  it('모르는 purpose는 400', async () => {
+    expect((await REQUEST(reqFor({ code: fresh(), purpose: 'admin' }))).status).toBe(400)
+  })
   it('채점 완료 수를 함께 돌려준다 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거', async () => {
     vi.mocked(db.classResults).mockResolvedValueOnce([{
       id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],

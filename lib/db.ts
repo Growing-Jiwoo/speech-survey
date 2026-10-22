@@ -14,6 +14,10 @@ export interface NewSessionInput {
   classCode: ClassCodeRow
   childNo: number
   birthYmd: string; gender: '남' | '여'; childName: string
+  /** 법정대리인 동의 확인 시각(`guardian_consented_at`, 제22조의2 확인 의무의 기록) — 라우트가 정한다. 검사할 때는 동의를
+   *  받지 않으므로(담당자 요청 2026-10-22) 명단 아동은 학급 신청 시각(신청 때 「법정대리인의 동의를 받은 학생만 명단에
+   *  등록했습니다」에 체크했다), 그 밖은 null(확인 기록 없음)이다 */
+  consentedAt: string | null
   /** 멱등 키 — 확인 모달을 열 때 화면이 한 번 만든다. 연타·재전송은 같은 키로 오므로
    *  두 번째부터는 새 행을 만들지 않고 첫 세션을 그대로 돌려준다(migration 004 주석).
    *  키가 없는 호출(테스트 등)은 멱등 보장 없이 그냥 만든다. */
@@ -41,9 +45,9 @@ export async function createSession(s: NewSessionInput): Promise<string> {
     form_id: formFor(c.grade, semesterOf(now)).id,
     teacher_name: c.teacher_name, teacher_phone: c.teacher_phone, teacher_email: c.teacher_email,
     birth_ymd: s.birthYmd, gender: s.gender, child_name: s.childName,
-    // 법정대리인 동의 확인 시각(감사 증적) — 라우트가 guardianConsent 검증을 통과한 요청만
-    // 여기 도달하므로, 세션 생성 = 동의 확인 완료를 의미한다(제22조의2 확인 의무의 기록).
-    guardian_consented_at: now,
+    // 법정대리인 동의 확인 시각(감사 증적) — 세션을 만든 시각이 아니라 실제로 확인한 시각이다(위 consentedAt).
+    // 종전에는 검사 시작 때 검사자가 체크해 세션 생성 = 동의 확인이었다(2026-10-22까지).
+    guardian_consented_at: s.consentedAt,
     ...(s.idemKey ? { idem_key: s.idemKey } : {}),
   }).select('id').single()
 
@@ -826,7 +830,9 @@ export interface SessionRow {
   teacher_phone: string | null; teacher_email: string | null
   checklist: string[]
   started_at: string; submitted_at: string | null
-  guardian_consented_at: string | null // 법정대리인 동의 확인 시각(도입 전 수집분은 null)
+  /** 법정대리인 동의 확인 시각. null은 확인 기록이 없다는 뜻이다 — 도입 전 수집분, 그리고 2026-10-22부터는 명단 밖 직접 입력 아동과
+   *  관리자 직접 발급 학급의 아동(검사할 때 동의를 받지 않고 신청 때 명단 아동만 확인한다 — createSession `consentedAt`) */
+  guardian_consented_at: string | null
   /** 아동 식별값을 관리자가 고친 시각. null이면 한 번도 고치지 않았다 */
   edited_at: string | null
   /** 최초 수정 직전의 아동 식별값. 두 번째 수정부터는 덮어쓰지 않는다 —

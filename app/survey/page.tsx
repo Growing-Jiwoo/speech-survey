@@ -9,9 +9,9 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import type { Recording } from '@/hooks/useRecorder'
-import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, itemsFor, sentenceFitEm, toggleChecklistArea } from '@/lib/items'
 import { isFatalFormError, useSurveyForm } from '@/hooks/useSurveyForm'
-import { canAdvance, visiblePages } from '@/lib/survey-flow'
+import { canAdvance, recordingNav, skippedAfter, visiblePages } from '@/lib/survey-flow'
 import {
   clearState, loadState, nextAttemptNo, resolveWritingMode, saveState, saveWritingModePref, settleLostUploads, unsavedPages,
   updateSavedState, withPendingUpload, withoutPendingUpload, type SurveyState, type WritingMode,
@@ -382,13 +382,17 @@ function SurveyInner() {
     // 연습 페이지에서는 곧바로 본 검사로 넘기지 않고 "연습이 끝났다"를 한 화면 보여준다
     // (연습과 본 검사의 경계가 화면에 없다는 피드백 — 2026-08-12).
     if (!fromReview && page.practice) { setPracticeEnd(true); return }
-    // [모르겠어요]로 넘긴 페이지를 기록한다 — 검토 화면이 「미녹음」과 구분해야 한다
-    // (담당자 확정 2026-09-21). 버튼 라벨을 정하는 `skipping`과 **같은 조건**을 쓴다:
-    // 화면이 「모르겠어요」라고 말한 그 누름만 기록해야 둘이 어긋나지 않는다.
-    if (skipping) patch(prev => ({ skipped: [...new Set([...prev.skipped, page.code])] }))
     // 쓰기 페이지를 떠날 때 **그때 보이던 방식**을 이 검사에 고정한다 — 토글을 안 누르면 방식은 기기 기본값에서
     // 읽히는데, 같은 기기의 다른 탭에서 기본값이 바뀌면 제출 때 다른 방식으로 나가 화면에서 고른 쓰기가 버려진다.
     if (page.section === f.writingSection && st && !st.writingMode) patch({ writingMode })
+    goNext()
+  }
+
+  /** [모르겠어요] — 녹음 없이 넘긴 화면이면 검토 화면이 「미녹음」과 구분하도록 남긴다(담당자 확정 2026-09-21).
+   *  녹음이 있으면 남기지 않고 넘어가기만 한다 — 읽은 데까지는 그 녹음으로 채점한다(lib/survey-flow `skippedAfter`, 사용자 확정(2026-10-22, 담당자 회신 아님)). */
+  function skipPage(e: React.MouseEvent) {
+    if (tooSoon(e)) return   // 두 번 톡이면 다음 화면의 [모르겠어요]까지 눌려 두 화면을 건너뛴다(위 lastMainTap)
+    patch(prev => ({ skipped: skippedAfter(prev, page.code) }))
     goNext()
   }
 
@@ -437,22 +441,13 @@ function SurveyInner() {
   const writingMode = resolveWritingMode(st)
   const canNext = !busy && canAdvance(f, page, { ...st, writingMode })
 
-  // 녹음 페이지를 한 번도 녹음하지 않고 넘어가는 경우: 주 버튼을 "모르겠어요"로 바꿔(+약한 스타일)
-  // (누르면 `tryNext`가 그 페이지를 `skipped`에 남겨 검토 화면이 미녹음과 구분한다 — 2026-09-21)
-  // 오터치 한 번으로 페이지가 조용히 통과되지 않도록 의도를 드러낸다(진행 자체는 허용 —
-  // 응답 거부·모름도 유효한 관찰이다). 담당자 확정(2026-08-07): 별도 버튼을 만들지 않고
-  // 기존 건너뛰기 버튼의 라벨만 바꾼다 — 근거 docs/superpowers/plans/2026-08-07-survey-session-controls.md
-  // (연습 페이지는 제외한다 — 연습을 건너뛰는 것은 "모름"의 관찰이 아니라 그냥 넘기는 것이다.)
-  // **업로드가 실패해 재시도를 기다리는 화면은 「모르겠어요」가 아니다** — 아이는 읽었고 저장만 안 됐다. 라벨이 모르겠어요로
-  // 바뀌어 누르면 skipped로 남아, 검토 화면이 「모르겠어요」로 보이고 미완료로 세지 않은 채 제출돼 읽은 녹음이 X·0점이 됐다.
-  // 이 화면은 [다음]으로 넘어가고 검토 화면에는 「미녹음」(미완료)으로 남는다(2026-10-08 야간 점검).
-  // 사용자 확정(2026-10-08, 담당자 회신 아님): 위 담당자 확정 규칙의 범위를 좁힌 결정이다 — 저장 실패는 모르겠어요가
-  // 아니라 따로 구별한다. 관리자 결과지는 이런 페이지를 「저장 실패」로 표시한다(sessions.upload_failed, migration 007).
-  // 녹음을 **시도한** 페이지도 「모르겠어요」가 아니다 — 실패한 녹음을 새로고침으로 잃었거나 업로드가 끊긴 페이지는 아이가 읽은
-  // 화면이다(lib/survey-state unsavedPages). 「모르겠어요」로 넘기면 검토가 완료로 보고 관리자는 「저장 실패」로 보았다(2026-10-12 점검).
-  const skipping = !fromReview && !isLast && !page.practice
-    && isRecordingPage(page) && (st.recorded[page.code] ?? 0) === 0 && !(page.code in pendingRetries)
-    && !(st.attempted ?? []).includes(page.code)
+  // 녹음 페이지 아래는 [이전] [모르겠어요] [다음]이다 — 녹음을 멈춘 뒤에도 [모르겠어요]를 누를 수 있다(담당자 요청 2026-10-22).
+  // 녹음 전에는 [다음]이 꺼져 있다(사용자 확정(2026-10-22, 담당자 회신 아님) — 오터치 한 번으로 화면이 조용히 넘어가지 않게(진행 자체는 [모르겠어요]로 허용 — 응답 거부·
+  // 모름도 유효한 관찰이다). 종전(담당자 확정 2026-08-07)에는 별도 버튼 없이 녹음 전에만 [다음]의 라벨이 바뀌었다.
+  // **다시 녹음할 화면(올리기 실패·저장되지 않은 시도)에는 [모르겠어요]가 없다** — 아이는 읽었고 저장만 안 됐다. 모르겠어요로
+  // 넘기면 검토가 완료로 보고 관리자는 「저장 실패」로 본다(사용자 확정 2026-10-08·10-12, 담당자 회신 아님). 그 화면은 [다음]으로
+  // 넘어가고 검토 화면에는 「미녹음」(미완료)으로 남는다. 판정은 lib/survey-flow `recordingNav`.
+  const nav = recordingNav(page, st, { fromReview, isLast, retrying: page.code in pendingRetries })
 
   // 섹션(주제) 진입 안내: 각 섹션의 첫 페이지에 처음 도달하면 안내 화면을 먼저 보여준다.
   // "첫 페이지"는 **진행 목록(pages) 기준**이다 — 양식의 고정 목록으로 판정하면 연습을
@@ -551,7 +546,7 @@ function SurveyInner() {
               )}
 
               {page.role === 'child' && isRecordingPage(page) && (
-                <ReadingPage key={page.code} page={page}
+                <ReadingPage key={page.code} page={page} fitEm={sentenceFitEm(f.sentenceItems.map(i => i.text))}
                   attemptCount={st.recorded[page.code] ?? 0} onRecordingChange={setBusy}
                   onRecorded={handleRecorded} stopRef={stopRecording} />
               )}
@@ -605,10 +600,16 @@ function SurveyInner() {
             시작하기
           </button>
         ) : (
-          <button onClick={tryNext} disabled={!canNext}
-            className={`${skipping ? 'btn-ghost' : 'btn-primary'} h-[52px] flex-[2]`}>
-            {fromReview ? '검토로 돌아가기' : isLast ? '검토' : skipping ? '모르겠어요' : '다음'}
-          </button>
+          <>
+            {nav.skip && (
+              <button onClick={skipPage} disabled={busy} className="btn-ghost h-[52px] flex-1">
+                모르겠어요
+              </button>
+            )}
+            <button onClick={tryNext} disabled={!canNext || !nav.next} className="btn-primary h-[52px] flex-[2]">
+              {fromReview ? '검토로 돌아가기' : isLast ? '검토' : '다음'}
+            </button>
+          </>
         )}
       </nav>
 
