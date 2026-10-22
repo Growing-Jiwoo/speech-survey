@@ -16,7 +16,6 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Spinner } from '@/components/Spinner'
 // 폴더만 admin일 뿐 범용 컴포넌트다(관리자 전용 데이터를 알지 않는다).
-import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { useFileDropGuard } from '@/hooks/useFileDropGuard'
 import { gradeClassLabel } from '@/lib/format'
 import { dispositionFilename, saveBlobAs } from '@/lib/download'
@@ -261,7 +260,6 @@ export function ResultsView({ token, scanLink = false }: {
   const targets = scanTargets(children)
   // 이 반에 스캔본 방식 검사가 하나라도 있으면 범례·안내에 스캔 설명을 붙인다
   const hasScan = children.some(c => c.sessions.some(x => x.writingMode === 'scan'))
-  const hasReplaced = children.some(c => { const t = scanTargetSession(c); return c.sessions.some(x => sessionLabel(x, t?.id) === 'replaced') })
 
   return (
     // 휴대폰(640px 미만)은 좌우 여백을 16px로 — 24px이면 375px에서 표(번호·이름·판정·상태)가 겨우 들어가, 재검사 행을
@@ -433,51 +431,9 @@ export function ResultsView({ token, scanLink = false }: {
               </table>
             </div>
 
-            {/* 「채점 전」이 0점으로, 판정이 확정 판정으로 읽히면 임상적 오독이다 — 관리자 결과지와
-                같은 범례를 교사 화면에도 상시 둔다(관리자 전용 조작 설명은 뺀다).
-                설명이 한 문장으로 끝나지 않아 1열. */}
-            <BadgeLegend
-              columns={1}
-              items={[
-                ...(hasScan ? [{
-                  badge: <Badge tone="amber">스캔 대기</Badge>,
-                  desc: <>「스캔본으로 올리기」를 고른 아이예요. 스캔본을 올리면 담당자가 보고 쓰기를 채점해요.
-                    채점한 쓰기 점수에는 <Badge tone="mint" size="sm">스캔</Badge> 표시가 붙어요.</>,
-                }] : []),
-                ...(hasReplaced ? [{
-                  badge: <Badge tone="mute">재검사로 대체</Badge>,
-                  desc: <>더 최근에 제출한 재검사가 있어 이 검사에는 스캔본을 올리지 않아요. 기록지는 최근 검사로 올라가요.</>,
-                }] : []),
-                {
-                  badge: <Badge tone="mute">채점 전</Badge>,
-                  desc: <>아직 채점하지 않은 과제예요. <b className="text-rec-deep">0점이 아니에요</b>.
-                    결과보고서 PDF에도 판정 칸이 비어 나가요.</>,
-                },
-                {
-                  badge: (
-                    <span className="flex gap-1">
-                      <VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" />
-                    </span>
-                  ),
-                  desc: <>세 과제를 함께 본 최종 판정이에요. <b>세 과제가 모두 채점돼야</b> 나오고, 결과보고서 PDF에도 같은
-                    글자로 찍혀요. <b>위험이 하나라도 있거나 주의가 둘 이상이면 위험</b>, 주의가 하나면 주의예요.</>,
-                },
-                {
-                  badge: (
-                    <span className="flex gap-2 tabular-nums">
-                      <span className="font-bold text-amber">8.04</span><span className="font-bold text-rec-deep">5.43</span>
-                    </span>
-                  ),
-                  desc: <>주황 점수는 그 과제가 주의, 빨강 점수는 위험이라는 뜻이에요. 최종 판정은 세 과제를 함께 본 결과라,
-                    한 과제가 주황이어도 최종은 주의일 수 있어요.</>,
-                },
-                ...(provisional ? [{
-                  badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-                  desc: <>판정 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요(아직 검사지가 없는 학년은 1학년 기준으로 판정해요).
-                    기준표를 받으면 숫자만 바꾸고, 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
-                }] : []),
-              ]}
-            />
+            {/* 「표시 읽는 법」 범례는 두지 않는다 — 담당자 요청(2026-10-22, 사용자 전달) 원문 「담임교사가 기록지 다운 받으러 오는 페이지에
+                결과 기준 점수가 보여서ㅜㅜ 8.04, 5.43처럼! 기준 점수는 삭제 … <표시 읽는 법>은 텍스트 삭제해도 될 것 같아」.
+                「채점 전」 칸이 0점이 아니라는 것은 칸 글자가 직접 말한다. 관리자 화면의 범례는 그대로다. */}
           </section>
           <p className="mt-3 text-[12px] leading-relaxed text-ink-mute">
             {hasScan
