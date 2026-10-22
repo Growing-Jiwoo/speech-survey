@@ -36,6 +36,13 @@ export function gradeClassLabel(grade: number, classNo: number): string {
   return classNo === 0 ? `${grade}학년 단일학급` : `${grade}-${classNo}`
 }
 
+/** 안내 문장 속 학급 — 「예시초 1-2 학급」. 단일학급은 표기가 이미 「학급」으로 끝나 「2학년 단일학급 학급」으로 겹치지 않게
+ *  붙이지 않는다(2026-10-22 출시 전 점검). 승인 안내(메일·평문)·결과지 링크 메일의 첫 문장이 쓴다 */
+export function classPhrase(schoolName: string, grade: number, classNo: number): string {
+  const where = `${schoolName} ${gradeClassLabel(grade, classNo)}`
+  return classNo === 0 ? where : `${where} 학급`
+}
+
 /** 결과지 머리글용 풀어 쓴 학급 표기 — `1학년 2반`, 단일학급은 `1학년 단일학급`.
  *  목록 표의 좁은 칸은 `gradeClassLabel`(`1-2`)을 그대로 쓴다. */
 export function classLabel(grade: number, classNo: number): string {
@@ -118,13 +125,14 @@ export const SCAN_GUIDE_TITLE = '쓰기를 기록지(스캔본)로 하실 때'
  * 문항은 화면 코드에 두지 않는다 — 승인 라우트가 서버에서 양식(`lib/forms` `writingPrompts`)을 풀어 메일에 넣고, 같은 값을 응답으로
  * 내려 관리자 [안내 문구 복사]가 쓴다. 안내 문구 자체는 담당자에게 확인받지 않은 사용자 확정(2026-10-21)이고, 말투만
  * 「-다」체로 맞췄다(lib/mail.ts 「문구」 절 — 담당자 확정).
- * 2학년 쓰기는 문장 쓰기다(lib/forms — 학년이 쓰기 과제를 정한다).
+ * 「낱말」·「문장」은 학년이 아니라 **양식의 쓰기 과제**(`WritingNotice.kind`)로 고른다 — 2학년은 문장 쓰기지만, 3~6학년은 1학년
+ * 양식(낱말 쓰기)으로 검사한다(lib/forms 폴백). 학년으로 고르던 때는 3학년 학급에 「불러 줄 문장」과 낱말 10개가 함께 실렸다.
  * 버튼 이름은 시작 화면 글자 그대로다 — 2026-10-22 시작 화면이 블록으로 바뀌며 [쓰기 기록지 인쇄]·[쓰기 스캔본 올리기]가 됐고
  * (담당자 요청), 스캔본은 [쓰기 스캔본 올리기]가 담임 메일로 보내는 링크에서 올린다(담당자 확정 같은 날 — 사용자의 「이메일에 링크를
  * 첨부하는 방식으로 할게」에 담당자 「알겠어!!」. 종전 「결과지 화면에서」).
  */
-export function scanGuideLines(grade: number): string[] {
-  const what = grade === 1 ? '낱말' : '문장'
+export function scanGuideLines(kind: WritingNotice['kind']): string[] {
+  const what = kind === 'word' ? '낱말' : '문장'
   return [
     '검사 주소에서 학급 코드를 입력한 뒤 [쓰기 기록지 인쇄]로 학생별 기록지를 뽑아 주시기 바랍니다.',
     `검사의 쓰기 단계에서 「스캔본으로 올리기」를 고르면, 불러 줄 ${what}이 기록지 칸 번호와 함께 화면에 나옵니다. 화면을 보고 불러 주시기 바랍니다.`,
@@ -132,12 +140,13 @@ export function scanGuideLines(grade: number): string[] {
   ]
 }
 
-/** 승인 안내에 싣는 받아쓰기 문항 — 승인 라우트가 서버에서 만든다(위 주석) */
-export interface WritingNotice { semester: 1 | 2; items: string[] }
+/** 승인 안내에 싣는 받아쓰기 문항 — 승인 라우트가 서버에서 만든다(위 주석). `kind`는 그 양식의 쓰기 과제(낱말 쓰기·문장 쓰기) */
+export interface WritingNotice { semester: 1 | 2; kind: 'word' | 'sentence'; items: string[] }
 
-/** 받아쓰기 문항 목록 앞의 한 줄 — 두 채널이 같은 말을 쓴다. 학기를 적는 이유: 문항은 학기마다 다르다(승인한 날의 학기 양식) */
-export function writingNoticeLead(grade: number, semester: 1 | 2): string {
-  return `받아쓰기는 아래 ${grade === 1 ? '낱말' : '문장'}로 진행해 주시기 바랍니다(${semester}학기 검사지 · 기록지 칸 번호 순서).`
+/** 받아쓰기 문항 목록 앞의 한 줄 — 두 채널이 같은 말을 쓴다. 학기를 적는 이유: 문항은 학기마다 다르다(승인한 날의 학기 양식).
+ *  조사는 받침에 맞춘다 — 「낱말로」·「문장으로」(「문장로」로 나가던 것, 2026-10-22 출시 전 점검) */
+export function writingNoticeLead(w: Pick<WritingNotice, 'semester' | 'kind'>): string {
+  return `받아쓰기는 아래 ${w.kind === 'word' ? '낱말로' : '문장으로'} 진행해 주시기 바랍니다(${w.semester}학기 검사지 · 기록지 칸 번호 순서).`
 }
 
 /**
@@ -157,10 +166,9 @@ export function approvalNoticeText(v: {
   teacherName: string; schoolName: string; grade: number; classNo: number
   code: string; surveyUrl: string; writing: WritingNotice
 }): string {
-  const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
   return [
     `${v.teacherName} 선생님, 안녕하십니까.`,
-    `${where} 학급의 읽기 선별검사 신청을 확인했습니다.`,
+    `${classPhrase(v.schoolName, v.grade, v.classNo)}의 읽기 선별검사 신청을 확인했습니다.`,
     '',
     `학급 코드: ${v.code}`,
     `검사 주소: ${v.surveyUrl}`,
@@ -169,9 +177,9 @@ export function approvalNoticeText(v: {
     '검사할 학생을 고르고 이름·생년월일을 확인한 뒤 시작하시기 바랍니다.',
     '',
     SCAN_GUIDE_TITLE,
-    ...scanGuideLines(v.grade).map(l => `- ${l}`),
+    ...scanGuideLines(v.writing.kind).map(l => `- ${l}`),
     '',
-    writingNoticeLead(v.grade, v.writing.semester),
+    writingNoticeLead(v.writing),
     ...v.writing.items.map((t, i) => `${i + 1}. ${t}`),
     '',
     '결과지 받는 방법',

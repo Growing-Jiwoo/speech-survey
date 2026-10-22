@@ -141,6 +141,7 @@ describe('POST /api/admin/codes/[id]/approve', () => {
     const w = vi.mocked(mail.approvedMail).mock.calls[0][0].writing
     expect(json.writing).toEqual(w)
     expect(w.items).toEqual(writingPrompts(formFor(PENDING_ROW.grade, w.semester)))
+    expect(w.kind).toBe(formFor(PENDING_ROW.grade, w.semester).writing.kind)   // 안내의 「낱말」·「문장」은 이 값으로 고른다
     const call = vi.mocked(mail.sendMail).mock.calls[0][0]
     expect(call.to).toBe('teacher@example.com')
     expect(call.html).toMatch(ROW.code)

@@ -74,7 +74,7 @@ const SCORE_INK: Record<Verdict, string | null> = { good: null, caution: 'text-a
  * 결과지를 내보낸다(스캔본 방식도 받기 기준은 같다 — 담당자가 채우기 전에 받으면 경고한다). 그 대가로 `scores.writing`에 0이 들어오는데 **그 0은 「0점을 받았다」가 아니라
  * 「아직 채점 전」이다.** 그대로 `0/10`으로 찍으면 치르지도 않은 과제에서 낙제한 아동으로 읽힌다 —
  * 임상적 오독이므로 관리자 결과지(components/admin/ResultSheet.tsx)와 같이 「채점 전」으로 그린다.
- * 뜻은 표 아래 범례가 설명한다.
+ * (표 아래 범례는 2026-10-22에 뺐다 — 담당자 요청: 범례에 기준 점수가 보였다. 「채점 전」은 글자로 뜻이 드러난다.)
  */
 /**
  * 체크박스. `indeterminate`는 HTML 속성이 아니라 **DOM 프로퍼티**라 JSX로 못 준다 — ref로 세운다.
@@ -258,7 +258,7 @@ export function ResultsView({ token, scanLink = false }: {
     return scanTargets(r.data.children)
   }
   const targets = scanTargets(children)
-  // 이 반에 스캔본 방식 검사가 하나라도 있으면 범례·안내에 스캔 설명을 붙인다
+  // 이 반에 스캔본 방식 검사가 하나라도 있으면 표 아래 안내에 스캔 설명을 붙인다(범례는 2026-10-22에 뺐다)
   const hasScan = children.some(c => c.sessions.some(x => x.writingMode === 'scan'))
 
   return (

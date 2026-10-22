@@ -82,7 +82,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, listSessions, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
   saveWriting, scanUploadTarget, latestSubmittedSessionId, uploadScanObject, upsertWritingScan, removeScanObjects, signedScanUrl, unlinkWritingScan,
   restoreWritingScan, scanUploadedAt,
   type ClassCodeRow,
@@ -640,6 +640,47 @@ describe('listClassCodes — 목록에 세션 수·명단 수를 함께 싣는�
     // 컬럼 목록은 `as unknown as` 캐스팅 탓에 타입으로 전혀 안 잡힌다 — 인자로 확인한다.
     expect(String((selectCallsByTable.get('class_codes') as unknown[][])[0][0]))
       .toContain('class_roster(count)')
+  })
+})
+
+describe('listSessions — 관리자 목록은 페이지를 넘기며 전부 받는다(2026-10-22)', () => {
+  // Supabase는 한 요청에 Max Rows(기본 1000)까지만 돌려주고 나머지를 오류 없이 자른다 — 스텁이 그 모양으로 페이지를 준다
+  const srow = (i: number) => ({
+    id: `s-${i}`, grade: 1, form_id: 'KODYS-G1-S2', writing_mode: 'screen', started_at: `2026-10-${String(1 + (i % 28)).padStart(2, '0')}T00:00:00Z`,
+    recordings: [{ item_code: 'p_rw_meaning' }], writing_answers: [], sentence_scores: [], writing_scans: null,
+  })
+  const page = (from: number, n: number) => ({ data: Array.from({ length: n }, (_, k) => srow(from + k)), error: null })
+
+  it('[REGRESSION] 1000건이 넘어도 잘리지 않는다 — 한 번에 받던 때는 오래된 검사가 목록·KPI에서 조용히 사라졌다', async () => {
+    enqueue('sessions', page(0, 1000)); enqueue('sessions', page(1000, 3)); enqueue('sessions', page(0, 0))
+    const rows = await listSessions()
+    expect(rows).toHaveLength(1003)
+    expect(fromCalls.filter(t => t === 'sessions').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('서버가 주는 행 수가 1000보다 작아도(Max Rows 설정) 받은 만큼 넘겨 끝까지 받는다', async () => {
+    enqueue('sessions', page(0, 500)); enqueue('sessions', page(500, 500)); enqueue('sessions', page(1000, 2)); enqueue('sessions', page(0, 0))
+    expect(await listSessions()).toHaveLength(1002)
+  })
+
+  it('넘기는 사이 새 검사가 생겨 경계의 행이 두 번 와도 한 번만 싣는다', async () => {
+    enqueue('sessions', page(0, 3)); enqueue('sessions', { data: [srow(2), srow(3)], error: null }); enqueue('sessions', page(0, 0))
+    expect((await listSessions()).map(r => r.id)).toEqual(['s-0', 's-1', 's-2', 's-3'])
+  })
+
+  it('진행률은 계산해 싣고 재료(녹음·쓰기 배열)는 응답에서 뺀다 — 화면은 progress만 쓴다', async () => {
+    enqueue('sessions', page(0, 1)); enqueue('sessions', page(0, 0))
+    const [r] = await listSessions()
+    expect(r.progress.recorded).toBe(1)
+    expect(r).not.toHaveProperty('recordings')
+    expect(r).not.toHaveProperty('writing_answers')
+    expect(r).not.toHaveProperty('sentence_scores')
+    expect(r).not.toHaveProperty('writing_scans')
+  })
+
+  it('조회가 실패하면 던진다(라우트가 500)', async () => {
+    enqueue('sessions', { data: null, error: { message: 'boom' } })
+    await expect(listSessions()).rejects.toThrow('boom')
   })
 })
 

@@ -90,7 +90,7 @@ describe('reportDateLabel / birthLabel / semesterOf — 결과보고서 표기',
 
 describe('approvalNoticeText', () => {
   const V = { teacherName: '김선생', schoolName: '서울가곡초등학교', grade: 1, classNo: 3,
-    code: 'SGT2E4', surveyUrl: 'https://x.kr', writing: { semester: 2 as const, items: ['가가', '나나'] } }
+    code: 'SGT2E4', surveyUrl: 'https://x.kr', writing: { semester: 2 as const, kind: 'word' as const, items: ['가가', '나나'] } }
 
   it('교사·학교·학급·코드·검사 주소와 시작 안내를 모두 담는다', () => {
     const t = approvalNoticeText(V)

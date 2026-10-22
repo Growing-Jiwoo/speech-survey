@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { SessionListRow } from '@/lib/db'
+import type { SessionListRow, SessionProgressSource } from '@/lib/db'
+import type { SessionProgress } from '@/lib/session-progress'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
@@ -13,8 +14,9 @@ const RECORDING_CODES = itemsFor(formForGrade(1)).recordingPages.map(p => p.code
 const G1_WRITE = itemsFor(formForGrade(1)).writingItems.map(i => i.code)
 
 /** 테스트 픽스처 */
-/** 진행률(`progress`)은 listSessions처럼 행에서 계산해 채운다 — 넘기지 않으면 over로 바꾼 녹음·쓰기가 반영된다. */
-export function mkSession(over: Partial<SessionListRow> = {}): SessionListRow {
+/** 진행률(`progress`)은 listSessions처럼 행에서 계산해 채운다 — 넘기지 않으면 over로 바꾼 녹음·쓰기가 반영된다.
+ *  진행률 재료(녹음·쓰기 배열)도 행에 남겨 둔다 — sessionProgress를 직접 부르는 테스트가 쓴다(목록 응답에는 실리지 않는다). */
+export function mkSession(over: Partial<SessionProgressSource & { progress: SessionProgress }> = {}): SessionListRow & SessionProgressSource {
   const row = {
     id: 'id-' + Math.random().toString(36).slice(2),
     class_code_id: '11111111-1111-1111-1111-111111111111', child_no: 3,

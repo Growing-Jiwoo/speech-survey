@@ -41,7 +41,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // 받아쓰기 문항 — 승인한 날의 학기 양식(새 세션이 고르는 규칙과 같다, lib/forms formFor). 메일과 [안내 문구 복사]가 같은 값을
     // 쓰도록 응답에도 싣는다(화면 코드는 양식을 import하지 않는다 — 실제 문항이 공개 번들에 실린다)
     const semester = semesterOf(new Date().toISOString())
-    const writing: WritingNotice = { semester, items: writingPrompts(formFor(row.grade, semester)) }
+    const form = formFor(row.grade, semester)
+    const writing: WritingNotice = { semester, kind: form.writing.kind, items: writingPrompts(form) }
 
     let mailed = false
     if (!already && row.teacher_email) {
