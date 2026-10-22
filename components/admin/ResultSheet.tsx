@@ -489,10 +489,10 @@ export function ResultSheet({
           verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
       </TaskSection>
 
-      {/* 문장마다 읽은 시간(초)과 정확 어절을 넣고, 총점은 어절 합 ÷ 시간 합(담당자 확정 2026-09-29,
+      {/* 문장마다 읽은 시간(초)과 정확 어절을 넣고, 총점은 어절 합 ÷ 시간 합 × 10(담당자 확정 2026-09-29, × 10은 2026-10-20 —
           lib/scoring `CountTaskKey` 주석). 시간은 녹음을 듣고 채점자가 판단해 넣는다 — 녹음 없는 문장은 잠긴다. */}
       <TaskSection title={SECTION_LABEL.sentence_reading}
-        hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간">
+        hint="문장마다 읽은 시간(초)과 정확하게 읽은 어절 수 · 총점 = 어절 ÷ 시간 × 10(10초당 어절)">
         <SentenceRows items={f.sentenceItems} sentences={sentences} onChange={setSentence}
           times={times} locked={locked} onTimeChange={setTime}
           attemptsFor={code => attemptsOf(`p_${code}`)} failedFor={code => uploadFailed.has(`p_${code}`)}
