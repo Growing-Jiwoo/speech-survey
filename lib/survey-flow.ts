@@ -12,7 +12,7 @@
 //     ⚠️ 회신은 사용자를 통해 전달받았고 원문이 저장소에 없다(08-11 스펙의 ② 세부 답도
 //     같은 경로였다). 원문이 필요해지면 사용자에게 요청할 것.
 // ⚠️ 검사지에 인쇄된 중단 규칙 문구는 적용하지 않는다 — 시행 절차는 담당자 회신이 우선한다.
-import type { FormItems } from './items'
+import { isRecordingPage, type FormItems, type SurveyPage } from './items'
 
 export interface FlowState {
   writing: Partial<Record<string, number>>
@@ -46,4 +46,33 @@ export function canAdvance(
   const writingDone = s.writingMode === 'scan' || page.items.every(i => s.writing[i.code] !== undefined)
   return (page.section !== f.writingSection || writingDone)
     && (page.section !== 'checklist' || s.checklist.length > 0)
+}
+
+/**
+ * 녹음 페이지 아래 버튼 — [이전] [모르겠어요] [다음]. 담당자 요청(2026-10-22) 원문 「읽다가 모르겠어요 라고 해서 녹음 멈춰도
+ * 모르겠어요를 누를 수 있게끔 … '이전, 모르겠어요, 다음' 이렇게」. 종전(담당자 확정 2026-08-07)에는 별도 버튼 없이 녹음 전에만
+ * [다음]의 라벨이 「모르겠어요」로 바뀌어, 읽다가 모른다고 해 녹음을 멈추면 누를 길이 없었다.
+ * - `skip` — [모르겠어요]를 보인다. 녹음 중에는 호출부가 잠근다.
+ * - `next` — [다음]을 누를 수 있다. 녹음 전에는 [모르겠어요]만이다 — 오터치 한 번으로 화면이 조용히 넘어가지 않게(08-07의 취지).
+ * [모르겠어요]가 없는 화면: 연습(모름의 관찰이 아니다)·검토에서 온 화면·마지막 화면, 그리고 **다시 녹음할 화면**(올리기 실패로
+ * 다시 보낼 녹음이 있거나 시도한 녹음이 저장되지 않았다 — 아이는 읽었다. 사용자 확정 2026-10-08·10-12, `unsavedPages`).
+ */
+export function recordingNav(
+  page: SurveyPage,
+  s: { recorded: Record<string, number>; attempted?: string[] },
+  ctx: { fromReview: boolean; isLast: boolean; retrying: boolean },
+): { skip: boolean; next: boolean } {
+  const recorded = (s.recorded[page.code] ?? 0) > 0
+  const rerecord = ctx.retrying || (!recorded && (s.attempted ?? []).includes(page.code))
+  const skip = !ctx.fromReview && !ctx.isLast && !page.practice && isRecordingPage(page) && !rerecord
+  return { skip, next: !skip || recorded }
+}
+
+/**
+ * [모르겠어요]를 누른 뒤의 「모르겠어요」 표시(`skipped`, 검토 화면이 미녹음과 구분한다 — 담당자 확정 2026-09-21).
+ * **녹음이 있으면 남기지 않는다** — 그 화면은 녹음이 채점 근거라(읽은 데까지 담당자가 듣고 채점한다) 표시가 할 일이 없고,
+ * 남겨 두면 그 녹음의 올리기가 뒤늦게 실패했을 때 검토가 그 화면을 빠진 것으로 세지 않아 읽은 녹음 없이 제출된다.
+ */
+export function skippedAfter(s: { recorded: Record<string, number>; skipped: string[] }, code: string): string[] {
+  return (s.recorded[code] ?? 0) > 0 ? s.skipped : [...new Set([...s.skipped, code])]
 }
