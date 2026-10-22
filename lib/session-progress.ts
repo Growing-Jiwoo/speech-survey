@@ -4,7 +4,7 @@
 import { itemsFor, type FormItems, type Totals } from './items'
 import { formOfSession } from './forms'
 import { scoreInputFrom } from './scoring'
-import type { SessionListRow } from './db'
+import type { SessionProgressSource } from './db'
 
 export interface SessionProgress {
   recorded: number; written: number; expected: Totals; incomplete: boolean
@@ -14,8 +14,8 @@ export interface SessionProgress {
   scan: 'wait' | 'uploaded' | null
 }
 
-type ProgressInput = Pick<SessionListRow, 'grade' | 'recordings' | 'writing_answers' | 'sentence_scores'>
-  & Partial<Pick<SessionListRow, 'writing_mode' | 'writing_scans'>>
+type ProgressInput = Pick<SessionProgressSource, 'grade' | 'recordings' | 'writing_answers' | 'sentence_scores'>
+  & Partial<Pick<SessionProgressSource, 'form_id' | 'writing_mode' | 'writing_scans'>>
 
 /** 목록 행의 쓰기 답(itemCode → 어절 수). 쓰기 답이 두 테이블에 나뉘어 있는 사실은
  *  scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다. */

@@ -859,7 +859,8 @@ export interface WritingRow { item_code: string; can_write: boolean }
 
 const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, form_id, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode, upload_failed'
 
-export type SessionListRow = SessionRow & {
+/** 목록 행의 진행률 재료 — 서버가 진행률(`progress`)을 계산하는 데만 쓰고 **응답에는 싣지 않는다**(listSessions). */
+export type SessionProgressSource = SessionRow & {
   recordings: { item_code: string }[]
   /** 진행률 분자(응답 존재 여부)에 값이 필요해 can_write까지 싣는다 */
   writing_answers: { item_code: string; can_write: boolean }[]
@@ -867,22 +868,45 @@ export type SessionListRow = SessionRow & {
   sentence_scores: { item_code: string; words: number }[]
   /** 쓰기 기록지 스캔본이 올라왔는지(1:1이라 객체·배열·null 어느 모양으로도 온다 — sessionProgress가 흡수) */
   writing_scans?: { session_id: string } | { session_id: string }[] | null
+}
+
+export type SessionListRow = SessionRow & {
   /** 진행률 — listSessions가 서버에서 계산해 싣는다(화면이 lib/forms를 import하지 않도록) */
   progress: SessionProgress
 }
 
 const MAX_LIST_ROWS = 5000
 
+/**
+ * 관리자 목록 — 세션 전부(최근 시작 순, 상한 `MAX_LIST_ROWS`).
+ *
+ * **페이지를 넘기며 받는다.** Supabase(PostgREST)는 한 요청에 정해진 행 수(API 설정 Max Rows, 기본 1000)까지만 돌려주고
+ * 나머지는 오류 없이 자른다 — `.limit(5000)`으로 한 번에 받던 때는 1000건이 넘으면 오래된 검사가 목록·KPI·학교별 현황에서
+ * 조용히 사라졌다(2026-10-22 출시 전 점검, 1129건 → 1000건 재현). 서버가 실제로 준 행 수만큼 넘기므로 Max Rows가 얼마든
+ * 맞다. 넘기는 사이 새 검사가 생기면 경계의 행이 두 번 올 수 있어 id로 거른다.
+ * 진행률 재료(녹음·쓰기 배열)는 계산 뒤 버린다 — 화면은 `progress`만 쓰고, 행마다 실으면 수천 건에서 응답이 몇 MB가 된다.
+ */
 export async function listSessions(): Promise<SessionListRow[]> {
-  const { data, error } = await sb().from('sessions')
-    .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), writing_scans(session_id)`)
-    .order('started_at', { ascending: false })
-    .limit(MAX_LIST_ROWS)
-  fail(error)
-  const rows = (data ?? []) as unknown as Omit<SessionListRow, 'progress'>[]
+  const rows: SessionProgressSource[] = []
+  const seen = new Set<string>()
+  while (rows.length < MAX_LIST_ROWS) {
+    const from = rows.length
+    const { data, error } = await sb().from('sessions')
+      .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), writing_scans(session_id)`)
+      .order('started_at', { ascending: false }).order('id')
+      .range(from, MAX_LIST_ROWS - 1)
+    fail(error)
+    const page = (data ?? []) as unknown as SessionProgressSource[]
+    const fresh = page.filter(r => !seen.has(r.id))
+    if (fresh.length === 0) break
+    for (const r of fresh) { seen.add(r.id); rows.push(r) }
+  }
   if (rows.length >= MAX_LIST_ROWS)
     console.warn(`[listSessions] 상한(${MAX_LIST_ROWS}) 도달 — 서버 페이지네이션 도입 검토 필요`)
-  return rows.map(r => ({ ...r, progress: sessionProgress(r) }))
+  return rows.slice(0, MAX_LIST_ROWS).map(r => {
+    const { recordings: _r, writing_answers: _w, sentence_scores: _s, writing_scans: _c, ...row } = r
+    return { ...row, progress: sessionProgress(r) }
+  })
 }
 
 /**
