@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { OtherTabNotice, useOtherTabGuard } from '@/hooks/useOtherTabGuard'
 import type { Recording } from '@/hooks/useRecorder'
-import { SECTION_LABEL, isRecordingPage, itemsFor, toggleChecklistArea } from '@/lib/items'
+import { SECTION_LABEL, isRecordingPage, itemsFor, sentenceFitEm, toggleChecklistArea } from '@/lib/items'
 import { isFatalFormError, useSurveyForm } from '@/hooks/useSurveyForm'
 import { canAdvance, recordingNav, skippedAfter, visiblePages } from '@/lib/survey-flow'
 import {
@@ -546,7 +546,7 @@ function SurveyInner() {
               )}
 
               {page.role === 'child' && isRecordingPage(page) && (
-                <ReadingPage key={page.code} page={page}
+                <ReadingPage key={page.code} page={page} fitEm={sentenceFitEm(f.sentenceItems.map(i => i.text))}
                   attemptCount={st.recorded[page.code] ?? 0} onRecordingChange={setBusy}
                   onRecorded={handleRecorded} stopRef={stopRecording} />
               )}

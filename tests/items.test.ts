@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CHECKLIST_AREAS, GRACE_SEC, areaLabel, isRecordingPage, itemsFor, maxRecSec,
-  pageLabel, toggleChecklistArea,
+  pageLabel, sentenceFitEm, toggleChecklistArea,
 } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
 
@@ -250,5 +250,19 @@ describe('pageLabel — 검토 화면 목록·업로드 재시도 안내', () =>
   })
   it('모르는 코드는 코드 그대로 (표시가 사라지지 않게)', () => {
     expect(pageLabel(g1, 'nope')).toBe('nope')
+  })
+})
+
+// 담당자 테스트(2026-10-22): 문장 4번의 마지막 어절만 셋째 줄로 넘어갔다 — 문장 화면 글자 크기를 가장 긴 줄에 맞춘다(ReadingPage).
+describe('sentenceFitEm — 문장 줄 하나의 폭(글자 크기 1em 기준)', () => {
+  it('줄바꿈(\\n)으로 나눈 줄마다 재고 가장 긴 줄의 폭을 돌려준다 — 한글 0.92 · 공백 0.28 · 마침표 0.228', () => {
+    // 「가나 다.」 = 0.92×3 + 0.28 + 0.228 = 3.268 · 「가나다라」 = 3.68 · 「가 나」 = 2.12
+    expect(sentenceFitEm(['가나 다.', '가나다라\n가 나'])).toBeCloseTo(3.68, 6)
+  })
+  it('앞뒤 공백은 세지 않는다 — 화면이 줄 끝 공백을 그리지 않는다', () => {
+    expect(sentenceFitEm([' 가나 \n 다 '])).toBeCloseTo(1.84, 6)
+  })
+  it('표에 없는 글자는 한글 폭으로 넉넉히 센다 — 넘쳐 접히는 쪽보다 조금 작아지는 쪽이 낫다', () => {
+    expect(sentenceFitEm(['가?'])).toBeCloseTo(1.84, 6)
   })
 })
