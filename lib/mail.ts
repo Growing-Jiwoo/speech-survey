@@ -204,29 +204,35 @@ export function approvedMail(v: {
   }
 }
 
-/** ③ 교사가 [결과지 받기]를 눌렀을 때 — 학급 결과 페이지 링크(14일).
+/** ③ 교사가 시작 화면의 [결과지 받기]·[쓰기 스캔본 올리기]를 눌렀을 때 — 학급 결과 페이지 링크(14일).
+ *  두 버튼은 **같은 화면**(결과지 받기와 스캔본 올리기가 함께 있다)으로 가고, 메일의 제목·버튼만 다르다(`purpose`).
+ *  스캔본 링크는 화면 주소에 `?scan=1`이 붙는다 — 올릴 기록지가 없으면 화면이 그렇다고 알린다(app/results).
+ *  스캔본 버튼은 담당자 요청(2026-10-22) 「쓰기 스캔본을 업로드할 수 있는 곳」이고, 시작 화면에서 바로 올리지 않고 메일 링크로
+ *  보내는 것은 사용자·담당자 확정(같은 날 — 코드만으로 올리게 하면 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다).
  *  이메일은 `class_codes.teacher_email`로만 간다(호출부가 채운다). 문의처는 「담당자에게 문의」까지
  *  (사용자 확정 2026-09-22). */
 export function resultsLinkMail(v: {
   teacherName: string; schoolName: string; grade: number; classNo: number; resultsUrl: string
+  purpose?: 'results' | 'scan'
 }): Mail {
   const where = `${v.schoolName} ${gradeClassLabel(v.grade, v.classNo)}`
+  const scan = v.purpose === 'scan'
   return {
     to: '',
-    subject: `[읽기 선별검사] ${where} 결과지`,
+    subject: `[읽기 선별검사] ${where} ${scan ? '쓰기 스캔본 올리기' : '결과지'}`,
     html: WRAP(`
       <p style="margin:0 0 6px">${escapeHtml(v.teacherName)} 선생님, 안녕하세요.</p>
-      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 검사 결과지를 받으실 수 있어요.</p>
+      <p style="margin:0 0 20px">${escapeHtml(where)} 학급의 ${scan ? '쓰기 기록지 스캔본을 올리실' : '검사 결과지를 받으실'} 수 있어요.</p>
       <p style="margin:0"><a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.resultsUrl)}"
         style="background:${C.blue};color:#fff;text-decoration:none;border-radius:9px;padding:12px 20px;
-        display:inline-block;font-weight:700;font-size:14px">결과지 보기</a></p>
+        display:inline-block;font-weight:700;font-size:14px">${scan ? '스캔본 올리기' : '결과지 보기'}</a></p>
       <p style="margin:14px 0 0;font-size:13px;color:${C.mute};word-break:break-all">
         버튼이 열리지 않으면 이 주소를 복사해 주세요:<br>
         <a target="_blank" rel="noopener noreferrer" href="${escapeHtml(v.resultsUrl)}" style="color:${C.blue}">${escapeHtml(v.resultsUrl)}</a></p>
       <p style="margin:24px 0 0;padding:12px 14px;background:${C.well};border:1px solid ${C.line};
         border-radius:10px;font-size:13px;color:${C.soft};line-height:1.7">
-        이 링크는 <b>14일</b> 동안 유효해요. 지나면 검사 주소에서 [결과지 받기]를 다시 눌러 주세요.<br>
-        채점이 진행되면 같은 링크를 새로고침하면 반영돼요.<br>
+        이 링크는 <b>14일</b> 동안 유효해요. 지나면 검사 주소에서 ${scan ? '[쓰기 스캔본 올리기]' : '[결과지 받기]'}를 다시 눌러 주세요.<br>
+        ${scan ? '같은 화면에서 결과지도 받으실 수 있어요.' : '채점이 진행되면 같은 링크를 새로고침하면 반영돼요.'}<br>
         링크가 열리지 않으면 담당자에게 문의해 주세요.</p>`, FOOTER.teacher),
   }
 }

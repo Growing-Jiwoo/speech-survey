@@ -8,7 +8,7 @@ import {
 import { z } from 'zod'
 
 describe('sessionCreateSchema — 코드 기반 (스펙 2026-08-13)', () => {
-  const VALID = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
+  const VALID = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101' }
   it('유효 입력 통과 + 코드 대문자 정규화', () => {
     const d = sessionCreateSchema.parse({ ...VALID, code: 'k7m2p9' })
     expect(d.code).toBe('K7M2P9')
@@ -23,24 +23,28 @@ describe('sessionCreateSchema — 코드 기반 (스펙 2026-08-13)', () => {
 // Task 13 코드리뷰 후속(2026-08-18) — 유니온의 순서 의존성을 스키마 레벨에서 직접 고정한다.
 // 라우트 테스트만으로는 재정렬 사고가 나도 "gender: 남→여" 같은 무의미한 diff로만 드러난다.
 describe('sessionCreateSchema — 유니온(명단 모드/직접 입력) 불변식', () => {
-  const ROSTER_BODY = { fromRoster: true as const, code: 'K7M2P9', childNo: 3, guardianConsent: true }
-  const DIRECT_BODY = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
+  const ROSTER_BODY = { fromRoster: true as const, code: 'K7M2P9', childNo: 3 }
+  const DIRECT_BODY = { code: 'K7M2P9', childNo: 3, name: '김도연', gender: '남', birthYmd: '190101' }
 
   it('명단 모드 바디는 통과하고, 함께 실은 name/gender/birthYmd는 벗겨진다', () => {
     const d = sessionCreateSchema.parse({ ...ROSTER_BODY, name: '위조', gender: '여', birthYmd: '000101' })
-    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3, guardianConsent: true })
+    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3 })
   })
   it('fromRoster 없는 명단-모양 바디(이름 등 없이 code/childNo만)는 거부된다', () => {
     // sessionCreateFromRosterSchema 쪽에서는 당연히 막히고, direct 쪽은 name 등 필수 필드가
     // 없어 막힌다 — 어느 쪽으로도 새지 않는지가 요점이다.
-    expect(sessionCreateSchema.safeParse({ code: 'K7M2P9', childNo: 3, guardianConsent: true }).success).toBe(false)
+    expect(sessionCreateSchema.safeParse({ code: 'K7M2P9', childNo: 3 }).success).toBe(false)
   })
   it('[REGRESSION] fromRoster:true는 direct 스키마를 절대 통과할 수 없다 — 유니온 순서를 뒤집어도', () => {
     expect(sessionCreateDirectSchema.safeParse(ROSTER_BODY).success).toBe(false)
     // 순서를 반대로 둔 유니온이라도(재정렬 사고 재현) 위조 신원이 direct로 새지 않아야 한다.
     const reordered = z.union([sessionCreateDirectSchema, sessionCreateFromRosterSchema])
     const d = reordered.parse({ ...ROSTER_BODY, name: '위조', gender: '여', birthYmd: '000101' })
-    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3, guardianConsent: true })
+    expect(d).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3 })
+  })
+  it('옛 화면이 실어 보낸 guardianConsent는 통과하되 벗겨진다 — 검사할 때 동의를 받지 않는다(담당자 요청 2026-10-22)', () => {
+    expect(sessionCreateSchema.parse({ ...ROSTER_BODY, guardianConsent: true })).toEqual({ fromRoster: true, code: 'K7M2P9', childNo: 3 })
+    expect(sessionCreateSchema.parse({ ...DIRECT_BODY, guardianConsent: true })).not.toHaveProperty('guardianConsent')
   })
   it('직접 입력 바디는 그대로 direct 스키마로 통과한다(회귀 방지)', () => {
     const d = sessionCreateSchema.parse(DIRECT_BODY)
@@ -137,8 +141,9 @@ describe('classCodeEmailSchema — 관리자 이메일 수정 바디', () => {
 })
 
 describe('resultsRequestSchema — 결과지 링크 요청', () => {
-  it('코드만 받고 대문자 정규화', () => {
-    expect(resultsRequestSchema.parse({ code: ' test24 ' })).toEqual({ code: 'TEST24' })
+  it('코드만 받고 대문자 정규화 — 버튼 종류(purpose)가 없으면 결과지다(옛 화면)', () => {
+    expect(resultsRequestSchema.parse({ code: ' test24 ' })).toEqual({ code: 'TEST24', purpose: 'results' })
+    expect(resultsRequestSchema.parse({ code: 'TEST24', purpose: 'scan' })).toEqual({ code: 'TEST24', purpose: 'scan' })
   })
   it('형식 밖 코드는 거부', () => {
     expect(resultsRequestSchema.safeParse({ code: 'TEST2' }).success).toBe(false)

@@ -21,12 +21,12 @@ const CODE_ROW = {
   status: 'active' as const, applied_at: null,
 }
 const PENDING_CODE_ROW = { ...CODE_ROW, status: 'pending' as const, applied_at: '2026-08-13T00:00:00.000Z' }
-const VALID = { code: 'K7M2P9', childNo: 7, name: '김도연', gender: '남', birthYmd: '190101', guardianConsent: true }
+const VALID = { code: 'K7M2P9', childNo: 7, name: '김도연', gender: '남', birthYmd: '190101' }
 const ROSTER = [
   { child_no: 3, child_name: '이서준', gender: '여' as const, birth_ymd: '180505' },
   { child_no: 7, child_name: '박지민', gender: '남' as const, birth_ymd: '190202' },
 ]
-const FROM_ROSTER = { fromRoster: true as const, code: 'K7M2P9', childNo: 7, guardianConsent: true }
+const FROM_ROSTER = { fromRoster: true as const, code: 'K7M2P9', childNo: 7 }
 
 let ipSeq = 0
 function makeReq(body: unknown, ip = `10.1.0.${++ipSeq}`) {
@@ -64,7 +64,7 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
     expect(json.grade).toBe(2)
     expect(db.createSession).toHaveBeenCalledWith({
       classCode: CODE_ROW, childNo: 7,
-      birthYmd: '190101', gender: '남', childName: '김도연',
+      birthYmd: '190101', gender: '남', childName: '김도연', consentedAt: null,
     })
   })
   it('[REGRESSION] 클라이언트가 보낸 학급 정보는 무시된다 — 서버가 코드에서 복사한다', async () => {
@@ -72,7 +72,7 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
     expect(res.status).toBe(200)
     expect(db.createSession).toHaveBeenCalledWith({
       classCode: CODE_ROW, childNo: 7,
-      birthYmd: '190101', gender: '남', childName: '김도연',
+      birthYmd: '190101', gender: '남', childName: '김도연', consentedAt: null,
     })
   })
   it('idemKey를 그대로 db 계층에 넘긴다 — 직접 입력 모드', async () => {
@@ -107,10 +107,21 @@ describe('POST /api/sessions — 코드 기반 생성', () => {
     expect((await POST(makeReq({ ...VALID, childNo: 0 }))).status).toBe(400)
     expect((await POST(makeReq({ ...VALID, childNo: 100 }))).status).toBe(400)
   })
-  it('guardianConsent가 true 리터럴이 아니면 400 (미체크로는 생성 불가)', async () => {
-    expect((await POST(makeReq({ ...VALID, guardianConsent: false }))).status).toBe(400)
-    const { guardianConsent: _omit, ...rest } = VALID
-    expect((await POST(makeReq(rest))).status).toBe(400)
+  // 담당자 요청(2026-10-22): 개인정보 동의는 교사가 신청할 때 한 번만 받고 검사할 때는 받지 않는다.
+  it('검사할 때 동의 체크 없이 만든다 — 배포 중 열려 있던 옛 화면이 보낸 guardianConsent도 받는다', async () => {
+    expect((await POST(makeReq(VALID))).status).toBe(200)
+    expect((await POST(makeReq({ ...VALID, guardianConsent: true }))).status).toBe(200)
+    expect((await POST(makeReq({ ...FROM_ROSTER, guardianConsent: true }))).status).toBe(200)
+  })
+  it('명단 아동의 동의 확인 시각은 학급 신청 시각이다 — 신청 때 「법정대리인의 동의를 받은 학생만 명단에 등록했습니다」에 체크했다', async () => {
+    vi.mocked(db.findClassCode).mockResolvedValue({ ...CODE_ROW, applied_at: '2026-10-20T01:00:00.000Z' })
+    await POST(makeReq(FROM_ROSTER))
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBe('2026-10-20T01:00:00.000Z')
+  })
+  it('직접 입력 아동은 동의 확인 기록이 없다 — 신청 때 확인한 것은 명단 아동뿐이다', async () => {
+    vi.mocked(db.findClassCode).mockResolvedValue({ ...CODE_ROW, applied_at: '2026-10-20T01:00:00.000Z' })
+    await POST(makeReq(VALID))
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBeNull()
   })
   it('이름 형식 위반 400', async () => {
     expect((await POST(makeReq({ ...VALID, name: '123' }))).status).toBe(400)
@@ -145,7 +156,7 @@ describe('POST /api/sessions — 명단 모드(fromRoster)', () => {
     expect(res.status).toBe(200)
     expect(db.createSession).toHaveBeenCalledWith({
       classCode: CODE_ROW, childNo: 7,
-      birthYmd: '190202', gender: '남', childName: '박지민',
+      birthYmd: '190202', gender: '남', childName: '박지민', consentedAt: null,   // CODE_ROW.applied_at(직접 발급 = null)
     })
   })
   it('[REGRESSION] 클라이언트가 다른 name·gender·birthYmd를 함께 보내도 명단 값이 이긴다', async () => {
@@ -155,7 +166,7 @@ describe('POST /api/sessions — 명단 모드(fromRoster)', () => {
     expect(res.status).toBe(200)
     expect(db.createSession).toHaveBeenCalledWith({
       classCode: CODE_ROW, childNo: 7,
-      birthYmd: '190202', gender: '남', childName: '박지민',
+      birthYmd: '190202', gender: '남', childName: '박지민', consentedAt: null,   // CODE_ROW.applied_at(직접 발급 = null)
     })
   })
   it('명단에 없는 번호 400, createSession 호출 안 됨', async () => {
@@ -182,7 +193,7 @@ describe('POST /api/sessions — 명단 모드(fromRoster)', () => {
     expect(res.status).toBe(200)
     expect(db.createSession).toHaveBeenCalledWith({
       classCode: CODE_ROW, childNo: 7,
-      birthYmd: '190101', gender: '남', childName: '김도연',
+      birthYmd: '190101', gender: '남', childName: '김도연', consentedAt: null,
     })
     expect(db.listRoster).not.toHaveBeenCalled()
   })

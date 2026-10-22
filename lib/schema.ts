@@ -77,6 +77,10 @@ const cleaned = z.string().transform(s => s.trim().replace(/\s+/g, ' '))
  *  구버전 화면이나 테스트가 키 없이 부를 수 있고, 그때는 멱등 보장만 없다. */
 export const idemKeySchema = z.string().uuid().optional()
 
+/** 검사할 때는 법정대리인 동의 체크를 받지 않는다 — 담당자 요청(2026-10-22) 「개인정보 수집, 이용 안내: 이건 교사가 신청할 때
+ *  한 번만 받고, 검사 실시할 때는 빼는게 어떨까?」. 종전에는 두 모드 모두 `guardianConsent: z.literal(true)`가 게이트였다.
+ *  배포 중 열려 있던 옛 화면이 그 값을 실어 와도 아래 객체가 모르는 키라 벗겨질 뿐 거부하지 않는다. 동의 확인 시각은
+ *  라우트가 정한다(app/api/sessions — 명단 아동은 학급 신청 시각). */
 export const sessionCreateDirectSchema = z.object({
   fromRoster: z.undefined().optional(),
   code: classCodeSchema,
@@ -85,8 +89,6 @@ export const sessionCreateDirectSchema = z.object({
   name: cleaned.pipe(nameSchema),
   gender: genderSchema,
   birthYmd: birthYmdSchema,
-  // 만 14세 미만 아동 — 법정대리인 동의를 확인했다는 검사자 체크(개인정보보호법 제22조의2).
-  guardianConsent: z.literal(true),
 })
 
 /** 명단 모드 — 신청 때 등록한 명단에서 서버가 값을 복사한다. 클라이언트가 보낸
@@ -96,7 +98,6 @@ export const sessionCreateFromRosterSchema = z.object({
   code: classCodeSchema,
   childNo: childNoSchema,
   idemKey: idemKeySchema,
-  guardianConsent: z.literal(true),
 })
 
 /** 두 모드의 유니온. z.union은 순서대로 시도해 처음 통과하는 스키마를 쓴다 — 명단 모드를
@@ -188,4 +189,5 @@ export const verifyCodeSchema = z.object({ code: classCodeSchema, childNo: child
 
 /** POST /api/results/request 바디 — 교사 결과지 링크 요청. 코드만 받는다. 이메일은 받지 않는다 —
  *  요청자가 주소를 정할 수 있으면 코드가 곧 결과지 열쇠가 된다(스펙 2026-09-22 「왜 매직링크인가」). */
-export const resultsRequestSchema = z.object({ code: classCodeSchema })
+/** POST /api/results/request — `purpose`는 어느 버튼인지(결과지 받기 / 쓰기 스캔본 올리기, 2026-10-22). 없으면 결과지(옛 화면) */
+export const resultsRequestSchema = z.object({ code: classCodeSchema, purpose: z.enum(['results', 'scan']).default('results') })

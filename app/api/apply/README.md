@@ -61,7 +61,9 @@
 학생 명단은 `class_roster`에, 담임 정보는 `class_codes`에 영구 저장된다(루트 README "운영 ·
 개인정보" 절 참고) — 이 라우트는 인증이 없으므로 그 저장이 시작되는 지점이 인증 없는 공개
 쓰기라는 점이 다른 두 테이블과 다르다. `class_roster`는 자체 동의 확인 시각을 갖지 않는다 —
-동의는 나중에 검사 시작 시점에 `sessions.guardian_consented_at`로 확인된다. 학급 코드
+신청 시각(`class_codes.applied_at`)이 그 명단의 동의 확인 시각이다(신청 화면의 동의 3번 「법정대리인의 동의를 받은 학생만
+명단에 등록했습니다」). 검사를 만들 때 그 시각이 `sessions.guardian_consented_at`으로 옮겨 적힌다 — 검사할 때는 동의를 다시
+받지 않는다(담당자 요청 2026-10-22). 학급 코드
 (`class_codes`)를 삭제하면 그 명단도 `on delete cascade`로 함께 지워진다.
 
 테스트: `tests/apply-route.test.ts`.

@@ -14,8 +14,13 @@
 // 학급 코드는 세션 생성 성공 직후 별도 키에 저장돼, 같은 학급의 다음 아동은 코드가 채워진
 // 채로 시작한다(아동 정보는 절대 남기지 않는다 — lib/survey-state.ts 참고).
 //
-// 학급 배너의 [결과지 받기 →]는 교사용이다(스펙 2026-09-22 teacher-results-download). 등록된 담임
-// 메일로 학급 결과 링크를 보낼 뿐 이 화면에서 결과가 열리지 않는다 — 아동 앞 공용 PC라 그래야 한다.
+// 코드를 확인하면 블록으로 나뉜다 — 학급 코드 · 현재 검사 상황 · 검사할 학생 · 쓰기 기록지 인쇄 · 쓰기 스캔본 올리기 · 결과지 받기
+// (담당자 요청 2026-10-22). 아래 셋은 교사용이다. [결과지 받기]·[쓰기 스캔본 올리기]는 등록된 담임 메일로 학급 결과 화면 링크를
+// 보낼 뿐 이 화면에서 열리지 않는다 — 아동 앞 공용 기기라 그래야 한다(components/start/LinkByMail).
+//
+// 개인정보 수집·이용 안내와 법정대리인 동의 확인은 **신청할 때 한 번만** 받는다(담당자 요청 2026-10-22 「교사가 신청할 때 한 번만
+// 받고, 검사 실시할 때는 빼는게 어떨까?」) — 아동마다 받던 체크를 없앴다. 동의 확인 기록은 서버가 정한다(app/api/sessions —
+// 명단 아동은 학급 신청 시각, 명단 밖 아동은 기록 없음).
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -23,11 +28,11 @@ import { Blip } from '@/components/Blip'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { Select } from '@/components/Select'
+import { LinkByMail } from '@/components/start/LinkByMail'
 import { WritingSheetDialog } from '@/components/start/WritingSheetDialog'
 import { normBirth } from '@/lib/birth'
-import { CONSENT_NOTICE, GUARDIAN_CONSENT_LABEL } from '@/lib/consent'
 import { gradeClassLabel, pad2 } from '@/lib/format'
-import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
+import { postJson } from '@/lib/http'
 import { hasHangul, qwertyFromHangul } from '@/lib/hangul-keys'
 import { clearState, loadClassCode, loadState, newState, saveClassCode, saveState, storageWritable } from '@/lib/survey-state'
 import { validBirthYmd, validChildNo, validClassCode, validGender, validName } from '@/lib/validate'
@@ -36,6 +41,8 @@ import type { SheetLayout } from '@/lib/writing-sheet'
 
 const inputCls = 'mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-line bg-well px-4 text-base outline-none transition focus:border-blue focus:bg-white focus:ring-[3.5px] focus:ring-blue/15'
 const labelCls = 'mt-4 block text-[13px] font-bold text-ink-soft'
+/** 블록 제목 — 칸 이름(labelCls)과 같은 글꼴, 위 여백만 없다 */
+const blockTitleCls = 'block text-[13px] font-bold text-ink-soft'
 
 /** 사이트 데이터 저장이 막힌 브라우저 안내(시작 화면 머리·확인 창 공통) */
 const STORAGE_BLOCKED_MSG = '이 브라우저는 검사 진행 상태를 저장할 수 없어 검사를 시작할 수 없어요. '
@@ -86,7 +93,7 @@ interface RosterChild {
 /** verify-code(childNo 없이) 응답 — 명단과 쓰기 기록지 인쇄 재료(스캔본 방식, 2026-09-30) */
 interface CodeLookup extends ClassInfo {
   roster: RosterChild[]
-  /** 스캔본을 기다리는 아이 수 — 배너가 「스캔 대기 N명」으로 알린다 */
+  /** 스캔본을 기다리는 아이 수 — 「현재 검사 상황」 블록이 「스캔 대기 N명」으로 알린다 */
   scanPending: number
   /** 기록지 QR의 반 표시와 쓰는 칸 모양(문항은 없다) */
   sheet: { tag: string; layout: SheetLayout }
@@ -118,8 +125,8 @@ export default function StartPage() {
   // 코드 조회 결과 — 명단 모드 머리글과 확인 모달이 쓴다
   const [cls, setCls] = useState<ClassInfo | null>(null)
   /** `cls`가 **어느 코드로** 조회된 것인지. 직접 입력 모드는 코드를 고쳐도 단계를 되돌리지
-   *  않으므로(아래 onChange 주석), 이것이 없으면 옛 학급 배너가 새 코드 위에 남는다 —
-   *  표시된 학급과 [결과지 받기 →]가 실제로 보내는 코드가 갈린다. */
+   *  않으므로(아래 onChange 주석), 이것이 없으면 옛 학급 블록이 새 코드 위에 남는다 —
+   *  표시된 학급과 [결과지 받기]가 실제로 보내는 코드가 갈린다. */
   const [clsCode, setClsCode] = useState('')
   const [roster, setRoster] = useState<RosterChild[]>([])
   // 쓰기 기록지 — 인쇄 창 재료와 스캔 대기 수. 코드 조회가 채우고 코드를 고치면 비운다(명단과 같은 수명).
@@ -140,8 +147,6 @@ export default function StartPage() {
   const clearError = (key: FieldKey) => setErrors(prev => (prev[key] ? { ...prev, [key]: undefined } : prev))
   const [formErr, setFormErr] = useState('')
   const [busy, setBusy] = useState(false)
-  // 법정대리인 동의를 확인했다는 검사자 체크(필수) — 체크 전에는 [확인] 비활성
-  const [consent, setConsent] = useState(false)
   // 값이 있으면 확인 모달이 열려 있다
   const [confirm, setConfirm] = useState<Confirmed | null>(null)
   // 세션 생성 실패 시 모달 안에 보여줄 오류 — 모달을 닫지 않고 재시도할 수 있게 한다
@@ -173,47 +178,6 @@ export default function StartPage() {
   /** 이 브라우저가 진행 상태를 저장하지 못한다 — 검사를 시작할 수 없으니 처음부터 알리고 세션을 만들지 않는다(storageWritable) */
   const [storageBlocked, setStorageBlocked] = useState(false)
 
-  // ── 결과지 받기(교사) — 담임 메일로 학급 결과 링크. 사용자 확정 2026-09-22(담당자 회신 아님).
-  // 이 버튼은 아동 앞 PC에 있다. 하는 일은 **등록된 메일함으로 링크를 보내는 것**뿐이라 아동이 눌러도
-  // 결과는 아동 손에 오지 않는다. 이메일은 입력·수정할 수 없다 — 요청자가 주소를 정하면 코드가 곧 열쇠다.
-  const [resultsMsg, setResultsMsg] = useState('')
-  const [resultsErr, setResultsErr] = useState('')
-  const [resultsBusy, setResultsBusy] = useState(false)
-  // 남은 쿨다운(초). 서버가 429로 준 값 또는 성공 뒤 60에서 시작해 1초씩 준다.
-  const [cooldown, setCooldown] = useState(0)
-  useEffect(() => {
-    if (cooldown <= 0) return
-    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [cooldown])
-
-  async function requestResults() {
-    setResultsBusy(true); setResultsErr('')
-    try {
-      // postJson(requestJson)은 실패 바디를 버리는데 429의 retryAfterSec가 필요해 여기서만 fetch를 직접 쓴다.
-      const res = await fetch('/api/results/request', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: cleanCode }),
-      })
-      const j = await res.json().catch(() => ({})) as
-        { sent?: boolean; maskedEmail?: string; scoredCount?: number; error?: string; retryAfterSec?: number }
-      if (res.status === 429 && typeof j.retryAfterSec === 'number') {
-        // 다른 기기에서 방금 요청했거나 연타 — 에러가 아니라 안내다.
-        setResultsMsg('방금 링크를 보냈어요. 메일함을 확인해 주세요.')
-        setCooldown(j.retryAfterSec)
-      } else if (!res.ok) {
-        setResultsErr(j.error ?? '문제가 생겼어요. 잠시 후 다시 시도해 주세요.')
-      } else {
-        setResultsMsg(`${j.maskedEmail} 로 결과지 링크를 보냈어요. 메일함을 확인해 주세요.`
-          + (j.scoredCount === 0 ? ' 아직 채점된 학생이 없어요. 채점이 끝나면 링크에서 새로고침해 주세요.' : ''))
-        setCooldown(60)
-      }
-    } catch {
-      setResultsErr(NETWORK_ERR_MSG)
-    } finally {
-      setResultsBusy(false)
-    }
-  }
-
   useEffect(() => {
     // localStorage는 서버 프리렌더에 없으므로 마운트 후 확인(하이드레이션 불일치 방지).
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -225,15 +189,15 @@ export default function StartPage() {
     // [확인]을 다시 눌러야 명단이 떴는데, 그 한 번은 방금 끝낸 아동의 「검사함」 표시를 새로
     // 받기 위한 것이었다 — 자동 조회도 서버를 다시 부르므로 그 목적은 그대로 달성된다.
     // 갇히지 않는다: 코드 칸은 모든 단계에서 화면에 남아 있고, 한 글자라도 고치면 아래
-    // onChange가 1단계로 되돌리며 명단·선택·동의 체크를 전부 비운다(다른 학급으로 전환).
+    // onChange가 1단계로 되돌리며 명단·선택을 전부 비운다(다른 학급으로 전환).
     const last = loadClassCode()
     if (last) { setCode(last); void lookupCode(last) }
     // 마운트 1회만 — lookupCode는 매 렌더 새로 만들어지므로 의존성에 넣으면 조회가 반복된다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 단계가 바뀌면 방금 나타난 첫 칸으로 포커스를 옮긴다. 눌렀던 [확인]은 다음 단계에서
-  // (보호자 동의 미체크 탓에) disabled로 다시 그려지므로 브라우저가 포커스를 body로 떨어뜨린다 —
+  // 단계가 바뀌면 방금 나타난 첫 칸으로 포커스를 옮긴다. 눌렀던 [확인]은 사라지고 다음 단계의 [확인]은
+  // (아직 학생을 고르지 않아) disabled로 그려지므로 브라우저가 포커스를 body로 떨어뜨린다 —
   // 그러면 키보드·스크린리더 검사자는 문서 처음부터 Tab을 다시 밟아야 새 칸에 닿는다.
   useEffect(() => {
     if (step === 'code') return
@@ -297,8 +261,8 @@ export default function StartPage() {
     setRoster(r.data.roster)
     setSheet(r.data.sheet ?? null)
     setScanPending(r.data.scanPending ?? 0)
-    // 명단 반으로 넘어가면 고른 아이·보호자 동의를 비운다 — 직접 입력 중 받은 체크가 명단 아이에게 승계되지 않게
-    if (r.data.roster.length > 0) { setPick(''); setConsent(false) }
+    // 명단 반으로 넘어가면 고른 아이를 비운다 — 다른 학급에서 고른 번호가 남지 않게
+    if (r.data.roster.length > 0) setPick('')
     setStep(r.data.roster.length > 0 ? 'roster' : 'direct')
   }
 
@@ -336,7 +300,7 @@ export default function StartPage() {
     if (Object.keys(next).length > 0) { focusFirstError(next); return }
 
     setFormErr(''); setBusy(true)
-    // 코드를 고친 뒤라면(onChange가 옛 학급을 비웠다) 그 학급을 먼저 다시 받는다 — 배너·[결과지 받기]·기록지 인쇄와
+    // 코드를 고친 뒤라면(onChange가 옛 학급을 비웠다) 그 학급을 먼저 다시 받는다 — 학급 블록·교사용 블록과
     // 아래 번호 겹침 경고가 **지금 코드의 학급** 기준이어야 한다.
     let rosterNow = roster
     if (clsCode !== cleanCode) {
@@ -387,11 +351,9 @@ export default function StartPage() {
     setBusy(true)
     const r = await postJson<{ sessionId: string; sessionToken: string; grade: number }>('/api/sessions',
       step === 'roster'
-        ? { fromRoster: true, code: cleanCode, childNo: c.childNo, guardianConsent: consent,
-            idemKey: c.idemKey }
+        ? { fromRoster: true, code: cleanCode, childNo: c.childNo, idemKey: c.idemKey }
         : {
           code: cleanCode, childNo: c.childNo, name: c.name, gender, birthYmd,
-          guardianConsent: consent, // 서버 스키마가 true 리터럴만 허용 — 미체크 요청은 400
           // 모달을 열 때 만든 키를 그대로 쓴다 — 재시도가 같은 키여야 서버가 멱등을 판정한다
           idemKey: c.idemKey,
         })
@@ -402,40 +364,17 @@ export default function StartPage() {
     router.push('/survey')
   }
 
-  const filled = code.trim() && childNo !== '' && name.trim() && gender && year && month && day && consent
-  // 직접 입력에서 [확인]이 꺼져 있을 때 무엇이 비었는지 — 아래 안내 줄이 쓴다
+  const filled = code.trim() && childNo !== '' && name.trim() && gender && year && month && day
+  // 직접 입력에서 [확인]이 꺼져 있을 때 무엇이 비었는지 — 아래 안내 줄이 쓴다. 한 칸이라도 채운 뒤부터 보인다
+  // (종전에는 보호자 동의 체크가 「다 채웠다」는 신호였다 — 체크가 없어진 뒤 빈 폼에 바로 띄우면 시끄럽다)
   const missing = [!code.trim() && '학급 코드', childNo === '' && '아동 번호', !name.trim() && '이름', !gender && '성별',
     !(year && month && day) && '생년월일'].filter(Boolean) as string[]
+  const touched = childNo !== '' || !!name.trim() || !!gender || !!year || !!month || !!day
   const canSubmit = step === 'code' ? !!code.trim()
-    : step === 'roster' ? !!(pick && consent)
+    : step === 'roster' ? !!pick
       : !!filled
-
-  /** 배너 오른쪽 텍스트 버튼. 쿨다운 중엔 「보냈어요 · N초 후 다시」로 비활성. */
-  const resultsButton = (
-    <button type="button" onClick={() => void requestResults()} disabled={resultsBusy || cooldown > 0}
-      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2 disabled:no-underline disabled:opacity-60">
-      {resultsBusy ? '보내는 중…' : cooldown > 0 ? `보냈어요 · ${cooldown}초 후 다시` : '결과지 받기 →'}
-    </button>
-  )
-  /** 배너의 [쓰기 기록지 인쇄 →] — 「결과지 받기 →」와 같은 모양의 선생님용 링크(사용자 확정 2026-09-30). */
-  const sheetButton = sheet && (
-    <button type="button" onClick={() => setSheetOpen(true)}
-      className="whitespace-nowrap text-[12.5px] font-bold text-blue underline underline-offset-2">
-      쓰기 기록지 인쇄 →
-    </button>
-  )
-  /** 스캔 대기 안내 — 선생님이 아이마다 보는 화면이라 올리는 것을 잊지 않게 한다. 0명이면 줄이 없다. */
-  const scanWaitLine = scanPending > 0 && (
-    <p className="mt-1.5 flex w-fit rounded-lg bg-amber/10 px-2.5 py-1 text-[12.5px] font-bold text-amber">
-      스캔 대기 {scanPending}명 · 결과지 화면에서 올려 주세요
-    </p>
-  )
-  /** 발송 결과 한 줄 — 성공·429는 안내 톤(polite), 그 외 실패만 경고 색. */
-  const resultsNotice = resultsErr
-    ? <p role="alert" className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">{resultsErr}</p>
-    : resultsMsg
-      ? <p aria-live="polite" className="mt-2 text-[12.5px] leading-relaxed text-ink-soft">{resultsMsg}</p>
-      : null
+  /** 화면에 걸린 학급이 지금 코드 칸의 학급이다 — 학급 블록과 교사용 블록은 이때만 보인다(`clsCode` 주석) */
+  const current = cls && clsCode === cleanCode ? cls : null
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center p-6 pt-10">
@@ -482,8 +421,9 @@ export default function StartPage() {
       )}
 
       {/* 자동완성은 의도적으로 끈다(autoComplete="off") — 교사 개인 기기에서 본인 정보가
-          아동 정보 칸에 제안되는 것을 막는다. */}
-      <form className="card mt-8 w-full p-5" autoComplete="off"
+          아동 정보 칸에 제안되는 것을 막는다.
+          학급 코드 · 현재 검사 상황 · 검사할 학생 세 블록이 한 폼이다 — Enter가 지금 단계의 [확인]을 누른다. */}
+      <form className="mt-8 flex w-full flex-col gap-3" autoComplete="off"
         onSubmit={e => {
           e.preventDefault()
           if (busy || !canSubmit) return
@@ -491,8 +431,8 @@ export default function StartPage() {
           else if (step === 'roster') openRosterConfirm()
           else void verify()
         }}>
-        <div>
-          <label className="text-[13px] font-bold text-ink-soft" htmlFor="code">학급 코드</label>
+        <section className="card p-5">
+          <label className={blockTitleCls} htmlFor="code">학급 코드</label>
           {/* 코드는 6자리지만, classCodeSchema가 trim 전 20자까지 허용해 양끝 공백 붙여넣기를
               봐준다(사용자 확정 2026-08-13) — maxLength를 6으로 조이면 그 붙여넣기가 잘려 코드
               자체가 손상될 수 있어, 공백 여유를 둔 8로 맞춘다. */}
@@ -510,16 +450,12 @@ export default function StartPage() {
               setCode(e.target.value.toUpperCase())
               clearError('code')
               // 코드를 고치면 화면에 걸린 명단은 다른 학급 것일 수 있으므로 첫 단계로 되돌린다.
-              // 보호자 동의 체크까지 함께 푼다 — 체크는 "이 아동의 법정대리인 동의를 받았다"는
-              // 뜻이라, 학급이 바뀔 수 있는 시점에 남겨 두면 다른 학급 아동에게 그대로 적용된다.
               // 직접 입력 모드는 되돌리지 않는다 — 그 폼의 [확인]이 코드를 다시 조회하므로
               // 위험이 없고, 코드 오타를 고치려다 입력하던 칸이 접히는 편이 더 나쁘다.
-              // 결과지 안내는 **단계와 무관하게** 비운다 — 「d***@exa***.com 로 보냈어요」는 고치기
-              // 전 코드의 학급 것이라, 남겨 두면 다른 학급 주소를 보며 메일함을 찾게 된다.
-              // 쿨다운도 코드마다 따로다(서버가 코드 키로 센다).
-              setResultsMsg(''); setResultsErr(''); setCooldown(0)
+              // 어느 단계든 학급을 비우면 학급 블록과 교사용 블록이 사라진다 — [결과지 받기]의 「d***@exa***.com 로 보냈어요」는
+              // 고치기 전 코드의 학급 것이라, 남겨 두면 다른 학급 주소를 보며 메일함을 찾게 된다(LinkByMail은 학급 코드가 key다).
               if (step === 'roster') {
-                setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick(''); setConsent(false)
+                setStep('code'); setCls(null); setClsCode(''); setRoster([]); setPick('')
                 setSheet(null); setScanPending(0)
               } else if (step === 'direct') {
                 // 입력하던 칸은 두되 **고치기 전 학급의 명단은 버린다.** 남겨 두면 「명단에서 고르기」가 옛 반 명단을
@@ -537,171 +473,169 @@ export default function StartPage() {
               이 코드로 학급 불러오기
             </button>
           )}
-        </div>
+          {step === 'code' && (
+            <>
+              {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
+              <button type="submit" disabled={busy || !canSubmit} className="cta mt-5">확인</button>
+            </>
+          )}
+        </section>
 
-        {step === 'roster' && cls && (
-          <>
-            {/* 코드가 가리키는 학급을 밝혀 직접 입력 폼과 한눈에 구분되게 한다. 담임 이름·연락처는
-                일부러 넣지 않는다 — 이 화면은 아동이 보고 있고, 학급 확인에는 학교·학년·반·인원이면
-                충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다). */}
-            {/* 「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게
-                (사용자 확정 2026-09-22 ①). 오른쪽 [결과지 받기 →]는 위 requestResults 주석 참고. */}
-            <div className="mt-4 rounded-xl border border-mint/40 bg-mint/10 px-3.5 py-2.5 text-[13px] font-bold text-mint">
-              <span>
-                {cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)} · 명단 {roster.length}명 ·
-                검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
-              </span>
-              {scanWaitLine}
-              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
-            </div>
-            {resultsNotice}
-            <label className={labelCls} htmlFor="pick">검사할 학생</label>
-            {/* 명단은 눌러야 펼쳐지는 드롭다운으로 둔다 — 교실 공용 기기 화면이라 목록을 펼쳐
-                두면 지금 검사하지 않는 아이들의 이름까지 계속 노출된다.
-                라벨에 생년월일은 넣지 않는다 — 선택 시점에 신원 대조에 가장 덜 필요한 칸이라
-                확인 모달에서만 보여준다. */}
-            <Select id="pick" ariaLabel="검사할 학생" placeholder="학생을 선택해 주세요"
-              className="mt-1.5" value={pick} onChange={v => { setPick(v); setConsent(false) }}
-              options={roster.map(r => ({
-                value: String(r.childNo),
-                label: `${r.childNo}번 ${r.name} (${r.gender})`,
-                // 이미 검사한 아동도 그대로 고를 수 있다 — 재검사는 허용이고(스펙 "중복 검사
-                // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
-                // 라벨에 이어 붙이지 않고 배지로 내보내는 이유는 Select의 badge 주석 참고.
-                // 진행 중(제출 전)과 제출을 가른다 — 둘 다 「검사함」이면 중간에 멈춘 아이를 끝난 아이로 보고
-                // 넘어가게 된다(위 배너의 「검사 완료 N명」도 제출만 센다).
-                badge: r.tested === 'submitted' ? '검사함' : r.tested === 'inProgress' ? '진행 중' : undefined,
-              }))} />
-            {/* 명단에서 고른 아동과 직접 입력할 아동은 서로 다른 아이다 — 코드 수정 때와 같은
-                이유로 보호자 동의 체크를 함께 푼다(위 onChange 주석 참고). 안 풀면 명단 아동으로
-                받은 체크가 다른 아동에게 그대로 승계돼 동의서 없는 아이의 검사가 시작될 수 있다. */}
-            <button type="button" onClick={() => { setStep('direct'); setPick(''); setConsent(false) }}
-              className="mt-2.5 text-[13px] font-bold text-blue underline underline-offset-2">
-              명단에 없는 학생이에요
-            </button>
-          </>
-        )}
-
-        {step === 'direct' && (
-          <>
-            {/* 코드를 고치는 중이면 감춘다 — 직접 입력 모드는 단계를 되돌리지 않아 `cls`가 옛 학급인
-                채로 남는다. 그 배너 옆 [결과지 받기 →]는 **입력된 코드**로 보내므로, 남겨 두면
-                화면이 가리키는 학급과 실제 동작 대상이 갈린다. */}
-            {cls && clsCode === cleanCode && (
-              <div className="mt-4 rounded-xl border border-line bg-well px-3.5 py-2.5 text-[13px] font-bold text-ink-soft">
-                <span>{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</span>
-                {scanWaitLine}
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">{resultsButton}{sheetButton}</div>
-              </div>
-            )}
-            {resultsNotice}
-            <div className="flex gap-2.5">
-              <div className="flex-1">
-                <label className={labelCls} htmlFor="childNo">아동 번호</label>
-                {/* placeholder를 두지 않는다(사용자 확정 2026-08-15). 학급 코드의 `ABC234`는 짐작할 수
-                    없는 형식(6자리·대문자·혼동 문자 제외)을 가르치지만, 번호칸의 예시 숫자는 라벨과
-                    숫자 키패드가 이미 말하는 것을 되풀이할 뿐이다. 두 자리 폭 칸 속 회색 숫자는
-                    입력된 값으로 오독되기 쉽고, 이 칸이 임상 기록을 어느 아이에게 붙일지 정한다. */}
-                <input id="childNo" data-field="childNo" name="childNo" value={childNo} maxLength={2}
-                  inputMode="numeric"
-                  aria-describedby={errors.childNo ? 'err-childNo' : undefined} aria-invalid={!!errors.childNo}
-                  onChange={e => { setChildNo(e.target.value.replace(/\D/g, '')); clearError('childNo') }} className={inputCls} />
-              </div>
-              <div className="flex-[2]">
-                <label className={labelCls} htmlFor="name">이름</label>
-                <input id="name" data-field="name" name="name" value={name} maxLength={30}
-                  aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
-                  onChange={e => { setName(e.target.value); clearError('name') }} className={inputCls} />
-              </div>
-            </div>
-            <FieldError id="err-childNo" msg={errors.childNo} />
-            <FieldError id="err-name" msg={errors.name} />
-
-            <span className={labelCls} id="gender-label">성별</span>
-            <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
-              aria-describedby={errors.gender ? 'err-gender' : undefined}>
-              {(['남', '여'] as const).map(g => (
-                <button key={g} type="button" onClick={() => { setGender(g); clearError('gender') }} aria-pressed={gender === g}
-                  className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
-                    gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
-                  {g}
-                </button>
-              ))}
-            </div>
-            <FieldError id="err-gender" msg={errors.gender} />
-
-            <span className={labelCls}>생년월일</span>
-            <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
-              aria-describedby={errors.birth ? 'err-birth' : undefined}>
-              <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
-                value={year} onChange={v => { setYear(v); setDay(''); clearError('birth') }}
-                options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
-              <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
-                value={month} onChange={v => { setMonth(v); setDay(''); clearError('birth') }}
-                options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
-              <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
-                value={day} onChange={v => { setDay(v); clearError('birth') }}
-                options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
-            </div>
-            <FieldError id="err-birth" msg={errors.birth} />
-            {/* 돌아가는 길. 위 폴백 링크는 드롭다운 바로 아래 있는 작은 글자라 터치 기기에서
-                잘못 눌리는데, 되돌릴 길이 없으면 남은 방법이 새로고침뿐이고 그러면 입력한 코드도
-                날아간다(코드는 세션 생성 성공 때만 기억된다). 「고르기」쪽이 정상 경로이므로
-                되돌리기가 아니라 그 이름으로 적는다. */}
+        {/* 코드가 가리키는 학급. 담임 이름·연락처는 일부러 넣지 않는다 — 이 화면은 아동이 보고 있고, 학급 확인에는
+            학교·학년·반·인원이면 충분하다(담임 정보는 시작 직전 확인 모달에서만 보여준다).
+            「검사 완료 N명」— 드롭다운을 펼쳐 「검사함」 배지를 세지 않아도 몇 명 남았는지 보이게(사용자 확정 2026-09-22 ①).
+            「스캔 대기 N명」— 선생님이 아이마다 보는 화면이라 올리는 것을 잊지 않게 한다. 0명이면 줄이 없다.
+            코드를 고치는 중이면 감춘다(`current`) — 직접 입력 모드는 단계를 되돌리지 않아 `cls`가 옛 학급인 채로 남는다. */}
+        {current && (
+          <section className="card p-5">
+            <h2 className={blockTitleCls}>현재 검사 상황</h2>
+            <p className="mt-1.5 text-[15px] font-bold text-ink">{current.schoolName} {gradeClassLabel(current.grade, current.classNo)}</p>
             {roster.length > 0 && (
-              <button type="button" onClick={() => { setStep('roster'); setConsent(false) }}
-                className="mt-4 text-[13px] font-bold text-blue underline underline-offset-2">
-                명단에서 고르기
-              </button>
+              <p className="mt-0.5 text-[13px] text-ink-soft">
+                명단 {roster.length}명 · 검사 완료 {roster.filter(r => r.tested === 'submitted').length}명
+              </p>
             )}
-          </>
+            {scanPending > 0 && (
+              <p className="mt-2 w-fit rounded-lg bg-amber/10 px-2.5 py-1 text-[12.5px] font-bold text-amber">
+                스캔 대기 {scanPending}명 · [쓰기 스캔본 올리기]로 올려 주세요
+              </p>
+            )}
+          </section>
         )}
 
-        {/* 개인정보 수집·이용 고지 + 법정대리인 동의 확인 체크 — 문구의 단일 소스는 lib/consent.ts.
-            코드만 입력하는 첫 단계에서는 감춘다 — 아동 개인정보를 아직 하나도 다루지 않는 화면에
-            동의 고지를 띄우면 무엇에 동의하는지가 흐려지고, 코드 오타로 못 넘어가는 사이에
-            체크가 켜져 있게 된다. */}
         {step !== 'code' && (
-          <div className="mt-6 rounded-xl border border-line bg-well p-4">
-            <p className="text-[13px] font-bold text-ink-soft">개인정보 수집·이용 안내</p>
-            <dl className="mt-2 flex flex-col gap-1.5">
-              {CONSENT_NOTICE.map(row => (
-                <div key={row.label} className="flex gap-2 text-xs leading-relaxed">
-                  <dt className="w-20 flex-none font-bold text-ink-mute">{row.label}</dt>
-                  <dd className="min-w-0 text-ink-soft">{row.value}</dd>
+          <section className="card p-5">
+            {step === 'roster' ? (
+              <>
+                <label className={blockTitleCls} htmlFor="pick">검사할 학생</label>
+                {/* 명단은 눌러야 펼쳐지는 드롭다운으로 둔다 — 교실 공용 기기 화면이라 목록을 펼쳐
+                    두면 지금 검사하지 않는 아이들의 이름까지 계속 노출된다.
+                    라벨에 생년월일은 넣지 않는다 — 선택 시점에 신원 대조에 가장 덜 필요한 칸이라
+                    확인 모달에서만 보여준다. */}
+                <Select id="pick" ariaLabel="검사할 학생" placeholder="학생을 선택해 주세요"
+                  className="mt-1.5" value={pick} onChange={v => setPick(v)}
+                  options={roster.map(r => ({
+                    value: String(r.childNo),
+                    label: `${r.childNo}번 ${r.name} (${r.gender})`,
+                    // 이미 검사한 아동도 그대로 고를 수 있다 — 재검사는 허용이고(스펙 "중복 검사
+                    // 경고"), 경고는 확인 모달이 낸다. 여기서 막으면 재검사 경로가 사라진다.
+                    // 라벨에 이어 붙이지 않고 배지로 내보내는 이유는 Select의 badge 주석 참고.
+                    // 진행 중(제출 전)과 제출을 가른다 — 둘 다 「검사함」이면 중간에 멈춘 아이를 끝난 아이로 보고
+                    // 넘어가게 된다(위 「검사 완료 N명」도 제출만 센다).
+                    badge: r.tested === 'submitted' ? '검사함' : r.tested === 'inProgress' ? '진행 중' : undefined,
+                  }))} />
+                <button type="button" onClick={() => { setStep('direct'); setPick('') }}
+                  className="mt-2.5 text-[13px] font-bold text-blue underline underline-offset-2">
+                  명단에 없는 학생이에요
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 className={blockTitleCls}>검사할 학생</h2>
+                <div className="flex gap-2.5">
+                  <div className="flex-1">
+                    <label className={labelCls} htmlFor="childNo">아동 번호</label>
+                    {/* placeholder를 두지 않는다(사용자 확정 2026-08-15). 학급 코드의 `ABC234`는 짐작할 수
+                        없는 형식(6자리·대문자·혼동 문자 제외)을 가르치지만, 번호칸의 예시 숫자는 라벨과
+                        숫자 키패드가 이미 말하는 것을 되풀이할 뿐이다. 두 자리 폭 칸 속 회색 숫자는
+                        입력된 값으로 오독되기 쉽고, 이 칸이 임상 기록을 어느 아이에게 붙일지 정한다. */}
+                    <input id="childNo" data-field="childNo" name="childNo" value={childNo} maxLength={2}
+                      inputMode="numeric"
+                      aria-describedby={errors.childNo ? 'err-childNo' : undefined} aria-invalid={!!errors.childNo}
+                      onChange={e => { setChildNo(e.target.value.replace(/\D/g, '')); clearError('childNo') }} className={inputCls} />
+                  </div>
+                  <div className="flex-[2]">
+                    <label className={labelCls} htmlFor="name">이름</label>
+                    <input id="name" data-field="name" name="name" value={name} maxLength={30}
+                      aria-describedby={errors.name ? 'err-name' : undefined} aria-invalid={!!errors.name}
+                      onChange={e => { setName(e.target.value); clearError('name') }} className={inputCls} />
+                  </div>
                 </div>
-              ))}
-            </dl>
-            {/* 둘째 줄은 담당자 문장을 그대로 빌려왔지만 **적용 화면은 사용자 확정(2026-09-22)이다
-                — 담당자 회신이 아니다.** 담당자가 2026-09-21에 「검사 실시 전, 학교의 개인정보 처리
-                방침 및 절차에 따라 법정대리인의 동의를 받아주세요」로 고치라고 한 것은 신청 화면
-                (/apply)의 동의 체크 3번이고, 이 시작 화면 안내는 언급하지 않았다. 바로 아래 체크박스
-                (GUARDIAN_CONSENT_LABEL)에서 「서면」을 뺀 것과 같은 이유로 함께 고쳤다 — 체크박스는
-                수단을 안 따지는데 그 위 안내만 「서면 동의서를 회수」라고 하면 서로 어긋난다.
-                되돌리거나 문구를 다시 손볼 때는 담당자에게 확인할 것. */}
-            <p className="mt-2 text-[12px] leading-relaxed text-ink-mute">
-              만 14세 미만 아동의 개인정보이므로 법정대리인(보호자)의 동의가 필요합니다.<br />
-              학교의 개인정보 처리 방침·절차에 따라 법정대리인의 동의를 먼저 받은 뒤 검사를 시작해 주세요.
-            </p>
-            <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border-[1.5px] border-line bg-white px-3 py-2.5">
-              <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                className="mt-0.5 h-5 w-5 flex-none accent-[var(--color-blue)]" />
-              <span className="text-xs font-bold leading-relaxed text-ink-soft">{GUARDIAN_CONSENT_LABEL}</span>
-            </label>
-          </div>
-        )}
+                <FieldError id="err-childNo" msg={errors.childNo} />
+                <FieldError id="err-name" msg={errors.name} />
 
-        {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
-        <button type="submit" disabled={busy || !canSubmit} className="cta mt-5">확인</button>
-        {step !== 'code' && !consent && (
-          <p className="mt-2 text-center text-[12px] text-ink-mute">보호자 동의 확인에 체크해야 시작할 수 있어요.</p>
-        )}
-        {/* 동의는 했는데 칸이 비어 [확인]이 꺼져 있으면 무엇이 빠졌는지 알린다 — 종전에는 버튼만 회색이라 성별·생년월일을
-            안 고른 줄 모르고 멈춰 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
-        {step === 'direct' && consent && missing.length > 0 && (
-          <p className="mt-2 text-center text-[12px] text-ink-mute">아직 비어 있는 칸이 있어요: {missing.join(', ')}</p>
+                <span className={labelCls} id="gender-label">성별</span>
+                <div className="mt-1.5 flex gap-2.5" data-field="gender" role="group" aria-labelledby="gender-label"
+                  aria-describedby={errors.gender ? 'err-gender' : undefined}>
+                  {(['남', '여'] as const).map(g => (
+                    <button key={g} type="button" onClick={() => { setGender(g); clearError('gender') }} aria-pressed={gender === g}
+                      className={`h-[50px] flex-1 rounded-xl border-[1.5px] text-[15px] font-bold transition ${
+                        gender === g ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-soft'}`}>
+                      {g}
+                    </button>
+                  ))}
+                </div>
+                <FieldError id="err-gender" msg={errors.gender} />
+
+                <span className={labelCls}>생년월일</span>
+                <div className="mt-1.5 flex gap-2" data-field="birth" role="group" aria-label="생년월일"
+                  aria-describedby={errors.birth ? 'err-birth' : undefined}>
+                  <Select ariaLabel="출생 연도" placeholder="연도" className="flex-[1.3]"
+                    value={year} onChange={v => { setYear(v); setDay(''); clearError('birth') }}
+                    options={YEARS.map(y => ({ value: String(y), label: `${y}년` }))} />
+                  <Select ariaLabel="출생 월" placeholder="월" className="flex-1"
+                    value={month} onChange={v => { setMonth(v); setDay(''); clearError('birth') }}
+                    options={MONTHS.map(m => ({ value: String(m), label: `${m}월` }))} />
+                  <Select ariaLabel="출생 일" placeholder="일" className="flex-1" disabled={!year || !month}
+                    value={day} onChange={v => { setDay(v); clearError('birth') }}
+                    options={DAYS.map(d => ({ value: String(d), label: `${d}일` }))} />
+                </div>
+                <FieldError id="err-birth" msg={errors.birth} />
+                {/* 돌아가는 길. 위 폴백 링크는 드롭다운 바로 아래 있는 작은 글자라 터치 기기에서
+                    잘못 눌리는데, 되돌릴 길이 없으면 남은 방법이 새로고침뿐이고 그러면 입력한 코드도
+                    날아간다(코드는 세션 생성 성공 때만 기억된다). 「고르기」쪽이 정상 경로이므로
+                    되돌리기가 아니라 그 이름으로 적는다. */}
+                {roster.length > 0 && (
+                  <button type="button" onClick={() => setStep('roster')}
+                    className="mt-4 text-[13px] font-bold text-blue underline underline-offset-2">
+                    명단에서 고르기
+                  </button>
+                )}
+              </>
+            )}
+            {formErr && <p role="alert" className="mt-3 text-sm text-rec-deep">{formErr}</p>}
+            <button type="submit" disabled={busy || !canSubmit} className="cta mt-5">확인</button>
+            {/* 칸이 비어 [확인]이 꺼져 있으면 무엇이 빠졌는지 알린다 — 종전에는 버튼만 회색이라 성별·생년월일을
+                안 고른 줄 모르고 멈춰 있었다(2026-10-08 야간 점검, 사용자 확정 같은 날). */}
+            {step === 'direct' && touched && missing.length > 0 && (
+              <p className="mt-2 text-center text-[12px] text-ink-mute">아직 비어 있는 칸이 있어요: {missing.join(', ')}</p>
+            )}
+          </section>
         )}
       </form>
+
+      {/* 교사용 블록 — 쓰기 기록지 인쇄 · 쓰기 스캔본 올리기 · 결과지 받기(담당자 요청 2026-10-22 — 종전에는 학급 배너 오른쪽의
+          작은 링크 둘이었고 스캔본은 결과지 화면에만 있어 찾지 못했다). 학급을 확인한 뒤에만 보인다.
+          버튼 이름은 승인 안내·메일이 가리키는 이름이다(lib/format `scanGuideLines`·`RESULTS_GUIDE_LINES`, lib/mail `resultsLinkMail`). */}
+      {current && (
+        <div className="mt-3 flex w-full flex-col gap-3">
+          {sheet && (
+            <section className="card p-5">
+              <h2 className={blockTitleCls}>쓰기 기록지</h2>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
+                쓰기를 기록지(스캔본)로 할 때, 이름이 찍힌 기록지를 아이마다 한 장씩 뽑아 나눠 주세요.
+              </p>
+              <button type="button" onClick={() => setSheetOpen(true)} className="btn-outline mt-3 h-[44px] w-full text-[14px]">
+                쓰기 기록지 인쇄
+              </button>
+            </section>
+          )}
+          <section className="card p-5">
+            <h2 className={blockTitleCls}>쓰기 스캔본</h2>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
+              아이들이 쓴 기록지를 한 파일로 스캔해 올려요. 담임 선생님 메일로 올리기 링크를 보내 드려요.
+            </p>
+            <LinkByMail key={clsCode} code={clsCode} purpose="scan" label="쓰기 스캔본 올리기" />
+          </section>
+          <section className="card p-5">
+            <h2 className={blockTitleCls}>결과지</h2>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-soft">
+              채점이 끝난 학생의 결과지를 받아요. 담임 선생님 메일로 결과지 링크를 보내 드려요.
+            </p>
+            <LinkByMail key={clsCode} code={clsCode} purpose="results" label="결과지 받기" />
+          </section>
+        </div>
+      )}
       <p className="mt-auto pt-6 text-center text-[12px] text-ink-mute">녹음된 목소리는 검사 확인 용도로만 사용돼요.</p>
 
       {/* [새로 시작] 확인 — 진행 중 검사를 버리는 동작이라 한 번 묻는다(위 confirmRestart 주석). */}

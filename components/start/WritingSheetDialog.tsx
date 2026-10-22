@@ -1,4 +1,4 @@
-// components/start/WritingSheetDialog.tsx — 시작 화면 학급 배너의 [쓰기 기록지 인쇄 →]가 여는 창과 인쇄.
+// components/start/WritingSheetDialog.tsx — 시작 화면 「쓰기 기록지」 블록의 [쓰기 기록지 인쇄]가 여는 창과 인쇄.
 //
 // 흐름(사용자 확정 2026-09-30, 담당자에게 시안 공유):
 // · 처음에는 요약과 [인쇄하기]만 보인다 — 가장 흔한 경우(검사 전 반 전체)는 한 번이면 끝난다.
