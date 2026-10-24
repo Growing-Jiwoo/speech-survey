@@ -9,7 +9,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { SECTION_LABEL, itemsFor } from '@/lib/items'
 import { scoreInputFrom } from '@/lib/scoring'
 import { adjacentSessionIds, filterSessions, kstDateKey, parseFilters, sortSessions } from '@/lib/adminStats'
-import { gradeClassLabel } from '@/lib/format'
+import { deleteRetestNote } from '@/lib/format'
 import { requestJson } from '@/lib/http'
 import { adminKeys, useSessionDetailQuery, useSessionsQuery, type SessionDetailData } from '@/hooks/useAdminQueries'
 import { patchDetail } from '@/lib/sheet-cache'
@@ -124,6 +124,7 @@ export function AdminDetailView() {
   )
 
   const { session: s } = data
+  const delNote = deleteRetestNote(data.retest ?? null)
   // 학년이 검사지를 정한다 — 문항 수도 쓰기 과제의 종류도 여기서 갈린다. 양식은 상세 API가 싣는다.
   const f = itemsFor(data.form)
   // 저장된 행 → 채점 입력. 쓰기 답이 두 테이블에 나뉘어 있는 사실은 scoreInputFrom만 안다.
@@ -276,11 +277,21 @@ export function AdminDetailView() {
           title="이 검사 기록을 삭제할까요?"
           confirmLabel={deleting ? '삭제 중…' : '삭제'}
           onConfirm={removeSession} onClose={() => setDelModal(false)}>
-          <p className="mt-3 text-center text-[13px] leading-relaxed text-ink-soft">
-            {/* 스캔본도 함께 지워진다(DELETE 라우트가 녹음·스캔본 두 저장소를 모두 비운다) — 종전 문구는 녹음만 말했다 */}
-            <b>{s.child_name}</b> ({s.school_name} {gradeClassLabel(s.grade, s.class_no)})의 정보와
-            녹음·스캔본 파일이 <b className="text-rec-deep">모두 영구 삭제</b>되고 되돌릴 수 없어요.
-          </p>
+          {/* 스캔본도 함께 지워진다(DELETE 라우트가 녹음·스캔본 두 저장소를 모두 비운다) — 종전 문구는 녹음만 말했다.
+              재검사한 아이는 어느 회차를 지우고 어느 회차가 남는지 말한다(lib/format deleteRetestNote, 담당자 질문 2026-10-24).
+              문구는 사용자 확정(2026-10-24). 문장마다 한 줄이고 좁은 화면에서 접혀도 낱말 중간에서 끊지 않는다(break-keep) */}
+          {delNote ? (
+            <p className="mt-3 break-keep text-center text-[13px] leading-relaxed text-ink-soft">
+              <b>{s.child_name}</b> <b className="text-rec-deep">{delNote.target}</b> 검사만 지워요.
+              <br /><b>{delNote.kept}</b>는 남아요.
+              <br />녹음·스캔본까지 영구 삭제되고 되돌릴 수 없어요.
+            </p>
+          ) : (
+            <p className="mt-3 break-keep text-center text-[13px] leading-relaxed text-ink-soft">
+              <b>{s.child_name}</b> 검사를 지워요.
+              <br />녹음·스캔본까지 <b className="text-rec-deep">영구 삭제</b>되고 되돌릴 수 없어요.
+            </p>
+          )}
         </ConfirmDialog>
         <LoadingOverlay show={deleting} />
       </main>

@@ -113,8 +113,14 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
  * 제출됐는데 세 과제 채점이 다 끝나지 않았으면 'unscored'(채점 전: 미채점을 위험으로 찍지 않는다).
  */
 export function finalResultOf(r: ResultsSessionRow): Verdict | 'unscored' | null {
+  return listResultOf(r).final
+}
+
+/** 관리자 목록 행에 싣는 두 값을 한 번의 판정으로 만든다. `sheetReady`는 결과보고서를 받을 수 있는 검사(status 'scored')인지다.
+ *  관리자 「결과지 받기」 창이 반마다 몇 명을 받을 수 있는지 셀 때 쓴다(lib/adminStats classSheetSummaries). */
+export function listResultOf(r: ResultsSessionRow): { final: Verdict | 'unscored' | null; sheetReady: boolean } {
   const e = evaluateSession(r)
-  return e.status === 'unsubmitted' ? null : e.verdict ?? 'unscored'
+  return { final: e.status === 'unsubmitted' ? null : e.verdict ?? 'unscored', sheetReady: e.status === 'scored' }
 }
 
 /**

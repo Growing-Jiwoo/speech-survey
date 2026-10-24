@@ -1,6 +1,6 @@
 import { formFor, formOfSession } from './forms'
 import { semesterOf } from './format'
-import { finalResultOf } from './results'
+import { listResultOf } from './results'
 import type { RosterChild } from './roster'
 import { criteriaProvisional, type Verdict } from './scoring'
 import type { ScoreRows } from './score-version'
@@ -881,6 +881,8 @@ export type SessionListRow = SessionRow & {
   /** 최종결과(양호·주의·위험): 진행 중이면 null, 제출됐는데 세 과제 채점이 다 끝나지 않았으면 'unscored'.
    *  교사 결과지·결과보고서 PDF와 같은 판정을 서버가 계산해 싣는다(lib/results `finalResultOf`) */
   final: Verdict | 'unscored' | null
+  /** 결과보고서를 받을 수 있는 검사인지(읽기 두 과제 채점 완료 — 교사 결과지와 같은 기준). 「결과지 받기」 창이 반마다 센다 */
+  sheetReady: boolean
   /** 판정 기준이 임시값인지(lib/scoring `criteriaProvisional`: 1학기 양식·3~6학년 폴백). 목록이 「임시」를 붙인다 */
   provisional: boolean
 }
@@ -918,7 +920,7 @@ export async function listSessions(): Promise<SessionListRow[]> {
     const { recordings: _r, writing_answers: _w, sentence_scores: _s, reading_marks: _m, sentence_times: _t, writing_scans: _c, ...row } = r
     return {
       ...row, progress: sessionProgress(r),
-      final: finalResultOf({ ...r, writing_scan: one(r.writing_scans) }),
+      ...listResultOf({ ...r, writing_scan: one(r.writing_scans) }),
       provisional: criteriaProvisional(formOfSession(r), r.grade),
     }
   })

@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import type { SessionListRow, SessionProgressSource } from '@/lib/db'
-import type { SessionProgress } from '@/lib/session-progress'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
-  awaitsScanScoring, hasActiveFilters, checklistSummary,
+  awaitsScanScoring, hasActiveFilters, checklistSummary, classSheetSummaries,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -16,7 +15,7 @@ const G1_WRITE = itemsFor(formForGrade(1)).writingItems.map(i => i.code)
 /** 테스트 픽스처 */
 /** 진행률(`progress`)은 listSessions처럼 행에서 계산해 채운다 — 넘기지 않으면 over로 바꾼 녹음·쓰기가 반영된다.
  *  진행률 재료(녹음·쓰기 배열)도 행에 남겨 둔다 — sessionProgress를 직접 부르는 테스트가 쓴다(목록 응답에는 실리지 않는다). */
-export function mkSession(over: Partial<SessionProgressSource & { progress: SessionProgress }> = {}): SessionListRow & SessionProgressSource {
+export function mkSession(over: Partial<SessionProgressSource & SessionListRow> = {}): SessionListRow & SessionProgressSource {
   const row = {
     id: 'id-' + Math.random().toString(36).slice(2),
     class_code_id: '11111111-1111-1111-1111-111111111111', child_no: 3,
@@ -32,7 +31,7 @@ export function mkSession(over: Partial<SessionProgressSource & { progress: Sess
     ...over,
   }
   // 최종결과는 판정 테스트(results.test.ts finalResultOf)가 본다 — 여기서는 칸 모양만 맞춘다
-  return { ...row, progress: over.progress ?? sessionProgress(row), final: null, provisional: false }
+  return { final: null, sheetReady: false, provisional: false, ...row, progress: over.progress ?? sessionProgress(row) }
 }
 
 describe('sessionProgress — 쓰기 스캔본(2026-09-30)', () => {
@@ -454,5 +453,32 @@ describe('checklistSummary', () => {
   it('영역은 none을 빼고 센다 · 아무것도 없으면 둘 다 아님', () => {
     expect(checklistSummary(['language', 'attention'])).toEqual({ areas: 2, none: false })
     expect(checklistSummary([])).toEqual({ areas: 0, none: false })
+  })
+})
+
+describe('classSheetSummaries — 「결과지 받기」 창의 학교·반별 준비 현황(담당자 요청 2026-10-24)', () => {
+  const A = '11111111-1111-1111-1111-111111111111'
+  const B = '22222222-2222-2222-2222-222222222222'
+  const s = (over: Partial<SessionListRow>) => mkSession({ class_code_id: A, sheetReady: true, final: 'good', ...over })
+
+  it('아이마다 받을 수 있는 것 중 최신 검사로 센다 — 서버가 넣는 장과 같은 규칙', () => {
+    const [sch] = classSheetSummaries([
+      s({ child_no: 1, started_at: '2026-10-23T00:00:00Z', final: 'good' }),
+      s({ child_no: 1, started_at: '2026-10-23T01:00:00Z', final: 'unscored' }),                   // 최신이 쓰기 채점 전
+      s({ child_no: 1, started_at: '2026-10-23T02:00:00Z', sheetReady: false, final: 'unscored' }), // 읽기 채점 전 재검사는 고르지 않는다
+      s({ child_no: 2, sheetReady: false, final: 'unscored' }),                                      // 아직 못 받는 아이
+      s({ child_no: 3 }),
+    ])
+    expect(sch.classes).toEqual([{ classCodeId: A, grade: 1, classNo: 2, teacher: '이담임', children: 3, ready: 2, writingPending: 1 }])
+  })
+
+  it('학교는 이름순, 반은 학년·반 순으로 묶는다', () => {
+    const out = classSheetSummaries([
+      s({ class_code_id: B, school_name: '가나초등학교', grade: 2, class_no: 1 }),
+      s({ school_name: '가나초등학교', grade: 1, class_no: 3 }),
+      s({ class_code_id: '33333333-3333-3333-3333-333333333333', school_name: '다라초등학교' }),
+    ])
+    expect(out.map(x => x.school)).toEqual(['가나초등학교', '다라초등학교'])
+    expect(out[0].classes.map(c => `${c.grade}-${c.classNo}`)).toEqual(['1-3', '2-1'])
   })
 })

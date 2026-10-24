@@ -15,7 +15,8 @@ import { buildChildren, latestScored, scoreInputFor, sheetsFileName } from '@/li
 import { jsonError } from '@/lib/request'
 
 /** 한 번에 병합할 수 있는 결과지 장수 상한 — 학급 정원보다 넉넉하다. 장당 약 52KB라(실측 2026-10-24) 60장이 약 3.1MB로
- *  Vercel 함수 응답 상한(4.5MB) 안이다. 학교 전체를 한 파일로 묶지 않는 이유도 이 상한이다(약 85장에서 넘는다). */
+ *  Vercel 함수 응답 상한(4.5MB) 안이다. 서버가 학교 전체를 한 응답으로 만들지 않는 이유도 이 상한이다(약 85장에서 넘는다).
+ *  학교 전체는 화면이 반별 파일을 받아 이어 붙인다(lib/download fetchMergedPdf). */
 const MAX_SHEETS = 60
 
 /** 동시에 만드는 결과지 수. renderReport는 CPU 일(폰트 임베드)이라 전부 한꺼번에 돌려도 빨라지지 않고

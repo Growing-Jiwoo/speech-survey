@@ -12,7 +12,7 @@
 | `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` · `PATCH` 담임 이메일 수정(`classCodeEmailSchema` → `updateClassCodeEmail`, 없는 행 404) — 결과지 링크가 이 주소로만 가므로 잘못 등록된 주소를 바로잡는 유일한 길 |
 | `[id]/roster/route.ts` | `GET` 신청 명단 조회. UUID 형식 검증 후 `listRoster` — 승인 검토 전용(아래 PII 절) |
 | `[id]/approve/route.ts` | `POST` 신청 승인. UUID 형식 검증 후 `approveClassCode` → (조건부) 교사에게 안내 메일 |
-| `[id]/sheets.pdf/route.ts` | `GET` 학급별 결과보고서 받기(담당자 요청 2026-10-24). UUID 형식 검증 후 `lib/pdf/class-sheets`에 넘긴다. 교사 결과지의 [전체 PDF 다운로드]와 같은 파일이고 이름 앞에 학교 이름만 붙는다 |
+| `[id]/sheets.pdf/route.ts` | `GET` 학급별 결과보고서 받기(담당자 요청 2026-10-24). UUID 형식 검증 후 `lib/pdf/class-sheets`에 넘긴다. 교사 결과지의 [전체 PDF 다운로드]와 같은 파일이고 이름 앞에 학교 이름만 붙는다. 화면의 「학교 전체」는 이 주소를 반마다 불러 합친다 |
 
 ## 설계 의도 · 제약
 
