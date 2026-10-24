@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { dispositionFilename, fetchFile } from '@/lib/download'
+import { PDFDocument } from 'pdf-lib'
+import { dispositionFilename, fetchFile, fetchMergedPdf, mergePdfs } from '@/lib/download'
 import { NETWORK_ERR_MSG } from '@/lib/http'
 
 // 관리자 결과보고서 PDF 받기(2026-10-12 점검 X6) — `<a download>`·`window.location.href`는 로그인이 끝났을 때 아무 안내 없이
@@ -39,5 +40,60 @@ describe('fetchFile', () => {
     expect(await fetchFile('/x.pdf', 'result.pdf', '못 받음')).toEqual({ ok: false, status: 500, error: '못 받음' })
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
     expect(await fetchFile('/x.pdf', 'result.pdf', '못 받음')).toEqual({ ok: false, status: 0, error: NETWORK_ERR_MSG })
+  })
+})
+
+describe('mergePdfs · fetchMergedPdf — 관리자 「학교 전체」 받기(담당자 요청 2026-10-24)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  /** 쪽 수와 쪽 너비가 다른 PDF — 너비로 어느 파일의 쪽인지 가린다 */
+  const pdf = async (pages: number, width: number) => {
+    const d = await PDFDocument.create()
+    for (let i = 0; i < pages; i++) d.addPage([width, 100])
+    return d.save()
+  }
+  const widths = async (bytes: Uint8Array | ArrayBuffer) =>
+    (await PDFDocument.load(bytes)).getPages().map(p => Math.round(p.getWidth()))
+  const pdfRes = async (pages: number, width: number) => new Response((await pdf(pages, width)) as BodyInit, { status: 200 })
+  const errRes = (status: number, error: string) => new Response(JSON.stringify({ error }), { status })
+
+  it('받은 순서대로 한 파일로 잇는다', async () => {
+    const merged = await mergePdfs([(await pdf(1, 100)).buffer as ArrayBuffer, (await pdf(2, 200)).buffer as ArrayBuffer])
+    expect(await widths(merged)).toEqual([100, 200, 200])
+  })
+
+  it('결과지가 없는 반(400)은 건너뛰고 이름을 남긴다 · 나머지 반은 순서대로 합친다', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(await pdfRes(1, 100))
+      .mockResolvedValueOnce(errRes(400, '내려받을 수 있는 결과지가 없어요.'))
+      .mockResolvedValueOnce(await pdfRes(2, 300))
+    vi.stubGlobal('fetch', fetch)
+    const done: number[] = []
+    const r = await fetchMergedPdf([{ url: '/a', label: '1-1' }, { url: '/b', label: '1-2' }, { url: '/c', label: '1-3' }], '못 받음', n => done.push(n))
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.skipped).toEqual(['1-2'])
+    expect(await widths(await r.blob.arrayBuffer())).toEqual([100, 300, 300])
+    expect(done).toEqual([1, 2, 3])
+    expect(fetch.mock.calls.map(c => c[0])).toEqual(['/a', '/b', '/c'])
+  })
+
+  it('[REGRESSION] 로그인 만료·서버 오류에서는 바로 멈춘다 — 일부 반만 든 파일이 학교 전체로 나가지 않게', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(await pdfRes(1, 100))
+      .mockResolvedValueOnce(errRes(401, '로그인이 끝났어요.'))
+    vi.stubGlobal('fetch', fetch)
+    expect(await fetchMergedPdf([{ url: '/a', label: '1-1' }, { url: '/b', label: '1-2' }, { url: '/c', label: '1-3' }], '못 받음'))
+      .toEqual({ ok: false, status: 401, error: '로그인이 끝났어요.' })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(errRes(500, '결과보고서를 만들지 못했어요.')))
+    expect(await fetchMergedPdf([{ url: '/a', label: '1-1' }], '못 받음'))
+      .toEqual({ ok: false, status: 500, error: '1-1: 결과보고서를 만들지 못했어요.' })
+  })
+
+  it('모든 반에 결과지가 없으면 실패로 알린다(빈 파일을 저장하지 않는다)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => errRes(400, '없음')))
+    const r = await fetchMergedPdf([{ url: '/a', label: '1-1' }, { url: '/b', label: '1-2' }], '못 받음')
+    expect(r).toMatchObject({ ok: false, status: 400 })
   })
 })

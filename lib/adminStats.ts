@@ -252,3 +252,45 @@ export function filtersToQuery(f: Filters, sort: Sort): string {
   }
   return sp.toString()
 }
+
+// ---------- 결과지 받기 ----------
+
+export interface ClassSheetSummary {
+  classCodeId: string; grade: number; classNo: number; teacher: string
+  /** 검사한 아이 수(번호 기준, 재검사는 한 명) */
+  children: number
+  /** 결과지를 받을 수 있는 아이 수(읽기 채점이 끝난 검사가 하나라도 있음) */
+  ready: number
+  /** 그중 받을 검사의 쓰기 채점이 남아 쓰기·최종결과 칸이 비어 나갈 아이 수 */
+  writingPending: number
+}
+export interface SchoolSheetSummary { school: string; classes: ClassSheetSummary[] }
+
+/**
+ * 「결과지 받기」 창의 학교·반별 준비 현황(담당자 요청 2026-10-24). 아이마다 **받을 수 있는 것 중 최신** 검사를 고른다 —
+ * 서버가 실제로 넣는 장과 같은 규칙이다(lib/results latestScored · lib/pdf/class-sheets). 학교는 이름순, 반은 학년·반 순.
+ */
+export function classSheetSummaries(
+  sessions: readonly Pick<SessionListRow, 'class_code_id' | 'child_no' | 'started_at' | 'school_name' | 'grade' | 'class_no' | 'teacher_name' | 'final' | 'sheetReady'>[],
+): SchoolSheetSummary[] {
+  const byClass = new Map<string, typeof sessions[number][]>()
+  for (const s of sessions) byClass.set(s.class_code_id, [...(byClass.get(s.class_code_id) ?? []), s])
+  const bySchool = new Map<string, ClassSheetSummary[]>()
+  for (const [classCodeId, rows] of byClass) {
+    const byChild = new Map<number, typeof rows>()
+    for (const r of rows) byChild.set(r.child_no, [...(byChild.get(r.child_no) ?? []), r])
+    let ready = 0, writingPending = 0
+    for (const list of byChild.values()) {
+      const pick = list.filter(r => r.sheetReady).sort((a, b) => b.started_at.localeCompare(a.started_at))[0]
+      if (!pick) continue
+      ready++
+      if (pick.final === 'unscored') writingPending++
+    }
+    const head = rows[0]
+    const sum = { classCodeId, grade: head.grade, classNo: head.class_no, teacher: head.teacher_name, children: byChild.size, ready, writingPending }
+    bySchool.set(head.school_name, [...(bySchool.get(head.school_name) ?? []), sum])
+  }
+  return [...bySchool.entries()]
+    .map(([school, classes]) => ({ school, classes: classes.sort((a, b) => a.grade - b.grade || a.classNo - b.classNo) }))
+    .sort((a, b) => a.school.localeCompare(b.school, 'ko'))
+}

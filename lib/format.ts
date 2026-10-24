@@ -68,6 +68,17 @@ export function sheetDateLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' })
 }
 
+/**
+ * 검사 기록 삭제 확인 창의 회차 안내: 지우는 회차와 남는 회차. 재검사가 아니면 null이다.
+ * 담당자가 「1·2회차를 지우면 3회차도 지워지나」를 물었다(2026-10-24). 창이 아이 이름만 말하고 「모두 영구 삭제」라고 해서
+ * 그 아이의 기록 전부가 지워지는 것처럼 읽혔다.
+ */
+export function deleteRetestNote(retest: { nth: number; of: number } | null): { target: string; kept: string } | null {
+  if (!retest) return null
+  const kept = Array.from({ length: retest.of }, (_, i) => i + 1).filter(n => n !== retest.nth)
+  return { target: `${retest.nth}/${retest.of}회차`, kept: `${kept.map(n => `${n}/${retest.of}`).join('·')}회차` }
+}
+
 /** KST 기준 [년, 월, 일]. 결과보고서의 검사일·학기 판정이 같은 시각 기준을 써야 한다. */
 function kstYmd(iso: string): [number, number, number] {
   const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' })

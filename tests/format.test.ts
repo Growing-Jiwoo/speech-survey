@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel } from '@/lib/format'
+import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel, deleteRetestNote } from '@/lib/format'
 import { APPLY_CHECKS, CONSENT_NOTICE, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
@@ -149,5 +149,15 @@ describe('신청 화면 안내·동의 문구(lib/consent)', () => {
   it('체크 2번은 화면의 검사 안내를 가리킨다 — 안내를 지우면 가짜 동의가 된다', () => {
     expect(APPLY_CHECKS[1].label).toContain('위 검사 안내')
     expect(SURVEY_NOTICE.length).toBeGreaterThan(0)
+  })
+})
+
+describe('deleteRetestNote — 검사 기록 삭제 확인 창(담당자 질문 2026-10-24)', () => {
+  it('재검사한 아이는 지우는 회차와 남는 회차를 말한다', () => {
+    expect(deleteRetestNote({ nth: 1, of: 3 })).toEqual({ target: '1/3회차', kept: '2/3·3/3회차' })
+    expect(deleteRetestNote({ nth: 2, of: 2 })).toEqual({ target: '2/2회차', kept: '1/2회차' })
+  })
+  it('한 번만 검사한 아이는 null — 창이 종전 문구를 쓴다', () => {
+    expect(deleteRetestNote(null)).toBeNull()
   })
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  maskEmail, evaluateSession, scoreInputFor, buildChildren, latestSession, childVerdict, representativeSession,
+  maskEmail, evaluateSession, finalResultOf, scoreInputFor, buildChildren, latestSession, childVerdict, representativeSession,
   summarize, sheetsFileName, latestScored, sessionLabel, awaitsScanWriting, scanTargetSession, scanTargets,
   type ResultsSessionRow,
 } from '@/lib/results'
@@ -115,6 +115,25 @@ describe('evaluateSession — 세션의 양식(form_id)으로 판정한다', () 
     const s2 = evaluateSession(row({ id: 's', child_no: 1, form_id: 'KODYS-G1-S2', ...READ_SCORED, ...WRITE_SCORED }))
     expect([legacy.taskVerdict?.wordReading, legacy.verdict]).toEqual(['good', 'good'])
     expect([s2.taskVerdict?.wordReading, s2.verdict]).toEqual(['caution', 'caution'])
+  })
+})
+
+describe('finalResultOf — 관리자 목록 「최종결과」 칸(담당자 요청 2026-10-24)', () => {
+  it('진행 중은 null — 채점할 것이 아직 없다', () => {
+    expect(finalResultOf(row({ id: 's', child_no: 1, submitted_at: null, ...READ_SCORED, ...WRITE_SCORED }))).toBeNull()
+  })
+  it('[REGRESSION] 세 과제 중 하나라도 채점 전이면 「채점 전」 — 쓰기만 남아도 미채점 0점으로 판정하지 않는다', () => {
+    expect(finalResultOf(row({ id: 's', child_no: 1, sentence_scores: READ_SCORED.sentence_scores,
+      recordings: READ_SCORED.recordings }))).toBe('unscored')
+    expect(finalResultOf(row({ id: 's', child_no: 1, ...READ_SCORED }))).toBe('unscored')
+  })
+  it('다 채점됐으면 교사 결과지·결과보고서 PDF와 같은 최종결과', () => {
+    for (const r of [
+      row({ id: 's', child_no: 1, ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 's', child_no: 1, form_id: 'KODYS-G1-S2', ...READ_SCORED, ...WRITE_SCORED }),
+      row({ id: 's', child_no: 1, ...ALL_SCORED_FAIL }),
+    ]) expect(finalResultOf(r)).toBe(evaluateSession(r).verdict)
+    expect(finalResultOf(row({ id: 's', child_no: 1, ...ALL_SCORED_FAIL }))).toBe('risk')
   })
 })
 

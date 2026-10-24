@@ -12,6 +12,7 @@ import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdmi
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { SheetsDialog } from '@/components/admin/SheetsDialog'
 import { StatsCards, type KpiKind } from '@/components/admin/StatsCards'
 import { SchoolBreakdown } from '@/components/admin/SchoolBreakdown'
 import { SessionTable } from '@/components/admin/SessionTable'
@@ -80,6 +81,7 @@ export function AdminDashboard() {
 
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: adminKeys.sessions }) }
 
+  const [sheetsOpen, setSheetsOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutErr, setLogoutErr] = useState('')
   async function logout() {
@@ -119,8 +121,13 @@ export function AdminDashboard() {
           <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
           <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열려요 · 카드와 학교를 누르면 목록을 걸러 볼 수 있어요</p>
         </div>
+        {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다 */}
+        <button type="button" onClick={() => setSheetsOpen(true)}
+          className="ml-auto rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
+          결과지 받기
+        </button>
         <Link href="/admin/codes"
-          className="ml-auto rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
+          className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
           학급 코드 발급
         </Link>
         <button type="button" onClick={refresh} disabled={isFetching}
@@ -158,6 +165,9 @@ export function AdminDashboard() {
       <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}
         schools={schools} grades={grades}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />
+      {sheetsOpen && (
+        <SheetsDialog sessions={sessions} initialSchool={filters.school} loginHref={loginHref} onClose={() => setSheetsOpen(false)} />
+      )}
     </div>
   )
 }
