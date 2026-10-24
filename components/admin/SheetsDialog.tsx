@@ -130,14 +130,26 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
             return (
               <section key={school} className="border-b border-line/70 last:border-b-0">
                 <div className="flex items-center gap-2 py-2.5">
-                  <button type="button" onClick={() => toggle(school)} aria-expanded={open}
-                    className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-well">
-                    <span aria-hidden className={`mt-0.5 text-[11px] text-ink-mute transition ${open ? 'rotate-90' : ''}`}>▶</span>
-                    <span className="min-w-0">
-                      <span className="block text-[15px] font-bold">{school}</span>
-                      <Status {...sum} prefix={only ? label(only) : `${classes.length}개 반`} />
-                    </span>
-                  </button>
+                  {/* 반이 하나면 펼칠 것이 없다(그 반이 학교 줄에 다 나온다) — 누를 수 없는 줄로 두고 ▶ 자리만 비워 이름 줄을 맞춘다 */}
+                  {only ? (
+                    <div className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1">
+                      <span aria-hidden className="invisible mt-0.5 inline-block text-[11px]">▶</span>
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-bold">{school}</span>
+                        <Status {...sum} prefix={label(only)} />
+                      </span>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => toggle(school)} aria-expanded={open}
+                      className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-well">
+                      {/* inline-block이어야 rotate가 먹는다 */}
+                      <span aria-hidden className={`mt-0.5 inline-block text-[11px] text-ink-mute transition ${open ? 'rotate-90' : ''}`}>▶</span>
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-bold">{school}</span>
+                        <Status {...sum} prefix={`${classes.length}개 반`} />
+                      </span>
+                    </button>
+                  )}
                   {/* 반이 하나면 그 반을 바로 받는다(학교 전체가 그 반 파일과 같다). 둘 이상이면 받을 수 있는 반만 이어 붙인다 */}
                   {only ? (
                     <button type="button" onClick={() => void downloadClass(only)} disabled={busy !== null || only.ready === 0}
