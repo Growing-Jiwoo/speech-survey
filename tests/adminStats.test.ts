@@ -28,10 +28,11 @@ export function mkSession(over: Partial<SessionProgressSource & { progress: Sess
     started_at: '2026-07-14T01:00:00.000Z', submitted_at: null,
     guardian_consented_at: '2026-07-14T00:59:00.000Z',
     edited_at: null, original_identity: null, writing_mode: 'screen' as const, upload_failed: [],
-    recordings: [], writing_answers: [], sentence_scores: [],
+    recordings: [], writing_answers: [], sentence_scores: [], reading_marks: [], sentence_times: [],
     ...over,
   }
-  return { ...row, progress: over.progress ?? sessionProgress(row) }
+  // 최종결과는 판정 테스트(results.test.ts finalResultOf)가 본다 — 여기서는 칸 모양만 맞춘다
+  return { ...row, progress: over.progress ?? sessionProgress(row), final: null, provisional: false }
 }
 
 describe('sessionProgress — 쓰기 스캔본(2026-09-30)', () => {
@@ -45,8 +46,8 @@ describe('sessionProgress — 쓰기 스캔본(2026-09-30)', () => {
     expect(p).toMatchObject({ scan: null, incomplete: true })
   })
   it('스캔본이 올라왔으면 uploaded — 담당자가 채점할 차례(목록이 「스캔 대기」와 가른다). 관계는 객체·배열 어느 모양이든', () => {
-    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: { session_id: 'x' } })).scan).toBe('uploaded')
-    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [{ session_id: 'x' }] })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: { uploaded_at: '2026-07-14T03:00:00.000Z' } })).scan).toBe('uploaded')
+    expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [{ uploaded_at: '2026-07-14T03:00:00.000Z' }] })).scan).toBe('uploaded')
     expect(sessionProgress(mkSession({ writing_mode: 'scan', writing_scans: [] })).scan).toBe('wait')
   })
   it('[REGRESSION] 스캔본 없이 쓰기를 넣기 시작했으면(종이로 채점) 「스캔 대기」가 아니다 — 선생님은 이미 올릴 수 없다', () => {
@@ -240,9 +241,9 @@ describe('filterSessions', () => {
     const SUB = { submitted_at: '2026-07-14T02:00:00.000Z' }
     const all10 = G1_WRITE.map(item_code => ({ item_code, can_write: true }))
     const rows = [
-      mkSession({ ...SUB, child_no: 1, writing_mode: 'scan', writing_scans: { session_id: 'x' } }),                          // 올라옴 · 채점 전 → 대상
+      mkSession({ ...SUB, child_no: 1, writing_mode: 'scan', writing_scans: { uploaded_at: '2026-07-14T03:00:00.000Z' } }),                          // 올라옴 · 채점 전 → 대상
       mkSession({ ...SUB, child_no: 2, writing_mode: 'scan', writing_answers: all10.slice(0, 3) }),                            // 종이로 채점 중 → 대상
-      mkSession({ ...SUB, child_no: 3, writing_mode: 'scan', writing_scans: { session_id: 'y' }, writing_answers: all10 }),     // 다 채점됨
+      mkSession({ ...SUB, child_no: 3, writing_mode: 'scan', writing_scans: { uploaded_at: '2026-07-14T03:00:00.000Z' }, writing_answers: all10 }),     // 다 채점됨
       mkSession({ ...SUB, child_no: 4, writing_mode: 'scan' }),                                                                // 스캔 대기(선생님 차례)
       mkSession({ ...SUB, child_no: 5, writing_answers: all10.slice(0, 3) }),                                                  // 화면 방식
     ]

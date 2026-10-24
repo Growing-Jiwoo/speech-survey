@@ -1,12 +1,14 @@
 # lib/pdf/ — 결과보고서 PDF
 
-`report.ts` 한 파일. **담당자가 배포한 결과보고서 양식(`KODYS_G1/G2_결과보고서_양식.docx`,
+`report.ts`가 **담당자가 배포한 결과보고서 양식(`KODYS_G1/G2_결과보고서_양식.docx`,
 2026-09-28)을 Letter 한 장짜리 PDF로 그린다.** 정답본(`KODYS_G*_결과보고서.docx`)과 레이아웃·글자
 크기·색이 1:1이 목표라, 표·여백·색·간격은 전부 그 docx에서 읽은 값을 pt로 옮겨 적었고 학년마다
 다른 값은 `SurveyForm.report`(`lib/forms/g*.ts`)가 갖는다. 이 저장소의 **공식 출력물은 관리자
 결과지 화면이 아니라 이 PDF**다. 호출부는 둘이다 — 관리자용 `GET /api/admin/sessions/[id]/sheet.pdf`
-(한 장)와 교사 결과지용 `GET /api/results/[token]/sheets.pdf`(여러 장을 한 파일로). 두 곳이 같은
-함수를 쓰므로 관리자와 선생님이 받는 문서는 같다(`tests/sheet-input-parity.test.ts`).
+(한 장)와 한 학급을 한 파일로 묶는 `class-sheets.ts`(여러 장). `class-sheets.ts`는 교사 결과지
+`GET /api/results/[token]/sheets.pdf`와 관리자 학급별 받기 `GET /api/admin/codes/[id]/sheets.pdf`(담당자 요청
+2026-10-24)가 함께 써서 같은 학급은 어디서 받아도 같은 파일이다(관리자 쪽 파일 이름 앞에만 학교 이름이 붙는다).
+두 호출부가 같은 함수를 쓰므로 관리자와 선생님이 받는 문서는 같다(`tests/sheet-input-parity.test.ts`).
 
 종전의 「원본 검사지 PDF에 점수만 얹는」 스탬핑(`stamp-sheet.ts`, `lib/forms/*-layout.ts`,
 `scripts/extract-form-layout.mjs`)은 2026-09-28에 폐기했다 — 담당자가 내려받는 문서의 양식을

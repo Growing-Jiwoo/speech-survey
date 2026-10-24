@@ -12,6 +12,7 @@ import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdmi
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { ClassSheets } from '@/components/admin/ClassSheets'
 import { StatsCards, type KpiKind } from '@/components/admin/StatsCards'
 import { SchoolBreakdown } from '@/components/admin/SchoolBreakdown'
 import { SessionTable } from '@/components/admin/SessionTable'
@@ -155,6 +156,14 @@ export function AdminDashboard() {
       <StatsCards kpis={kpis} filters={filters} onSelect={onKpi} />
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
+      {/* 학교를 고르면(막대·학교 필터 어느 쪽이든) 그 학교의 학급마다 결과지 받기 — 담당자 요청(2026-10-24). 학급은 코드 목록에서
+          고른다(검사가 있는 발급 코드). 학교가 바뀌면 오류 문구가 남지 않게 key로 새로 그린다 */}
+      {filters.school && (
+        <ClassSheets key={filters.school} school={filters.school} loginHref={loginHref}
+          classes={(codes ?? [])
+            .filter(c => c.status === 'active' && c.school_name === filters.school && c.session_count > 0)
+            .sort((a, b) => a.grade - b.grade || a.class_no - b.class_no)} />
+      )}
       <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}
         schools={schools} grades={grades}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />

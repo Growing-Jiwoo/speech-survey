@@ -14,6 +14,7 @@ import {
 } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
 import { Badge } from '@/components/Badge'
+import { VerdictBadge } from '@/components/VerdictBadge'
 import { StatusBadge } from './StatusBadge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
@@ -152,11 +153,18 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       }),
       col.display({
         id: 'status', header: '상태',
-        meta: { thClassName: 'whitespace-nowrap px-4 pr-5', tdClassName: 'whitespace-nowrap px-4 pr-5' },
+        meta: { thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
         cell: ({ row }) => {
           const p = row.original.progress
           return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
         },
+      }),
+      // 결과지에 들어가지 않고 판정을 보게 상태 옆에 둔다(담당자 요청 2026-10-24). 값은 서버가 교사 결과지·결과보고서 PDF와
+      // 같은 판정으로 계산해 싣는다(lib/results finalResultOf). 화면에서 다시 채점하지 않는다
+      col.display({
+        id: 'final', header: '최종결과',
+        meta: { thClassName: 'whitespace-nowrap px-4 pr-5', tdClassName: 'whitespace-nowrap px-4 pr-5' },
+        cell: ({ row }) => <FinalCell final={row.original.final} provisional={row.original.provisional} />,
       }),
     ])
     // retest를 빼면 새 재검사가 들어와도 배지가 옛 회차에 머문다 — 목록을 새로고침한
@@ -341,6 +349,11 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
             desc: '제출은 됐지만 녹음이나 쓰기가 비어 있어요.',
           },
           { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았어요.' },
+          { badge: <Badge tone="mute">채점 전</Badge>, desc: '제출됐지만 낱말 해독·문장 읽기·쓰기 채점이 다 끝나지 않았어요.' },
+          {
+            badge: <span className="inline-flex gap-1"><VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" /></span>,
+            desc: '세 과제를 다 채점한 최종결과예요(결과보고서 PDF와 같아요). 「임시」가 붙으면 확정 전 기준으로 낸 판정이에요.',
+          },
           // 스캔본 방식의 쓰기 칸 — 막대 대신 이 두 배지가 보인다(ProgressCell)
           { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사예요. 선생님이 아직 기록지 스캔본을 올리지 않았어요.' },
           { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사예요. 결과지에서 쓰기를 채점할 차례예요.' },
@@ -357,6 +370,19 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         </p>
       )}
     </>
+  )
+}
+
+/** 최종결과 칸: 진행 중 「—」 · 채점이 남았으면 「채점 전」(0점·위험으로 읽히지 않게) · 다 채점됐으면 양호·주의·위험.
+ *  임시 기준 판정에는 「임시」를 붙인다. 결과지 머리의 「임시 기준 · 확정 전」과 같은 뜻이다 */
+function FinalCell({ final, provisional }: { final: SessionListRow['final']; provisional: boolean }) {
+  if (final === null) return <span className="text-xs text-ink-mute">—</span>
+  if (final === 'unscored') return <Badge tone="mute">채점 전</Badge>
+  return (
+    <span className="inline-flex items-center gap-1">
+      <VerdictBadge v={final} />
+      {provisional && <span title="임시 기준 · 확정 전" className="text-[11px] font-bold text-amber">임시</span>}
+    </span>
   )
 }
 

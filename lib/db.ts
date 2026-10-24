@@ -1,6 +1,8 @@
-import { formFor } from './forms'
+import { formFor, formOfSession } from './forms'
 import { semesterOf } from './format'
+import { finalResultOf } from './results'
 import type { RosterChild } from './roster'
+import { criteriaProvisional, type Verdict } from './scoring'
 import type { ScoreRows } from './score-version'
 import { sessionProgress, type SessionProgress } from './session-progress'
 import { scanTargetState, type ScanTargetState } from './scan-mapping'
@@ -859,20 +861,28 @@ export interface WritingRow { item_code: string; can_write: boolean }
 
 const SESSION_COLS = 'id, class_code_id, child_no, school_region, school_id, school_name, birth_ymd, grade, form_id, class_no, gender, child_name, teacher_name, teacher_phone, teacher_email, checklist, started_at, submitted_at, guardian_consented_at, edited_at, original_identity, writing_mode, upload_failed'
 
-/** 목록 행의 진행률 재료 — 서버가 진행률(`progress`)을 계산하는 데만 쓰고 **응답에는 싣지 않는다**(listSessions). */
+/** 목록 행의 진행률·최종결과 재료 — 서버가 `progress`·`final`을 계산하는 데만 쓰고 **응답에는 싣지 않는다**(listSessions). */
 export type SessionProgressSource = SessionRow & {
   recordings: { item_code: string }[]
   /** 진행률 분자(응답 존재 여부)에 값이 필요해 can_write까지 싣는다 */
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
   sentence_scores: { item_code: string; words: number }[]
+  /** 낱말 해독 O/X와 문장 읽은 시간은 최종결과만 쓴다 */
+  reading_marks: { item_code: string; correct: boolean }[]
+  sentence_times: { item_code: string; seconds: number }[]
   /** 쓰기 기록지 스캔본이 올라왔는지(1:1이라 객체·배열·null 어느 모양으로도 온다 — sessionProgress가 흡수) */
-  writing_scans?: { session_id: string } | { session_id: string }[] | null
+  writing_scans?: { uploaded_at: string } | { uploaded_at: string }[] | null
 }
 
 export type SessionListRow = SessionRow & {
   /** 진행률 — listSessions가 서버에서 계산해 싣는다(화면이 lib/forms를 import하지 않도록) */
   progress: SessionProgress
+  /** 최종결과(양호·주의·위험): 진행 중이면 null, 제출됐는데 세 과제 채점이 다 끝나지 않았으면 'unscored'.
+   *  교사 결과지·결과보고서 PDF와 같은 판정을 서버가 계산해 싣는다(lib/results `finalResultOf`) */
+  final: Verdict | 'unscored' | null
+  /** 판정 기준이 임시값인지(lib/scoring `criteriaProvisional`: 1학기 양식·3~6학년 폴백). 목록이 「임시」를 붙인다 */
+  provisional: boolean
 }
 
 const MAX_LIST_ROWS = 5000
@@ -884,7 +894,7 @@ const MAX_LIST_ROWS = 5000
  * 나머지는 오류 없이 자른다 — `.limit(5000)`으로 한 번에 받던 때는 1000건이 넘으면 오래된 검사가 목록·KPI·학교별 현황에서
  * 조용히 사라졌다(2026-10-22 출시 전 점검, 1129건 → 1000건 재현). 서버가 실제로 준 행 수만큼 넘기므로 Max Rows가 얼마든
  * 맞다. 넘기는 사이 새 검사가 생기면 경계의 행이 두 번 올 수 있어 id로 거른다.
- * 진행률 재료(녹음·쓰기 배열)는 계산 뒤 버린다 — 화면은 `progress`만 쓰고, 행마다 실으면 수천 건에서 응답이 몇 MB가 된다.
+ * 진행률·최종결과 재료(녹음·채점 배열)는 계산 뒤 버린다 — 화면은 `progress`·`final`만 쓰고, 행마다 실으면 수천 건에서 응답이 몇 MB가 된다.
  */
 export async function listSessions(): Promise<SessionListRow[]> {
   const rows: SessionProgressSource[] = []
@@ -892,7 +902,8 @@ export async function listSessions(): Promise<SessionListRow[]> {
   while (rows.length < MAX_LIST_ROWS) {
     const from = rows.length
     const { data, error } = await sb().from('sessions')
-      .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), writing_scans(session_id)`)
+      .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), `
+        + 'reading_marks(item_code, correct), sentence_times(item_code, seconds), writing_scans(uploaded_at)')
       .order('started_at', { ascending: false }).order('id')
       .range(from, MAX_LIST_ROWS - 1)
     fail(error)
@@ -904,8 +915,12 @@ export async function listSessions(): Promise<SessionListRow[]> {
   if (rows.length >= MAX_LIST_ROWS)
     console.warn(`[listSessions] 상한(${MAX_LIST_ROWS}) 도달 — 서버 페이지네이션 도입 검토 필요`)
   return rows.slice(0, MAX_LIST_ROWS).map(r => {
-    const { recordings: _r, writing_answers: _w, sentence_scores: _s, writing_scans: _c, ...row } = r
-    return { ...row, progress: sessionProgress(r) }
+    const { recordings: _r, writing_answers: _w, sentence_scores: _s, reading_marks: _m, sentence_times: _t, writing_scans: _c, ...row } = r
+    return {
+      ...row, progress: sessionProgress(r),
+      final: finalResultOf({ ...r, writing_scan: one(r.writing_scans) }),
+      provisional: criteriaProvisional(formOfSession(r), r.grade),
+    }
   })
 }
 

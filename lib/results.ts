@@ -108,6 +108,16 @@ export function evaluateSession(r: ResultsSessionRow): Evaluated {
 }
 
 /**
+ * 관리자 목록의 「최종결과」 칸 — 담당자 요청(2026-10-24, 사용자 전달: 결과지에 들어가지 않고 목록에서 판정을 보고 싶다).
+ * 판정은 위 evaluateSession 그대로라 교사 결과지·결과보고서 PDF의 최종결과와 같다. 진행 중이면 null,
+ * 제출됐는데 세 과제 채점이 다 끝나지 않았으면 'unscored'(채점 전: 미채점을 위험으로 찍지 않는다).
+ */
+export function finalResultOf(r: ResultsSessionRow): Verdict | 'unscored' | null {
+  const e = evaluateSession(r)
+  return e.status === 'unsubmitted' ? null : e.verdict ?? 'unscored'
+}
+
+/**
  * 명단 ∪ 세션 → 아이당 한 줄. 정렬은 **위험 → 주의 → 나머지, 그 안에서 번호순**(사용자 확정 ④ 「Fail 먼저」를
  * 3단계로 옮긴 것, 2026-10-20). 판정은 대표 검사의 판정(`childVerdict` — 가장 최근에 제출된 검사)이다. 화면의 접힌 행·요약과
  * 같은 검사를 봐야 한다 — 1차 위험 뒤 2차를 중단한 아이가 위로 올라가지 않았다(2026-10-12 점검).

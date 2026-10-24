@@ -34,6 +34,7 @@ vi.mock('pdf-lib', async () => {
 import { POST as REQUEST } from '@/app/api/results/request/route'
 import { GET as LIST } from '@/app/api/results/[token]/route'
 import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
+import { GET as ADMIN_SHEETS } from '@/app/api/admin/codes/[id]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
 import { classSheetTag } from '@/lib/writing-sheet'
 import { buildChildren } from '@/lib/results'
@@ -334,6 +335,35 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect((await sheetsReq('bad')).status).toBe(401)
     vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
     expect((await sheetsReq(await createResultsToken(CID, 'test-secret'))).status).toBe(404)
+  })
+  // 관리자 학급별 받기(담당자 요청 2026-10-24) — 같은 학급을 관리자가 받든 선생님이 받든 같은 파일이어야 한다
+  const adminReq = (id: string, qs = '') =>
+    ADMIN_SHEETS(new Request(`http://x/api/admin/codes/${id}/sheets.pdf${qs}`), { params: Promise.resolve({ id }) })
+  it('관리자 학급별 받기는 선생님 [전체 PDF 다운로드]와 같은 파일 — 같은 장·같은 순서, 파일명은 앞에 학교만 붙는다', async () => {
+    const printed = () => vi.mocked(pdf.renderReport).mock.calls.map(c => c[0])
+    const teacher = await sheetsReq(await createResultsToken(CID, 'test-secret'))
+    const teacherPages = printed()
+    vi.mocked(pdf.renderReport).mockClear()
+    // 관리자 경로는 고르지 않는다 — ids를 실어도 전체다
+    const admin = await adminReq(CID, '?ids=a1')
+    expect(admin.status).toBe(200)
+    expect(db.findClassCodeById).toHaveBeenLastCalledWith(CID)
+    expect(printed()).toEqual(teacherPages)
+    // 여러 학교의 「1-2_결과지_전체」가 관리자 폴더 하나에 섞이지 않게
+    const fileName = (r: Response) => decodeURIComponent(r.headers.get('content-disposition')!.split("''")[1])
+    expect(fileName(admin)).toBe(`대구가창초등학교_${fileName(teacher)}`)
+    expect(fileName(teacher)).toMatch(/^1-2_결과지_전체_/)
+    expect(admin.headers.get('cache-control')).toBe('no-store')
+  })
+  it('관리자 학급별 받기 — 잘못된 id는 400이고 DB를 읽지 않는다(가드 순서) · 채점된 아이가 없으면 400 · 코드가 없으면 404', async () => {
+    expect((await adminReq('nope')).status).toBe(400)
+    expect(db.classResults).not.toHaveBeenCalled()
+    vi.mocked(db.classResults).mockResolvedValueOnce([ROWS[3]])
+    const none = await adminReq(CID)
+    expect(none.status).toBe(400)
+    expect((await none.json()).error).toContain('내려받을 수 있는 결과지가 없어요')
+    vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
+    expect((await adminReq(CID)).status).toBe(404)
   })
   // 아래 넷은 전수 점검(2026-09-22)에서 나온 것들이다.
   it('[REGRESSION] 최신이 중단된 재검사인 아이도 전체에 포함된다 — 채점된 앞 차수를 내보낸다', async () => {

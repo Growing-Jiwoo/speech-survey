@@ -282,6 +282,14 @@ describe('deleteSession — PII 파기는 스토리지 전체 페이지네이션
     expect(fromCalls).toEqual(['sessions'])
   })
 
+  it('그 검사 하나만 지운다 — 행은 id 하나로만 거르고 스토리지는 그 id 폴더만 본다(같은 아이의 다른 회차는 남는다, 담당자 질문 2026-10-24)', async () => {
+    enqueue('sessions', { data: null, error: null })
+    await deleteSession(SID)
+    expect(deleteCallsByTable.get('sessions')).toHaveLength(1)
+    expect(eqCallsByTable.get('sessions')).toEqual([['id', SID]])
+    expect(storage.list.mock.calls.map(c => c[0])).toEqual([SID, SID])
+  })
+
   it('쓰기 기록지 스캔본(아이 필적)도 행보다 먼저 지운다 — 버킷이 달라 녹음만 지우면 남는다', async () => {
     storage.list
       .mockResolvedValueOnce({ data: [obj('p_rw_meaning_1.webm')], error: null })
@@ -647,7 +655,7 @@ describe('listSessions — 관리자 목록은 페이지를 넘기며 전부 받
   // Supabase는 한 요청에 Max Rows(기본 1000)까지만 돌려주고 나머지를 오류 없이 자른다 — 스텁이 그 모양으로 페이지를 준다
   const srow = (i: number) => ({
     id: `s-${i}`, grade: 1, form_id: 'KODYS-G1-S2', writing_mode: 'screen', started_at: `2026-10-${String(1 + (i % 28)).padStart(2, '0')}T00:00:00Z`,
-    recordings: [{ item_code: 'p_rw_meaning' }], writing_answers: [], sentence_scores: [], writing_scans: null,
+    recordings: [{ item_code: 'p_rw_meaning' }], writing_answers: [], sentence_scores: [], reading_marks: [], sentence_times: [], writing_scans: null,
   })
   const page = (from: number, n: number) => ({ data: Array.from({ length: n }, (_, k) => srow(from + k)), error: null })
 
@@ -668,14 +676,28 @@ describe('listSessions — 관리자 목록은 페이지를 넘기며 전부 받
     expect((await listSessions()).map(r => r.id)).toEqual(['s-0', 's-1', 's-2', 's-3'])
   })
 
-  it('진행률은 계산해 싣고 재료(녹음·쓰기 배열)는 응답에서 뺀다 — 화면은 progress만 쓴다', async () => {
+  it('진행률·최종결과는 계산해 싣고 재료(녹음·채점 배열)는 응답에서 뺀다 — 화면은 progress·final만 쓴다', async () => {
     enqueue('sessions', page(0, 1)); enqueue('sessions', page(0, 0))
     const [r] = await listSessions()
     expect(r.progress.recorded).toBe(1)
-    expect(r).not.toHaveProperty('recordings')
-    expect(r).not.toHaveProperty('writing_answers')
-    expect(r).not.toHaveProperty('sentence_scores')
-    expect(r).not.toHaveProperty('writing_scans')
+    expect(r).toMatchObject({ final: null, provisional: false })   // 진행 중 · 2학기 1학년 양식(확정 기준)
+    for (const k of ['recordings', 'writing_answers', 'sentence_scores', 'reading_marks', 'sentence_times', 'writing_scans'])
+      expect(r).not.toHaveProperty(k)
+  })
+
+  it('최종결과 재료(낱말 O/X·읽은 시간)를 같은 조회로 받는다 — 빠지면 채점한 검사도 전부 「채점 전」이 된다', async () => {
+    enqueue('sessions', page(0, 1)); enqueue('sessions', page(0, 0))
+    await listSessions()
+    const [cols] = selectCallsByTable.get('sessions')![0] as [string]
+    expect(cols).toContain('reading_marks(item_code, correct)')
+    expect(cols).toContain('sentence_times(item_code, seconds)')
+  })
+
+  it('제출됐는데 채점이 남았으면 「채점 전」, 1학기 양식은 임시 기준', async () => {
+    enqueue('sessions', { data: [{ ...srow(0), form_id: 'KODYS-G1', submitted_at: '2026-10-02T00:00:00Z', reading_marks: [], sentence_times: [] }], error: null })
+    enqueue('sessions', page(0, 0))
+    const [r] = await listSessions()
+    expect(r).toMatchObject({ final: 'unscored', provisional: true })
   })
 
   it('조회가 실패하면 던진다(라우트가 500)', async () => {
