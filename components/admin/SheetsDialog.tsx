@@ -130,9 +130,10 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
               <section key={school} className="border-b border-line/70 last:border-b-0">
                 {/* 학교 줄은 반이 몇 개든 같은 모양이다 — ▶로 반을 펼치고 오른쪽은 늘 [학교 전체 받기], 반별 [받기]는 펼친 줄에만 있다.
                     반 수에 따라 버튼과 ▶가 바뀌면 헷갈렸다(사용자 확인 2026-10-24) */}
-                <div className="flex items-center gap-2 py-2.5">
+                {/* 회색 강조는 줄 전체(오른쪽 버튼까지)에 깐다 — 이름 쪽에만 깔면 버튼이 줄 밖처럼 보였다(사용자 확인 2026-10-24) */}
+                <div className="my-1.5 flex items-center gap-2 rounded-lg py-1 pr-2 transition hover:bg-well">
                   <button type="button" onClick={() => toggle(school)} aria-expanded={open}
-                    className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-well">
+                    className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left">
                     {/* inline-block이어야 rotate가 먹는다 */}
                     <span aria-hidden className={`mt-0.5 inline-block text-[11px] text-ink-mute transition ${open ? 'rotate-90' : ''}`}>▶</span>
                     <span className="min-w-0">
