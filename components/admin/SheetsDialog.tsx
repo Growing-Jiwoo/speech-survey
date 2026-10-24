@@ -126,45 +126,29 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
             const open = opened.has(school)
             const sum = classes.reduce((a, c) => ({ ready: a.ready + c.ready, children: a.children + c.children, writingPending: a.writingPending + c.writingPending }),
               { ready: 0, children: 0, writingPending: 0 })
-            const only = classes.length === 1 ? classes[0] : null
             return (
               <section key={school} className="border-b border-line/70 last:border-b-0">
-                <div className="flex items-center gap-2 py-2.5">
-                  {/* 반이 하나면 펼칠 것이 없다(그 반이 학교 줄에 다 나온다) — 누를 수 없는 줄로 두고 ▶ 자리만 비워 이름 줄을 맞춘다 */}
-                  {only ? (
-                    <div className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1">
-                      <span aria-hidden className="invisible mt-0.5 inline-block text-[11px]">▶</span>
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-bold">{school}</span>
-                        <Status {...sum} prefix={label(only)} />
-                      </span>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => toggle(school)} aria-expanded={open}
-                      className="flex min-w-0 flex-1 items-start gap-2 rounded-lg px-2 py-1 text-left transition hover:bg-well">
-                      {/* inline-block이어야 rotate가 먹는다 */}
-                      <span aria-hidden className={`mt-0.5 inline-block text-[11px] text-ink-mute transition ${open ? 'rotate-90' : ''}`}>▶</span>
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-bold">{school}</span>
-                        <Status {...sum} prefix={`${classes.length}개 반`} />
-                      </span>
-                    </button>
-                  )}
-                  {/* 반이 하나면 그 반을 바로 받는다(학교 전체가 그 반 파일과 같다). 둘 이상이면 받을 수 있는 반만 이어 붙인다 */}
-                  {only ? (
-                    <button type="button" onClick={() => void downloadClass(only)} disabled={busy !== null || only.ready === 0}
-                      className={`${btn} border-line bg-white text-ink-soft hover:border-blue`}>
-                      {busy === only.classCodeId ? '만드는 중…' : '받기'}
-                    </button>
-                  ) : (
-                    <button type="button" onClick={() => void downloadSchool(school, readyClasses)} disabled={busy !== null || readyClasses.length === 0}
-                      className={`${btn} border-blue bg-blue/5 text-blue hover:bg-blue/10`}>
-                      {busy === key ? `만드는 중… ${done}/${readyClasses.length}` : '학교 전체 받기'}
-                    </button>
-                  )}
+                {/* 학교 줄은 반이 몇 개든 같은 모양이다 — ▶로 반을 펼치고 오른쪽은 늘 [학교 전체 받기], 반별 [받기]는 펼친 줄에만 있다.
+                    반 수에 따라 버튼과 ▶가 바뀌면 헷갈렸다(사용자 확인 2026-10-24) */}
+                {/* 회색 강조는 줄 전체(오른쪽 버튼까지)에 깐다 — 이름 쪽에만 깔면 버튼이 줄 밖처럼 보였다(사용자 확인 2026-10-24) */}
+                <div className="my-1.5 flex items-center gap-2 rounded-lg py-1 pr-2 transition hover:bg-well">
+                  <button type="button" onClick={() => toggle(school)} aria-expanded={open}
+                    className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1 text-left">
+                    {/* inline-block이어야 rotate가 먹는다 */}
+                    <span aria-hidden className={`mt-0.5 inline-block text-[11px] text-ink-mute transition ${open ? 'rotate-90' : ''}`}>▶</span>
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-bold">{school}</span>
+                      <Status {...sum} prefix={`${classes.length}개 반`} />
+                    </span>
+                  </button>
+                  {/* 받을 수 있는 반만 이어 붙인다. 반이 하나면 그 반 파일과 같은 내용이다 */}
+                  <button type="button" onClick={() => void downloadSchool(school, readyClasses)} disabled={busy !== null || readyClasses.length === 0}
+                    className={`${btn} border-blue bg-blue/5 text-blue hover:bg-blue/10`}>
+                    {busy === key ? `만드는 중… ${done}/${readyClasses.length}` : '학교 전체 받기'}
+                  </button>
                 </div>
-                <div className="px-2">{note(key)}{only && note(only.classCodeId)}</div>
-                {open && !only && (
+                <div className="px-2">{note(key)}</div>
+                {open && (
                   <ul className="mb-3 ml-6 flex flex-col gap-1.5">
                     {classes.map(c => (
                       <li key={c.classCodeId} className="rounded-xl bg-well px-3 py-2.5">
