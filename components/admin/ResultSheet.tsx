@@ -19,6 +19,7 @@ import {
   type SaveOutcome, type ScoreRows, type SheetScores,
 } from '@/lib/sheet-save'
 import { Badge } from '@/components/Badge'
+import { Tip } from '@/components/Tip'
 import { VerdictBadge } from '@/components/VerdictBadge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { BadgeLegend } from './BadgeLegend'
@@ -32,7 +33,7 @@ import { SentenceRows } from './sheet/SentenceRows'
 import { SentenceWriteRows } from './sheet/SentenceWriteRows'
 import { ScanViewer } from './sheet/ScanViewer'
 import { ScanWritingRows } from './sheet/ScanWritingRows'
-import { PageAudio, type Attempt } from './sheet/PageAudio'
+import { AUDIO_HELP, PageAudio, type Attempt } from './sheet/PageAudio'
 import type { SessionRow } from '@/lib/db'
 
 /** 자동 저장 디바운스(ms). 채점자가 O/X를 연달아 찍는 속도보다 길고, 화면을 떠나기 전에
@@ -201,6 +202,19 @@ export function ResultSheet({
   const entered = { marks, sentences, times, writing: scanMode ? written : writing }
   const r = scoreSession(form, session.submitted_at ? withUnrecordedFixed(f, entered, hasRecording) : entered)
   const writingLabel = SECTION_LABEL[f.writingSection]
+  // 과제별 판정 기준 표기 — 범례와 소계 판정 배지의 말풍선이 같이 쓴다(판정 규칙은 담당자 확정 2026-10-19 docx)
+  const criteria: Record<TaskKey, string> = {
+    wordReading: cutoffLabel(cutoff.wordReading, v => `${v}점`),
+    sentenceReading: `${cutoffLabel(cutoff.sentenceReading, fluencyLabel)}(${FLUENCY_UNIT})`,
+    writing: cutoffLabel(cutoff.writing, v => `${v}점`),
+  }
+  // 「임시 기준 · 확정 전」 설명 — 머리 배지 말풍선과 범례가 같이 쓴다
+  const provisionalHelp = <>
+    {form.grades.includes(session.grade)
+      ? <>담당자 기준표를 받기 전까지 쓰는 <b>임시 기준</b>으로 낸 판정이에요.</>
+      : <>{session.grade}학년 검사지가 아직 없어 <b>{form.grades[0]}학년 검사지와 기준</b>으로 검사하고 판정했어요.</>}
+    {' '}기준표를 받으면 기준 숫자만 바뀌어요. 이미 채점한 검사도 저장된 점수로 다시 계산해요.
+  </>
 
   // 저장 전 채점은 화면에만 있다. 아동을 옮기면 사라지므로(다른 아동 화면은 다시 마운트된다)
   // 상위가 막을 수 있도록 알린다. 저장된 값과 비교해 판단한다 — 되돌리면 다시 깨끗해진다.
@@ -429,9 +443,12 @@ export function ResultSheet({
               {/* 재검사 회차 — 같은 아이의 1차·2차 결과지가 머리까지 같아 어느 검사인지 알 수 없었다(2026-10-12 점검).
                   목록 이름 옆 꼬리표와 같은 모양·같은 셈이다 */}
               {retest && (
-                <span className="self-center rounded-full bg-well px-2 py-0.5 text-[12px] font-bold tabular-nums text-ink-mute"
-                  title={`같은 번호로 ${retest.of}번 검사한 아동의 ${retest.nth}번째 검사예요`}>
-                  {retest.nth}/{retest.of}회차
+                <span className="self-center">
+                  <Tip tip={`같은 번호로 ${retest.of}번 검사한 아동의 ${retest.nth}번째 검사예요.`}>
+                    <span className="rounded-full bg-well px-2 py-0.5 text-[12px] font-bold tabular-nums text-ink-mute">
+                      {retest.nth}/{retest.of}회차
+                    </span>
+                  </Tip>
                 </span>
               )}
               <span className="text-[14px] text-ink-soft">{session.gender} · {birthLabel(session.birth_ymd)}</span>
@@ -451,7 +468,7 @@ export function ResultSheet({
               <StatusBadge submitted={!!session.submitted_at} incomplete={incomplete} />
               {/* 임시 기준으로 나온 판정이 실제 판정으로 학교에 전달되지 않도록 화면에 남긴다 — 결과보고서
                   PDF는 담당자 양식을 그대로 따르므로 이 표시가 없다. 임시 기준 세션에는 이 화면이 유일한 경고다. */}
-              {provisional && <Badge tone="amber">임시 기준 · 확정 전</Badge>}
+              {provisional && <Tip tip={provisionalHelp}><Badge tone="amber">임시 기준 · 확정 전</Badge></Tip>}
             </div>
           </div>
         </div>
@@ -486,7 +503,7 @@ export function ResultSheet({
             { label: '무의미 점수', value: r.wordNonsense, max: readMax.nonsense },
           ]}
           total={{ label: '총 점수', value: r.wordReading, max: taskMax.wordReading }}
-          verdict={r.verdict.wordReading} complete={r.complete.wordReading} />
+          verdict={r.verdict.wordReading} criterion={criteria.wordReading} complete={r.complete.wordReading} />
       </TaskSection>
 
       {/* 문장마다 읽은 시간(초)과 정확 어절을 넣고, 총점은 어절 합 ÷ 시간 합 × 10(담당자 확정 2026-09-29, × 10은 2026-10-20 —
@@ -503,7 +520,7 @@ export function ResultSheet({
             { label: '읽은 시간', value: readSecLabel(r.sentenceSec), unit: '초' },
           ]}
           total={{ label: '총점', value: fluencyLabel(r.sentenceReading), unit: FLUENCY_UNIT }}
-          verdict={r.verdict.sentenceReading} complete={r.complete.sentenceReading} />
+          verdict={r.verdict.sentenceReading} criterion={criteria.sentenceReading} complete={r.complete.sentenceReading} />
       </TaskSection>
 
       {/* 쓰기 과제 — 학년에 따라 낱말 쓰기 또는 문장 쓰기다. 화면 방식은 검사 중 수집분(읽기 전용),
@@ -581,13 +598,13 @@ export function ResultSheet({
               { label: '무의미 점수', value: r.writeNonsense, max: writeMax.nonsense },
             ]}
             total={{ label: '총 점수', value: r.writing, max: taskMax.writing }}
-            verdict={r.verdict.writing} complete={r.complete.writing} />
+            verdict={r.verdict.writing} criterion={criteria.writing} complete={r.complete.writing} />
         </>
       ) : (
         <>
           {!scanMode && <SentenceWriteRows items={f.writingItems} writing={writing} />}
           <Subtotal total={{ label: '총점', value: r.writing, max: taskMax.writing }}
-            verdict={r.verdict.writing} complete={r.complete.writing} />
+            verdict={r.verdict.writing} criterion={criteria.writing} complete={r.complete.writing} />
         </>
       )}
       </TaskSection>
@@ -692,52 +709,42 @@ export function ResultSheet({
           설명이 한 문장으로 끝나지 않아 1열로 둔다(2열이면 폭이 반이라 대여섯 줄로 접힌다). */}
       <BadgeLegend
         columns={1}
+        // 설명 문장은 배지 말풍선과 한 벌이다(UNSCORED_HELP·AUDIO_HELP·provisionalHelp) — 출처(누가 정했나)는 그 정의의 주석에 있다.
+        // 담당자가 읽는 화면이라 화면에는 개발용 표기를 찍지 않는다.
+        // 「채점 전」은 범례 윗줄(상시)이 말한다 — 펼친 목록에 또 두면 같은 말이 두 번 보인다. 자세한 설명은 배지 말풍선(UNSCORED_HELP)
         items={[
           {
-            badge: <Badge tone="mute">채점 전</Badge>,
-            desc: <>아직 채점하지 않은 과제예요. <b className="text-rec-deep">0점이 아니에요</b>.
-              결과보고서 PDF에도 판정 칸이 비어 나가요.</>,
-          },
-          {
             badge: <Badge tone="rec">미녹음</Badge>,
-            // 미녹음 채점은 사용자 확정(2026-08-12 기본 채점 → 2026-09-29 고정)이다. 출처는 여기(주석)에만 둔다 —
-            // 담당자가 읽는 화면이라, 화면에 찍힌 개발용 표기는 뜻 없이 혼란만 준다.
-            // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes).
-            desc: <>녹음이 올라오지 않은 과제예요(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으니 <b>오반응(X ·
-              0점)으로 고정</b>되어 칸이 잠기고, 화면·결과보고서 PDF에 그대로 나가요. 문장 읽기유창성은 그 문장의 읽은 시간을 <b>그 문장의 제한 시간({form.limits.sentenceSec.join('·')}초)</b>으로 계산해요.</>,
+            // 문장의 시간(제한 시간)은 담당자 확정(2026-09-29)이다(lib/scoring unrecordedTimes)
+            desc: <>{AUDIO_HELP.unrecorded} 문장 읽기유창성은 읽은 시간을 그 문장의 제한 시간({form.limits.sentenceSec.join('·')}초)으로
+              계산해요.</>,
           },
-          {
-            badge: <Badge tone="rec">저장 실패</Badge>,
-            // 사용자 확정(2026-10-08) — 표시만 더한 것이고 채점은 미녹음과 같다. 결과보고서 PDF에는 넣지 않았다(담당자 양식).
-            desc: <>아이가 읽었지만 <b>인터넷 문제 등으로 녹음이 올라오지 않은</b> 과제예요. 채점은 미녹음과
-              같아요(오반응 고정). 결과보고서 PDF에서는 미녹음과 구별되지 않아요.</>,
-          },
+          // 결과보고서 PDF에는 저장 실패 표시를 넣지 않았다(담당자 양식)
+          { badge: <Badge tone="rec">저장 실패</Badge>, desc: AUDIO_HELP.failed },
           {
             badge: (
               <span className="flex gap-1">
                 <VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" />
               </span>
             ),
-            // 판정 규칙은 담당자 확정(2026-10-19 docx) — lib/scoring verdictOf·finalVerdict
-            desc: <>과제별 기준에 따른 판정이에요 — 낱말 해독 {cutoffLabel(cutoff.wordReading, v => `${v}점`)} ·
-              문장 읽기유창성 {cutoffLabel(cutoff.sentenceReading, fluencyLabel)}({FLUENCY_UNIT}) ·
-              {' '}{writingLabel} {cutoffLabel(cutoff.writing, v => `${v}점`)}. 채점이 끝난 과제에만 나오고 결과보고서 PDF의
-              결과 요약에도 같은 글자로 찍혀요. 최종결과는 <b>위험이 하나라도 있거나 주의가 둘 이상이면 위험</b>, 주의가
-              하나면 주의예요.</>,
+            // 판정 규칙은 담당자 확정(2026-10-19 docx) — lib/scoring verdictOf·finalVerdict. 기준은 과제마다 한 줄 —
+            // 한 문장에 「·」로 이어 붙였더니 과제 경계와 주의·위험 경계가 같은 점이라 어디서 끊어 읽을지 몰랐다
+            desc: <>
+              과제마다 아래 기준으로 판정해요. 채점이 끝난 과제에만 나오고 결과보고서 PDF 결과 요약에도 같은 글자로 찍혀요.
+              <span className="mt-1.5 block pl-2">· {SECTION_LABEL.word_reading}: {criteria.wordReading}</span>
+              <span className="block pl-2">· {SECTION_LABEL.sentence_reading}: {criteria.sentenceReading}</span>
+              <span className="block pl-2">· {writingLabel}: {criteria.writing}</span>
+              <span className="mt-1.5 block">최종결과는 <b>위험이 하나라도 있거나 주의가 둘 이상이면 위험</b>, 주의가 하나면 주의예요.</span>
+            </>,
           },
-          ...(provisional ? [{
-            badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>,
-            desc: <>{form.grades.includes(session.grade)
-              ? <>판정 기준이 담당자 기준표를 받기 전까지 쓰는 <b>임시 숫자</b>라는 표시예요.</>
-              : <>{session.grade}학년 검사지가 아직 없어 <b>{form.grades[0]}학년 검사지와 기준</b>으로 검사·판정했다는 표시예요.</>}
-              {' '}기준표를 받으면 숫자만 바뀌어요. 이미 채점한 검사도 저장된 점수로 다시 계산해요.</>,
-          }] : []),
+          ...(provisional ? [{ badge: <Badge tone="amber">임시 기준 · 확정 전</Badge>, desc: provisionalHelp }] : []),
         ]}
         // 「기준 시간 이후 반응은 채점하지 않는다」는 낱말 해독에만 남긴다 — 문장은 20초를 넘겨 읽었을 때
         // 어디까지 셀지 담당자가 듣고 판단한다(lib/scoring readSecMax 주석). 앱이 규칙을 대신 말하지 않는다.
-        note={<>채점 기준({form.id}): 낱말 해독은 {form.limits.wordSec}초 내 정확 반응 수예요. 녹음은 마지막 반응이
-          잘리지 않게 조금 더 담기 때문에 기준 시간 이후 반응은 채점하지 않아요. 문장 읽기유창성은 정확하게 읽은
-          어절 수의 합을 읽은 시간(초)의 합으로 나눈 뒤 10을 곱한 값({FLUENCY_UNIT})이에요.</>}
+        // 양식은 머리 배지(form.title)에 있어 여기에 양식 id를 다시 찍지 않는다
+        note={<>낱말 해독은 {form.limits.wordSec}초 동안 정확하게 읽은 낱말 수예요. 녹음은 마지막 반응이 잘리지 않게 조금 더
+          길게 담겨요. {form.limits.wordSec}초가 지난 반응은 채점하지 않아요. 문장 읽기유창성은 정확하게 읽은 어절 수의 합을
+          읽은 시간(초)의 합으로 나눈 뒤 10을 곱한 값({FLUENCY_UNIT})이에요.</>}
       />
     </section>
   )
