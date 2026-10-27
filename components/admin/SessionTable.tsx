@@ -13,9 +13,11 @@ import {
   awaitsScanScoring, checklistSummary, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals,
 } from '@/lib/adminStats'
 import { gradeClassLabel } from '@/lib/format'
+import { SECTION_LABEL, areaLabel } from '@/lib/items'
 import { Badge } from '@/components/Badge'
+import { Tip } from '@/components/Tip'
 import { VerdictBadge } from '@/components/VerdictBadge'
-import { StatusBadge } from './StatusBadge'
+import { STATUS_LEGEND, StatusBadge } from './StatusBadge'
 import { BadgeLegend } from '@/components/admin/BadgeLegend'
 import { FilterToolbar } from '@/components/admin/FilterToolbar'
 
@@ -31,6 +33,18 @@ declare module '@tanstack/react-table' {
 }
 
 const ROW_HEIGHT = 56  // 진행률 트랙 2개 기준 예상 행 높이(measureElement로 실측 보정)
+
+// 배지 설명 — 행의 말풍선(Tip)과 아래 범례가 같은 문장을 읽는다. 한쪽만 고쳐 두 곳 말이 갈리지 않게 여기 한 벌만 둔다.
+// 상태 배지 셋은 결과지 머리와 같이 쓰므로 StatusBadge에 있다. 판정 규칙 문장은 lib/scoring finalVerdict(담당자 확정 2026-10-19)와 같은 뜻이다
+const HELP = {
+  unscored: '제출됐지만 세 과제 채점이 아직 다 끝나지 않았어요.',
+  verdict: '세 과제를 다 채점한 최종결과예요. 결과보고서 PDF와 같아요.',
+  verdictRule: '위험이 하나라도 있거나 주의가 둘 이상이면 위험, 주의가 하나면 주의예요.',
+  provisional: '「임시」가 붙으면 확정 전 기준으로 낸 판정이에요.',
+  scanWait: '쓰기를 종이 기록지에 한 검사예요. 선생님이 아직 스캔본을 올리지 않았어요.',
+  scanUploaded: '스캔본이 올라왔거나 스캔본 없이 채점을 시작한 검사예요. 결과지에서 쓰기를 채점할 차례예요.',
+  checklist: '검사자가 체크리스트에서 고른 발달 영역 수예요. 마우스를 올리면(태블릿은 누르면) 어떤 영역인지 보여요.',
+}
 
 // v9: 사용할 기능을 명시해 그 코드만 번들에 담는다(코어 행 모델은 자동 포함).
 // 이 표는 정렬·필터를 URL 동기화 로직(lib/adminStats)이 담당하므로 테이블 기능을 켜지 않는다.
@@ -89,10 +103,11 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
                 {row.original.child_name}
               </Link>
               {nth && (
-                <span className="rounded-full bg-well px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-ink-mute"
-                  title={`같은 번호로 ${nth.of}번 검사한 아동의 ${nth.nth}번째 검사예요`}>
-                  {nth.nth}/{nth.of}회차
-                </span>
+                <Tip tabbable={false} tip={`같은 번호로 ${nth.of}번 검사한 아동의 ${nth.nth}번째 검사예요.`}>
+                  <span className="rounded-full bg-well px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-ink-mute">
+                    {nth.nth}/{nth.of}회차
+                  </span>
+                </Tip>
               )}
             </span>
           )
@@ -136,7 +151,8 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         cell: ({ row }) => {
           // 분모는 행마다 다르다 — 그 아동의 학년 검사지 문항 수다.
           const p = row.original.progress
-          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} scan={p.scan} />
+          return <ProgressCell recorded={p.recorded} written={p.written} totals={p.expected} scan={p.scan}
+            submitted={!!row.original.submitted_at} />
         },
       }),
       col.display({
@@ -146,8 +162,17 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           // 「특이사항 없음」(none)은 영역이 아니다 — 세면 none만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11)
           const c = checklistSummary(row.original.checklist)
           // 체크리스트 선택은 경고가 아니다 — amber는 '제출 · 미완료 있음'에만 남긴다.
-          return c.areas > 0 ? <Badge tone="mute" size="sm">{c.areas}개 영역</Badge>
-            : c.none ? <span className="text-xs text-ink-soft">특이사항 없음</span>
+          // 「N개 영역」 수만으로는 어느 영역인지 몰라 결과지를 열어야 했다 — 마우스를 올리면(태블릿은 누르면) 고른 영역을
+          // 말풍선으로 보인다(사용자 확정 2026-10-27). 차례는 저장된 차례(검사자가 누른 차례)다 — 결과지 체크리스트 칸과 같다
+          const areas = row.original.checklist.filter(a => a !== 'none')
+          return c.areas > 0 ? (
+            <Tip tabbable={false} tip={<>
+              <span className="block font-bold text-ink">{SECTION_LABEL.checklist}</span>
+              {areas.map(a => <span key={a} className="block">· {areaLabel(a)}</span>)}
+            </>}>
+              <Badge tone="mute" size="sm">{c.areas}개 영역</Badge>
+            </Tip>
+          ) : c.none ? <span className="text-xs text-ink-mute">특이사항 없음</span>
             : <span className="text-xs text-ink-mute">—</span>
         },
       }),
@@ -156,7 +181,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         meta: { thClassName: 'whitespace-nowrap px-4', tdClassName: 'whitespace-nowrap px-4' },
         cell: ({ row }) => {
           const p = row.original.progress
-          return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} />
+          return <StatusBadge submitted={!!row.original.submitted_at} incomplete={p.incomplete} tabbable={false} />
         },
       }),
       // 결과지에 들어가지 않고 판정을 보게 상태 옆에 둔다(담당자 요청 2026-10-24). 값은 서버가 교사 결과지·결과보고서 PDF와
@@ -343,26 +368,18 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
       </div>
       <BadgeLegend
         items={[
-          { badge: <Badge tone="mute">진행 중</Badge>, desc: '아직 제출하지 않은 검사예요.' },
-          {
-            badge: <Badge tone="amber">제출 · 미완료 있음</Badge>,
-            desc: '제출은 됐지만 녹음이나 쓰기가 비어 있어요.',
-          },
-          { badge: <Badge tone="mint">제출 완료</Badge>, desc: '받아야 할 녹음·쓰기를 다 받았어요.' },
-          { badge: <Badge tone="mute">채점 전</Badge>, desc: '제출됐지만 낱말 해독·문장 읽기·쓰기 채점이 다 끝나지 않았어요.' },
+          // 「채점 전」은 범례 윗줄(상시)이 말한다 — 펼친 목록에 또 두면 같은 말이 두 번 보인다. 자세한 설명은 배지 말풍선(HELP.unscored)
+          ...STATUS_LEGEND,
           {
             badge: <span className="inline-flex gap-1"><VerdictBadge v="good" /><VerdictBadge v="caution" /><VerdictBadge v="risk" /></span>,
-            desc: '세 과제를 다 채점한 최종결과예요(결과보고서 PDF와 같아요). 「임시」가 붙으면 확정 전 기준으로 낸 판정이에요.',
+            desc: `${HELP.verdict} ${HELP.provisional}`,
           },
           // 스캔본 방식의 쓰기 칸 — 막대 대신 이 두 배지가 보인다(ProgressCell)
-          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: '쓰기를 스캔본으로 하는 검사예요. 선생님이 아직 기록지 스캔본을 올리지 않았어요.' },
-          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: '스캔본이 올라왔거나 종이로 채점을 시작한 검사예요. 결과지에서 쓰기를 채점할 차례예요.' },
-          {
-            badge: <Badge tone="mute" size="sm">3개 영역</Badge>,
-            desc: '검사자가 체크리스트에서 표시한 발달 영역 수예요. 「특이사항 없음」을 골랐으면 그렇게 적혀요.',
-          },
+          { badge: <Badge tone="amber" size="sm">스캔 대기</Badge>, desc: HELP.scanWait },
+          { badge: <Badge tone="blue" size="sm">스캔본 채점</Badge>, desc: HELP.scanUploaded },
+          { badge: <Badge tone="mute" size="sm">3개 영역</Badge>, desc: HELP.checklist },
         ]}
-        note={<>진행률의 분모는 그 아동의 <b>학년 검사지</b> 기준이에요(1학년 쓰기 10문항 · 2학년 5문항).</>}
+        note="진행률의 쓰기 칸은 학년마다 문항 수가 달라요(1학년 10문항 · 2학년 5문항)."
       />
       {rows.length === 0 && (
         <p className="p-8 text-center text-sm text-ink-mute">
@@ -377,42 +394,52 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
  *  임시 기준 판정에는 「임시」를 붙인다. 결과지 머리의 「임시 기준 · 확정 전」과 같은 뜻이다 */
 function FinalCell({ final, provisional }: { final: SessionListRow['final']; provisional: boolean }) {
   if (final === null) return <span className="text-xs text-ink-mute">—</span>
-  if (final === 'unscored') return <Badge tone="mute">채점 전</Badge>
+  if (final === 'unscored') return <Tip tabbable={false} tip={HELP.unscored}><Badge tone="mute">채점 전</Badge></Tip>
   return (
-    <span className="inline-flex items-center gap-1">
-      <VerdictBadge v={final} />
-      {provisional && <span title="임시 기준 · 확정 전" className="text-[11px] font-bold text-amber">임시</span>}
-    </span>
+    <Tip tabbable={false} tip={<>
+      <span className="block">{HELP.verdict}</span>
+      <span className="mt-1 block">{HELP.verdictRule}</span>
+      {provisional && <span className="mt-1 block font-bold text-amber">{HELP.provisional}</span>}
+    </>}>
+      <span className="inline-flex items-center gap-1">
+        <VerdictBadge v={final} />
+        {provisional && <span className="text-[11px] font-bold text-amber">임시</span>}
+      </span>
+    </Tip>
   )
 }
 
-function ProgressCell({ recorded, written, totals, scan }: {
-  recorded: number; written: number; totals: Totals; scan: 'wait' | 'uploaded' | null
+function ProgressCell({ recorded, written, totals, scan, submitted }: {
+  recorded: number; written: number; totals: Totals; scan: 'wait' | 'uploaded' | null; submitted: boolean
 }) {
   return (
     <div className="flex min-w-[140px] flex-col gap-1 py-1.5">
-      <Track label="녹음" value={recorded} max={totals.rec} />
+      <Track label="녹음" value={recorded} max={totals.rec} alert={submitted} />
       {/* 스캔본 방식은 쓰기가 비어 있는 것이 정상이다 — 빨갛게 그리지 않고, 담당자가 채점할 차례(스캔본 올라옴)인지
           선생님이 올리기를 기다리는지를 가른다. 다 채점되면 다른 검사처럼 막대로 보인다 */}
       {scan && written < totals.write
         ? <div className="flex items-center gap-1.5"><span className="w-7 text-[12px] text-ink-mute">쓰기</span>
-            {scan === 'uploaded' ? <Badge tone="blue" size="sm">스캔본 채점</Badge> : <Badge tone="amber" size="sm">스캔 대기</Badge>}</div>
-        : <Track label="쓰기" value={written} max={totals.write} />}
+            {scan === 'uploaded'
+              ? <Tip tabbable={false} tip={HELP.scanUploaded}><Badge tone="blue" size="sm">스캔본 채점</Badge></Tip>
+              : <Tip tabbable={false} tip={HELP.scanWait}><Badge tone="amber" size="sm">스캔 대기</Badge></Tip>}</div>
+        : <Track label="쓰기" value={written} max={totals.write} alert={submitted} />}
     </div>
   )
 }
 
-function Track({ label, value, max }: { label: string; value: number; max: number }) {
-  const full = value >= max
+/** 진행률 막대 하나. 빨강은 **제출했는데 빈 것**에만 쓴다 — 다 받은 막대와 아직 진행 중인 막대는 회색이다(사용자 확정
+ *  2026-10-27, A안). 다 받은 초록 막대가 줄마다 둘씩 서서 판정 색을 묻었고, 진행 중인 아이의 덜 찬 막대는 정상인데도 빨갰다 */
+function Track({ label, value, max, alert }: { label: string; value: number; max: number; alert: boolean }) {
+  const missing = alert && value < max
   // 분자가 분모를 넘는 일은 없어야 하지만, 넘더라도 막대가 100%를 넘지 않도록 clamp한다(옛 데이터에 대한 방어).
   const pct = max === 0 ? 0 : Math.min(100, Math.round((value / max) * 100))
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-7 text-[12px] text-ink-mute">{label}</span>
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-ink/10">
-        <span className={`block h-full rounded-full ${full ? 'bg-mint' : 'bg-rec'}`} style={{ width: `${pct}%` }} />
+        <span className={`block h-full rounded-full ${missing ? 'bg-rec' : 'bg-ink/30'}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className={`font-read text-[12.5px] tabular-nums ${full ? 'text-ink-soft' : 'font-bold text-rec-deep'}`}>{value}/{max}</span>
+      <span className={`font-read text-[12.5px] tabular-nums ${missing ? 'font-bold text-rec-deep' : 'text-ink-mute'}`}>{value}/{max}</span>
     </div>
   )
 }

@@ -6,9 +6,18 @@
 // 다시 `0:00/0:02`를 찍어 같은 숫자가 두 번 나왔다. 제한 시간 초과만 별도 배지로 알린다.
 'use client'
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Badge } from '@/components/Badge'
+import { Tip } from '@/components/Tip'
 import type { DetailRecording } from '@/hooks/useAdminQueries'
+
+/** 배지 설명 — 배지 말풍선과 결과지 범례(ResultSheet)가 같은 문장을 읽는다.
+ *  미녹음 채점은 사용자 확정(2026-08-12 기본 채점 → 2026-09-29 고정), 저장 실패 표시는 사용자 확정(2026-10-08 — 표시만, 채점은 미녹음과 같다) */
+export const AUDIO_HELP: { unrecorded: ReactNode; failed: ReactNode } = {
+  unrecorded: <>녹음이 없는 과제예요(「모르겠어요」로 넘긴 것 포함). 들을 녹음이 없으니 <b>오반응(X · 0점)으로 고정</b>하고
+    칸을 잠가요. 결과보고서 PDF에도 그대로 나가요.</>,
+  failed: <>아이가 읽었지만 인터넷 문제 등으로 녹음이 올라오지 않은 과제예요. 채점(오반응 고정)과 결과보고서 PDF는 미녹음과 같아요.</>,
+}
 
 // wavesurfer.js(수십 KB)는 재생기가 실제로 필요할 때만 청크를 받도록 지연 로드.
 const AudioPlayer = dynamic(() => import('@/components/AudioPlayer').then(m => m.AudioPlayer), {
@@ -45,7 +54,7 @@ export function PageAudio({ label, attempts, limitSec, onAudioError, failed }: {
     return (
       <div className="flex items-center gap-2.5 print:hidden">
         {label && <span className="text-[14px] font-bold text-ink">{label}</span>}
-        <Badge tone="rec">{failed ? '저장 실패' : '미녹음'}</Badge>
+        <Tip tip={failed ? AUDIO_HELP.failed : AUDIO_HELP.unrecorded}><Badge tone="rec">{failed ? '저장 실패' : '미녹음'}</Badge></Tip>
       </div>
     )
   }
