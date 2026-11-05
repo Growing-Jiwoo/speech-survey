@@ -4,7 +4,9 @@
 //
 // 올릴 수 있는 검사(사용자 확정 2026-09-30):
 //   이 토큰의 학급 · 제출됨 · 쓰기 방식 scan · 담당자가 쓰기를 아직 하나도 넣지 않음 ·
-//   그 아이의 **가장 최근에 제출된 검사**(2026-10-01 — 오래 열어 둔 탭이 새 기록지를 앞 차수에 붙이지 않게).
+//   그 아이의 **가장 최근에 제출된 검사**(2026-10-01 — 오래 열어 둔 탭이 새 기록지를 앞 차수에 붙이지 않게) ·
+//   **지금 학기 검사**(lib/format termKeyOf, 2026-11-05 — 학급 코드는 만료가 없어 같은 반이 1·2학기를 같은 코드로 검사한다.
+//   QR에는 반과 번호만 있어 지난 학기 검사에 이번 학기 기록지가 붙을 수 있다. 사용자 확정, 담당자 회신 아님).
 //   이미 올린 것은 담당자 채점 전까지 바꿀 수 있다(새 파일을 올린 뒤 옛 파일을 지운다). 채점이 시작된
 //   뒤에 바꾸면 넣은 점수와 근거 그림이 어긋난다 — 잘못 붙었으면 담당자가 「연결 해제」한다.
 // 응답에 스토리지 경로를 싣지 않는다(결과 목록 라우트와 같은 방침).
@@ -15,6 +17,7 @@ import {
 } from '@/lib/db'
 import { env } from '@/lib/env'
 import { formOfSession } from '@/lib/forms'
+import { termKeyOf } from '@/lib/format'
 import { itemsFor } from '@/lib/items'
 import { imageExt, sniffImage } from '@/lib/image-validate'
 import { UUID_RE, createRateLimiter, jsonError } from '@/lib/request'
@@ -53,6 +56,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const scored = (x: { writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[] }) =>
       x.writing_answers.some(w => writingCodes.has(w.item_code)) || x.sentence_scores.some(s => writingCodes.has(s.item_code))
     if (scored(t)) return jsonError('담당자가 쓰기 채점을 시작해 바꿀 수 없어요.', 409)
+    // 지난 학기 검사에는 붙이지 않는다 — 화면도 지금 학기에만 올리기를 둔다(ResultsView)
+    if (termKeyOf(t.started_at) !== termKeyOf(new Date().toISOString()))
+      return jsonError('지난 학기 검사에는 스캔본을 올릴 수 없어요.', 409)
     // 스캔본은 그 아이의 가장 최근 제출 검사에만 붙는다(화면의 짝짓기와 같은 규칙) — 다르면 화면이 옛 목록으로 짝지은 것이다
     if ((await latestSubmittedSessionId(t.class_code_id, t.child_no)) !== sessionId)
       return jsonError('이 학생은 더 최근에 제출한 검사가 있어요. 결과지를 새로고침한 뒤 다시 올려 주세요.', 409)

@@ -6,6 +6,9 @@
 // 받을 때 「쓰기 채점 전」 경고를 이 화면이 맡는다.
 // 아이 행(접힌 행)은 **대표 검사**(가장 최근에 제출된 검사 — lib/results-view representativeSession)를 그린다.
 // 판정·정렬·요약도 같은 검사를 본다(2026-10-12 점검).
+// 학기(사용자 확정 2026-11-05 — 담당자 회신 아님): 표·요약·받기·스캔본 올리기는 **고른 학기 안에서** 돈다. 학급 코드는 만료가
+// 없어 같은 반이 1학기 코드로 2학기에도 검사한다. 처음에는 지금 학기(검사가 없으면 검사가 있는 최근 학기 — lib/results-view
+// defaultTerm)를 보이고, 학기가 둘 이상일 때만 고르는 단추를 둔다. 스캔본은 지금 학기 검사에만 올린다.
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -21,8 +24,8 @@ import { gradeClassLabel } from '@/lib/format'
 import { dispositionFilename, saveBlobAs } from '@/lib/download'
 import { requestJson } from '@/lib/http'
 import {
-  awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
-  summarize, type ResultsChild, type ResultsSession, type SessionLabel,
+  awaitsScanWriting, defaultTerm, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
+  summarize, type ResultsChild, type ResultsSession, type ResultsTerm, type SessionLabel,
 } from '@/lib/results-view'
 import { FLUENCY_UNIT, VERDICT_LABEL, fluencyLabel, type CountTaskKey, type TaskKey, type Verdict } from '@/lib/scoring'
 import { VerdictBadge } from '@/components/VerdictBadge'
@@ -30,10 +33,10 @@ import { ScanUpload } from './ScanUpload'
 
 interface Payload {
   cls: { schoolName: string; grade: number; classNo: number; teacherName: string }
-  provisional: boolean
   /** 개수형 과제의 만점. 문장 읽기는 비율(어절/10초)이라 만점이 없다 */
   taskMax: Record<CountTaskKey, number>
-  children: ResultsChild[]
+  /** 검사가 있는 학기와 지금 학기, 최근 학기 먼저(lib/results termGroups) */
+  terms: ResultsTerm[]
   /** 쓰기 기록지 QR의 반 표시 — 올린 스캔본이 이 반 것인지 가린다(lib/writing-sheet) */
   sheetTag: string
 }
@@ -150,19 +153,31 @@ export function ResultsView({ token, scanLink = false }: {
    *  25장 병합은 서버가 몇 초를 쓰는 일이라, 잘못 눌린 클릭 하나로 시작되면 안 된다(사용자 확정 2026-09-22). */
   const [confirmMode, setConfirmMode] = useState<'all' | 'picked' | null>(null)
   const [dlErr, setDlErr] = useState('')
+  /** 선생님이 고른 학기. null이면 처음 보일 학기 — 메일의 [쓰기 스캔본 올리기] 링크로 왔으면 지금 학기(스캔본은 지금 학기에만
+   *  올린다), 아니면 `defaultTerm` */
+  const [termPick, setTermPick] = useState<string | null>(null)
   // 스캔 카드 밖(카드가 없는 반이면 화면 어디든)에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 결과지 화면을
   // 떠난다 — 확인 중이던 스캔본 창도 함께 사라진다. 카드 유무와 무관하게 이 화면 전체에서 막는다(2026-10-12 점검).
   useFileDropGuard()
 
   const err = error ? (error.status === 401 ? 'expired' : error.status === 404 ? 'gone' : 'other') : null
 
-  const summary = useMemo(() => (data ? summarize(data.children) : null), [data])
+  const view = useMemo(() => {
+    if (!data) return null
+    const chosen = termPick !== null ? data.terms.find(t => t.key === termPick) : undefined
+    return chosen ?? (scanLink ? data.terms.find(t => t.current) : undefined) ?? defaultTerm(data.terms)
+  }, [data, termPick, scanLink])
+  const summary = useMemo(() => (view ? summarize(view.children) : null), [view])
+  /** 학기를 바꾸면 고른 검사·펼친 줄·받기 오류를 비운다 — 다른 학기의 검사를 고른 채 받으면 화면에 없는 장이 섞인다 */
+  function chooseTerm(key: string) {
+    setTermPick(key); setPicked(new Set()); setOpen(new Set()); setDlErr('')
+  }
 
   /** 확인 모달이 보여 줄 「이 검사들을 받습니다」 명단. 화면이 고른 것과 서버가 담을 것이
    *  같은 기준이어야 하므로(전체=아이당 받을 수 있는 것 중 최신), 여기서도 `latestScored`를 쓴다. */
   const pickList = useMemo(() => {
     const rows: { id: string; childNo: number; name: string; attempt: string | null; pendingWriting: boolean; replaced: boolean }[] = []
-    for (const c of data?.children ?? []) {
+    for (const c of view?.children ?? []) {
       const target = scanTargetSession(c)
       for (const s of c.sessions) {
         const inAll = confirmMode === 'all' && latestScored(c)?.id === s.id
@@ -179,7 +194,7 @@ export function ResultsView({ token, scanLink = false }: {
       }
     }
     return rows
-  }, [data, confirmMode, picked])
+  }, [view, confirmMode, picked])
   /** 받을 것 중 **스캔본 쓰기 채점 전**인 검사 — 결과보고서의 쓰기·최종결과 칸이 빈 채로 나간다. 담당자가 채우면
    *  다시 받아야 하므로 받기 전에 알린다(사용자 확정 2026-09-30). 화면 방식의 빈 쓰기(A안)는 나중에 채워지지
    *  않아 여기서 따로 알리지 않는다 — 종전과 같다. 재검사로 대체된 검사도 같은 이유로 여기 들지 않는다. */
@@ -196,7 +211,8 @@ export function ResultsView({ token, scanLink = false }: {
   async function download(mode: 'all' | 'picked', ids?: string[]) {
     setConfirmMode(null)
     setDownloading(mode); setDlErr('')
-    const qs = ids ? `?ids=${ids.join(',')}` : mode === 'picked' ? `?ids=${[...picked].join(',')}` : ''
+    // 전체는 보고 있는 학기의 것만 — 서버도 학기를 받아 그 학기 안에서 아이당 한 장을 고른다(lib/pdf/class-sheets)
+    const qs = ids ? `?ids=${ids.join(',')}` : mode === 'picked' ? `?ids=${[...picked].join(',')}` : `?term=${view?.key ?? ''}`
     try {
       const res = await fetch(`/api/results/${token}/sheets.pdf${qs}`)
       if (!res.ok) {
@@ -243,11 +259,12 @@ export function ResultsView({ token, scanLink = false }: {
     </main>
   )
 
-  if (!data || !summary) return (
+  if (!data || !summary || !view) return (
     <main className="flex min-h-dvh items-center justify-center"><Spinner className="h-8 w-8 text-blue" /></main>
   )
 
-  const { cls, children, taskMax, provisional, sheetTag } = data
+  const { cls, taskMax, terms, sheetTag } = data
+  const { children, provisional } = view
   const pickedCount = picked.size
   /** 올리기 확인 창이 짝짓기 직전에 부른다. 화면의 조회와 따로 받는다 — 실패해도 화면이 오류로 바뀌지 않게
    *  (null을 돌려주면 창은 가진 목록으로 짝짓고, 서버가 대상 검사를 다시 확인한다). 받으면 화면도 새 목록으로 바꾼다. */
@@ -255,7 +272,8 @@ export function ResultsView({ token, scanLink = false }: {
     const r = await requestJson<Payload>(`/api/results/${token}`, { method: 'GET' })
     if (!r.ok) return null
     queryClient.setQueryData(['results', token], r.data)
-    return scanTargets(r.data.children)
+    // 스캔본은 지금 학기 검사에만 붙는다(올리기 라우트가 다시 확인한다)
+    return scanTargets(r.data.terms.find(t => t.current)?.children ?? [])
   }
   const targets = scanTargets(children)
   // 이 반에 스캔본 방식 검사가 하나라도 있으면 표 아래 안내에 스캔 설명을 붙인다(범례는 2026-10-22에 뺐다)
@@ -277,7 +295,21 @@ export function ResultsView({ token, scanLink = false }: {
         </p>
       )}
       <h1 className="mt-5 text-xl font-bold">{cls.schoolName} {gradeClassLabel(cls.grade, cls.classNo)}</h1>
-      <p className="mt-1 text-sm text-ink-soft">담임 {cls.teacherName}</p>
+      <p className="mt-1 text-sm text-ink-soft">담임 {cls.teacherName}{terms.length === 1 && ` · ${view.label}`}</p>
+      {/* 학기가 둘 이상일 때만 고른다 — 같은 학급 코드로 1·2학기를 검사한 반. 2학기 검사가 1학기의 재검사로 보이지 않게
+          학기마다 따로 보인다(사용자 확정 2026-11-05). 누르는 범위는 위아래로 넓힌다(상태 탭과 같은 ::after) */}
+      {terms.length > 1 && (
+        <div role="group" aria-label="학기" className="mt-4 flex flex-wrap gap-1.5">
+          {terms.map(t => (
+            <button key={t.key} type="button" onClick={() => chooseTerm(t.key)} aria-pressed={t.key === view.key}
+              disabled={downloading !== null}
+              className={`relative rounded-full px-3.5 py-1.5 text-[13px] font-bold transition after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[''] ${
+                t.key === view.key ? 'bg-blue text-white' : 'bg-well text-ink-soft'}`}>
+              {t.label}{t.current && ' (지금)'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 상단 요약 — 교사가 진짜 알고 싶은 것("누가 걸렸나")을 표를 훑기 전에 준다(사용자 확정 ④) */}
       <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-soft">
@@ -316,7 +348,8 @@ export function ResultsView({ token, scanLink = false }: {
 
           {/* 스캔본 방식 검사가 있는 반만. 입구 카드는 올릴 수 있는 아이(스캔 대기·이미 올림)가 있을 때만 보인다 —
               조건을 여기서 걸면 확인 중에 다시 받은 목록에서 대상이 사라질 때 창이 통째로 닫힌다(고른 것이 사라진다). */}
-          {(hasScan || scanLink) && (
+          {/* 지난 학기를 보고 있으면 두지 않는다 — 스캔본은 지금 학기 검사에만 올린다(app/api/results/[token]/scans) */}
+          {view.current && (hasScan || scanLink) && (
             <ScanUpload token={token} sheetTag={sheetTag} targets={targets} onUploaded={() => void refetch()}
               // 파일을 고르면 목록을 다시 받아 짝짓는다 — 열어 둔 지 오래된 탭은 그사이 제출·재검사된 아이를 모른다
               refreshTargets={refreshTargets} emptyNotice={scanLink} />
@@ -466,7 +499,7 @@ export function ResultsView({ token, scanLink = false }: {
             ? <>아래 <b>{pickKids}명</b>의 결과지 <b>{pickList.length}장</b>을 <b>한 파일</b>로 만들어요.</>
             : <>아래 <b>{pickList.length}명</b>의 결과지를 <b>한 파일</b>로 만들어요.</>}
         </p>
-        <p className="mt-1 text-[12.5px] text-ink-mute">만드는 데 몇 초 걸려요.</p>
+        <p className="mt-1 text-[12.5px] text-ink-mute">{terms.length > 1 && `${view.label} 검사예요. `}만드는 데 몇 초 걸려요.</p>
         {/* 한 학급이 40명까지 간다 — 한 줄에 하나씩 쌓으면 스크롤만 길어져 누구를 받는지 안 보인다.
             좁은 화면은 2열, 넓으면 3열로 접어 한 화면에 최대한 담는다. 모달 안에서만 스크롤한다. */}
         <ul className="mt-3 grid max-h-64 grid-cols-2 gap-x-3 overflow-y-auto rounded-xl border border-line

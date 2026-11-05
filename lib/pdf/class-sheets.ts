@@ -2,16 +2,18 @@
 // 관리자 학급별 받기(GET /api/admin/codes/[id]/sheets.pdf, 담당자 요청 2026-10-24)가 같이 쓴다. 같은 학급을 어디서 받든
 // 같은 파일이어야 한다. 학급(권한)은 호출부가 정한다: 교사는 결과지 토큰, 관리자는 proxy 인증 + 코드 id.
 // 세션마다 관리자 한 장 PDF와 **같은** `renderReport`를 돌려 한 문서에 이어 붙인다(pdf-lib copyPages).
-//   ids 없음 → 채점 완료 세션 전부, 아이당 최신 1장, 번호순 (25명 반 = 한 파일)
-//   ids 있음 → 그 세션들만(옛 차수도 가능). **전부 이 학급 소속인지 검증** — 아니면 403.
+//   ids 없음 → **한 학기**(`term`, 없으면 지금 학기)의 채점 완료 세션, 아이당 최신 1장, 번호순 (25명 반 = 한 파일)
+//   ids 있음 → 그 세션들만(옛 차수·지난 학기도 가능). **전부 이 학급 소속인지 검증** — 아니면 403.
+//   재검사 차수(파일 이름의 `_2차`)는 학기 안에서 센다(lib/results termGroups — 사용자 확정 2026-11-05, 담당자 회신 아님).
 //   쪽 순서는 어느 쪽이든 번호순, 같은 아이는 차수순(ids를 보낸 순서가 아니다).
 // 채점 완료(lib/results의 scored)가 아닌 세션은 400 — 빈 결과지가 나가면 오해한다.
 import { NextResponse } from 'next/server'
 import { PDFDocument } from 'pdf-lib'
 import { classResults, findClassCodeById, type ClassResultsRow } from '@/lib/db'
 import { kstDateKey } from '@/lib/adminStats'
+import { parseTermKey, termKeyOf, termLabel } from '@/lib/format'
 import { renderReport } from '@/lib/pdf/report'
-import { buildChildren, latestScored, scoreInputFor, sheetsFileName } from '@/lib/results'
+import { buildChildren, latestScored, scoreInputFor, sheetsFileName, termGroups } from '@/lib/results'
 import { jsonError } from '@/lib/request'
 
 /** 한 번에 병합할 수 있는 결과지 장수 상한 — 학급 정원보다 넉넉하다. 장당 약 52KB라(실측 2026-10-24) 60장이 약 3.1MB로
@@ -36,29 +38,39 @@ async function mapLimit<T, R>(xs: T[], limit: number, fn: (x: T) => Promise<R>):
 /**
  * 학급 `classCodeId`의 결과보고서 병합 PDF 응답. `idsParam`은 `?ids=`를 합친 값이고 null이면 전체다
  * (`?ids=`는 「아무도 고르지 않음」이지 「전체」가 아니다 — 호출부가 has()로 가른다). `tag`는 실패 로그 머리.
- * `schoolInName`이면 파일 이름 앞에 학교 이름을 붙인다. 관리자는 여러 학교의 「1-2_결과지_전체_…」를 한 폴더에 받는다.
+ * `schoolInName`이면 파일 이름 앞에 학교 이름을 붙인다. 관리자는 여러 학교의 「1-2_2026-2학기_결과지_전체_…」를 한 폴더에 받는다.
+ * `term`(`?term=2026-2`)은 전체 받기의 학기다 — 없으면 지금 학기. 형식이 아니면 400.
  */
 export async function classSheetsResponse(
-  classCodeId: string, idsParam: string | null, tag: string, { schoolInName = false } = {},
+  classCodeId: string, idsParam: string | null, tag: string,
+  { schoolInName = false, term = null }: { schoolInName?: boolean; term?: string | null } = {},
 ): Promise<Response> {
+  if (term !== null && !parseTermKey(term)) return jsonError('학기를 확인해 주세요.', 400)
   try {
     const [row, rows] = await Promise.all([findClassCodeById(classCodeId), classResults(classCodeId)])
     if (!row) return jsonError('학급 정보가 없어요.', 404)
 
     // 상태·차수는 lib/results가 정한다 — 화면과 같은 판정이어야 화면에서 잠긴 것이 여기서 열리지 않는다.
-    const children = buildChildren([], rows)
+    // 학기마다 따로 묶는다 — 화면(교사 결과지)이 학기 안에서 차수를 세므로 파일 이름의 `_2차`도 같아야 한다.
+    const groups = termGroups(rows)
+    const termKey = term ?? groups.find(g => g.current)!.key
     const byId = new Map(rows.map(r => [r.id, r]))
     const meta = new Map<string, { childNo: number; name: string; attemptNo: number; attemptCount: number; startedDate: string; status: string }>()
-    for (const c of children) for (const s of c.sessions)
-      meta.set(s.id, { childNo: c.childNo, name: c.name, attemptNo: s.attemptNo, attemptCount: c.sessions.length,
-        startedDate: kstDateKey(new Date(s.startedAt)), status: s.status })
+    let termChildren: ReturnType<typeof buildChildren> = []
+    for (const g of groups) {
+      const children = buildChildren([], g.rows)
+      if (g.key === termKey) termChildren = children
+      for (const c of children) for (const s of c.sessions)
+        meta.set(s.id, { childNo: c.childNo, name: c.name, attemptNo: s.attemptNo, attemptCount: c.sessions.length,
+          startedDate: kstDateKey(new Date(s.startedAt)), status: s.status })
+    }
 
     const all = idsParam === null
     let picked: ClassResultsRow[]
     if (all) {
       // 아이당 **받을 수 있는 것 중 최신** 한 장(lib/results의 latestScored 주석) — 최신 세션이
-      // 중단된 재검사인 아이를 통째로 빼지 않는다.
-      picked = children.map(latestScored).filter(s => s !== null).map(s => byId.get(s.id)!)
+      // 중단된 재검사인 아이를 통째로 빼지 않는다. 고른 학기 안에서만 — 지난 학기 결과지가 이번 학기 묶음에 섞이지 않게.
+      picked = termChildren.map(latestScored).filter(s => s !== null).map(s => byId.get(s.id)!)
     } else {
       // 같은 id가 두 번 오면 한 장만 — 중복이면 같은 장이 두 번 붙고 파일명 「N명」도 틀린다
       const ids = [...new Set(idsParam.split(',').map(s => s.trim()).filter(Boolean))]
@@ -97,8 +109,12 @@ export async function classSheetsResponse(
     }
     const out = await merged.save()
 
+    // 파일 이름의 학기 — 전체면 고른 학기, 고른 검사들이 한 학기면 그 학기(여러 학기면 붙이지 않는다)
+    const pickedTerms = new Set(picked.map(r => termKeyOf(r.started_at)))
+    const nameTerm = all ? termKey : pickedTerms.size === 1 ? [...pickedTerms][0] : null
     const name = (schoolInName ? `${row.school_name}_` : '') + sheetsFileName({
       grade: row.grade, classNo: row.class_no, date: kstDateKey(new Date()), all,
+      term: nameTerm ? termLabel(nameTerm, { short: true }) : undefined,
       picked: picked.map(r => meta.get(r.id)!),
     })
     return new NextResponse(out as BodyInit, {

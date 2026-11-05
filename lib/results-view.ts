@@ -15,7 +15,7 @@ export type SessionStatus = 'scored' | 'scoring' | 'unsubmitted'
 
 export interface ResultsSession {
   id: string
-  /** 같은 아동 안에서 started_at 오름차순 1부터 */
+  /** 같은 아동·**같은 학기** 안에서 started_at 오름차순 1부터 — 다른 학기의 검사는 재검사가 아니다(ResultsTerm) */
   attemptNo: number
   startedAt: string
   submittedAt: string | null
@@ -85,8 +85,39 @@ export interface ResultsChild {
   childNo: number
   name: string
   gender: string
-  /** started_at 오름차순. 비어 있으면 명단에만 있는 아이(미실시) */
+  /** **한 학기의** 검사, started_at 오름차순. 비어 있으면 그 학기에 검사하지 않은 아이(명단에만 있음) */
   sessions: ResultsSession[]
+}
+
+/**
+ * 교사 결과지의 학기 한 칸 — 표·요약·받기·스캔본 올리기가 모두 고른 학기 안에서 돈다(lib/results termGroups).
+ * 사용자 확정(2026-11-05) — 담당자 회신 아님. 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사하는데, 학기를
+ * 섞으면 2학기 검사가 1학기 검사의 「2차 재검사」로 그려졌다.
+ */
+export interface ResultsTerm {
+  /** `2026-2`(lib/format termKey) */
+  key: string
+  /** `2026학년도 2학기` */
+  label: string
+  /** 지금 학기 — 스캔본은 지금 학기 검사에만 올린다(app/api/results/[token]/scans) */
+  current: boolean
+  /** 그 학기 검사에 임시 판정 기준이 있는지(검사가 없으면 지금 시작할 양식 기준) */
+  provisional: boolean
+  children: ResultsChild[]
+}
+
+type TermLike = Pick<ResultsTerm, 'current' | 'children'>
+const hasSessions = (t: TermLike) => t.children.some(c => c.sessions.length > 0)
+
+/**
+ * 처음 보일 학기 — 지금 학기에 검사가 있으면 지금 학기, 없으면 검사가 있는 가장 최근 학기(3월 초에 지난 학년도 결과지를 받으러
+ * 온 선생님이 빈 표를 먼저 보지 않게), 아무 검사도 없으면 지금 학기. `terms`는 최근 학기 먼저(termGroups 순서).
+ * 시작 화면의 결과지 요청(app/api/results/request)도 이 학기로 「받을 수 있는 결과지 수」를 센다 — 화면이 처음 보이는 수와 같아야 한다.
+ */
+export function defaultTerm<T extends TermLike>(terms: T[]): T | null {
+  const cur = terms.find(t => t.current) ?? null
+  if (cur && hasSessions(cur)) return cur
+  return terms.find(hasSessions) ?? cur ?? terms[0] ?? null
 }
 
 export function latestSession(c: ResultsChild): ResultsSession | null {
