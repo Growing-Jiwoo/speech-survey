@@ -24,6 +24,8 @@ export interface ClassCodeItem {
   status: 'pending' | 'active'
   /** 신청 접수 시각. 관리자 직접 발급분은 null */
   applied_at: string | null
+  /** 신청 순번 — 화면에 `#017`로 보인다(아동 코드의 앞자리, lib/child-code). 관리자 직접 발급분도 있다 */
+  apply_seq: number
   /** 이 코드로 만들어진 세션 수 — 0일 때만 삭제 버튼을 낸다(pending은 예외, 아직 검사 전이다) */
   session_count: number
   /** 신청 명단 인원 수. **실명은 목록에 실리지 않는다** — 수만 센다(PII) */

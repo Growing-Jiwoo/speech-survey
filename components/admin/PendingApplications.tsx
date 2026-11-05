@@ -3,6 +3,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { applySeqLabel } from '@/lib/child-code'
 import { approvalNoticeText, gradeClassLabel, type WritingNotice } from '@/lib/format'
 import { postJson } from '@/lib/http'
 import { adminKeys, useRosterQuery, type ClassCodeItem } from '@/hooks/useAdminQueries'
@@ -120,6 +121,8 @@ export function PendingApplications({
                   <span className="break-keep text-sm font-bold">
                     {c.school_name} <span className="whitespace-nowrap">{gradeClassLabel(c.grade, c.class_no)}</span>
                   </span>
+                  {/* 신청 순번 — 승인 뒤에도 그대로인 아동 코드 앞자리(lib/child-code, 사용자 확정 2026-11-05 — 담당자 회신 아님) */}
+                  <span className="flex-none text-[11px] tabular-nums text-ink-mute" title="신청 순번 — 아동 코드의 앞자리">{applySeqLabel(c.apply_seq)}</span>
                   <span className="flex-none rounded-full bg-amber/15 px-2 py-0.5 text-[11.5px] font-bold text-amber">
                     학생 {c.roster_count}명
                   </span>

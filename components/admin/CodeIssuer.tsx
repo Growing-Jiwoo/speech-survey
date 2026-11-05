@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { PendingApplications } from '@/components/admin/PendingApplications'
 import { Select } from '@/components/Select'
+import { applySeqLabel } from '@/lib/child-code'
 import { CLASS_OPTIONS, gradeClassLabel } from '@/lib/format'
 import { postJson, requestJson } from '@/lib/http'
 import { validEmail, validName, validPhone } from '@/lib/validate'
@@ -248,7 +249,12 @@ export function CodeIssuer() {
                 <tr key={c.id} className="border-t border-line/60">
                   <td className="font-read whitespace-nowrap px-3 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
                   <td className="max-w-[11rem] break-keep px-3">{c.school_name}</td>
-                  <td className="whitespace-nowrap px-3">{gradeClassLabel(c.grade, c.class_no)}</td>
+                  {/* 신청 순번(#017)은 아동 코드 `017-03`의 앞자리다 — 엑셀 등 내보낸 파일의 아이를 학급으로 되짚을 때 본다.
+                      학급 코드 대신 쓰는 이유는 lib/child-code(사용자 확정 2026-11-05 — 담당자 회신 아님). */}
+                  <td className="whitespace-nowrap px-3">
+                    {gradeClassLabel(c.grade, c.class_no)}
+                    <span className="ml-1.5 text-[11px] tabular-nums text-ink-mute" title="신청 순번 — 아동 코드의 앞자리">{applySeqLabel(c.apply_seq)}</span>
+                  </td>
                   <td className="whitespace-nowrap px-3">{c.teacher_name}</td>
                   <td className="px-3 py-2 text-ink-soft">
                     {editId === c.id ? (

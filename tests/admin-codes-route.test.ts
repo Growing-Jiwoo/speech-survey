@@ -29,7 +29,7 @@ const ROW = {
   grade: 1, class_no: 2, teacher_name: '김담임',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
-  status: 'active' as const, applied_at: null,
+  status: 'active' as const, applied_at: null, apply_seq: 1,
 }
 const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
@@ -96,6 +96,12 @@ describe('GET /api/admin/codes', () => {
     expect(json.codes[0].roster_count).toBe(24)
     expect(json.codes[0]).not.toHaveProperty('sessions')
     expect(json.codes[0]).not.toHaveProperty('class_roster')
+  })
+
+  it('신청 순번(apply_seq)을 그대로 싣는다 — 화면의 #017', async () => {
+    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, apply_seq: 17, sessions: [], class_roster: [] }])
+    const json = await (await GET()).json()
+    expect(json.codes[0].apply_seq).toBe(17)
   })
 
   it('조인이 비어 있으면 0 — 관리자 직접 발급분은 명단이 없다', async () => {

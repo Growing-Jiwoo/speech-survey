@@ -396,7 +396,7 @@ const CLASS_CODE: ClassCodeRow = {
   grade: 3, class_no: 5,
   teacher_name: '김담임', teacher_phone: '01011112222', teacher_email: 'teacher@test.kr',
   created_at: '2026-01-01T00:00:00Z',
-  status: 'active', applied_at: null,
+  status: 'active', applied_at: null, apply_seq: 1,
 }
 
 describe('insertApplication — pending 코드 + 명단', () => {
@@ -648,6 +648,12 @@ describe('listClassCodes — 목록에 세션 수·명단 수를 함께 싣는�
     // 컬럼 목록은 `as unknown as` 캐스팅 탓에 타입으로 전혀 안 잡힌다 — 인자로 확인한다.
     expect(String((selectCallsByTable.get('class_codes') as unknown[][])[0][0]))
       .toContain('class_roster(count)')
+  })
+
+  it('[REGRESSION] apply_seq까지 select한다 — 빠지면 관리자 화면의 #순번이 「#undefined」가 된다', async () => {
+    enqueue('class_codes', { data: [], error: null })
+    await listClassCodes()
+    expect(String((selectCallsByTable.get('class_codes') as unknown[][])[0][0])).toContain('apply_seq')
   })
 })
 

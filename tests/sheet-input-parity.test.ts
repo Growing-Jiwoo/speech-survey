@@ -46,7 +46,7 @@ const CODE_ROW = {
   school_region: 'daegu', school_id: 'B000002944', school_name: '대구가창초등학교',
   grade: 1, class_no: 2, teacher_name: '김서연',
   teacher_phone: null, teacher_email: 'kim@school.kr',
-  created_at: '2026-09-21T00:00:00.000Z', status: 'active' as const, applied_at: null,
+  created_at: '2026-09-21T00:00:00.000Z', status: 'active' as const, applied_at: null, apply_seq: 1,
 }
 
 /** 채점이 절반쯤 된 검사 — 낱말은 O/X가 일부만, 문장은 전부, 쓰기도 전부.
