@@ -89,6 +89,9 @@ export const sessionCreateDirectSchema = z.object({
   name: cleaned.pipe(nameSchema),
   gender: genderSchema,
   birthYmd: birthYmdSchema,
+  /** 「이 학생을 명단에 추가해요(법정대리인 동의를 받은 학생이에요)」를 켜고 시작했다 — 서버가 명단에 넣고 그 시각을 동의
+   *  확인으로 적는다(사용자 확정 2026-11-05). 동의 확인이라 `true`만 받는다(기본 꺼짐 — 화면이 미리 켜 두지 않는다). */
+  addToRoster: z.literal(true).optional(),
 })
 
 /** 명단 모드 — 신청 때 등록한 명단에서 서버가 값을 복사한다. 클라이언트가 보낸
@@ -113,6 +116,13 @@ export const sessionCreateFromRosterSchema = z.object({
  *  "무시됐을 뿐 요청은 유효하다"이므로 200 + 조용한 무시 쪽이 상태 코드의 의미에 더 맞는다). */
 export const sessionCreateSchema = z.union([sessionCreateFromRosterSchema, sessionCreateDirectSchema])
 export type SessionCreateInput = z.infer<typeof sessionCreateDirectSchema>
+
+/** 명단에서 빼기·되살리기 바디 — 교사 결과지(`POST /api/results/<토큰>/roster`)와 관리자(`PATCH /api/admin/codes/<id>/roster`)가
+ *  같다. 사용자 확정(2026-11-05) — 담당자 회신 아님. */
+export const rosterRemovedSchema = z.object({
+  childNo: childNoSchema,
+  removed: z.boolean(),
+})
 
 /** PATCH /api/admin/sessions/[id] 바디 — 검사자가 잘못 입력한 **아동 식별값**만 고친다.
  *

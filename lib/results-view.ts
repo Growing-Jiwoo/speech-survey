@@ -85,8 +85,20 @@ export interface ResultsChild {
   childNo: number
   name: string
   gender: string
+  /** 명단에 있는 아이 — 교사 결과지가 [명단에서 빼기]를 낸다. 명단 밖(직접 입력·명단 없는 학급)이면 false */
+  inRoster: boolean
   /** started_at 오름차순. 비어 있으면 명단에만 있는 아이(미실시) */
   sessions: ResultsSession[]
+}
+
+/** 명단에서 뺀 아이(migration 009) — 결과지 표·요약·[전체 PDF]에 들지 않고 「명단에서 뺀 학생」 칸에만 보인다.
+ *  검사 기록은 남아 있다(`tests`) — 그 결과지를 받으려면 되살린다(개발 판단 2026-11-05, 바꿀 수 있음). */
+export interface RemovedChild {
+  childNo: number
+  name: string
+  gender: string
+  /** 이 학급에 남아 있는 이 번호의 검사 수 */
+  tests: number
 }
 
 export function latestSession(c: ResultsChild): ResultsSession | null {

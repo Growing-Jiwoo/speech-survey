@@ -22,7 +22,7 @@ import { dispositionFilename, saveBlobAs } from '@/lib/download'
 import { requestJson } from '@/lib/http'
 import {
   awaitsScanWriting, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
-  summarize, type ResultsChild, type ResultsSession, type SessionLabel,
+  summarize, type RemovedChild, type ResultsChild, type ResultsSession, type SessionLabel,
 } from '@/lib/results-view'
 import { FLUENCY_UNIT, VERDICT_LABEL, fluencyLabel, type CountTaskKey, type TaskKey, type Verdict } from '@/lib/scoring'
 import { VerdictBadge } from '@/components/VerdictBadge'
@@ -34,6 +34,8 @@ interface Payload {
   /** 개수형 과제의 만점. 문장 읽기는 비율(어절/10초)이라 만점이 없다 */
   taskMax: Record<CountTaskKey, number>
   children: ResultsChild[]
+  /** 명단에서 뺀 아이 — 표 아래 「명단에서 뺀 학생」 칸(lib/results splitRemoved). 배포 직후 옛 응답에는 없다 */
+  removed?: RemovedChild[]
   /** 쓰기 기록지 QR의 반 표시 — 올린 스캔본이 이 반 것인지 가린다(lib/writing-sheet) */
   sheetTag: string
 }
@@ -216,6 +218,25 @@ export function ResultsView({ token, scanLink = false }: {
     setPicked(prev => { const n = new Set(prev); if (on) n.add(id); else n.delete(id); return n })
   }
 
+  /** 명단에서 빼기·되살리기(사용자 확정 2026-11-05 — 담당자 회신 아님). 빼기만 한 번 묻는다. 뺀 아이의 선택은 지운다 —
+   *  표에서 사라진 검사가 [선택한 검사 다운로드]에 남으면 고르지 않은 것을 받는다. */
+  const [rosterBusy, setRosterBusy] = useState<number | null>(null)
+  const [rosterErr, setRosterErr] = useState('')
+  async function setRemoved(childNo: number, name: string, removed: boolean) {
+    if (removed && !window.confirm(`${childNo}번 ${name} 학생을 명단에서 뺄까요?\n검사 기록은 그대로 남고, 아래 「명단에서 뺀 학생」에서 되살릴 수 있어요.`)) return
+    setRosterBusy(childNo); setRosterErr('')
+    const r = await requestJson(`/api/results/${token}/roster`, { body: { childNo, removed } })
+    if (!r.ok) setRosterErr(r.error)
+    else {
+      if (removed) {
+        const ids = new Set(data?.children.find(c => c.childNo === childNo)?.sessions.map(s => s.id) ?? [])
+        setPicked(prev => new Set([...prev].filter(id => !ids.has(id))))
+      }
+      await refetch()
+    }
+    setRosterBusy(null)
+  }
+
   /** 아이 행(상위) 체크박스 — 그 아이의 **채점 완료 차수 전부**를 한 번에 켜고 끈다.
    *  종전에는 이 칸이 「최신 차수 하나」의 체크박스였다. 펼치면 같은 검사에 체크박스가 둘이 되고,
    *  2차만 고르면 이름 행은 꺼진 채라 상위처럼 보이는 칸이 거짓말을 했다(사용자 지적 2026-09-22). */
@@ -248,6 +269,7 @@ export function ResultsView({ token, scanLink = false }: {
   )
 
   const { cls, children, taskMax, provisional, sheetTag } = data
+  const removed = data.removed ?? []
   const pickedCount = picked.size
   /** 올리기 확인 창이 짝짓기 직전에 부른다. 화면의 조회와 따로 받는다 — 실패해도 화면이 오류로 바뀌지 않게
    *  (null을 돌려주면 창은 가진 목록으로 짝짓고, 서버가 대상 검사를 다시 확인한다). 받으면 화면도 새 목록으로 바꾼다. */
@@ -399,6 +421,16 @@ export function ResultsView({ token, scanLink = false }: {
                               뒤라 차수를 고를 수 없었다(2026-10-12 점검). 768px도 과제 열이 펼쳐진 표가 상자보다 넓어
                               마지막 열이 밀려났다. 넓은 화면은 종전처럼 마지막 열이다. */}
                           {!label && retests && <div className="mt-1 lg:hidden">{expandButton()}</div>}
+                          {/* 전학 간 학생 빼기(사용자 확정 2026-11-05) — 명단에 있는 아이만. 표에 칸을 더하지 않고 이름 아래에 둔다
+                              (375px에서 판정·상태가 가로 스크롤 없이 들어가야 한다 — 위 1024px 주석) */}
+                          {!label && c.inRoster && (
+                            <div className="mt-0.5">
+                              <button type="button" disabled={rosterBusy !== null} onClick={() => void setRemoved(c.childNo, c.name, true)}
+                                className="-my-1.5 py-1.5 text-[11.5px] text-ink-mute underline underline-offset-2 hover:text-ink-soft disabled:opacity-40">
+                                {rosterBusy === c.childNo ? '빼는 중…' : '명단에서 빼기'}
+                              </button>
+                            </div>
+                          )}
                         </td>
                         {TASKS.map(t => (
                           <td key={t.key} className="hidden whitespace-nowrap px-1 py-2 sm:px-2 tabular-nums md:table-cell">
@@ -430,6 +462,26 @@ export function ResultsView({ token, scanLink = false }: {
                 </tbody>
               </table>
             </div>
+
+            {/* 명단에서 뺀 학생(사용자 확정 2026-11-05) — 표·요약·[전체 PDF]에 들지 않는다. 검사 기록은 남아 있어 되살리면 표로 돌아온다 */}
+            {removed.length > 0 && (
+              <div className="border-t border-line/60 px-3 py-3 sm:px-4">
+                <p className="text-[12.5px] font-bold text-ink-soft">명단에서 뺀 학생 {removed.length}명</p>
+                <p className="mt-0.5 text-[12px] text-ink-mute">검사 기록은 그대로 있어요. 결과지를 받으려면 되살려 주세요.</p>
+                <ul className="mt-2 space-y-1">
+                  {removed.map(r => (
+                    <li key={r.childNo} className="flex items-center justify-between gap-3 text-[13px] text-ink-mute">
+                      <span>{r.childNo}번 {r.name} ({r.gender}){r.tests > 0 && ` · 검사 ${r.tests}회`}</span>
+                      <button type="button" disabled={rosterBusy !== null} onClick={() => void setRemoved(r.childNo, r.name, false)}
+                        className="rounded-lg border-[1.5px] border-line bg-white px-2.5 py-0.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-40">
+                        {rosterBusy === r.childNo ? '되살리는 중…' : '되살리기'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {rosterErr && <p role="alert" className="px-3 pb-3 text-[13px] text-rec-deep sm:px-4">{rosterErr}</p>}
 
             {/* 「표시 읽는 법」 범례는 두지 않는다 — 담당자 요청(2026-10-22, 사용자 전달) 원문 「담임교사가 기록지 다운 받으러 오는 페이지에
                 결과 기준 점수가 보여서ㅜㅜ 8.04, 5.43처럼! 기준 점수는 삭제 … <표시 읽는 법>은 텍스트 삭제해도 될 것 같아」.

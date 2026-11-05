@@ -9,7 +9,7 @@ import {
   TASK_KEYS, finalVerdict, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedFixed,
   type ScoreInput, type Verdict,
 } from './scoring'
-import { childVerdict, type ResultsChild, type ResultsSession } from './results-view'
+import { childVerdict, type RemovedChild, type ResultsChild, type ResultsSession } from './results-view'
 import { scanTargetState } from './scan-mapping'
 
 // 화면용 타입·헬퍼는 lib/results-view.ts에 있다(떼어 낸 이유는 그 파일 머리 주석). 서버 쪽 호출부가
@@ -42,8 +42,28 @@ export interface ResultsSessionRow {
   writing_scan: { uploaded_at: string } | null
 }
 
-/** 명단 한 줄 — `RosterRow`의 부분집합(생년월일은 결과 표에 싣지 않는다). */
-export interface ResultsRosterRow { child_no: number; child_name: string; gender: string }
+/** 명단 한 줄 — `RosterRow`의 부분집합(생년월일은 결과 표에 싣지 않는다). `removed`는 명단에서 뺀 아이(migration 009). */
+export interface ResultsRosterRow { child_no: number; child_name: string; gender: string; removed?: boolean }
+
+/**
+ * 명단(뺀 아이 포함) + 세션 → 결과지 표의 아이들과 「명단에서 뺀 학생」. 사용자 확정(2026-11-05) — 담당자 회신 아님.
+ * 뺀 아이의 번호로 남은 검사는 표·요약·[전체 PDF]에서 뺀다(그 아이는 이 반에 없다). 검사 기록 자체는 지우지 않는다 —
+ * 관리자 화면에는 그대로 있고, 되살리면 표로 돌아온다. 같은 번호를 직접 입력으로 검사한 명단 밖 아이도 함께 빠진다
+ * (번호가 곧 아이를 가르는 열쇠라 가려낼 수 없다 — 뺀 자리에 새 아이를 넣으면 그 행이 되살아나 표로 돌아온다).
+ */
+export function splitRemoved(
+  roster: ResultsRosterRow[], rows: ResultsSessionRow[],
+): { children: ResultsChild[]; removed: RemovedChild[]; removedNos: Set<number> } {
+  const out = roster.filter(r => r.removed)
+  const removedNos = new Set(out.map(r => r.child_no))
+  return {
+    children: buildChildren(roster.filter(r => !r.removed), rows.filter(r => !removedNos.has(r.child_no))),
+    removed: out.map(r => ({
+      childNo: r.child_no, name: r.child_name, gender: r.gender, tests: rows.filter(x => x.child_no === r.child_no).length,
+    })),
+    removedNos,
+  }
+}
 
 /**
  * `kim@school.kr` → `k***@sch***.kr`. 어느 메일함인지는 알려주되 주소는 새지 않게.
@@ -133,11 +153,11 @@ export function listResultOf(r: ResultsSessionRow): { final: Verdict | 'unscored
  */
 export function buildChildren(roster: ResultsRosterRow[], rows: ResultsSessionRow[]): ResultsChild[] {
   const byNo = new Map<number, ResultsChild>()
-  for (const r of roster) byNo.set(r.child_no, { childNo: r.child_no, name: r.child_name, gender: r.gender, sessions: [] })
+  for (const r of roster) byNo.set(r.child_no, { childNo: r.child_no, name: r.child_name, gender: r.gender, inRoster: true, sessions: [] })
 
   const sorted = [...rows].sort((a, b) => a.started_at.localeCompare(b.started_at))
   for (const r of sorted) {
-    const c = byNo.get(r.child_no) ?? { childNo: r.child_no, name: r.child_name, gender: r.gender, sessions: [] }
+    const c = byNo.get(r.child_no) ?? { childNo: r.child_no, name: r.child_name, gender: r.gender, inRoster: false, sessions: [] }
     c.name = r.child_name
     c.gender = r.gender
     c.sessions.push({

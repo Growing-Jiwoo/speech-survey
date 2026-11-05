@@ -7,11 +7,11 @@
 // `sheetTag`는 쓰기 기록지 QR의 반 표시다 — 올린 스캔본이 이 반 것인지 화면이 가린다(lib/writing-sheet).
 import { NextResponse } from 'next/server'
 import { verifyResultsToken } from '@/lib/auth'
-import { classResults, findClassCodeById, listRoster } from '@/lib/db'
+import { classResults, findClassCodeById, listRosterAll } from '@/lib/db'
 import { env } from '@/lib/env'
 import { formFor, formOfSession } from '@/lib/forms'
 import { semesterOf } from '@/lib/format'
-import { buildChildren } from '@/lib/results'
+import { splitRemoved } from '@/lib/results'
 import { classSheetTag } from '@/lib/writing-sheet'
 import { jsonError } from '@/lib/request'
 import { criteriaProvisional, scoringFor } from '@/lib/scoring'
@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   if (!classCodeId) return jsonError('링크가 만료됐거나 올바르지 않아요.', 401)
   try {
     const [row, roster, rows, sheetTag] = await Promise.all([
-      findClassCodeById(classCodeId), listRoster(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
+      findClassCodeById(classCodeId), listRosterAll(classCodeId), classResults(classCodeId), classSheetTag(classCodeId),
     ])
     if (!row) return jsonError('학급 정보가 없어요.', 404)
     // 만점은 학년이 같으면 학기가 달라도 같다(낱말 해독 14 · 쓰기 10) — 지금 학기 양식에서 읽는다.
@@ -40,10 +40,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
       cls: { schoolName: row.school_name, grade: row.grade, classNo: row.class_no, teacherName: row.teacher_name },
       provisional,
       taskMax: scoringFor(form).taskMax,
-      children: buildChildren(
-        roster.map(r => ({ child_no: r.child_no, child_name: r.child_name, gender: r.gender })),
+      // 명단에서 뺀 아이는 표 대신 「명단에서 뺀 학생」으로(lib/results splitRemoved) — 생년월일은 싣지 않는다
+      ...(({ children, removed }) => ({ children, removed }))(splitRemoved(
+        roster.map(r => ({ child_no: r.child_no, child_name: r.child_name, gender: r.gender, removed: r.removed })),
         rows,
-      ),
+      )),
       sheetTag,
     }, { headers: { 'cache-control': 'no-store' } })
   } catch (e) {

@@ -8,7 +8,7 @@
 // 채점 완료(lib/results의 scored)가 아닌 세션은 400 — 빈 결과지가 나가면 오해한다.
 import { NextResponse } from 'next/server'
 import { PDFDocument } from 'pdf-lib'
-import { classResults, findClassCodeById, type ClassResultsRow } from '@/lib/db'
+import { classResults, findClassCodeById, listRosterAll, type ClassResultsRow } from '@/lib/db'
 import { kstDateKey } from '@/lib/adminStats'
 import { renderReport } from '@/lib/pdf/report'
 import { buildChildren, latestScored, scoreInputFor, sheetsFileName } from '@/lib/results'
@@ -39,11 +39,21 @@ async function mapLimit<T, R>(xs: T[], limit: number, fn: (x: T) => Promise<R>):
  * `schoolInName`이면 파일 이름 앞에 학교 이름을 붙인다. 관리자는 여러 학교의 「1-2_결과지_전체_…」를 한 폴더에 받는다.
  */
 export async function classSheetsResponse(
-  classCodeId: string, idsParam: string | null, tag: string, { schoolInName = false } = {},
+  classCodeId: string, idsParam: string | null, tag: string,
+  { schoolInName = false, excludeRemoved = false }: {
+    schoolInName?: boolean
+    /** 교사 결과지의 [전체 PDF] — 명단에서 뺀 아이를 넣지 않는다(화면 표에 없는 아이가 파일에 실리지 않게, lib/results splitRemoved).
+     *  관리자의 학급 받기는 넣는다 — 검사 기록은 남아 있고 관리자 화면은 뺀 아이의 검사도 그대로 보인다 */
+    excludeRemoved?: boolean
+  } = {},
 ): Promise<Response> {
   try {
-    const [row, rows] = await Promise.all([findClassCodeById(classCodeId), classResults(classCodeId)])
+    const [row, allRows, roster] = await Promise.all([
+      findClassCodeById(classCodeId), classResults(classCodeId), excludeRemoved && idsParam === null ? listRosterAll(classCodeId) : [],
+    ])
     if (!row) return jsonError('학급 정보가 없어요.', 404)
+    const removedNos = new Set(roster.filter(r => r.removed).map(r => r.child_no))
+    const rows = allRows.filter(r => !removedNos.has(r.child_no))
 
     // 상태·차수는 lib/results가 정한다 — 화면과 같은 판정이어야 화면에서 잠긴 것이 여기서 열리지 않는다.
     const children = buildChildren([], rows)

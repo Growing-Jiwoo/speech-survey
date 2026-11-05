@@ -4,6 +4,8 @@ vi.mock('@/lib/db', () => ({
   createSession: vi.fn().mockResolvedValue('sess-1'),
   findClassCode: vi.fn(),
   listRoster: vi.fn(),
+  hasRoster: vi.fn(),
+  addRosterChild: vi.fn(),
 }))
 const envMock = vi.hoisted(() => ({ env: vi.fn((): string => 'test-secret') }))
 vi.mock('@/lib/env', () => envMock)
@@ -23,8 +25,8 @@ const CODE_ROW = {
 const PENDING_CODE_ROW = { ...CODE_ROW, status: 'pending' as const, applied_at: '2026-08-13T00:00:00.000Z' }
 const VALID = { code: 'K7M2P9', childNo: 7, name: '김도연', gender: '남', birthYmd: '190101' }
 const ROSTER = [
-  { child_no: 3, child_name: '이서준', gender: '여' as const, birth_ymd: '180505' },
-  { child_no: 7, child_name: '박지민', gender: '남' as const, birth_ymd: '190202' },
+  { child_no: 3, child_name: '이서준', gender: '여' as const, birth_ymd: '180505', consented_at: null },
+  { child_no: 7, child_name: '박지민', gender: '남' as const, birth_ymd: '190202', consented_at: null },
 ]
 const FROM_ROSTER = { fromRoster: true as const, code: 'K7M2P9', childNo: 7 }
 
@@ -43,6 +45,44 @@ beforeEach(() => {
   vi.mocked(db.createSession).mockResolvedValue('sess-1')
   vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
   vi.mocked(db.listRoster).mockResolvedValue(ROSTER)
+  vi.mocked(db.hasRoster).mockResolvedValue(true)
+  vi.mocked(db.addRosterChild).mockResolvedValue('added')
+})
+
+describe('POST /api/sessions — 직접 입력하며 명단에 추가 (사용자 확정 2026-11-05)', () => {
+  it('addToRoster면 명단에 넣고, 넣은 시각이 세션의 동의 기록이 된다', async () => {
+    const res = await POST(makeReq({ ...VALID, childNo: 12, addToRoster: true }))
+    expect(res.status).toBe(200)
+    expect(db.addRosterChild).toHaveBeenCalledWith(CODE_ROW.id,
+      { childNo: 12, name: '김도연', gender: '남', birthYmd: '190101' }, expect.any(String))
+    const at = vi.mocked(db.addRosterChild).mock.calls[0][2]
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBe(at)
+  })
+  it('없으면 명단을 건드리지 않는다 — 지금처럼 검사만(동의 기록 없음)', async () => {
+    await POST(makeReq({ ...VALID, childNo: 12 }))
+    expect(db.addRosterChild).not.toHaveBeenCalled()
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBeNull()
+  })
+  it('이미 명단에 있는 번호(exists)면 덮지 않고 검사만 — 동의 기록 없음', async () => {
+    vi.mocked(db.addRosterChild).mockResolvedValue('exists')
+    const res = await POST(makeReq({ ...VALID, addToRoster: true }))
+    expect(res.status).toBe(200)
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBeNull()
+  })
+  it('명단 없는 학급(관리자 직접 발급)에는 넣지 않는다', async () => {
+    vi.mocked(db.hasRoster).mockResolvedValue(false)
+    await POST(makeReq({ ...VALID, addToRoster: true }))
+    expect(db.addRosterChild).not.toHaveBeenCalled()
+  })
+  it('addToRoster는 true만 받는다(동의 확인) — false는 400', async () => {
+    const res = await POST(makeReq({ ...VALID, addToRoster: false }))
+    expect(res.status).toBe(400)
+  })
+  it('명단 모드: 검사 중 추가한 아이는 추가할 때 확인한 시각이 동의 기록이다', async () => {
+    vi.mocked(db.listRoster).mockResolvedValue([{ ...ROSTER[1], consented_at: '2026-11-05T01:00:00.000Z' }])
+    await POST(makeReq(FROM_ROSTER))
+    expect(vi.mocked(db.createSession).mock.calls[0][0].consentedAt).toBe('2026-11-05T01:00:00.000Z')
+  })
 })
 
 describe('POST /api/sessions — 서명 키가 없는 배포', () => {

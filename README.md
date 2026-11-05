@@ -271,7 +271,7 @@ G2 문장 쓰기 0·1·2)와 검사자 체크리스트를 받는 읽기 선별�
 
 1. `npm install`
 2. Supabase 프로젝트(리전: 서울/ap-northeast-2) 생성 → SQL Editor에서 `supabase/migrations/`의
-   파일을 **번호 순서대로** 실행한다(`001_init.sql` → … → `008_session_form.sql`, 파일별 내용은
+   파일을 **번호 순서대로** 실행한다(`001_init.sql` → … → `009_roster_transfer.sql`, 파일별 내용은
    [supabase/migrations/README.md](supabase/migrations/README.md)).
    001은 통합본으로, 구 001~015를 하나로 합친 것이다 — 구 이력은 git log 참고.
    - 학급 코드 발급 테이블(`class_codes`), 그를 참조하는 검사 세션(`sessions`), 녹음·낱말쓰기·
