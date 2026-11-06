@@ -36,6 +36,7 @@
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 녹음·스캔본 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |
 | `GET /api/admin/codes/[id]/sheets.pdf` | 관리자 학급별 결과보고서 받기(담당자 요청 2026-10-24). 교사 결과지의 [전체 PDF 다운로드]와 같은 파일이고(병합 규칙은 `lib/pdf/class-sheets` 하나) 파일 이름 앞에만 학교 이름이 붙는다. `ids`는 받지 않는다. 화면의 「학교 전체」는 이 라우트를 반마다 불러 브라우저에서 이어 붙인다. 서버가 한 응답으로 만들면 응답 크기 상한(4.5MB, 약 85장)에 걸리기 때문이다 |
+| `GET /api/admin/export.xlsx` | 관리자 [전체 데이터 받기] — 제출된 검사 전부를 엑셀 하나로(담당자 요청 2026-11-05, 담을 것은 담당자 확정 2026-11-06). 표는 `lib/excel-export`(아이·학기마다 마지막 검사 한 줄 · 양식마다 시트 하나 · **아동 코드만, 이름 없음** · 문항별 O/X · 문장별 어절·초), 파일은 `lib/xlsx-write`(라이브러리 없음). 재료 `exportSessions`는 이름·생년월일을 읽지도 않는다. 제출된 검사가 없으면 400(빈 파일을 주지 않는다), 파일명 `읽기검사_전체데이터_<KST 오늘>.xlsx`(RFC 5987), `no-store`. 테스트 `tests/export-route.test.ts` · 인증은 proxy(`tests/proxy.test.ts`에 401 핀) |
 | `GET /api/admin/codes/[id]/roster` | 신청 명단 조회(읽기 전용). **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단해야 해서 존재한다. 목록 라우트는 그래서 실명 대신 `roster_count`만 센다 |
 | `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
 | `PATCH /api/admin/sessions/[id]` | 아동 식별값(번호·이름·성별·생년월일) 수정 — `sessionEditSchema`가 정한 4개만, 학년·학급은 받지 않는다(원래 값은 `original_identity`로 남긴다) |

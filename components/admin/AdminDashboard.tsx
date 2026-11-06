@@ -10,6 +10,7 @@ import {
 } from '@/lib/adminStats'
 import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
+import { fetchFile, saveBlobAs } from '@/lib/download'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { SheetsDialog } from '@/components/admin/SheetsDialog'
@@ -82,6 +83,17 @@ export function AdminDashboard() {
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: adminKeys.sessions }) }
 
   const [sheetsOpen, setSheetsOpen] = useState(false)
+  // 전체 데이터 엑셀 받기 — 담당자 요청(2026-11-05), 담을 것은 담당자 확정(2026-11-06, lib/excel-export). 결과보고서 받기와 같은
+  // 받는 방식(lib/download)이라 로그인이 끝났으면 화면이 JSON 원문으로 바뀌지 않고 아래 줄에 알린다.
+  const [exporting, setExporting] = useState(false)
+  const [exportErr, setExportErr] = useState<{ text: string; login: boolean } | null>(null)
+  async function exportAll() {
+    setExporting(true); setExportErr(null)
+    const res = await fetchFile('/api/admin/export.xlsx', `읽기검사_전체데이터_${kstDateKey(new Date())}.xlsx`, '엑셀 파일을 받지 못했어요.')
+    setExporting(false)
+    if (!res.ok) { setExportErr({ text: res.error, login: res.status === 401 }); return }
+    saveBlobAs(res.blob, res.name)
+  }
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutErr, setLogoutErr] = useState('')
   async function logout() {
@@ -126,6 +138,11 @@ export function AdminDashboard() {
           className="ml-auto rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
           결과지 받기
         </button>
+        {/* 전체 데이터 엑셀(아동 코드만 — 이름 없음). 필터와 상관없이 제출된 검사 전부다 */}
+        <button type="button" onClick={() => void exportAll()} disabled={exporting}
+          className="rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10 disabled:opacity-50">
+          {exporting ? '엑셀 만드는 중…' : '전체 데이터 받기'}
+        </button>
         <Link href="/admin/codes"
           className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
           학급 코드 발급
@@ -144,6 +161,12 @@ export function AdminDashboard() {
           {loggingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
         {logoutErr && <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">{logoutErr}</p>}
+        {exportErr && (
+          <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">
+            {exportErr.text}
+            {exportErr.login && <>{' '}<Link href={loginHref} className="text-blue underline">다시 로그인</Link></>}
+          </p>
+        )}
       </div>
       {isError && (
         <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">

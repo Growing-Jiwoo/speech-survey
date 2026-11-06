@@ -82,7 +82,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, listSessions, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, exportSessions, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, listSessions, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
   saveWriting, scanUploadTarget, latestSubmittedSessionId, uploadScanObject, upsertWritingScan, removeScanObjects, signedScanUrl, unlinkWritingScan,
   restoreWritingScan, scanUploadedAt,
   type ClassCodeRow,
@@ -709,6 +709,46 @@ describe('listSessions — 관리자 목록은 페이지를 넘기며 전부 받
   it('조회가 실패하면 던진다(라우트가 500)', async () => {
     enqueue('sessions', { data: null, error: { message: 'boom' } })
     await expect(listSessions()).rejects.toThrow('boom')
+  })
+})
+
+describe('exportSessions — 엑셀 내보내기 재료(담당자 확정 2026-11-06 「아동 코드만」)', () => {
+  const erow = (i: number, cc: unknown = { apply_seq: 17 }) => ({
+    id: `e-${i}`, class_code_id: 'C1', child_no: i + 1, gender: '여', grade: 1, form_id: 'KODYS-G1-S2', checklist: [],
+    started_at: '2026-10-05T01:00:00Z', submitted_at: '2026-10-05T01:20:00Z',
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [], class_codes: cc,
+  })
+
+  it('[REGRESSION] 이름·생년월일·학교·담임은 select하지 않는다 — 엑셀은 아동 코드만이고, 읽지 않으면 샐 수도 없다', async () => {
+    enqueue('sessions', { data: [], error: null })
+    await exportSessions()
+    const [cols] = selectCallsByTable.get('sessions')![0] as [string]
+    for (const pii of ['child_name', 'birth_ymd', 'school_name', 'teacher_name', 'teacher_phone', 'teacher_email'])
+      expect(cols).not.toContain(pii)
+    expect(cols).toContain('class_codes(apply_seq)')
+    expect(cols).toContain('sentence_times(item_code, seconds)')
+  })
+
+  it('학급 신청 순번을 행에 펴서 싣는다(객체·배열 어느 모양으로 와도)', async () => {
+    enqueue('sessions', { data: [erow(0), erow(1, [{ apply_seq: 9 }])], error: null })
+    enqueue('sessions', { data: [], error: null })
+    const rows = await exportSessions()
+    expect(rows.map(r => r.apply_seq)).toEqual([17, 9])
+    expect(rows[0]).not.toHaveProperty('class_codes')
+  })
+
+  it('페이지를 넘기며 끝까지 받는다(Max Rows가 오류 없이 자른다 — listSessions와 같은 이유)', async () => {
+    enqueue('sessions', { data: Array.from({ length: 1000 }, (_, i) => erow(i)), error: null })
+    enqueue('sessions', { data: [erow(1000), erow(1001)], error: null })
+    enqueue('sessions', { data: [], error: null })
+    expect(await exportSessions()).toHaveLength(1002)
+  })
+
+  it('학급 순번이 없으면 던진다(아동 코드를 만들 수 없다) · 조회 실패도 던진다', async () => {
+    enqueue('sessions', { data: [erow(0, null)], error: null })
+    await expect(exportSessions()).rejects.toThrow()
+    enqueue('sessions', { data: null, error: { message: 'boom' } })
+    await expect(exportSessions()).rejects.toThrow('boom')
   })
 })
 

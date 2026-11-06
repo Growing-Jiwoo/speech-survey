@@ -58,11 +58,15 @@ export function maskEmail(email: string): string {
   return `${local.slice(0, 1)}***@${labels[0].slice(0, 3)}***${tld}`
 }
 
+/** 채점 입력에 필요한 세션 값만 — 이름·생년월일 없이 부를 수 있게(엑셀 내보내기 lib/excel-export는 이름을 읽지 않는다). */
+export type ScoreSource = Pick<ResultsSessionRow,
+  'grade' | 'form_id' | 'submitted_at' | 'recordings' | 'reading_marks' | 'sentence_scores' | 'sentence_times' | 'writing_answers'>
+
 /**
  * 채점 입력 조립 — 관리자 결과지·PDF 라우트(`app/api/admin/sessions/[id]/sheet.pdf`)와 같다.
  * 제출된 세션만 미녹음 고정값(X·0점)을 적용한다: 진행 중인 검사의 빈 녹음은 "아직 안 한 것".
  */
-export function scoreInputFor(r: ResultsSessionRow): { form: SurveyForm; input: ScoreInput } {
+export function scoreInputFor(r: ScoreSource): { form: SurveyForm; input: ScoreInput } {
   const form = formOfSession(r)
   const f = itemsFor(form)
   const raw = scoreInputFrom(f, {
