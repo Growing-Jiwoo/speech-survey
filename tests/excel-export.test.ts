@@ -33,8 +33,9 @@ const SCORED: Partial<ExportSessionRow> = {
 }
 
 /** 시트의 한 줄을 머리글 → 값 객체로 */
+/** 머리글 → 값. 문항 열 머리글은 「번호 · 문항」이라 번호(` · ` 앞)로 찾는다 */
 const asRecord = (sheet: { rows: unknown[][] }, i: number) =>
-  Object.fromEntries((sheet.rows[0] as string[]).map((h, k) => [h, sheet.rows[i][k] ?? null]))
+  Object.fromEntries((sheet.rows[0] as string[]).map((h, k) => [h.split(' · ')[0], sheet.rows[i][k] ?? null]))
 
 describe('exportTermOf — 학년도·학기(KST)', () => {
   it('3~8월 1학기 · 9~2월 2학기 · 1·2월은 앞 해 학년도', () => {
@@ -74,28 +75,29 @@ describe('latestPerTerm — 아이·학기마다 마지막 제출 검사(담당�
 })
 
 describe('exportColumns — 머리글', () => {
-  it('아동 코드만(이름·생년월일·학교 없음) · 문항은 번호로 · 체크리스트는 영역마다', () => {
+  it('아동 코드만(이름·생년월일·학교 없음) · 「임시 기준」 열 없음 · 체크리스트는 영역마다', () => {
     const h = exportColumns(G1S2).map(c => c.header)
-    expect(h.slice(0, 7)).toEqual(['아동 코드', '학년', '학기', '성별', '검사일', '양식', '임시 기준'])
+    expect(h.slice(0, 6)).toEqual(['아동 코드', '학년', '학기', '성별', '검사일', '양식'])
     expect(h).not.toContain('이름')
-    expect(h.filter(x => /^낱말\d\d$/.test(x))).toEqual(f1.readItems.map((_, i) => `낱말${p2(i + 1)}`))
-    expect(h).toContain('문장1 어절')
+    expect(h).not.toContain('임시 기준')
     expect(h).toContain(`문장${f1.sentenceItems.length} 초`)
-    expect(h.filter(x => /^쓰기\d\d$/.test(x))).toHaveLength(f1.writingItems.length)
+    expect(h.filter(x => /^쓰기\d\d · /.test(x))).toHaveLength(f1.writingItems.length)
     expect(h).toEqual(expect.arrayContaining([
       '낱말 해독 합', '낱말 해독 판정', '문장 정확 어절 합', '문장 읽은 시간 합(초)', '문장 읽기유창성(어절/10초)',
       '문장 읽기유창성 판정', '쓰기 합', '쓰기 판정', '최종 판정', '체크리스트 특이사항 없음', '체크리스트 주의력',
     ]))
   })
-  it('[REGRESSION] 머리글에 문항 글자가 없다 — 받은 파일이 곧 문항 유출이 된다', () => {
+  // 사용자 확정(2026-11-06): 번호만 두면 담당자가 매번 검사지를 펴 맞춰 봐야 한다 — 문항을 양식에서 읽어 번호 뒤에 붙인다
+  it('문항 열 머리글은 「번호 · 문항」 — 문항은 양식에서 읽는다(낱말·문장·쓰기)', () => {
     for (const form of FORMS) {
-      const words = [...form.readMeaning, ...form.readNonsense, ...form.sentences,
-        ...(form.writing.kind === 'word' ? [...form.writing.meaning, ...form.writing.nonsense] : form.writing.sentences)]
-      // 체크리스트 영역 이름(앱이 정한 고정 글자)은 빼고 본다 — 실제 문항이 우연히 그 글자와 겹쳐도 유출이 아니다
-      const headers = exportColumns(form).map(c => c.header).filter(h => !h.startsWith('체크리스트 ')).join('|')
-      for (const w of words) expect(headers).not.toContain(w)
+      const f = itemsFor(form)
+      const h = exportColumns(form).map(c => c.header)
+      expect(h.filter(x => /^낱말\d\d · /.test(x))).toEqual(f.readItems.map((it, i) => `낱말${p2(i + 1)} · ${it.text}`))
+      expect(h.filter(x => /^문장\d 어절 · /.test(x))).toEqual(f.sentenceItems.map((it, i) => `문장${i + 1} 어절 · ${it.text}`))
+      expect(h.filter(x => /^쓰기\d\d · /.test(x))).toEqual(f.writingItems.map((it, i) => `쓰기${p2(i + 1)} · ${it.text}`))
     }
   })
+
 })
 
 describe('buildExportSheets — 값', () => {
@@ -104,7 +106,7 @@ describe('buildExportSheets — 값', () => {
     const [sheet] = buildExportSheets([r])
     expect(sheet.name).toBe('KODYS-G1-S2')
     const v = asRecord(sheet, 1)
-    expect(v).toMatchObject({ '아동 코드': '017-03', 학년: 1, 학기: '2026-2학기', 성별: '남', 검사일: '2026-10-05', 양식: 'KODYS-G1-S2', '임시 기준': null })
+    expect(v).toMatchObject({ '아동 코드': '017-03', 학년: 1, 학기: '2026-2학기', 성별: '남', 검사일: '2026-10-05', 양식: 'KODYS-G1-S2' })
     expect(v['낱말01']).toBe('O')
     expect(v[`낱말${p2(f1.readItems.length)}`]).toBe('X')
     expect(v['문장1 어절']).toBe(f1.sentenceItems[0].text.trim().split(/\s+/).length)
@@ -164,15 +166,6 @@ describe('buildExportSheets — 값', () => {
     expect(sheet.name).toBe('KODYS-G2-S2')
     const v = asRecord(sheet, 1)
     expect(f2.writingItems.map((_, i) => v[`쓰기${p2(i + 1)}`])).toEqual(f2.writingItems.map((_, i) => i % 3))
-  })
-
-  it('1학기 양식과 3~6학년(1학년 양식 폴백)은 「임시 기준」', () => {
-    const sheets = buildExportSheets([
-      row({ id: 'a', child_no: 1, form_id: 'KODYS-G1', started_at: '2026-05-01T01:00:00Z' }),
-      row({ id: 'b', child_no: 2, grade: 3 }),
-    ])
-    expect(asRecord(sheets.find(s => s.name === 'KODYS-G1')!, 1)['임시 기준']).toBe('임시')
-    expect(asRecord(sheets.find(s => s.name === 'KODYS-G1-S2')!, 1)['임시 기준']).toBe('임시')
   })
 
   it('양식마다 시트 하나(레지스트리 순서) · 줄은 아동 코드 순 · 줄 없는 양식은 시트가 없다', () => {

@@ -12,11 +12,13 @@
 // 아래는 **개발 판단(2026-11-06) — 담당자 회신 아님**:
 // - **양식마다 시트 하나**(탭 이름 = 양식 id). 학년·학기마다 문항 수와 문장의 어절 수가 달라 한 시트에 섞으면 같은 열이 다른
 //   문항을 가리킨다.
-// - 문항 열 머리글은 **문항 번호**(`낱말01`·`문장1 어절`·`쓰기01`)다 — 실제 낱말을 머리글에 쓰면 받은 파일이 곧 문항 유출이고,
-//   이 저장소에도 실제 낱말을 적을 수 없다(CLAUDE.md §2 — 저장소 공개).
 // - 2학년 **문장 쓰기는 문항마다 0·1·2 점수**를 숫자로 싣는다 — 어절당 1점이라 O/X로 나타낼 수 없다(1학년 낱말 쓰기만 O/X).
-// - 「임시 기준」 열 — 1학기 양식·3~6학년 폴백의 판정은 임시값이다(lib/scoring `criteriaProvisional`). 화면에는 표시가 붙지만
-//   엑셀로 나가면 그 표시가 사라지므로 열로 남긴다.
+//
+// 사용자 확정(2026-11-06) — 담당자 회신 아님:
+// - 문항 열 머리글은 **문항 번호 + 실제 문항**(`낱말01 · <낱말>`·`문장1 어절 · <문장>`·`쓰기01 · <낱말·문장>`)이다. 번호만 두면
+//   담당자가 매번 검사지를 다시 펴 맞춰 봐야 한다(사용자 지시). 문항은 실행 때 양식(`lib/forms` — 운영은 FORMS_KEY로 연 실제 문항)에서
+//   읽는다 — 이 파일·테스트에는 실제 낱말이 없다(CLAUDE.md §2). 받은 파일은 문항이 담긴 자료라 관리자만 받는다.
+// - 「임시 기준」 열은 두지 않는다 — 3~6학년은 아직 검사하지 않아 기준표도 문항도 없다(사용자 지시).
 // - 과제 합계·판정은 **그 과제의 채점이 다 끝났을 때만** 채운다(미채점을 0점·위험으로 찍지 않는다 — 결과보고서 PDF와 같은 규칙).
 //   최종 판정은 세 과제가 다 끝나야 채운다(lib/results `evaluateSession`과 같다). 채점하지 않은 문항 칸은 비운다(0이 아니다).
 //
@@ -29,7 +31,7 @@ import { pad2, semesterOf } from './format'
 import { kstDateKey } from './adminStats'
 import { childCode } from './child-code'
 import {
-  TASK_KEYS, VERDICT_LABEL, clampWords, criteriaProvisional, finalVerdict, scoreSession, type ScoreInput, type ScoreResult, type TaskKey,
+  TASK_KEYS, VERDICT_LABEL, clampWords, finalVerdict, scoreSession, type ScoreInput, type ScoreResult, type TaskKey,
 } from './scoring'
 import { scoreInputFor, type ScoreSource } from './results'
 import type { Cell, SheetData } from './xlsx-write'
@@ -103,14 +105,13 @@ export function exportColumns(form: SurveyForm): Column[] {
     { header: '성별', value: c => c.row.gender },
     { header: '검사일', value: c => kstDateKey(new Date(c.row.started_at)) },
     { header: '양식', value: c => c.form.id },
-    { header: '임시 기준', value: c => (criteriaProvisional(c.form, c.row.grade) ? '임시' : null) },
 
-    // 문항별 O/X — 담당자 확정(2026-11-06) 「문항별 OX가 필요해요!」. 머리글은 문항 번호(개발 판단 — 실제 낱말을 싣지 않는다)
-    ...f.readItems.map((it, i): Column => ({ header: `낱말${pad2(i + 1)}`, value: c => ox(c.input.marks[it.code]) })),
+    // 문항별 O/X — 담당자 확정(2026-11-06) 「문항별 OX가 필요해요!」. 머리글은 번호 + 실제 문항(사용자 확정 2026-11-06, 머리 주석)
+    ...f.readItems.map((it, i): Column => ({ header: `낱말${pad2(i + 1)} · ${it.text}`, value: c => ox(c.input.marks[it.code]) })),
 
     // 유창성은 문항별 정확 어절 수와 초 — 담당자 확정(2026-11-06) 「유창성은 문항별 정확하게 읽은 어절 수, 초, 원점수!」
     ...f.sentenceItems.flatMap((it, i): Column[] => [
-      { header: `문장${i + 1} 어절`, value: c => {
+      { header: `문장${i + 1} 어절 · ${it.text}`, value: c => {
         const v = c.input.sentences[it.code]
         return v === undefined ? null : clampWords(f, it.code, v)
       } },
@@ -123,7 +124,7 @@ export function exportColumns(form: SurveyForm): Column[] {
 
     // 쓰기 — 1학년 낱말 쓰기는 O/X, 2학년 문장 쓰기는 문항 점수 0·1·2(개발 판단: 어절당 1점이라 O/X가 맞지 않는다)
     ...f.writingItems.map((it, i): Column => ({
-      header: `쓰기${pad2(i + 1)}`,
+      header: `쓰기${pad2(i + 1)} · ${it.text}`,
       value: c => {
         const v = c.input.writing[it.code]
         if (v === undefined) return null
