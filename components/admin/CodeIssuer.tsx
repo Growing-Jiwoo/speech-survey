@@ -250,7 +250,7 @@ export function CodeIssuer() {
                   <td className="font-read whitespace-nowrap px-3 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
                   <td className="max-w-[11rem] break-keep px-3">{c.school_name}</td>
                   {/* 신청 순번(#017)은 아동 코드 `017-03`의 앞자리다 — 엑셀 등 내보낸 파일의 아이를 학급으로 되짚을 때 본다.
-                      학급 코드 대신 쓰는 이유는 lib/child-code(사용자 확정 2026-11-05 — 담당자 회신 아님). */}
+                      학급 코드 대신 쓰는 이유는 lib/child-code(형식은 담당자 확정 2026-11-06, 6자리 코드 대신 순번은 사용자 확정 2026-11-05). */}
                   <td className="whitespace-nowrap px-3">
                     {gradeClassLabel(c.grade, c.class_no)}
                     <span className="ml-1.5 text-[11px] tabular-nums text-ink-mute" title="신청 순번 — 아동 코드의 앞자리">{applySeqLabel(c.apply_seq)}</span>

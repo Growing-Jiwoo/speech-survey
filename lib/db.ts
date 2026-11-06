@@ -525,7 +525,7 @@ export interface ClassCodeRow {
   /** 신청 접수 시각. 관리자 직접 발급분은 null(승인 절차를 거치지 않았다) */
   applied_at: string | null
   /** 신청 순번(migration 010) — 아동 코드 `017-03`의 앞자리(lib/child-code). DB 시퀀스가 매기고 앱은 넣지 않는다.
-   *  6자리 코드 대신 쓰는 이유는 migration 010 주석(사용자 확정 2026-11-05 — 담당자 회신 아님) */
+   *  6자리 코드 대신 쓰는 이유는 migration 010 주석(형식은 담당자 확정 2026-11-06, 6자리 코드 대신 순번은 사용자 확정 2026-11-05) */
   apply_seq: number
 }
 
