@@ -36,8 +36,8 @@
 | `DELETE /api/admin/sessions/[id]` | 세션 영구 삭제(PII 파기) — 녹음·스캔본 스토리지 전체 페이지네이션 후 행 삭제(CASCADE) |
 | `POST /api/admin/codes`, `GET /api/admin/codes` | 학급 코드 발급(unique 충돌 시 최대 5회 재시도, 소진 시 502)·목록(`session_count`·`roster_count`로 펴서 응답, 조인 원본 키는 비노출) |
 | `GET /api/admin/codes/[id]/sheets.pdf` | 관리자 학급별 결과보고서 받기(담당자 요청 2026-10-24). 교사 결과지의 [전체 PDF 다운로드]와 같은 파일이고(병합 규칙은 `lib/pdf/class-sheets` 하나) 파일 이름 앞에만 학교 이름이 붙는다. `ids`는 받지 않는다. 화면의 「학교 전체」는 이 라우트를 반마다 불러 브라우저에서 이어 붙인다. 서버가 한 응답으로 만들면 응답 크기 상한(4.5MB, 약 85장)에 걸리기 때문이다 |
-| `GET`·`PATCH /api/admin/codes/[id]/roster` | 명단 조회(뺀 아이 포함)·빼기/되살리기 `{ childNo, removed }`. **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단하고, 승인 뒤 전학 간 아이를 빼야 해서 존재한다(빼기는 사용자 확정 2026-11-05). 목록 라우트는 그래서 실명 대신 `roster_count`(뺀 아이 포함 행 수)만 센다 |
-| `POST /api/results/[token]/roster` | 교사 결과지의 명단 빼기·되살리기 `{ childNo, removed }` — 학급 스코프 토큰이 권한, 학급당 시간당 200회. 시작 화면에는 두지 않는다(코드만 알면 들어오는 공용 기기). 검사 기록은 건드리지 않는다(사용자 확정 2026-11-05 — 담임·관리자 둘 다) |
+| `GET`·`PATCH /api/admin/codes/[id]/roster` | 명단 조회(뺀 아이 포함)·빼기/되살리기 `{ childNo, removed }`. **아동 실명이 실리는 유일한 학급 코드 라우트** — 승인 전 관리자가 실제 학급 명단인지 판단하고, 승인 뒤 전학 간 아이를 빼야 해서 존재한다(빼기·기록 유지는 담당자 확정 2026-11-06). 목록 라우트는 그래서 실명 대신 `roster_count`(뺀 아이 포함 행 수)만 센다 |
+| `POST /api/results/[token]/roster` | 교사 결과지의 명단 빼기·되살리기 `{ childNo, removed }` — 학급 스코프 토큰이 권한, 학급당 시간당 200회. 시작 화면에는 두지 않는다(코드만 알면 들어오는 공용 기기). 검사 기록은 건드리지 않는다(빼기·기록 유지는 담당자 확정 2026-11-06, 담임·관리자 둘 다는 사용자 확정 2026-11-05) |
 | `DELETE /api/admin/codes/[id]` | 학급 코드 삭제. 세션이 참조 중이면 409(FK restrict가 최종 방어) |
 | `PATCH /api/admin/sessions/[id]` | 아동 식별값(번호·이름·성별·생년월일) 수정 — `sessionEditSchema`가 정한 4개만, 학년·학급은 받지 않는다(원래 값은 `original_identity`로 남긴다) |
 | `GET /api/admin/sessions/[id]/sheet.pdf` | 관리자 결과보고서 PDF 한 장 — 저장된 채점으로 만든다(`lib/pdf/report.ts`), 파일명 `NN_이름_YYYY-MM-DD.pdf`, 재검사한 아이는 `NN_이름_N차_YYYY-MM-DD.pdf`(1차·2차가 같은 이름이라 덮어써졌다 — 교사 결과지 한 장과 같은 `sheetsFileName`, 2026-10-12) |
