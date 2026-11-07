@@ -10,7 +10,7 @@
 |---|---|
 | `route.ts` | `POST` 발급(zod `classCodeCreateSchema` 검증 → `generateClassCode()` → insert), `GET` 목록 |
 | `[id]/route.ts` | `DELETE` 삭제. UUID 형식 검증 후 `deleteClassCode` · `PATCH` 담임 이메일 수정(`classCodeEmailSchema` → `updateClassCodeEmail`, 없는 행 404) — 결과지 링크가 이 주소로만 가므로 잘못 등록된 주소를 바로잡는 유일한 길 |
-| `[id]/roster/route.ts` | `GET` 신청 명단 조회. UUID 형식 검증 후 `listRoster` — 승인 검토 전용(아래 PII 절) |
+| `[id]/roster/route.ts` | `GET` 명단 조회(뺀 아이 포함 `removed`, `listRosterAll`) — 승인 검토와 승인 뒤 명단 빼기 화면이 쓴다. `PATCH` `{ childNo, removed }` 명단 빼기·되살리기(`setRosterRemoved`, migration 009 — 빼기·기록 유지는 담당자 확정 2026-11-06, 되살리기는 사용자 확정 2026-11-05). UUID 형식 검증이 먼저(아래 PII 절) |
 | `[id]/approve/route.ts` | `POST` 신청 승인. UUID 형식 검증 후 `approveClassCode` → (조건부) 교사에게 안내 메일 |
 | `[id]/sheets.pdf/route.ts` | `GET` 학급별 결과보고서 받기(담당자 요청 2026-10-24). UUID 형식 검증 후 `lib/pdf/class-sheets`에 넘긴다. 교사 결과지의 [전체 PDF 다운로드]와 같은 파일이고 이름 앞에 학교 이름만 붙는다. 화면의 「학교 전체」는 이 주소를 반마다 불러 합친다 |
 
@@ -27,7 +27,9 @@
   검사한 건수"와 "신청 인원 수"뿐이고, 세션 원본 키를 관리자 화면 밖으로 흘릴 이유가 없다.
   **명단 내용(아동 실명)은 목록에 실리지 않는다** — 수만 센다. 실명은 승인 검토 화면이
   `[id]/roster`로 따로 가져간다: 관리자 화면을 열기만 해도 모든 학급의 아동 실명이 흘러나오지
-  않고, 실명은 관리자가 그 학급을 열겠다고 누른 순간에만 오간다.
+  않고, 실명은 관리자가 그 학급을 열겠다고 누른 순간에만 오간다. 학급 행의 나머지 컬럼은 그대로 싣는다 —
+  신청 순번 `apply_seq`(migration 010, 화면의 `#017` · 아동 코드 앞자리)도 여기로 온다. 순번은 DB 시퀀스가
+  매기므로 발급(`POST`)은 넣지 않는다.
 - **삭제 거부는 두 겹이다.** 화면은 `session_count === 0`인 코드에만 삭제 버튼을 보이고,
   라우트는 `deleteClassCode`가 `'in_use'`를 돌려주면 409를 낸다. 최종 방어는 DB의
   `sessions.class_code_id … on delete restrict`다 — 이 셋 중 하나만 고쳐서 삭제를 허용하지 말 것.

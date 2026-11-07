@@ -1,13 +1,15 @@
 // components/admin/CodeIssuer.tsx — 학급 코드 발급 + 발급 목록.
 // 코드 1개 = 학급 1개(학교·학년·반·담임·연락처). 검사 현장은 이 코드만 입력한다(스펙 2026-08-13).
 'use client'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SchoolPicker, type SelectedSchool } from '@/components/SchoolPicker'
 import { PendingApplications } from '@/components/admin/PendingApplications'
+import { RosterManager } from '@/components/admin/RosterManager'
 import { Select } from '@/components/Select'
+import { applySeqLabel } from '@/lib/child-code'
 import { CLASS_OPTIONS, gradeClassLabel } from '@/lib/format'
 import { postJson, requestJson } from '@/lib/http'
 import { validEmail, validName, validPhone } from '@/lib/validate'
@@ -40,6 +42,8 @@ export function CodeIssuer() {
   /** 같은 학급의 코드가 이미 있다고 한 번 알린 학급(학교·학년·반) — 한 번 더 누르면 그대로 발급한다 */
   const [dupAck, setDupAck] = useState('')
   const [busy, setBusy] = useState(false)
+  /** 명단을 펼친 발급 학급 — 한 번에 하나(아동 실명은 누른 학급만 받는다) */
+  const [rosterId, setRosterId] = useState<string | null>(null)
   // 발급 직후 1건만 붙잡아 둔다 — 교사에게 그 자리에서 불러 줘야 하는데, 아래 목록에서
   // 방금 만든 코드를 눈으로 찾게 하면 다른 학급 코드를 잘못 읽어 줄 수 있다.
   const [issued, setIssued] = useState<ClassCodeItem | null>(null)
@@ -245,10 +249,16 @@ export function CodeIssuer() {
             </thead>
             <tbody>
               {active.map(c => (
-                <tr key={c.id} className="border-t border-line/60">
+                <Fragment key={c.id}>
+                <tr className="border-t border-line/60">
                   <td className="font-read whitespace-nowrap px-3 py-2.5 font-bold tracking-widest text-blue">{c.code}</td>
                   <td className="max-w-[11rem] break-keep px-3">{c.school_name}</td>
-                  <td className="whitespace-nowrap px-3">{gradeClassLabel(c.grade, c.class_no)}</td>
+                  {/* 신청 순번(#017)은 아동 코드 `017-03`의 앞자리다 — 엑셀 등 내보낸 파일의 아이를 학급으로 되짚을 때 본다.
+                      학급 코드 대신 쓰는 이유는 lib/child-code(형식은 담당자 확정 2026-11-06, 6자리 코드 대신 순번은 사용자 확정 2026-11-05). */}
+                  <td className="whitespace-nowrap px-3">
+                    {gradeClassLabel(c.grade, c.class_no)}
+                    <span className="ml-1.5 text-[11px] tabular-nums text-ink-mute" title="신청 순번 — 아동 코드의 앞자리">{applySeqLabel(c.apply_seq)}</span>
+                  </td>
                   <td className="whitespace-nowrap px-3">{c.teacher_name}</td>
                   <td className="px-3 py-2 text-ink-soft">
                     {editId === c.id ? (
@@ -288,6 +298,14 @@ export function CodeIssuer() {
                   </td>
                   <td className="whitespace-nowrap px-3 tabular-nums">{c.session_count}</td>
                   <td className="whitespace-nowrap px-3 text-right">
+                    {/* 명단 있는 학급만 — 전학 간 학생 빼기·되살리기(RosterManager, 사용자 확정 2026-11-05). 실명은 누른 학급만 받는다 */}
+                    {c.roster_count > 0 && (
+                      <button type="button" onClick={() => setRosterId(rosterId === c.id ? null : c.id)}
+                        aria-expanded={rosterId === c.id} aria-controls={`roster-${c.id}`}
+                        className="mr-1.5 rounded-lg border-[1.5px] border-line bg-white px-2.5 py-1 text-xs font-bold text-ink-soft transition hover:border-blue">
+                        {rosterId === c.id ? '명단 닫기' : '명단 보기'}
+                      </button>
+                    )}
                     {/* 세션이 있는 코드는 지울 수 없다(FK restrict) — 버튼 자체를 내지 않는다.
                         대기(pending) 건의 삭제(반려)는 위 섹션이 맡으므로 여기에는 오지 않는다. 목록이 낡았으면 잠근다(위 stale) */}
                     {c.session_count === 0 && (
@@ -298,6 +316,10 @@ export function CodeIssuer() {
                     )}
                   </td>
                 </tr>
+                {rosterId === c.id && (
+                  <tr id={`roster-${c.id}`}><td colSpan={8} className="bg-well/50 px-3 py-3"><RosterManager codeId={c.id} /></td></tr>
+                )}
+              </Fragment>
               ))}
             </tbody>
           </table>

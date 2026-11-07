@@ -1,5 +1,5 @@
-// GET /api/results/[token]/sheets.pdf?ids=a,b,c — 교사용 병합 결과보고서. 학급은 토큰이 정하고 병합 규칙(ids 없음 = 아이당
-// 받을 수 있는 최신 1장 · ids 있음 = 그 검사들만, 이 학급 소속 검증 · 번호순)은 관리자 학급별 받기와 같은 함수가 갖는다
+// GET /api/results/[token]/sheets.pdf?ids=a,b,c(또는 ?term=2026-2) — 교사용 병합 결과보고서. 학급은 토큰이 정하고 병합 규칙(ids 없음 =
+// 화면이 고른 학기(`term`, 없으면 지금 학기)의 아이당 받을 수 있는 최신 1장 · ids 있음 = 그 검사들만, 이 학급 소속 검증 · 번호순)은 관리자 학급별 받기와 같은 함수가 갖는다
 // (lib/pdf/class-sheets). 같은 학급을 어디서 받든 같은 파일이어야 한다.
 import { verifyResultsToken } from '@/lib/auth'
 import { env } from '@/lib/env'
@@ -19,5 +19,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   // 빠진다**(전수 점검 2026-09-22). 값이 아예 없는 것과 빈 값은 다르게 본다: `?ids=`는 「아무도
   // 고르지 않음」이지 「전체」가 아니다 — 같게 보면 선택 0명인 요청이 반 전체를 내려받는다.
   const sp = new URL(req.url).searchParams
-  return classSheetsResponse(classCodeId, sp.has('ids') ? sp.getAll('ids').join(',') : null, 'results/:token/sheets.pdf')
+  return classSheetsResponse(classCodeId, sp.has('ids') ? sp.getAll('ids').join(',') : null, 'results/:token/sheets.pdf',
+    { term: sp.get('term'), excludeRemoved: true })
 }

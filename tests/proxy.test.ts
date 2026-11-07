@@ -39,6 +39,11 @@ describe('proxy — 인증 실패', () => {
     expect(res.status).toBe(401)
   })
 
+  it('[REGRESSION] 전체 데이터 엑셀(/api/admin/export.xlsx)도 토큰 없으면 401 — 라우트에는 인증 코드가 없다', async () => {
+    const res = await proxy(mkReq('/api/admin/export.xlsx'))
+    expect(res.status).toBe(401)
+  })
+
   it('서명이 변조된 토큰 거부', async () => {
     const token = await createToken(SECRET)
     // 마지막 16진수 한 자리를 **반드시 다른 값으로** 바꾼다 — 끝 두 자리를 'ff'로 덮으면 서명이 원래 'ff'로 끝날 때

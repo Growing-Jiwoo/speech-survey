@@ -5,13 +5,17 @@
 // 올릴 수 있는 검사(사용자 확정 2026-09-30):
 //   이 토큰의 학급 · 제출됨 · 쓰기 방식 scan · 담당자가 쓰기를 아직 하나도 넣지 않음 ·
 //   그 아이의 **가장 최근에 제출된 검사**(2026-10-01 — 오래 열어 둔 탭이 새 기록지를 앞 차수에 붙이지 않게).
+//   학기로는 거르지 않는다(사용자 확정 2026-11-07 — 담당자 회신 아님): 8월 말에 검사하고 9월에 올리는 기록지가 막혔다. QR에는 반과
+//   번호만 있어 기록지는 그 아이의 가장 최근 검사 것으로 보는 것이 맞다 — 2학기 검사를 아직 안 한 아이는 1학기 검사에, 한 아이는
+//   2학기 검사에 붙는다. 학기를 넘는 아이는 재검사처럼 확인 창에서 선생님이 한 번 더 고른다(lib/results-view scanTargetsAcross).
 //   이미 올린 것은 담당자 채점 전까지 바꿀 수 있다(새 파일을 올린 뒤 옛 파일을 지운다). 채점이 시작된
 //   뒤에 바꾸면 넣은 점수와 근거 그림이 어긋난다 — 잘못 붙었으면 담당자가 「연결 해제」한다.
 // 응답에 스토리지 경로를 싣지 않는다(결과 목록 라우트와 같은 방침).
 import { NextResponse } from 'next/server'
 import { verifyResultsToken } from '@/lib/auth'
 import {
-  latestSubmittedSessionId, removeScanObjects, restoreWritingScan, scanUploadTarget, uploadScanObject, upsertWritingScan,
+  latestSubmittedSessionId, removedRosterState, removeScanObjects, restoreWritingScan, scanUploadTarget, uploadScanObject,
+  upsertWritingScan,
 } from '@/lib/db'
 import { env } from '@/lib/env'
 import { formOfSession } from '@/lib/forms'
@@ -47,6 +51,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const t = await scanUploadTarget(sessionId)
     // 다른 학급의 검사는 없는 검사와 같은 404 — 있다는 사실도 알려 주지 않는다.
     if (!t || t.class_code_id !== classCodeId) return jsonError('검사 기록이 없어요.', 404)
+    // 명단에서 뺀 아이의 검사는 결과지 표·올리기 대상에 없다 — 오래 열어 둔 탭이 옛 목록으로 짝지어 보내도 붙이지 않는다(2026-11-07 통합 점검)
+    if (await removedRosterState(classCodeId, t.child_no))
+      return jsonError('명단에서 뺀 학생이에요. 스캔본을 올리려면 결과지에서 먼저 명단으로 되돌려 주세요.', 409)
     if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사예요.', 409)
     if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사예요.', 409)
     const writingCodes = new Set(itemsFor(formOfSession(t)).writingItems.map(i => i.code))

@@ -1,5 +1,6 @@
 import { formFor, formOfSession } from './forms'
-import { semesterOf } from './format'
+import { semesterOf, termKeyOf } from './format'
+import type { ExportSessionRow } from './excel-export'
 import { listResultOf } from './results'
 import type { RosterChild } from './roster'
 import { criteriaProvisional, type Verdict } from './scoring'
@@ -354,7 +355,10 @@ export interface WritingScanRow {
 
 /** 스캔본을 올릴 수 있는지 판단할 재료 — 한 번의 조회로 가져온다(라우트가 판정한다). */
 export interface ScanUploadTarget {
-  class_code_id: string; child_no: number; grade: number; form_id: string | null; submitted_at: string | null; writing_mode: WritingMode
+  class_code_id: string; child_no: number; grade: number; form_id: string | null
+  /** 검사 시작 시각 — 학기 구분용(스캔본 대상은 학기를 가리지 않는다 — 올리기 라우트, 2026-11-07) */
+  started_at: string
+  submitted_at: string | null; writing_mode: WritingMode
   writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[]
   scan: WritingScanRow | null
 }
@@ -366,14 +370,15 @@ function one<T>(v: T | T[] | null | undefined): T | null {
 
 export async function scanUploadTarget(sessionId: string): Promise<ScanUploadTarget | null> {
   const { data, error } = await sb().from('sessions')
-    .select('class_code_id, child_no, grade, form_id, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), '
+    .select('class_code_id, child_no, grade, form_id, started_at, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), '
       + 'writing_scans(session_id, path, content_type, bytes, uploaded_at)')
     .eq('id', sessionId).maybeSingle()
   fail(error)
   if (!data) return null
   const r = data as unknown as Omit<ScanUploadTarget, 'scan'> & { writing_scans: WritingScanRow | WritingScanRow[] | null }
   return {
-    class_code_id: r.class_code_id, child_no: r.child_no, grade: r.grade, form_id: r.form_id ?? null, submitted_at: r.submitted_at, writing_mode: r.writing_mode,
+    class_code_id: r.class_code_id, child_no: r.child_no, grade: r.grade, form_id: r.form_id ?? null, started_at: r.started_at,
+    submitted_at: r.submitted_at, writing_mode: r.writing_mode,
     writing_answers: r.writing_answers ?? [], sentence_scores: r.sentence_scores ?? [], scan: one(r.writing_scans),
   }
 }
@@ -383,6 +388,8 @@ export async function scanUploadTarget(sessionId: string): Promise<ScanUploadTar
  * scanTargetSession과 같은 규칙, started_at 기준). 제출된 검사가 없으면 null.
  * 올리기 라우트가 화면이 보낸 검사와 대조한다 — 열어 둔 지 오래된 결과지 탭은 그사이 제출된 재검사를 몰라,
  * 새 기록지를 앞 차수 검사에 붙인다(QR에는 반과 번호만 있다).
+ * 학기로 거르지 않는다 — 라우트가 보낸 검사가 **지금 학기**인지 먼저 확인하므로(학기 구분, 2026-11-05), 그 검사가 학급·번호
+ * 전체에서 가장 최근 제출이면 지금 학기 안에서도 가장 최근 제출이다(지금 학기보다 뒤의 검사는 없다).
  */
 export async function latestSubmittedSessionId(classCodeId: string, childNo: number): Promise<string | null> {
   const { data, error } = await sb().from('sessions').select('id')
@@ -524,9 +531,12 @@ export interface ClassCodeRow {
   status: 'pending' | 'active'
   /** 신청 접수 시각. 관리자 직접 발급분은 null(승인 절차를 거치지 않았다) */
   applied_at: string | null
+  /** 신청 순번(migration 010) — 아동 코드 `017-03`의 앞자리(lib/child-code). DB 시퀀스가 매기고 앱은 넣지 않는다.
+   *  6자리 코드 대신 쓰는 이유는 migration 010 주석(형식은 담당자 확정 2026-11-06, 6자리 코드 대신 순번은 사용자 확정 2026-11-05) */
+  apply_seq: number
 }
 
-const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at, status, applied_at'
+const CLASS_CODE_COLS = 'id, code, school_region, school_id, school_name, grade, class_no, teacher_name, teacher_phone, teacher_email, created_at, status, applied_at, apply_seq'
 
 export interface NewClassCodeInput {
   code: string
@@ -618,24 +628,94 @@ export async function approveClassCode(
   return { row, already: true }
 }
 
-/** 승인 화면이 검토하는 신청 명단 1줄. 읽기 전용 — 이 앱에서 명단을 고치는 경로는 없다
- *  (교사가 올린 원문 그대로 관리자가 확인하고, 틀렸으면 반려 = 삭제 후 재신청이다). */
+/** 명단 1줄. 신청 때 올라온 값은 고치지 않는다(틀렸으면 반려 = 삭제 후 재신청) — 바뀌는 것은 **빼기·되살리기**와
+ *  검사 중 **추가**뿐이다(migration 009). 전학 간 아이를 명단에서 빼고 검사 기록은 남기는 것은 담당자 확정(2026-11-06, 답장에 대한 회신 원문 「오케이 고마워!!」).
+ *  담임·관리자 둘 다·되살리기·검사 중 추가는 사용자 확정(2026-11-05) — 담당자 회신 아님. */
 export interface RosterRow {
   child_no: number; child_name: string; gender: '남' | '여'; birth_ymd: string
+  /** 검사 중 추가한 아이의 법정대리인 동의 확인 시각. null = 신청 때 함께 올라온 아이(확인은 학급의 `applied_at`) */
+  consented_at: string | null
 }
 
-/** 학급 신청 명단 조회. **번호 순**으로 고정한다 — 관리자는 이 표를 교사가 보낸 명렬표와
- *  줄을 맞춰 보며 검토하므로, 순서가 흔들리면 같은 명단인지 눈으로 확인할 수 없다. */
+/** 관리 화면(관리자 명단·교사 결과지)용 — 뺀 아이까지. `removed`면 명단에서 뺀 아이다. */
+export type ManagedRosterRow = RosterRow & { removed: boolean }
+
+/** **명단에 있는** 아이만(뺀 아이 제외) — 시작 화면 드롭다운·명단 모드 세션 생성·결과지 표가 쓴다. **번호 순**으로
+ *  고정한다 — 관리자는 이 표를 교사가 보낸 명렬표와 줄을 맞춰 보며 검토하므로, 순서가 흔들리면 같은 명단인지 눈으로
+ *  확인할 수 없다. */
 export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
   const { data, error } = await sb().from('class_roster')
-    .select('child_no, child_name, gender, birth_ymd')
-    .eq('class_code_id', classCodeId).order('child_no')
+    .select('child_no, child_name, gender, birth_ymd, consented_at')
+    .eq('class_code_id', classCodeId).is('removed_at', null).order('child_no')
   fail(error)
   return (data ?? []) as unknown as RosterRow[]
 }
 
+/** 뺀 아이까지 전부(번호 순) — 빼기·되살리기 화면이 쓴다. */
+export async function listRosterAll(classCodeId: string): Promise<ManagedRosterRow[]> {
+  const { data, error } = await sb().from('class_roster')
+    .select('child_no, child_name, gender, birth_ymd, consented_at, removed_at')
+    .eq('class_code_id', classCodeId).order('child_no')
+  fail(error)
+  return ((data ?? []) as unknown as (RosterRow & { removed_at: string | null })[])
+    .map(({ removed_at, ...r }) => ({ ...r, removed: removed_at != null }))
+}
+
+/** 명단 행이 하나라도 있는 학급인가(뺀 아이 포함) — 명단 없이 운영하는 학급(관리자 직접 발급)에는 검사 중 추가를 하지
+ *  않는다. 그 학급은 처음부터 직접 입력으로 검사하는 곳이라, 몇 명만 명단에 생기면 드롭다운과 직접 입력이 섞인다. */
+export async function hasRoster(classCodeId: string): Promise<boolean> {
+  const { count, error } = await sb().from('class_roster')
+    .select('child_no', { count: 'exact', head: true }).eq('class_code_id', classCodeId)
+  fail(error)
+  return (count ?? 0) > 0
+}
+
+/** 명단에서 빼기(`removed: true`) · 되살리기(`false`). 검사 기록은 건드리지 않는다 — 세션은 명단이 아니라 학급 코드에
+ *  붙어 있다. 그 번호의 행이 없으면 'missing'. 같은 상태로 다시 불러도 'ok'(두 화면이 같은 아이를 동시에 눌러도 된다). */
+export async function setRosterRemoved(
+  classCodeId: string, childNo: number, removed: boolean,
+): Promise<'ok' | 'missing'> {
+  const { data, error } = await sb().from('class_roster')
+    .update({ removed_at: removed ? new Date().toISOString() : null })
+    .eq('class_code_id', classCodeId).eq('child_no', childNo).select('child_no')
+  fail(error)
+  return (data ?? []).length > 0 ? 'ok' : 'missing'
+}
+
+/**
+ * 검사 중 명단에 추가(시작 화면 「명단에 없는 학생이에요」 + 「명단에 추가」 체크). 사용자 확정(2026-11-05) — 직접
+ * 입력한 아이는 다음 검사(재검사·다음 학기) 때 드롭다운에 없어 매번 다시 쳐야 했고, 오타가 나면 같은 아이로 이어지지 않았다.
+ * - 그 번호가 명단에 **있으면** 'exists' — 덮어쓰지 않는다(시작 화면이 「N번은 명단의 ○○ 학생 번호예요」로 미리 알린다).
+ * - 그 번호가 **뺀 아이** 자리면 그 행을 새 값으로 덮어 되살린다(번호는 학급 안에서 unique — 전학 간 아이의 번호를 받은 경우).
+ * - 없으면 새로 넣는다. 동시에 두 기기가 같은 번호를 넣으면 unique 충돌(23505)이 나고 뒤의 것이 'exists'다.
+ */
+export async function addRosterChild(
+  classCodeId: string,
+  child: { childNo: number; name: string; gender: '남' | '여'; birthYmd: string },
+  consentedAt: string,
+): Promise<'added' | 'exists'> {
+  const values = {
+    child_name: child.name, gender: child.gender, birth_ymd: child.birthYmd,
+    removed_at: null, consented_at: consentedAt,
+  }
+  // 뺀 자리 되살리기 — removed_at이 있는 행만 바꾼다(명단에 있는 아이는 이 조건에 걸리지 않아 덮이지 않는다)
+  const { data: revived, error: e1 } = await sb().from('class_roster').update(values)
+    .eq('class_code_id', classCodeId).eq('child_no', child.childNo).not('removed_at', 'is', null)
+    .select('child_no')
+  fail(e1)
+  if ((revived ?? []).length > 0) return 'added'
+  const { error: e2 } = await sb().from('class_roster')
+    .insert({ class_code_id: classCodeId, child_no: child.childNo, ...values })
+  if ((e2 as { code?: string } | null)?.code === '23505') return 'exists'
+  fail(e2)
+  return 'added'
+}
+
 /** 명단 + 각 아동의 검사 상태. 드롭다운이 "검사함"을 표시하기 위한 것 —
  *  학급 세션을 한 번에 읽어 childTestState와 같은 판정을 번호별로 만든다.
+ *  **지금 학기(lib/format termKeyOf — 시작 시각의 KST 학년도·학기) 검사만 센다** — 학급 코드는 만료가 없어 같은 반이 1학기 코드로
+ *  2학기에도 검사한다. 1학기 검사까지 세면 2학기 시작 화면에 「검사함」·「검사 완료 N명」·스캔 대기가 1학기 것으로 찬다
+ *  (사용자 확정 2026-11-05, 담당자 회신 아님).
  *  (verify-code의 옛 방침 "번호 목록을 만들지 않는다"는 명단 도입으로 뒤집혔다:
  *   코드 소지 = 학급 접근이라는 전제에서, 명단을 주면서 검사 여부만 숨기는 것은 무의미하다.)
  *  참고(advisory, 실제 고치지는 않음): 직접 입력 모드로 만든 세션의 child_no가 우연히 명단의
@@ -652,24 +732,37 @@ export async function rosterWithTested(
     /** 쓰기 상태(가장 최근에 제출된 검사 기준) — 기록지 인쇄 창이 「화면 입력함·스캔 올림·스캔 대기」를 보인다. 검사가 없으면 null */
     writing: ScanTargetState | null
   }[]
-  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, 위 쓰기 상태 기준) — 시작 화면 「현재 검사 상황」 블록 */
+  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, **명단에서 뺀 아이 제외**, 위 쓰기 상태 기준) — 시작 화면 「현재 검사 상황」 블록 */
   scanPending: number
 }> {
-  const roster = await listRoster(classCodeId)
+  // 뺀 아이까지 읽어 번호를 가린다 — 뺀 아이는 교사 결과지의 올리기 대상(표)에 없어 스캔본을 올릴 길이 없다.
+  // 세면 「스캔 대기 N명」이 영영 줄지 않는다(2026-11-07 통합 점검)
+  const all = await listRosterAll(classCodeId)
+  const roster = all.filter(r => !r.removed)
+  const removedNos = new Set(all.filter(r => r.removed).map(r => r.child_no))
   const { data, error } = await sb().from('sessions')
     .select('child_no, started_at, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), writing_scans(session_id)')
     .eq('class_code_id', classCodeId).order('started_at')
   fail(error)
+  const term = termKeyOf(new Date().toISOString())
+  const rows = (data ?? []) as unknown as ClassWritingRow[]
   const state = new Map<number, 'submitted' | 'inProgress'>()
   // 쓰기 상태는 스캔본이 붙을 검사 기준 — **가장 최근에 제출된 검사**, 없으면 가장 최근 검사
   // (lib/results-view scanTargetSession과 같은 규칙: 그만둔 재검사가 앞 차수의 스캔 대기를 가리지 않게).
   // started_at 오름차순이라 뒤에 오는 값이 더 최근이다.
   const writing = new Map<number, ScanTargetState>()
-  for (const s of (data ?? []) as unknown as ClassWritingRow[]) {
-    const cur = state.get(s.child_no)
-    if (s.submitted_at) state.set(s.child_no, 'submitted')
-    else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
-    if (!s.submitted_at && cur === 'submitted') continue
+  // 쓰기 상태·스캔 대기는 **학기를 가리지 않는다**(사용자 확정 2026-11-07) — 기록지는 학기와 무관하게 그 아이의 가장 최근 제출 검사에
+  // 붙어(올리기 라우트), 8월 말 검사의 스캔 대기는 9월 시작 화면에도 세야 한다. 「검사함」·「검사 완료 N명」만 지금 학기다.
+  const submittedAny = new Set<number>()
+  for (const s of rows) {
+    if (removedNos.has(s.child_no)) continue
+    if (termKeyOf(s.started_at) === term) {
+      const cur = state.get(s.child_no)
+      if (s.submitted_at) state.set(s.child_no, 'submitted')
+      else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
+    }
+    if (!s.submitted_at && submittedAny.has(s.child_no)) continue
+    if (s.submitted_at) submittedAny.add(s.child_no)
     writing.set(s.child_no, scanTargetState({
       // 컬럼은 not null default 'screen'이다 — 그래도 scan이 아닌 값은 전부 화면 방식으로 읽는다(스캔 대기로 잘못 세지 않게)
       submitted: !!s.submitted_at, mode: s.writing_mode === 'scan' ? 'scan' : 'screen', hasScan: one(s.writing_scans) !== null,
@@ -773,15 +866,37 @@ export async function updateClassCodeEmail(id: string, teacherEmail: string): Pr
 
 /** 같은 학급·같은 아동 번호의 기존 검사 상태 — 중복 검사 경고용.
  *  제출본이 하나라도 있으면 'submitted', 미제출만 있으면 'inProgress', 없으면 null.
+ *  **지금 학기 검사만** 본다(rosterWithTested와 같은 규칙 — 1학기에 검사한 아이를 2학기에 검사하는 것은 재검사가 아니다).
  *  ⚠️ 번호 목록을 만들지 않는다 — 물어본 번호 하나에 대해서만 답한다(스펙 "중복 검사 경고"). */
 export async function childTestState(
   classCodeId: string, childNo: number,
 ): Promise<'submitted' | 'inProgress' | null> {
-  const { data, error } = await sb().from('sessions').select('submitted_at')
+  const { data, error } = await sb().from('sessions').select('started_at, submitted_at')
     .eq('class_code_id', classCodeId).eq('child_no', childNo)
   fail(error)
-  if (!data || data.length === 0) return null
-  return data.some(r => r.submitted_at) ? 'submitted' : 'inProgress'
+  const term = termKeyOf(new Date().toISOString())
+  const rows = (data ?? []).filter(r => termKeyOf(r.started_at) === term)
+  if (rows.length === 0) return null
+  return rows.some(r => r.submitted_at) ? 'submitted' : 'inProgress'
+}
+
+/**
+ * 그 번호가 **명단에서 뺀 아이** 자리인가 — 아니면(명단에 있음·명단에 없는 번호·명단 없는 학급) null, 뺀 자리면 그 번호로 이
+ * 학급에 남은 검사가 있는지(`hasTests`, 학기 무관). 사용자 확정(2026-11-07, 담당자 회신 아님): 결과는 (학급, 번호)로 묶이므로
+ * 전학 온 아이를 뺀 번호로 직접 입력하면 뺀 아이의 검사와 섞이고, 명단에 넣지 않으면 뺀 번호라 결과지 표에서 숨는다 —
+ * 세션 생성(app/api/sessions)이 이것으로 막고, 시작 화면 확인 창(verify-code `removedNo`)이 미리 알린다.
+ */
+export async function removedRosterState(
+  classCodeId: string, childNo: number,
+): Promise<{ hasTests: boolean } | null> {
+  const { data, error } = await sb().from('class_roster').select('removed_at')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo).maybeSingle()
+  fail(error)
+  if (!data || data.removed_at == null) return null
+  const { count, error: e2 } = await sb().from('sessions')
+    .select('id', { count: 'exact', head: true }).eq('class_code_id', classCodeId).eq('child_no', childNo)
+  fail(e2)
+  return { hasTests: (count ?? 0) > 0 }
 }
 
 // ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------
@@ -926,9 +1041,49 @@ export async function listSessions(): Promise<SessionListRow[]> {
   })
 }
 
+/** 내보내기가 한 번에 받는 행 수와 전체 상한 — 상한은 고장 난 페이지 넘기기가 끝없이 돌지 않게 하는 안전띠다(운영 규모의 수십 배) */
+const EXPORT_PAGE = 1000
+const MAX_EXPORT_ROWS = 50_000
+
+/**
+ * 엑셀 내보내기(GET /api/admin/export.xlsx)의 재료 — **제출된** 검사 전부와 채점 행, 학급 신청 순번(아동 코드 앞자리).
+ * 담당자 확정(2026-11-06) 「엑셀에서는 아동 코드만 있어야 할 것 같아!」 — 그래서 이름·생년월일·학교·담임은 **읽지도 않는다**.
+ * 목록(`listSessions`)처럼 페이지를 넘기며 받는다(Supabase Max Rows가 나머지를 오류 없이 자른다 — 같은 주석). 줄 고르기(아이·학기마다
+ * 마지막 검사)와 채점은 lib/excel-export가 한다.
+ */
+export async function exportSessions(): Promise<ExportSessionRow[]> {
+  const rows: ExportSessionRow[] = []
+  const seen = new Set<string>()
+  while (rows.length < MAX_EXPORT_ROWS) {
+    const from = rows.length
+    const { data, error } = await sb().from('sessions')
+      .select('id, class_code_id, child_no, gender, grade, form_id, checklist, started_at, submitted_at, '
+        + 'recordings(item_code), reading_marks(item_code, correct), sentence_scores(item_code, words), '
+        + 'sentence_times(item_code, seconds), writing_answers(item_code, can_write), class_codes(apply_seq)')
+      .not('submitted_at', 'is', null)
+      .order('started_at').order('id')
+      .range(from, from + EXPORT_PAGE - 1)
+    fail(error)
+    const page = (data ?? []) as unknown as (Omit<ExportSessionRow, 'apply_seq'> & {
+      class_codes: { apply_seq: number } | { apply_seq: number }[] | null
+    })[]
+    const fresh = page.filter(r => !seen.has(r.id))
+    if (fresh.length === 0) break
+    for (const { class_codes, ...r } of fresh) {
+      const cc = one(class_codes)
+      // 세션은 학급 코드를 on delete restrict로 참조하므로 없을 수 없다 — 있으면 아동 코드를 만들 수 없어 던진다(라우트 500)
+      if (!cc) throw new Error(`학급 신청 순번이 없다: ${r.id}`)
+      seen.add(r.id)
+      rows.push({ ...r, apply_seq: cc.apply_seq })
+    }
+  }
+  if (rows.length >= MAX_EXPORT_ROWS) throw new Error(`내보내기 상한(${MAX_EXPORT_ROWS}) 도달 — 나눠 받는 기능 필요`)
+  return rows
+}
+
 /**
  * 같은 학급·같은 번호의 검사 전부(id·시작 시각만) — 재검사 회차(lib/adminStats retestOrdinals)를 결과지 머리와 결과보고서 PDF
- * 파일명에 붙이는 데 쓴다. 목록과 같은 묶음(학급 코드 + 번호)이라 목록의 「2/2회차」와 같은 숫자가 나온다.
+ * 파일명에 붙이는 데 쓴다. 목록과 같은 묶음(학급 코드 + 번호, 학기는 retestOrdinals가 가른다)이라 목록의 「2/2회차」와 같은 숫자가 나온다.
  */
 export async function childSessions(
   classCodeId: string, childNo: number,

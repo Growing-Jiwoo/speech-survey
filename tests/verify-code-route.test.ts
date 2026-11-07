@@ -4,6 +4,7 @@ vi.mock('@/lib/db', () => ({
   findClassCode: vi.fn(),
   childTestState: vi.fn(),
   rosterWithTested: vi.fn(),
+  removedRosterState: vi.fn(),
 }))
 
 import { classSheetTag } from '@/lib/writing-sheet'
@@ -16,7 +17,7 @@ const ROW = {
   grade: 1, class_no: 2, teacher_name: '김담임',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
-  status: 'active' as const, applied_at: null,
+  status: 'active' as const, applied_at: null, apply_seq: 1,
 }
 let ipSeq = 0
 const req = (body: unknown, ip = `10.0.0.${++ipSeq}`) => new Request('http://x/api/sessions/verify-code', {
@@ -30,6 +31,7 @@ beforeEach(() => {
   vi.mocked(db.findClassCode).mockResolvedValue(ROW)
   vi.mocked(db.childTestState).mockResolvedValue(null)
   vi.mocked(db.rosterWithTested).mockResolvedValue({ roster: [], scanPending: 0 })
+  vi.mocked(db.removedRosterState).mockResolvedValue(null)
 })
 
 describe('POST /api/sessions/verify-code', () => {
@@ -39,7 +41,7 @@ describe('POST /api/sessions/verify-code', () => {
     expect(await res.json()).toEqual({
       schoolName: '서울신구초등학교', grade: 1, classNo: 2,
       teacherName: '김담임', teacherPhone: '01012345678', teacherEmail: null,
-      alreadyTested: null,
+      alreadyTested: null, removedNo: null,
     })
     expect(db.childTestState).toHaveBeenCalledWith(ROW.id, 3)
   })
@@ -73,7 +75,7 @@ describe('POST /api/sessions/verify-code', () => {
   it('[REGRESSION] 응답에 다른 아동 번호 목록이 실리지 않는다 — 물어본 번호의 상태만 답한다', async () => {
     const json = await (await POST(req({ code: 'K7M2P9', childNo: 3 }))).json()
     expect(Object.keys(json).sort()).toEqual(
-      ['alreadyTested', 'classNo', 'grade', 'schoolName', 'teacherEmail', 'teacherName', 'teacherPhone'])
+      ['alreadyTested', 'classNo', 'grade', 'removedNo', 'schoolName', 'teacherEmail', 'teacherName', 'teacherPhone'])
   })
   it('childNo 없음은 유효(명단 조회) — 범위 밖 값만 400', async () => {
     expect((await POST(req({ code: 'K7M2P9' }))).status).toBe(200)
@@ -146,6 +148,14 @@ describe('POST /api/sessions/verify-code', () => {
     expect(json.alreadyTested).toBe('inProgress')
     expect(json.roster).toBeUndefined()
     expect(db.rosterWithTested).not.toHaveBeenCalled()
+  })
+
+  // 명단에서 뺀 번호(사용자 확정 2026-11-07) — 확인 창이 미리 경고하고 시작을 막는다(실제 관문은 세션 생성)
+  it('childNo가 명단에서 뺀 번호면 removedNo로 검사가 남았는지 알린다', async () => {
+    vi.mocked(db.removedRosterState).mockResolvedValue({ hasTests: true })
+    const json = await (await POST(req({ code: 'K7M2P9', childNo: 5 }))).json()
+    expect(json.removedNo).toEqual({ hasTests: true })
+    expect(db.removedRosterState).toHaveBeenCalledWith(ROW.id, 5)
   })
 
   it('명단이 빈 학급(관리자 직접 발급 코드)은 roster: []를 돌려준다', async () => {

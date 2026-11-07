@@ -8,7 +8,8 @@
 (한 장)와 한 학급을 한 파일로 묶는 `class-sheets.ts`(여러 장). `class-sheets.ts`는 교사 결과지
 `GET /api/results/[token]/sheets.pdf`와 관리자 학급별 받기 `GET /api/admin/codes/[id]/sheets.pdf`(담당자 요청
 2026-10-24)가 함께 써서 같은 학급은 어디서 받아도 같은 파일이다(관리자 쪽 파일 이름 앞에만 학교 이름이 붙는다).
-두 호출부가 같은 함수를 쓰므로 관리자와 선생님이 받는 문서는 같다(`tests/sheet-input-parity.test.ts`).
+두 호출부가 같은 함수를 쓰므로 관리자와 선생님이 받는 문서는 같다(`tests/sheet-input-parity.test.ts`). 다른 것은 하나 — 교사 쪽은
+`excludeRemoved`로 **명단에서 뺀 아이**를 넣지 않고 `?ids=`에 섞이면 다른 학급 id처럼 403이다(2026-11-07). 관리자 쪽은 넣는다.
 
 종전의 「원본 검사지 PDF에 점수만 얹는」 스탬핑(`stamp-sheet.ts`, `lib/forms/*-layout.ts`,
 `scripts/extract-form-layout.mjs`)은 2026-09-28에 폐기했다 — 담당자가 내려받는 문서의 양식을

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   maskEmail, evaluateSession, finalResultOf, scoreInputFor, buildChildren, latestSession, childVerdict, representativeSession,
   summarize, sheetsFileName, latestScored, sessionLabel, awaitsScanWriting, scanTargetSession, scanTargets,
-  type ResultsSessionRow,
+  termGroups, defaultTerm, type ResultsSessionRow,
 } from '@/lib/results'
 
 /** G1 세션 행 골격. 채점 행은 테스트마다 채운다. */
@@ -381,6 +381,63 @@ describe('sheetsFileName — 관리자 규약 계승', () => {
   it('단일학급(반 0)은 학년만', () => {
     expect(sheetsFileName({ grade: 2, classNo: 0, date: '2026-09-22', all: true, picked: [] })).toBe('2학년_결과지_전체_2026-09-22.pdf')
   })
+  it('학기를 주면 반 단위 이름의 학급 뒤에 붙는다 — 같은 반의 1·2학기 「결과지_전체」가 같은 이름이 되지 않게(2026-11-05)', () => {
+    const p = (childNo: number) => ({ childNo, name: `아이${childNo}`, attemptNo: 1, attemptCount: 1, startedDate: '2026-09-21' })
+    expect(sheetsFileName({ ...base, term: '2026-2학기', all: true, picked: [] })).toBe('1-2_2026-2학기_결과지_전체_2026-09-22.pdf')
+    expect(sheetsFileName({ ...base, term: '2026-2학기', all: false, picked: [p(1), p(3)] })).toBe('1-2_2026-2학기_결과지_2명_2026-09-22.pdf')
+    // 한 아이 한 장은 검사일이 학기를 말한다
+    expect(sheetsFileName({ ...base, term: '2026-2학기', all: false, picked: [p(3)] })).toBe('03_아이3_2026-09-21.pdf')
+  })
+})
+
+// ---------- 학기 구분(사용자 확정 2026-11-05 — 담당자 회신 아님) ----------
+
+describe('termGroups — 세션을 학기별로 나눈다', () => {
+  const NOW = '2026-11-05T03:00:00.000Z'   // 2026학년도 2학기
+  it('검사 시작 시각의 KST 학년도·학기로 나누고, 최근 학기 먼저. 지금 학기는 검사가 없어도 넣는다', () => {
+    const rows = [
+      row({ id: 'a', child_no: 1, started_at: '2026-05-01T01:00:00.000Z' }),
+      row({ id: 'b', child_no: 1, started_at: '2025-10-01T01:00:00.000Z' }),
+      row({ id: 'c', child_no: 2, started_at: '2026-02-20T01:00:00.000Z' }),   // 2026년 2월 = 2025학년도 2학기
+    ]
+    expect(termGroups(rows, NOW).map(g => [g.key, g.current, g.rows.map(r => r.id)])).toEqual([
+      ['2026-2', true, []],
+      ['2026-1', false, ['a']],
+      ['2025-2', false, ['b', 'c']],
+    ])
+  })
+  it('[REGRESSION] 학기마다 buildChildren을 부르면 다른 학기의 검사는 재검사가 아니다 — 차수·대표 검사·「N차 미제출」이 학기 안에서 정해진다', () => {
+    const rows = [
+      row({ id: 'spring', child_no: 1, started_at: '2026-05-01T01:00:00.000Z', submitted_at: '2026-05-01T01:20:00.000Z', ...ALL_SCORED_FAIL }),
+      row({ id: 'fall', child_no: 1, started_at: '2026-10-01T01:00:00.000Z', submitted_at: null }),
+    ]
+    const [fall, spring] = termGroups(rows, NOW).map(g => buildChildren([], g.rows))
+    expect(fall[0].sessions.map(s => [s.id, s.attemptNo])).toEqual([['fall', 1]])
+    expect(spring[0].sessions.map(s => [s.id, s.attemptNo])).toEqual([['spring', 1]])
+    // 2학기는 중단된 검사뿐 — 1학기의 위험 판정을 2학기의 대표로 삼지 않는다
+    expect(representativeSession(fall[0])?.id).toBe('fall')
+    expect(childVerdict(fall[0])).toBeNull()
+    expect(childVerdict(spring[0])).toBe('risk')
+    // 섞어서 부르면 1학기 검사가 2학기의 1차가 된다 — 이것이 고친 버그다
+    expect(buildChildren([], rows)[0].sessions.map(s => s.attemptNo)).toEqual([1, 2])
+  })
+})
+
+describe('defaultTerm — 교사 결과지가 처음 보일 학기', () => {
+  const t = (key: string, current: boolean, sessions: number) => ({
+    key, current, children: [{ childNo: 1, name: '가', gender: '여', inRoster: true, sessions: buildChildren([], Array.from({ length: sessions }, (_, i) =>
+      row({ id: `${key}-${i}`, child_no: 1 })))[0]?.sessions ?? [] }],
+  })
+  it('지금 학기에 검사가 있으면 지금 학기', () => {
+    expect(defaultTerm([t('2026-2', true, 1), t('2026-1', false, 2)])?.key).toBe('2026-2')
+  })
+  it('지금 학기에 검사가 없으면 검사가 있는 가장 최근 학기 — 3월 초에 지난 학년도 결과지를 받으러 온 선생님', () => {
+    expect(defaultTerm([t('2027-1', true, 0), t('2026-2', false, 3), t('2026-1', false, 1)])?.key).toBe('2026-2')
+  })
+  it('아무 검사도 없으면 지금 학기', () => {
+    expect(defaultTerm([t('2026-2', true, 0)])?.key).toBe('2026-2')
+    expect(defaultTerm([])).toBeNull()
+  })
 })
 
 // ---------- 쓰기 스캔본(사용자 확정 2026-09-30) ----------
@@ -550,3 +607,45 @@ describe('sessionLabel — 재검사로 대체(스캔 대기인데 대상 검사
   })
 })
 
+
+// 스캔본은 학기와 무관하게 그 아이의 가장 최근 제출 검사에 붙는다(사용자 확정 2026-11-07 — 8월 말 검사의 기록지를 9월에 올린다)
+describe('scanTargetsAcross · termSessionLabel — 학기를 넘는 스캔본 대상', async () => {
+  const { scanTargetsAcross, termSessionLabel } = await import('@/lib/results-view')
+  type S = import('@/lib/results-view').ResultsSession
+  const sess = (id: string, startedAt: string, submitted = true): S => ({
+    id, attemptNo: 1, startedAt, submittedAt: submitted ? startedAt : null, status: submitted ? 'scoring' : 'unsubmitted',
+    scores: null, verdict: null, complete: null, taskVerdict: null, writingMode: 'scan', scanState: submitted ? 'wait' : 'unsubmitted',
+  })
+  const kid = (sessions: S[]) => ({ childNo: 3, name: '가나', gender: '여', inRoster: true, sessions })
+  const T1 = sess('t1', '2026-08-28T01:00:00Z')
+
+  it('2학기 검사가 없으면 1학기 검사가 대상 — 9월에 올려도 막히지 않는다', () => {
+    const terms = [{ children: [kid([])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms).map(t => [t.sessionId, t.retest])).toEqual([['t1', false]])
+    expect(termSessionLabel(T1, 't1', 't1')).toBe('scanWait')
+  })
+  it('2학기에 제출한 검사가 있으면 그것이 대상이고, 1학기 스캔 대기는 「다음 학기 검사로 대체」 · 확인 창이 한 번 더 묻는다', () => {
+    const T2 = sess('t2', '2026-09-20T01:00:00Z')
+    const terms = [{ children: [kid([T2])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms).map(t => [t.sessionId, t.retest])).toEqual([['t2', true]])
+    expect(termSessionLabel(T1, 't1', 't2')).toBe('laterTerm')
+    expect(termSessionLabel(T2, 't2', 't2')).toBe('scanWait')
+  })
+  it('2학기 검사가 제출 전이면 기록지는 여전히 1학기 검사로', () => {
+    const terms = [{ children: [kid([sess('t2', '2026-09-20T01:00:00Z', false)])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms)[0].sessionId).toBe('t1')
+  })
+  it('[REGRESSION] 요약도 표 배지와 같은 값으로 센다 — 「다음 학기 검사로 대체」는 스캔 대기가 아니라 읽기 채점 상태(2026-11-07 통합 점검)', async () => {
+    const { summarize, scanTargetIdsAcross } = await import('@/lib/results-view')
+    const T2 = sess('t2', '2026-09-20T01:00:00Z')
+    const T1scored: S = { ...T1, status: 'scored', verdict: 'risk' }
+    const terms = [{ children: [kid([T2])] }, { children: [kid([T1scored])] }]
+    const across = scanTargetIdsAcross(terms)
+    // 1학기 표: 대표 검사 t1은 기록지가 t2로 간다 — 스캔 대기로 세면 배지(「다음 학기 검사로 대체」)와 숫자가 어긋난다
+    expect(summarize(terms[1].children, across)).toMatchObject({ scanWait: 0, scored: 1, risk: 1, scoring: 0 })
+    expect(summarize([kid([T1])], across)).toMatchObject({ scanWait: 0, scoring: 1 })
+    // 2학기 표의 t2는 여전히 스캔 대기 · 대상 id를 안 주면 종전대로
+    expect(summarize(terms[0].children, across)).toMatchObject({ scanWait: 1 })
+    expect(summarize(terms[1].children)).toMatchObject({ scanWait: 1, scored: 0 })
+  })
+})

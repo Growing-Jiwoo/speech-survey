@@ -2,7 +2,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '@/lib/http'
-import type { MarkRow, RosterRow, SentenceScoreRow, SentenceTimeRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
+import type { ManagedRosterRow, MarkRow, SentenceScoreRow, SentenceTimeRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
 import type { SurveyForm } from '@/lib/forms'
 
 /** 관리자 쿼리 키 — 무효화/제거 호출부가 리터럴을 복사하다 어긋나지 않도록 한 곳에 정의. */
@@ -24,6 +24,8 @@ export interface ClassCodeItem {
   status: 'pending' | 'active'
   /** 신청 접수 시각. 관리자 직접 발급분은 null */
   applied_at: string | null
+  /** 신청 순번 — 화면에 `#017`로 보인다(아동 코드의 앞자리, lib/child-code). 관리자 직접 발급분도 있다 */
+  apply_seq: number
   /** 이 코드로 만들어진 세션 수 — 0일 때만 삭제 버튼을 낸다(pending은 예외, 아직 검사 전이다) */
   session_count: number
   /** 신청 명단 인원 수. **실명은 목록에 실리지 않는다** — 수만 센다(PII) */
@@ -97,7 +99,7 @@ export function useClassCodesQuery() {
 export function useRosterQuery(id: string | null) {
   return useQuery({
     queryKey: adminKeys.roster(id ?? ''),
-    queryFn: () => fetchJson<{ roster: RosterRow[] }>(`/api/admin/codes/${id}/roster`).then(d => d.roster),
+    queryFn: () => fetchJson<{ roster: ManagedRosterRow[] }>(`/api/admin/codes/${id}/roster`).then(d => d.roster),
     enabled: !!id,
   })
 }

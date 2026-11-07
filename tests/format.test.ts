@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel, deleteRetestNote } from '@/lib/format'
+import { approvalNoticeText, birthLabel, classLabel, contactLabel, fmtDuration, gradeClassLabel, pad2, reportDateLabel, semesterOf, sheetDateLabel, deleteRetestNote,
+  parseTermKey, termKey, termKeyOf, termLabel, termOf } from '@/lib/format'
 import { APPLY_CHECKS, CONSENT_NOTICE, RETENTION_LABEL, SURVEY_NOTICE } from '@/lib/consent'
 
 describe('fmtDuration — 초 → m:ss (미상은 —)', () => {
@@ -85,6 +86,46 @@ describe('reportDateLabel / birthLabel / semesterOf — 결과보고서 표기',
     expect(semesterOf('2026-09-01T01:00:00.000Z')).toBe(2)
     expect(semesterOf('2027-02-27T01:00:00.000Z')).toBe(2)
     expect(semesterOf('2026-08-31T15:00:00.000Z')).toBe(2)   // KST 9월 1일 00:00
+  })
+})
+
+// 사용자 확정(2026-11-05) — 담당자 회신 아님. 학기 경계는 semesterOf(담당자 확정 2026-10-20) 그대로다.
+describe('termOf / termKey / termLabel — 학기 구분', () => {
+  it('3~8월은 그해 1학기, 9~12월은 그해 2학기, 1·2월은 앞 해 학년도의 2학기 (KST)', () => {
+    expect(termOf('2026-03-02T01:00:00.000Z')).toEqual({ year: 2026, semester: 1 })
+    expect(termOf('2026-08-31T01:00:00.000Z')).toEqual({ year: 2026, semester: 1 })
+    expect(termOf('2026-11-05T01:00:00.000Z')).toEqual({ year: 2026, semester: 2 })
+    expect(termOf('2027-01-10T01:00:00.000Z')).toEqual({ year: 2026, semester: 2 })
+    expect(termOf('2027-02-28T01:00:00.000Z')).toEqual({ year: 2026, semester: 2 })
+    expect(termOf('2027-03-01T01:00:00.000Z')).toEqual({ year: 2027, semester: 1 })
+  })
+  it('경계는 KST 자정이다 — UTC로 자르면 9월 1일 아침·3월 1일 아침 검사가 앞 학기로 간다', () => {
+    expect(termKeyOf('2026-08-31T14:59:00.000Z')).toBe('2026-1')
+    expect(termKeyOf('2026-08-31T15:00:00.000Z')).toBe('2026-2')   // KST 9월 1일 00:00
+    expect(termKeyOf('2027-02-28T14:59:00.000Z')).toBe('2026-2')
+    expect(termKeyOf('2027-02-28T15:00:00.000Z')).toBe('2027-1')   // KST 3월 1일 00:00
+    // 1월 1일 KST 새벽(UTC로는 아직 전해 12월 31일)도 같은 학년도다
+    expect(termKeyOf('2026-12-31T16:00:00.000Z')).toBe('2026-2')
+  })
+  it('학기와 양식이 갈리지 않는다 — termOf의 학기는 semesterOf와 같다', () => {
+    for (const iso of ['2026-02-28T15:00:00.000Z', '2026-08-31T15:00:00.000Z', '2027-01-01T00:00:00.000Z', '2026-06-15T03:00:00.000Z'])
+      expect(termOf(iso).semester).toBe(semesterOf(iso))
+  })
+  it('열쇠는 글자 순서가 곧 시간 순서다', () => {
+    const keys = ['2027-1', '2026-2', '2026-1'].sort()
+    expect(keys).toEqual(['2026-1', '2026-2', '2027-1'])
+  })
+  it('열쇠 읽기 — 형식이 아니면 null', () => {
+    expect(parseTermKey('2026-2')).toEqual({ year: 2026, semester: 2 })
+    expect(parseTermKey('2026-3')).toBeNull()
+    expect(parseTermKey('26-1')).toBeNull()
+    expect(parseTermKey('2026-1x')).toBeNull()
+    expect(termKey({ year: 2026, semester: 1 })).toBe('2026-1')
+  })
+  it('표기 — 풀어 쓴 꼴과 좁은 칸 꼴', () => {
+    expect(termLabel('2026-2')).toBe('2026학년도 2학기')
+    expect(termLabel({ year: 2027, semester: 1 }, { short: true })).toBe('2027-1학기')
+    expect(termLabel('잘못된 값')).toBe('잘못된 값')
   })
 })
 

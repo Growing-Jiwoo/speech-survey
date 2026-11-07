@@ -3,7 +3,7 @@ import type { SessionListRow, SessionProgressSource } from '@/lib/db'
 import {
   computeKpis, computeSchoolStats, schoolOptions, gradeOptions, filterSessions, sortSessions,
   parseFilters, filtersToQuery, kstDateKey, DEFAULT_FILTERS, DEFAULT_SORT, adjacentSessionIds, retestOrdinals,
-  awaitsScanScoring, hasActiveFilters, checklistSummary, classSheetSummaries,
+  awaitsScanScoring, hasActiveFilters, checklistSummary, classSheetSummaries, termOptions,
 } from '@/lib/adminStats'
 import { itemsFor } from '@/lib/items'
 import { formForGrade } from '@/lib/forms'
@@ -206,7 +206,7 @@ describe('filterSessions', () => {
     mkSession({ child_name: '김하나', school_name: '가나초', grade: 1, submitted_at: '2026-07-14T02:00:00.000Z', started_at: '2026-07-14T01:00:00.000Z' }),
     mkSession({ child_name: '박둘', school_name: '다라초', grade: 2, started_at: '2026-07-10T01:00:00.000Z' }),
   ]
-  const f = (over: object) => ({ q: '', status: 'all' as const, school: null, grade: null, today: false, ...over })
+  const f = (over: object) => ({ q: '', status: 'all' as const, school: null, grade: null, term: null, today: false, ...over })
 
   it('검색어는 이름·학교 부분일치(공백 트림)', () => {
     expect(filterSessions(base, f({ q: ' 하나 ' }), kstDateKey(now))).toHaveLength(1)
@@ -235,6 +235,16 @@ describe('filterSessions', () => {
     expect(filterSessions(base, f({ grade: 2 }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(base, f({ today: true }), kstDateKey(now))).toHaveLength(1)
     expect(filterSessions(base, f({ today: true, grade: 2 }), kstDateKey(now))).toHaveLength(0)
+  })
+  it('학기 필터 — 검사 시작 시각의 KST 학년도·학기로 거른다(2026-11-05 학기 구분)', () => {
+    const rows = [
+      mkSession({ id: 'a', started_at: '2026-07-14T01:00:00.000Z' }),   // 2026-1
+      mkSession({ id: 'b', started_at: '2026-08-31T15:00:00.000Z' }),   // KST 9월 1일 → 2026-2
+      mkSession({ id: 'c', started_at: '2027-02-10T01:00:00.000Z' }),   // 2027년 2월 → 2026학년도 2학기
+    ]
+    expect(filterSessions(rows, f({ term: '2026-1' }), kstDateKey(now)).map(s => s.id)).toEqual(['a'])
+    expect(filterSessions(rows, f({ term: '2026-2' }), kstDateKey(now)).map(s => s.id)).toEqual(['b', 'c'])
+    expect(termOptions(rows)).toEqual(['2026-2', '2026-1'])   // 최근 학기 먼저, 중복 없이
   })
   it('scanReady — 스캔본이 올라왔거나 종이로 채점을 시작했는데 쓰기가 남은 검사만(목록의 「스캔본 채점」 배지와 같은 조건)', () => {
     const SUB = { submitted_at: '2026-07-14T02:00:00.000Z' }
@@ -341,14 +351,14 @@ describe('URL 직렬화', () => {
     expect(parseFilters(new URLSearchParams())).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
   })
   it('parseFilters — 값 파싱', () => {
-    const sp = new URLSearchParams('q=김&status=submitted&school=가나초&grade=2&today=1&sort=name&dir=asc')
+    const sp = new URLSearchParams('q=김&status=submitted&school=가나초&grade=2&term=2026-2&today=1&sort=name&dir=asc')
     expect(parseFilters(sp)).toEqual({
-      filters: { q: '김', status: 'submitted', school: '가나초', grade: 2, today: true },
+      filters: { q: '김', status: 'submitted', school: '가나초', grade: 2, term: '2026-2', today: true },
       sort: { key: 'name', dir: 'asc' },
     })
   })
   it('parseFilters — 잘못된 값은 기본값으로 폴백', () => {
-    const sp = new URLSearchParams('status=bogus&grade=abc&sort=nope&dir=sideways')
+    const sp = new URLSearchParams('status=bogus&grade=abc&term=2026-3&sort=nope&dir=sideways')
     expect(parseFilters(sp)).toEqual({ filters: DEFAULT_FILTERS, sort: DEFAULT_SORT })
   })
   it('parseFilters — status=scanReady(스캔본 채점) 허용, 왕복 보존', () => {
@@ -362,7 +372,7 @@ describe('URL 직렬화', () => {
   })
   it('filtersToQuery — 기본값과 같은 키는 생략, 왕복 보존', () => {
     expect(filtersToQuery(DEFAULT_FILTERS, DEFAULT_SORT)).toBe('')
-    const filters = { q: '김', status: 'inProgress' as const, school: '가나초', grade: 1, today: true }
+    const filters = { q: '김', status: 'inProgress' as const, school: '가나초', grade: 1, term: '2027-1', today: true }
     const sort = { key: 'progress' as const, dir: 'asc' as const }
     const qs = filtersToQuery(filters, sort)
     expect(parseFilters(new URLSearchParams(qs))).toEqual({ filters, sort })
@@ -431,6 +441,18 @@ describe('retestOrdinals', () => {
     expect(m1.get('aaa')).toEqual({ nth: 1, of: 2 })
     expect(m1.get('zzz')).toEqual({ nth: 2, of: 2 })
   })
+
+  // 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다 — 2학기 검사는 1학기 검사의 재검사가 아니다(2026-11-05)
+  it('[REGRESSION] 학기가 다르면 같은 학급·번호여도 회차를 따로 센다', () => {
+    const m = retestOrdinals([
+      mkSession({ id: 'spring', class_code_id: CODE_A, child_no: 3, started_at: '2026-05-01T00:00:00.000Z' }),
+      mkSession({ id: 'fall1', class_code_id: CODE_A, child_no: 3, started_at: '2026-10-01T00:00:00.000Z' }),
+      mkSession({ id: 'fall2', class_code_id: CODE_A, child_no: 3, started_at: '2027-02-01T00:00:00.000Z' }),   // 같은 2026학년도 2학기
+    ])
+    expect(m.has('spring')).toBe(false)
+    expect(m.get('fall1')).toEqual({ nth: 1, of: 2 })
+    expect(m.get('fall2')).toEqual({ nth: 2, of: 2 })
+  })
 })
 
 // 「전체 검사」 카드 — 거르는 조건이 하나도 없을 때만 켜진 모양이다(2026-10-12 점검: 학교·학년·검색만 걸려 있어도 켜져 보였다)
@@ -440,7 +462,7 @@ describe('hasActiveFilters', () => {
     expect(hasActiveFilters({ ...DEFAULT_FILTERS, q: '   ' })).toBe(false)   // 공백 검색은 거르지 않는다(filterSessions와 같다)
   })
   it('[REGRESSION] 학교·학년·검색 하나만 걸려도 걸린 것이다 — 상태·오늘만 보던 때는 「전체」가 켜져 보였다', () => {
-    for (const over of [{ school: '가창초' }, { grade: 2 }, { q: '김' }, { status: 'submitted' as const }, { today: true }])
+    for (const over of [{ school: '가창초' }, { grade: 2 }, { q: '김' }, { status: 'submitted' as const }, { today: true }, { term: '2026-2' }])
       expect(hasActiveFilters({ ...DEFAULT_FILTERS, ...over })).toBe(true)
   })
 })
@@ -459,7 +481,8 @@ describe('checklistSummary', () => {
 describe('classSheetSummaries — 「결과지 받기」 창의 학교·반별 준비 현황(담당자 요청 2026-10-24)', () => {
   const A = '11111111-1111-1111-1111-111111111111'
   const B = '22222222-2222-2222-2222-222222222222'
-  const s = (over: Partial<SessionListRow>) => mkSession({ class_code_id: A, sheetReady: true, final: 'good', ...over })
+  const s = (over: Partial<SessionListRow>) =>
+    mkSession({ class_code_id: A, sheetReady: true, final: 'good', started_at: '2026-10-23T00:00:00Z', ...over })
 
   it('아이마다 받을 수 있는 것 중 최신 검사로 센다 — 서버가 넣는 장과 같은 규칙', () => {
     const [sch] = classSheetSummaries([
@@ -468,7 +491,7 @@ describe('classSheetSummaries — 「결과지 받기」 창의 학교·반별 �
       s({ child_no: 1, started_at: '2026-10-23T02:00:00Z', sheetReady: false, final: 'unscored' }), // 읽기 채점 전 재검사는 고르지 않는다
       s({ child_no: 2, sheetReady: false, final: 'unscored' }),                                      // 아직 못 받는 아이
       s({ child_no: 3 }),
-    ])
+    ], '2026-2')
     expect(sch.classes).toEqual([{ classCodeId: A, grade: 1, classNo: 2, teacher: '이담임', children: 3, ready: 2, writingPending: 1 }])
   })
 
@@ -477,8 +500,20 @@ describe('classSheetSummaries — 「결과지 받기」 창의 학교·반별 �
       s({ class_code_id: B, school_name: '가나초등학교', grade: 2, class_no: 1 }),
       s({ school_name: '가나초등학교', grade: 1, class_no: 3 }),
       s({ class_code_id: '33333333-3333-3333-3333-333333333333', school_name: '다라초등학교' }),
-    ])
+    ], '2026-2')
     expect(out.map(x => x.school)).toEqual(['가나초등학교', '다라초등학교'])
     expect(out[0].classes.map(c => `${c.grade}-${c.classNo}`)).toEqual(['1-3', '2-1'])
+  })
+
+  it('고른 학기의 검사만 센다 — 서버도 학기 하나의 결과지를 묶는다(2026-11-05)', () => {
+    const rows = [
+      s({ child_no: 1, started_at: '2026-05-01T00:00:00Z' }),                       // 1학기
+      s({ child_no: 1, started_at: '2026-10-01T00:00:00Z', sheetReady: false }),    // 2학기, 아직 못 받음
+      s({ child_no: 2, class_code_id: B, started_at: '2026-05-02T00:00:00Z' }),    // 1학기에만 검사한 반
+    ]
+    expect(classSheetSummaries(rows, '2026-2')[0].classes).toEqual([
+      { classCodeId: A, grade: 1, classNo: 2, teacher: '이담임', children: 1, ready: 0, writingPending: 0 },
+    ])
+    expect(classSheetSummaries(rows, '2026-1')[0].classes.map(c => [c.classCodeId, c.ready])).toEqual([[A, 1], [B, 1]])
   })
 })

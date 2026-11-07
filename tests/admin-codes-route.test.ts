@@ -7,6 +7,8 @@ vi.mock('@/lib/db', () => ({
   updateClassCodeEmail: vi.fn(),
   approveClassCode: vi.fn(),
   listRoster: vi.fn().mockResolvedValue([]),
+  listRosterAll: vi.fn().mockResolvedValue([]),
+  setRosterRemoved: vi.fn().mockResolvedValue('ok'),
 }))
 vi.mock('@/lib/mail', () => ({
   approvedMail: vi.fn((v: { teacherName: string; schoolName: string; code: string; surveyUrl: string }) => ({
@@ -18,7 +20,7 @@ vi.mock('@/lib/mail', () => ({
 import { GET, POST } from '@/app/api/admin/codes/route'
 import { DELETE, PATCH } from '@/app/api/admin/codes/[id]/route'
 import { POST as APPROVE } from '@/app/api/admin/codes/[id]/approve/route'
-import { GET as ROSTER } from '@/app/api/admin/codes/[id]/roster/route'
+import { GET as ROSTER, PATCH as ROSTER_PATCH } from '@/app/api/admin/codes/[id]/roster/route'
 import * as db from '@/lib/db'
 import * as mail from '@/lib/mail'
 import { formFor, writingPrompts } from '@/lib/forms'
@@ -29,7 +31,7 @@ const ROW = {
   grade: 1, class_no: 2, teacher_name: '김담임',
   teacher_phone: '01012345678', teacher_email: null,
   created_at: '2026-08-13T00:00:00.000Z',
-  status: 'active' as const, applied_at: null,
+  status: 'active' as const, applied_at: null, apply_seq: 1,
 }
 const VALID = {
   region: '서울특별시교육청', schoolId: 'B000002295', schoolName: '서울신구초등학교',
@@ -47,6 +49,8 @@ beforeEach(() => {
   vi.mocked(db.deleteClassCode).mockResolvedValue('ok')
   vi.mocked(mail.sendMail).mockResolvedValue({ ok: true, id: 'mail-1' })
   vi.mocked(db.listRoster).mockResolvedValue([])
+  vi.mocked(db.listRosterAll).mockResolvedValue([])
+  vi.mocked(db.setRosterRemoved).mockResolvedValue('ok')
 })
 
 describe('POST /api/admin/codes', () => {
@@ -96,6 +100,12 @@ describe('GET /api/admin/codes', () => {
     expect(json.codes[0].roster_count).toBe(24)
     expect(json.codes[0]).not.toHaveProperty('sessions')
     expect(json.codes[0]).not.toHaveProperty('class_roster')
+  })
+
+  it('신청 순번(apply_seq)을 그대로 싣는다 — 화면의 #017', async () => {
+    vi.mocked(db.listClassCodes).mockResolvedValue([{ ...ROW, apply_seq: 17, sessions: [], class_roster: [] }])
+    const json = await (await GET()).json()
+    expect(json.codes[0].apply_seq).toBe(17)
   })
 
   it('조인이 비어 있으면 0 — 관리자 직접 발급분은 명단이 없다', async () => {
@@ -214,27 +224,27 @@ describe('GET /api/admin/codes/[id]/roster', () => {
   const rosterReq = () => new Request('http://x', { method: 'GET' })
 
   it('명단을 db 순서 그대로 내려준다', async () => {
-    vi.mocked(db.listRoster).mockResolvedValue([
-      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
-      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+    vi.mocked(db.listRosterAll).mockResolvedValue([
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04', consented_at: null, removed: false },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20', consented_at: null, removed: true },
     ])
     const res = await ROSTER(rosterReq(), delParams(ROW.id))
     expect(res.status).toBe(200)
-    expect(db.listRoster).toHaveBeenCalledWith(ROW.id)
+    expect(db.listRosterAll).toHaveBeenCalledWith(ROW.id)
     expect((await res.json()).roster).toEqual([
-      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04' },
-      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20' },
+      { child_no: 1, child_name: '김아동', gender: '남', birth_ymd: '2019-03-04', consented_at: null, removed: false },
+      { child_no: 2, child_name: '이아동', gender: '여', birth_ymd: '2019-11-20', consented_at: null, removed: true },
     ])
   })
 
   it('잘못된 UUID → 400, db 미호출 (가드 순서)', async () => {
     const res = await ROSTER(rosterReq(), delParams('nope'))
     expect(res.status).toBe(400)
-    expect(db.listRoster).not.toHaveBeenCalled()
+    expect(db.listRosterAll).not.toHaveBeenCalled()
   })
 
   it('db 오류 502 + 내부 문구·아동 실명 비노출', async () => {
-    vi.mocked(db.listRoster).mockRejectedValue(new Error('pg: relation class_roster 김아동'))
+    vi.mocked(db.listRosterAll).mockRejectedValue(new Error('pg: relation class_roster 김아동'))
     const res = await ROSTER(rosterReq(), delParams(ROW.id))
     const json = await res.json()
     expect(res.status).toBe(502)
@@ -264,5 +274,26 @@ describe('PATCH /api/admin/codes/[id] — 담임 이메일 수정', () => {
     expect((await patchReq('not-uuid', { teacherEmail: 'a@b.kr' })).status).toBe(400)
     vi.mocked(db.updateClassCodeEmail).mockResolvedValueOnce(null)
     expect((await patchReq(ROW.id, { teacherEmail: 'a@b.kr' })).status).toBe(404)
+  })
+})
+
+describe('PATCH /api/admin/codes/[id]/roster — 명단 빼기·되살리기 (사용자 확정 2026-11-05)', () => {
+  const patchReq = (body: unknown) => new Request('http://x', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  it('빼기·되살리기를 그대로 넘긴다', async () => {
+    expect((await ROSTER_PATCH(patchReq({ childNo: 3, removed: true }), delParams(ROW.id))).status).toBe(200)
+    expect(db.setRosterRemoved).toHaveBeenCalledWith(ROW.id, 3, true)
+    expect((await ROSTER_PATCH(patchReq({ childNo: 3, removed: false }), delParams(ROW.id))).status).toBe(200)
+    expect(db.setRosterRemoved).toHaveBeenLastCalledWith(ROW.id, 3, false)
+  })
+  it('명단에 없는 번호 → 404', async () => {
+    vi.mocked(db.setRosterRemoved).mockResolvedValue('missing')
+    expect((await ROSTER_PATCH(patchReq({ childNo: 40, removed: true }), delParams(ROW.id))).status).toBe(404)
+  })
+  it('형식 오류·잘못된 UUID → 400, db 미호출', async () => {
+    expect((await ROSTER_PATCH(patchReq({ childNo: 3 }), delParams(ROW.id))).status).toBe(400)
+    expect((await ROSTER_PATCH(patchReq({ childNo: 3, removed: true }), delParams('nope'))).status).toBe(400)
+    expect(db.setRosterRemoved).not.toHaveBeenCalled()
   })
 })

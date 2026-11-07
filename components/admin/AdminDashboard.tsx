@@ -5,11 +5,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DEFAULT_FILTERS, DEFAULT_SORT, computeKpis, computeSchoolStats, filterSessions, filtersToQuery,
-  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
+  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions, termOptions,
   type Filters, type Sort, type SortKey,
 } from '@/lib/adminStats'
 import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { termKeyOf } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
+import { fetchFile, saveBlobAs } from '@/lib/download'
 import { Blip } from '@/components/Blip'
 import { LoadingOverlay } from '@/components/LoadingOverlay'
 import { SheetsDialog } from '@/components/admin/SheetsDialog'
@@ -51,6 +53,7 @@ export function AdminDashboard() {
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
+  const terms = useMemo(() => termOptions(list), [list])
   // 진행률 분모는 행마다 다르다(학년별 검사지) — 서버가 행마다 계산해 싣는다(`progress`, lib/session-progress).
   const rows = useMemo(
     () => sortSessions(filterSessions(list, filters, todayKey), sort),
@@ -82,6 +85,17 @@ export function AdminDashboard() {
   const refresh = () => { void queryClient.invalidateQueries({ queryKey: adminKeys.sessions }) }
 
   const [sheetsOpen, setSheetsOpen] = useState(false)
+  // 전체 데이터 엑셀 받기 — 담당자 요청(2026-11-05), 담을 것은 담당자 확정(2026-11-06, lib/excel-export). 결과보고서 받기와 같은
+  // 받는 방식(lib/download)이라 로그인이 끝났으면 화면이 JSON 원문으로 바뀌지 않고 아래 줄에 알린다.
+  const [exporting, setExporting] = useState(false)
+  const [exportErr, setExportErr] = useState<{ text: string; login: boolean } | null>(null)
+  async function exportAll() {
+    setExporting(true); setExportErr(null)
+    const res = await fetchFile('/api/admin/export.xlsx', `읽기검사_전체데이터_${kstDateKey(new Date())}.xlsx`, '엑셀 파일을 받지 못했어요.')
+    setExporting(false)
+    if (!res.ok) { setExportErr({ text: res.error, login: res.status === 401 }); return }
+    saveBlobAs(res.blob, res.name)
+  }
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutErr, setLogoutErr] = useState('')
   async function logout() {
@@ -121,10 +135,20 @@ export function AdminDashboard() {
           <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
           <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열려요 · 카드와 학교를 누르면 목록을 걸러 볼 수 있어요</p>
         </div>
-        {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다 */}
+        {/* 머리 버튼은 한 묶음으로 오른쪽에 둔다 — 버튼이 다섯 개가 되자 1024px에서 「로그아웃」 하나만 아랫줄 왼쪽으로 떨어졌다
+            (2026-11-07 로컬 시험 스택 점검). 묶음이면 줄이 바뀌어도 오른쪽 정렬로 함께 접힌다 */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다.
+            학기는 학기 필터가 걸려 있으면 그 학기, 아니면 검사가 있는 가장 최근 학기(보통 지금 학기 — 교사 결과지가 처음
+            보이는 학기와 같은 규칙, lib/results-view defaultTerm. 2026-11-05 학기 구분) */}
         <button type="button" onClick={() => setSheetsOpen(true)}
-          className="ml-auto rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
+          className="rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
           결과지 받기
+        </button>
+        {/* 전체 데이터 엑셀(아동 코드만 — 이름 없음). 필터와 상관없이 제출된 검사 전부다 */}
+        <button type="button" onClick={() => void exportAll()} disabled={exporting}
+          className="rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10 disabled:opacity-50">
+          {exporting ? '엑셀 만드는 중…' : '전체 데이터 받기'}
         </button>
         <Link href="/admin/codes"
           className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue">
@@ -143,7 +167,14 @@ export function AdminDashboard() {
           className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-50">
           {loggingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
+        </div>
         {logoutErr && <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">{logoutErr}</p>}
+        {exportErr && (
+          <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">
+            {exportErr.text}
+            {exportErr.login && <>{' '}<Link href={loginHref} className="text-blue underline">다시 로그인</Link></>}
+          </p>
+        )}
       </div>
       {isError && (
         <p role="alert" className="border-b border-amber/40 bg-amber/10 px-5 py-2 text-[13px] text-amber">
@@ -163,10 +194,11 @@ export function AdminDashboard() {
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
       <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}
-        schools={schools} grades={grades}
+        schools={schools} grades={grades} terms={terms}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />
       {sheetsOpen && (
-        <SheetsDialog sessions={sessions} initialSchool={filters.school} loginHref={loginHref} onClose={() => setSheetsOpen(false)} />
+        <SheetsDialog sessions={sessions} initialSchool={filters.school} term={filters.term ?? terms[0] ?? termKeyOf(now.toISOString())}
+          loginHref={loginHref} onClose={() => setSheetsOpen(false)} />
       )}
     </div>
   )

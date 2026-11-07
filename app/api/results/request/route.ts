@@ -12,10 +12,10 @@
 // — 기존 레이트리미터와 같은 한계를 받아들인다.
 import { NextResponse } from 'next/server'
 import { createResultsToken } from '@/lib/auth'
-import { classResults, findClassCode } from '@/lib/db'
+import { classResults, findClassCode, listRosterAll } from '@/lib/db'
 import { env } from '@/lib/env'
 import { resultsLinkMail, sendMail } from '@/lib/mail'
-import { buildChildren, maskEmail, summarize } from '@/lib/results'
+import { buildChildren, defaultTerm, maskEmail, summarize, termGroups } from '@/lib/results'
 import { clientIp, createRateLimiter, jsonError, VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS } from '@/lib/request'
 import { resultsRequestSchema } from '@/lib/schema'
 
@@ -55,10 +55,15 @@ export async function POST(req: Request) {
     // 발급 이메일 필수화(2026-09-22) 뒤로는 도달하지 않는 방어선. 안내 UI는 두지 않는다(사용자 확정).
     if (!row.teacher_email) return jsonError('이 학급은 이메일이 등록돼 있지 않아요. 담당자에게 문의해 주세요.', 400)
 
-    const [token, rows] = await Promise.all([
+    const [token, allRows, roster] = await Promise.all([
       createResultsToken(row.id, env('SESSION_SECRET')),
       classResults(row.id),
+      listRosterAll(row.id),
     ])
+    // 명단에서 뺀 아이의 검사는 링크의 표·[전체 PDF]에 들지 않는다(lib/results splitRemoved) — 아래 수도 그것을 빼고 센다.
+    // 빼지 않으면 뺀 아이만 채점된 반이 「받을 수 있어요」를 듣고 빈 표를 연다(2026-11-07 통합 점검)
+    const removedNos = new Set(roster.filter(r => r.removed).map(r => r.child_no))
+    const rows = allRows.filter(r => !removedNos.has(r.child_no))
     // Host 헤더는 위조 가능 — APP_URL이 있으면 그것을 쓴다(apply·approve 라우트와 같은 규칙).
     const origin = process.env.APP_URL?.trim() || new URL(req.url).origin
     const m = resultsLinkMail({
@@ -72,10 +77,13 @@ export async function POST(req: Request) {
     }
     lastSentAt.set(key, Date.now())
 
-    // 받을 수 있는 결과지 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 여기서 필요 없다
+    // 받을 수 있는 결과지 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 뺀 아이를 가리는 데만 쓴다
     // (세션만으로 센다 — 미실시는 채점 수와 무관). 「채점 완료」 칸이 아니라 받을 수 있는 수를 쓴다 — 스캔본
     // 쓰기만 남은 아이는 채점 완료가 아니어도 링크에서 읽기 점수를 볼 수 있다(lib/results-view summarize).
-    const scoredCount = summarize(buildChildren([], rows)).downloadable
+    // 링크가 처음 보이는 학기(`defaultTerm` — 지금 학기, 검사가 없으면 검사가 있는 최근 학기)의 수다. 학기를 섞어 세면
+    // 1학기 결과지만 있는 반이 2학기에 「받을 수 있어요」를 듣고 빈 표를 연다(학기 구분 — 사용자 확정 2026-11-05).
+    const shown = defaultTerm(termGroups(rows).map(g => ({ current: g.current, children: buildChildren([], g.rows) })))
+    const scoredCount = shown ? summarize(shown.children).downloadable : 0
     return NextResponse.json({ sent: true, maskedEmail: maskEmail(row.teacher_email), scoredCount })
   } catch (e) {
     console.error('[results/request] 실패', e)

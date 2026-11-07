@@ -3,6 +3,7 @@
 // 서버가 계산해 행에 싣는다(lib/session-progress.ts → listSessions).
 import type { Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
+import { parseTermKey, termKeyOf } from '@/lib/format'
 
 export type { Totals }
 
@@ -18,19 +19,22 @@ export interface Filters {
   status: StatusFilter
   school: string | null
   grade: number | null
+  /** 학기(`2026-2`, lib/format termKey) — 검사 시작 시각의 KST 학년도·학기. null이면 모든 학기.
+   *  사용자 확정(2026-11-05, 담당자 회신 아님): 같은 학급 코드로 1·2학기를 검사한 반을 학기별로 나눠 보게 */
+  term: string | null
   today: boolean
 }
 
 export type SortKey = 'name' | 'school' | 'grade' | 'started' | 'submitted' | 'progress'
 export interface Sort { key: SortKey; dir: 'asc' | 'desc' }
 
-export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, today: false }
+export const DEFAULT_FILTERS: Filters = { q: '', status: 'all', school: null, grade: null, term: null, today: false }
 export const DEFAULT_SORT: Sort = { key: 'started', dir: 'desc' }
 
 /** 목록을 거르는 조건이 하나라도 걸려 있나 — 「전체 검사」 카드는 아무것도 안 걸렸을 때만 켜진 모양이다. 학교·학년·검색만
  *  걸려 있어도 켜져 보여, 전체를 보고 있다고 오해했다(2026-10-12 점검). 검색은 공백뿐이면 거르지 않는다(filterSessions와 같다). */
 export function hasActiveFilters(f: Filters): boolean {
-  return f.q.trim() !== '' || f.status !== 'all' || f.school !== null || f.grade !== null || f.today
+  return f.q.trim() !== '' || f.status !== 'all' || f.school !== null || f.grade !== null || f.term !== null || f.today
 }
 
 /** 목록 체크리스트 칸 — 표시한 발달 영역 수와 「특이사항 없음」(none)을 가른다. none은 영역이 아니다 — 세면 「특이사항
@@ -60,6 +64,9 @@ export function kstDateKey(d: Date): string {
  *
  * 아동 식별은 `(class_code_id, child_no)`로 한다. 이름은 동명이인이 있고, 세션에 복사된
  * 학급 정보는 코드가 나중에 수정돼도 검사 당시 값을 유지하므로 묶는 키로 쓰기에 불안정하다.
+ * 그리고 **같은 학기 안에서만** 센다(lib/format termKeyOf) — 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도
+ * 검사하는데, 2학기 검사는 1학기 검사의 재검사가 아니다(교사 결과지의 차수와 같은 규칙 — lib/results termGroups.
+ * 사용자 확정 2026-11-05, 담당자 회신 아님).
  *
  * 회차는 시작 시각(`started_at`) 오름차순이다 — 목록의 정렬·필터와 무관하게 고정돼야
  * 한다. 화면 정렬을 바꿨다고 "1회차"가 다른 세션을 가리키면 회차 표기 자체가 무의미해진다.
@@ -74,7 +81,7 @@ export function retestOrdinals(
 ): Map<string, { nth: number; of: number }> {
   const groups = new Map<string, RetestRow[]>()
   for (const s of sessions) {
-    const key = `${s.class_code_id}\u0000${s.child_no}`
+    const key = `${s.class_code_id}\u0000${s.child_no}\u0000${termKeyOf(s.started_at)}`
     const list = groups.get(key)
     if (list) list.push(s)
     else groups.set(key, [s])
@@ -129,6 +136,11 @@ export function gradeOptions(sessions: SessionListRow[]): number[] {
   return [...new Set(sessions.map(s => s.grade))].sort((a, b) => a - b)
 }
 
+/** 검사가 있는 학기(`2026-2`), 최근 학기 먼저 */
+export function termOptions(sessions: Pick<SessionListRow, 'started_at'>[]): string[] {
+  return [...new Set(sessions.map(s => termKeyOf(s.started_at)))].sort((a, b) => b.localeCompare(a))
+}
+
 // ---------- 필터 · 정렬 ----------
 
 /** 담당자가 스캔본을 보고 쓰기를 채점할 차례 — 목록 진행률 칸의 파란 「스캔본 채점」 배지와 같은 조건(SessionTable) */
@@ -144,6 +156,7 @@ export function filterSessions(sessions: SessionListRow[], f: Filters, todayKey:
     if (f.status === 'scanReady' && !awaitsScanScoring(s)) return false
     if (f.school !== null && s.school_name !== f.school) return false
     if (f.grade !== null && s.grade !== f.grade) return false
+    if (f.term !== null && termKeyOf(s.started_at) !== f.term) return false
     if (f.today && kstDateKey(new Date(s.started_at)) !== todayKey) return false
     if (keyword
       && !s.child_name.includes(keyword)
@@ -223,12 +236,14 @@ export function parseFilters(sp: URLSearchParams): { filters: Filters; sort: Sor
   const gradeRaw = Number(sp.get('grade'))
   const key = sp.get('sort') as SortKey | null
   const dir = sp.get('dir')
+  const term = sp.get('term')
   return {
     filters: {
       q: sp.get('q') ?? '',
       status: status !== null && STATUS_SET.has(status) ? status : 'all',
       school: sp.get('school'),
       grade: Number.isInteger(gradeRaw) && gradeRaw > 0 ? gradeRaw : null,
+      term: term !== null && parseTermKey(term) ? term : null,
       today: sp.get('today') === '1',
     },
     sort: {
@@ -245,6 +260,7 @@ export function filtersToQuery(f: Filters, sort: Sort): string {
   if (f.status !== 'all') sp.set('status', f.status)
   if (f.school !== null) sp.set('school', f.school)
   if (f.grade !== null) sp.set('grade', String(f.grade))
+  if (f.term !== null) sp.set('term', f.term)
   if (f.today) sp.set('today', '1')
   if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) {
     sp.set('sort', sort.key)
@@ -269,12 +285,14 @@ export interface SchoolSheetSummary { school: string; classes: ClassSheetSummary
 /**
  * 「결과지 받기」 창의 학교·반별 준비 현황(담당자 요청 2026-10-24). 아이마다 **받을 수 있는 것 중 최신** 검사를 고른다 —
  * 서버가 실제로 넣는 장과 같은 규칙이다(lib/results latestScored · lib/pdf/class-sheets). 학교는 이름순, 반은 학년·반 순.
+ * `term`(`2026-2`) 학기의 검사만 센다 — 서버도 학기 하나의 결과지를 묶는다(`?term=`, 학기 구분 2026-11-05).
  */
 export function classSheetSummaries(
   sessions: readonly Pick<SessionListRow, 'class_code_id' | 'child_no' | 'started_at' | 'school_name' | 'grade' | 'class_no' | 'teacher_name' | 'final' | 'sheetReady'>[],
+  term: string,
 ): SchoolSheetSummary[] {
   const byClass = new Map<string, typeof sessions[number][]>()
-  for (const s of sessions) byClass.set(s.class_code_id, [...(byClass.get(s.class_code_id) ?? []), s])
+  for (const s of sessions) if (termKeyOf(s.started_at) === term) byClass.set(s.class_code_id, [...(byClass.get(s.class_code_id) ?? []), s])
   const bySchool = new Map<string, ClassSheetSummary[]>()
   for (const [classCodeId, rows] of byClass) {
     const byChild = new Map<number, typeof rows>()

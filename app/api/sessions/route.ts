@@ -18,7 +18,7 @@
 //   그냥 fromRoster를 빼고 직접 입력 경로로 보내면 그만이다 — 서버 복사 보장은 클라이언트가
 //   이 모드를 선택했을 때만 성립하는 opt-in 보장이다).
 import { NextResponse } from 'next/server'
-import { createSession, findClassCode, listRoster } from '@/lib/db'
+import { addRosterChild, createSession, findClassCode, hasRoster, listRoster, removedRosterState } from '@/lib/db'
 import { createSessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { clientIp, createRateLimiter, jsonError, PUBLIC_RATE_LIMIT, PUBLIC_RATE_WINDOW_MS } from '@/lib/request'
@@ -58,16 +58,35 @@ export async function POST(req: Request) {
       sessionId = await createSession({
         classCode, childNo: child.child_no,
         birthYmd: child.birth_ymd, gender: child.gender, childName: child.child_name,
-        // 검사할 때는 동의를 받지 않는다(담당자 요청 2026-10-22) — 명단 아동은 신청 때 확인했다(lib/db consentedAt)
-        consentedAt: classCode.applied_at,
+        // 검사할 때는 동의를 받지 않는다(담당자 요청 2026-10-22) — 명단 아동은 신청 때 확인했다(lib/db consentedAt).
+        // 검사 중 명단에 추가한 아이는 추가할 때 확인한 시각이다(migration 009)
+        consentedAt: child.consented_at ?? classCode.applied_at,
         idemKey: d.idemKey,
       })
     } else {
+      // 「명단에 추가」(사용자 확정 2026-11-05): 명단이 있는 학급에서만, 그 번호가 명단에 없을 때만 넣는다 — 이미 있는 번호는
+      // 덮지 않는다(addRosterChild 'exists'). 추가되면 그 시각이 이 아이의 동의 확인이다. 세션보다 먼저 넣는 것은 세션을 만든 뒤
+      // 추가가 실패하면 검사는 시작됐는데 다음에도 드롭다운에 없어서다 — 거꾸로 추가만 되고 세션이 실패하면 다시 누를 때 드롭다운에 있다.
+      // 명단에서 뺀 번호(사용자 확정 2026-11-07 — 담당자 회신 아님): 결과는 (학급, 번호)로 묶인다(lib/results). 그 번호에 검사가
+      // 남아 있으면 새 아이의 검사가 뺀 아이의 기록과 섞이므로 「명단에 추가」를 켜도 막는다(세션도 명단도 건드리지 않는다).
+      // 검사가 없으면 「명단에 추가」로 그 자리를 되살릴 수 있지만, 켜지 않으면 뺀 번호라 결과지 표에 보이지 않는 검사가 되므로 막는다.
+      // 시작 화면 확인 창이 verify-code `removedNo`로 미리 알리고 시작을 막는다 — 여기가 실제 관문이다
+      const removed = await removedRosterState(classCode.id, d.childNo)
+      if (removed?.hasTests)
+        return jsonError(`${d.childNo}번은 명단에서 뺀 학생의 번호예요. 검사 기록이 섞이지 않게 다른 번호로 입력해 주세요.`, 409)
+      if (removed && !d.addToRoster)
+        return jsonError(`${d.childNo}번은 명단에서 뺀 학생의 번호예요. 다른 번호로 입력하거나 「명단에 추가」를 켜 주세요.`, 409)
+      let consentedAt: string | null = null
+      if (d.addToRoster && await hasRoster(classCode.id)) {
+        const at = new Date().toISOString()
+        const r = await addRosterChild(classCode.id, { childNo: d.childNo, name: d.name, gender: d.gender, birthYmd: d.birthYmd }, at)
+        if (r === 'added') consentedAt = at
+      }
       sessionId = await createSession({
         classCode, childNo: d.childNo,
         birthYmd: d.birthYmd, gender: d.gender, childName: d.name,
-        // 명단 밖 아동은 신청 때 확인한 대상이 아니다 — 확인 기록 없음(관리자 결과지 「보호자 동의 기록 없음」)
-        consentedAt: null,
+        // 명단 밖 아동은 신청 때 확인한 대상이 아니다 — 확인 기록 없음(관리자 결과지 「보호자 동의 기록 없음」). 방금 명단에 넣은 아이는 그 확인 시각
+        consentedAt,
         idemKey: d.idemKey,
       })
     }

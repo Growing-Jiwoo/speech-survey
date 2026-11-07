@@ -16,6 +16,8 @@ vi.mock('@/lib/db', () => ({
   sessionDetail: vi.fn(),
   // 관리자 PDF 파일명의 재검사 회차 — 문서 내용(renderReport 입력)과는 무관하다
   childSessions: vi.fn(async () => []),
+  // 교사 경로는 ids로 골라도 명단에서 뺀 아이를 가린다(lib/pdf/class-sheets excludeRemoved) — 뺀 아이 없음
+  listRosterAll: vi.fn(async () => []),
 }))
 vi.mock('@/lib/pdf/report', () => ({ renderReport: vi.fn() }))
 // 교사 라우트만 pdf-lib으로 병합한다 — 보고서 생성을 모킹했으므로 병합도 흉내만 낸다.
@@ -46,7 +48,7 @@ const CODE_ROW = {
   school_region: 'daegu', school_id: 'B000002944', school_name: '대구가창초등학교',
   grade: 1, class_no: 2, teacher_name: '김서연',
   teacher_phone: null, teacher_email: 'kim@school.kr',
-  created_at: '2026-09-21T00:00:00.000Z', status: 'active' as const, applied_at: null,
+  created_at: '2026-09-21T00:00:00.000Z', status: 'active' as const, applied_at: null, apply_seq: 1,
 }
 
 /** 채점이 절반쯤 된 검사 — 낱말은 O/X가 일부만, 문장은 전부, 쓰기도 전부.
