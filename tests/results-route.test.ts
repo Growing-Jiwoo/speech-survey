@@ -160,6 +160,19 @@ describe('POST /api/results/request', () => {
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
   })
+  it('[REGRESSION] scoredCount는 명단에서 뺀 아이를 세지 않는다 — 링크의 표에 없는 아이로 「받을 수 있어요」를 말하지 않게(2026-11-07)', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([{
+      id: 's1', child_no: 1, child_name: '가', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
+      started_at: '2026-09-22T01:00:00.000Z', submitted_at: '2026-09-22T01:20:00.000Z',
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'scan' as const, writing_scan: null,
+    }])
+    vi.mocked(db.listRosterAll).mockResolvedValueOnce([
+      { child_no: 1, child_name: '가', gender: '여', birth_ymd: '190312', consented_at: null, removed: true },
+    ])
+    const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
+    expect(json.scoredCount).toBe(0)
+  })
   // 담당자 요청(2026-10-22): 시작 화면에 「쓰기 스캔본 올리기」 블록 — 결과지처럼 담임 메일로 링크를 보낸다(코드만으로 올리게 하면
   // 아이 앞 기기에서 아동 기록에 그림을 올릴 수 있다 — 담당자 확정 같은 날, 사용자 제안에 「알겠어!!」).
   it('스캔본 올리기(purpose: scan)는 같은 결과지 화면 링크에 ?scan=1을 붙여 스캔본 메일로 보낸다', async () => {
