@@ -239,7 +239,14 @@ export interface ResultsSummary {
   downloadable: number
 }
 
-export function summarize(children: ResultsChild[]): ResultsSummary {
+/**
+ * @param acrossIds 학기를 가로지른 스캔 대상 검사 id(`scanTargetIdsAcross`). 주면 표 배지와 같은 `termSessionLabel`로 센다 —
+ *   기록지가 다음 학기 검사로 가는 검사(「다음 학기 검사로 대체」)는 이 학기에 올릴 스캔본이 없으니 「스캔 대기」로 세지 않는다.
+ *   그 검사의 쓰기는 앞으로도 채워지지 않으므로 화면 방식의 빈 쓰기(A안)처럼 **읽기 채점 상태**로 센다 — 읽기 채점이 끝났으면
+ *   「채점 완료」(판정도 센다 — 접힌 행의 판정 칸이 그 판정을 보인다), 아니면 「채점 중」(사용자 확정 2026-11-07, 담당자 회신 아님).
+ *   안 주면(학기를 가로지를 필요가 없는 호출부 — 결과지 요청의 받을 수 있는 수) 종전대로 `sessionLabel`.
+ */
+export function summarize(children: ResultsChild[], acrossIds?: ReadonlyMap<number, string>): ResultsSummary {
   const s: ResultsSummary = { tested: 0, scored: 0, scoring: 0, scanWait: 0, unsubmitted: 0, risk: 0, caution: 0, untested: 0, downloadable: 0 }
   for (const c of children) {
     const rep = representativeSession(c)
@@ -249,7 +256,8 @@ export function summarize(children: ResultsChild[]): ResultsSummary {
     // 칸은 대표 검사의 화면 상태 하나로 정한다 — 접힌 행이 그리는 배지와 같은 값이어야 요약 숫자와 표가 맞는다
     // (종전에는 요약이 받을 수 있는 앞 차수를, 표가 최신 세션을 봐 「채점 완료 6」 옆 배지가 5개였다, 2026-10-12 점검).
     // 스캔 대기가 앞서는 것은 sessionLabel이 정한다 — 선생님이 할 일이 남았다(시작 화면 배너의 수와 같다).
-    const label = sessionLabel(rep, rep.id)
+    let label: SessionLabel = acrossIds ? termSessionLabel(rep, rep.id, acrossIds.get(c.childNo)) : sessionLabel(rep, rep.id)
+    if (label === 'laterTerm') label = rep.status === 'scored' ? 'scored' : 'scoring'
     if (label === 'scored') { s.scored++; if (rep.verdict === 'risk') s.risk++; if (rep.verdict === 'caution') s.caution++ }
     else if (label === 'scoring') s.scoring++
     else if (label === 'scanWait') s.scanWait++

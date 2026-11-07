@@ -176,7 +176,9 @@ export function ResultsView({ token, scanLink = false }: {
     const chosen = termPick !== null ? data.terms.find(t => t.key === termPick) : undefined
     return chosen ?? (scanLink ? data.terms.find(t => t.current) : undefined) ?? defaultTerm(data.terms)
   }, [data, termPick, scanLink])
-  const summary = useMemo(() => (view ? summarize(view.children) : null), [view])
+  // 학기를 가로지른 스캔 대상 — 표 배지(termSessionLabel)와 요약 칸이 같은 값으로 센다(「다음 학기 검사로 대체」를 스캔 대기로 세지 않게, 2026-11-07)
+  const acrossIds = useMemo(() => scanTargetIdsAcross(data?.terms ?? []), [data])
+  const summary = useMemo(() => (view ? summarize(view.children, acrossIds) : null), [view, acrossIds])
   /** 학기를 바꾸면 고른 검사·펼친 줄·받기 오류를 비운다 — 다른 학기의 검사를 고른 채 받으면 화면에 없는 장이 섞인다 */
   function chooseTerm(key: string) {
     setTermPick(key); setPicked(new Set()); setOpen(new Set()); setDlErr('')
@@ -306,7 +308,6 @@ export function ResultsView({ token, scanLink = false }: {
     return scanTargetsAcross(r.data.terms)
   }
   const targets = scanTargetsAcross(terms)
-  const acrossIds = scanTargetIdsAcross(terms)
   // 이 반에 스캔본 방식 검사가 하나라도 있으면 표 아래 안내에 스캔 설명을 붙인다(범례는 2026-10-22에 뺐다)
   const hasScan = children.some(c => c.sessions.some(x => x.writingMode === 'scan'))
   // 올리기 카드는 어느 학기에서든 — 다른 학기에 스캔본 방식 검사가 있어도 낸다

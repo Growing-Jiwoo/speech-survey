@@ -702,6 +702,14 @@ describe('rosterWithTested', () => {
       expect(r.scanPending).toBe(0)
     })
 
+    it('[REGRESSION] 명단에서 뺀 아이의 스캔 대기는 세지 않는다 — 결과지 올리기 대상이 아니라 줄일 길이 없다(2026-11-07 통합 점검)', async () => {
+      enqueue('class_roster', { data: [...ROSTER, { child_no: 5, child_name: '정민준', gender: '남', birth_ymd: '190606', removed_at: '2026-11-06T00:00:00Z' }], error: null })
+      enqueue('sessions', { data: [sess(1), sess(5)], error: null })
+      const r = await rosterWithTested(CLASS_CODE.id, isWw)
+      expect(r.roster.map(c => c.childNo)).toEqual([1, 2, 3, 4])
+      expect(r.scanPending).toBe(1)
+    })
+
     it('명단 밖(직접 입력) 아이의 스캔 대기도 센다 — 시작 화면 배너는 반 전체 기준', async () => {
       const r = await stateOf([sess(9)])
       expect(r.roster.every(c => c.writing === null)).toBe(true)

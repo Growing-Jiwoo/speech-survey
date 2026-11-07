@@ -17,7 +17,7 @@
 // 학급 id의 해시라 비밀이 아니다)·쓰는 칸의 종류와 개수(문항은 싣지 않는다)·아이마다 쓰기 상태·스캔 대기 수.
 // 코드 소지가 곧 학급 접근이라는 전제는 그대로다 — 명단 외에 새로 드러나는 개인정보는 없다.
 import { NextResponse } from 'next/server'
-import { childTestState, findClassCode, rosterWithTested } from '@/lib/db'
+import { childTestState, findClassCode, removedRosterState, rosterWithTested } from '@/lib/db'
 import { formFor } from '@/lib/forms'
 import { semesterOf } from '@/lib/format'
 import { itemsFor } from '@/lib/items'
@@ -54,8 +54,12 @@ export async function POST(req: Request) {
       const layout: SheetLayout = { kind: f.writingSection === 'word_writing' ? 'word' : 'sentence', count: f.writingItems.length }
       return NextResponse.json({ ...base, roster, scanPending, sheet: { tag, layout } })
     }
-    const alreadyTested = await childTestState(row.id, parsed.data.childNo)
-    return NextResponse.json({ ...base, alreadyTested })
+    // removedNo — 그 번호가 명단에서 뺀 아이 자리면 { hasTests }(사용자 확정 2026-11-07, 담당자 회신 아님). 확인 창이 경고하고,
+    // 검사가 남은 번호는 시작을 막고, 없는 번호는 「명단에 추가」를 켜야 시작할 수 있다 — 세션 생성(app/api/sessions)이 같은 규칙으로 막는다
+    const [alreadyTested, removedNo] = await Promise.all([
+      childTestState(row.id, parsed.data.childNo), removedRosterState(row.id, parsed.data.childNo),
+    ])
+    return NextResponse.json({ ...base, alreadyTested, removedNo })
   } catch (e) {
     console.error('[verify-code] 조회 실패', e)
     return jsonError('확인하지 못했어요. 잠시 후 다시 시도해 주세요.', 502)

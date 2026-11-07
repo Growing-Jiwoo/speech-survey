@@ -386,6 +386,14 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(res.status).toBe(403)
     expect(pdf.renderReport).not.toHaveBeenCalled()
   })
+  it('[REGRESSION] 명단에서 뺀 아이의 검사를 ids로 고르면 다른 학급 id처럼 403 — 화면 표에 없는 검사를 링크로 받지 않게(2026-11-07 통합 점검)', async () => {
+    vi.mocked(db.listRosterAll).mockResolvedValueOnce([
+      { child_no: 3, child_name: '아이3', gender: '여', birth_ymd: '190312', consented_at: null, removed: true },
+    ])
+    const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,b1')
+    expect(res.status).toBe(403)
+    expect(pdf.renderReport).not.toHaveBeenCalled()
+  })
   it('채점 완료가 아닌 세션(미제출)을 고르면 400', async () => {
     expect((await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=c1')).status).toBe(400)
   })

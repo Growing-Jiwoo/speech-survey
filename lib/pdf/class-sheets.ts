@@ -3,7 +3,7 @@
 // 같은 파일이어야 한다. 학급(권한)은 호출부가 정한다: 교사는 결과지 토큰, 관리자는 proxy 인증 + 코드 id.
 // 세션마다 관리자 한 장 PDF와 **같은** `renderReport`를 돌려 한 문서에 이어 붙인다(pdf-lib copyPages).
 //   ids 없음 → **한 학기**(`term`, 없으면 지금 학기)의 채점 완료 세션, 아이당 최신 1장, 번호순 (25명 반 = 한 파일)
-//   ids 있음 → 그 세션들만(옛 차수·지난 학기도 가능). **전부 이 학급 소속인지 검증** — 아니면 403.
+//   ids 있음 → 그 세션들만(옛 차수·지난 학기도 가능). **전부 이 학급 소속인지 검증** — 아니면 403(교사 결과지는 명단에서 뺀 아이의 검사도 403).
 //   재검사 차수(파일 이름의 `_2차`)는 학기 안에서 센다(lib/results termGroups — 사용자 확정 2026-11-05, 담당자 회신 아님).
 //   쪽 순서는 어느 쪽이든 번호순, 같은 아이는 차수순(ids를 보낸 순서가 아니다).
 // 채점 완료(lib/results의 scored)가 아닌 세션은 400 — 빈 결과지가 나가면 오해한다.
@@ -46,7 +46,8 @@ export async function classSheetsResponse(
   { schoolInName = false, term = null, excludeRemoved = false }: {
     schoolInName?: boolean
     term?: string | null
-    /** 교사 결과지의 [전체 PDF] — 명단에서 뺀 아이를 넣지 않는다(화면 표에 없는 아이가 파일에 실리지 않게, lib/results splitRemoved).
+    /** 교사 결과지 — 명단에서 뺀 아이를 넣지 않는다(화면 표에 없는 아이가 파일에 실리지 않게, lib/results splitRemoved).
+     *  `?ids=`에 뺀 아이의 검사가 섞이면 다른 학급의 id처럼 403이다 — 화면에 없는 검사를 링크로 받을 수 없게(2026-11-07 통합 점검).
      *  관리자의 학급 받기는 넣는다 — 검사 기록은 남아 있고 관리자 화면은 뺀 아이의 검사도 그대로 보인다 */
     excludeRemoved?: boolean
   } = {},
@@ -54,7 +55,7 @@ export async function classSheetsResponse(
   if (term !== null && !parseTermKey(term)) return jsonError('학기를 확인해 주세요.', 400)
   try {
     const [row, allRows, roster] = await Promise.all([
-      findClassCodeById(classCodeId), classResults(classCodeId), excludeRemoved && idsParam === null ? listRosterAll(classCodeId) : [],
+      findClassCodeById(classCodeId), classResults(classCodeId), excludeRemoved ? listRosterAll(classCodeId) : [],
     ])
     if (!row) return jsonError('학급 정보가 없어요.', 404)
     const removedNos = new Set(roster.filter(r => r.removed).map(r => r.child_no))

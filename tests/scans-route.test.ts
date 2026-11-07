@@ -8,6 +8,7 @@ vi.mock('@/lib/db', () => ({
   removeScanObjects: vi.fn().mockResolvedValue(undefined),
   restoreWritingScan: vi.fn().mockResolvedValue(undefined),
   latestSubmittedSessionId: vi.fn(),
+  removedRosterState: vi.fn(),
 }))
 
 import { POST } from '@/app/api/results/[token]/scans/route'
@@ -44,10 +45,20 @@ beforeEach(async () => {
   vi.mocked(db.removeScanObjects).mockResolvedValue(undefined)
   vi.mocked(db.restoreWritingScan).mockResolvedValue(undefined)
   vi.mocked(db.latestSubmittedSessionId).mockResolvedValue(SID)   // 보낸 검사가 그 아이의 가장 최근 제출 검사
+  vi.mocked(db.removedRosterState).mockResolvedValue(null)         // 명단에 있는 아이
   token = await createResultsToken(CID, 'test-secret')
 })
 
 describe('POST /api/results/[token]/scans — 쓰기 기록지 스캔본 한 장', () => {
+  it('[REGRESSION] 명단에서 뺀 아이의 검사에는 올리지 않는다 — 409, 파일도 행도 건드리지 않는다(2026-11-07 통합 점검)', async () => {
+    vi.mocked(db.removedRosterState).mockResolvedValue({ hasTests: true })
+    const res = await post({ sessionId: SID, file: JPEG })
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toContain('명단에서 뺀 학생이에요')
+    expect(db.removedRosterState).toHaveBeenCalledWith(CID, 5)
+    expect(db.uploadScanObject).not.toHaveBeenCalled()
+    expect(db.upsertWritingScan).not.toHaveBeenCalled()
+  })
   it('올린다: 새 경로에 파일 → 스캔본 행. Content-Type은 매직바이트로 서버가 정한다', async () => {
     const res = await post({ sessionId: SID, file: JPEG })
     expect(res.status).toBe(200)

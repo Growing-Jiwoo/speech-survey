@@ -14,7 +14,8 @@
 import { NextResponse } from 'next/server'
 import { verifyResultsToken } from '@/lib/auth'
 import {
-  latestSubmittedSessionId, removeScanObjects, restoreWritingScan, scanUploadTarget, uploadScanObject, upsertWritingScan,
+  latestSubmittedSessionId, removedRosterState, removeScanObjects, restoreWritingScan, scanUploadTarget, uploadScanObject,
+  upsertWritingScan,
 } from '@/lib/db'
 import { env } from '@/lib/env'
 import { formOfSession } from '@/lib/forms'
@@ -50,6 +51,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const t = await scanUploadTarget(sessionId)
     // 다른 학급의 검사는 없는 검사와 같은 404 — 있다는 사실도 알려 주지 않는다.
     if (!t || t.class_code_id !== classCodeId) return jsonError('검사 기록이 없어요.', 404)
+    // 명단에서 뺀 아이의 검사는 결과지 표·올리기 대상에 없다 — 오래 열어 둔 탭이 옛 목록으로 짝지어 보내도 붙이지 않는다(2026-11-07 통합 점검)
+    if (await removedRosterState(classCodeId, t.child_no))
+      return jsonError('명단에서 뺀 학생이에요. 스캔본을 올리려면 결과지에서 먼저 명단으로 되돌려 주세요.', 409)
     if (!t.submitted_at) return jsonError('아직 제출되지 않은 검사예요.', 409)
     if (t.writing_mode !== 'scan') return jsonError('화면에서 쓰기를 표시한 검사예요.', 409)
     const writingCodes = new Set(itemsFor(formOfSession(t)).writingItems.map(i => i.code))

@@ -6,6 +6,7 @@ vi.mock('@/lib/db', () => ({
   listRoster: vi.fn(),
   hasRoster: vi.fn(),
   addRosterChild: vi.fn(),
+  removedRosterState: vi.fn(),
 }))
 const envMock = vi.hoisted(() => ({ env: vi.fn((): string => 'test-secret') }))
 vi.mock('@/lib/env', () => envMock)
@@ -47,6 +48,36 @@ beforeEach(() => {
   vi.mocked(db.listRoster).mockResolvedValue(ROSTER)
   vi.mocked(db.hasRoster).mockResolvedValue(true)
   vi.mocked(db.addRosterChild).mockResolvedValue('added')
+  vi.mocked(db.removedRosterState).mockResolvedValue(null)
+})
+
+// 명단에서 뺀 번호의 재사용(사용자 확정 2026-11-07 — 담당자 회신 아님): 결과가 (학급, 번호)로 묶여 기록이 섞인다
+describe('POST /api/sessions — 명단에서 뺀 번호로 직접 입력', () => {
+  it('[REGRESSION] 그 번호에 검사가 남아 있으면 「명단에 추가」를 켜도 409 — 세션도 명단도 건드리지 않는다', async () => {
+    vi.mocked(db.removedRosterState).mockResolvedValue({ hasTests: true })
+    for (const extra of [{}, { addToRoster: true }]) {
+      const res = await POST(makeReq({ ...VALID, childNo: 12, ...extra }))
+      expect(res.status).toBe(409)
+      expect((await res.json()).error).toContain('12번은 명단에서 뺀 학생의 번호예요')
+    }
+    expect(db.createSession).not.toHaveBeenCalled()
+    expect(db.addRosterChild).not.toHaveBeenCalled()
+  })
+  it('검사가 없는 뺀 번호: 「명단에 추가」 없이는 409(결과지 표에 숨는 검사가 된다), 켜면 되살리며 시작', async () => {
+    vi.mocked(db.removedRosterState).mockResolvedValue({ hasTests: false })
+    const res = await POST(makeReq({ ...VALID, childNo: 12 }))
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toContain('「명단에 추가」를 켜 주세요')
+    expect(db.createSession).not.toHaveBeenCalled()
+    const ok = await POST(makeReq({ ...VALID, childNo: 12, addToRoster: true }))
+    expect(ok.status).toBe(200)
+    expect(db.addRosterChild).toHaveBeenCalledTimes(1)
+    expect(db.createSession).toHaveBeenCalledTimes(1)
+  })
+  it('명단 모드는 뺀 번호를 따로 보지 않는다 — 뺀 아이는 listRoster에 없어 이미 400', async () => {
+    await POST(makeReq(FROM_ROSTER))
+    expect(db.removedRosterState).not.toHaveBeenCalled()
+  })
 })
 
 describe('POST /api/sessions — 직접 입력하며 명단에 추가 (사용자 확정 2026-11-05)', () => {

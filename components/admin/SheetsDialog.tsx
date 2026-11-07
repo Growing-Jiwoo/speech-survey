@@ -180,7 +180,8 @@ export function SheetsDialog({ sessions, initialSchool, term, loginHref, onClose
         </div>
 
         <p className="break-keep border-t border-line bg-well px-5 py-3 text-[12px] leading-relaxed text-ink-soft">
-          반별 파일은 선생님이 받는 「전체 PDF」와 같아요. 아이마다 읽기 채점이 끝난 가장 최근 검사 한 장이 번호순으로 들어가요.
+          반별 파일은 선생님이 받는 「전체 PDF」와 같은 방식이에요 — 아이마다 읽기 채점이 끝난 가장 최근 검사 한 장이 번호순으로 들어가요.
+          다만 선생님 파일에서 빠지는 <b>명단에서 뺀 학생</b>도 여기에는 들어가요.
           쓰기 채점 전인 아이는 쓰기·최종결과 칸이 비어 나가요.
         </p>
       </div>

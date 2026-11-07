@@ -658,7 +658,7 @@ export async function listRosterAll(classCodeId: string): Promise<ManagedRosterR
     .eq('class_code_id', classCodeId).order('child_no')
   fail(error)
   return ((data ?? []) as unknown as (RosterRow & { removed_at: string | null })[])
-    .map(({ removed_at, ...r }) => ({ ...r, removed: removed_at !== null }))
+    .map(({ removed_at, ...r }) => ({ ...r, removed: removed_at != null }))
 }
 
 /** 명단 행이 하나라도 있는 학급인가(뺀 아이 포함) — 명단 없이 운영하는 학급(관리자 직접 발급)에는 검사 중 추가를 하지
@@ -732,10 +732,14 @@ export async function rosterWithTested(
     /** 쓰기 상태(가장 최근에 제출된 검사 기준) — 기록지 인쇄 창이 「화면 입력함·스캔 올림·스캔 대기」를 보인다. 검사가 없으면 null */
     writing: ScanTargetState | null
   }[]
-  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, 위 쓰기 상태 기준) — 시작 화면 「현재 검사 상황」 블록 */
+  /** 스캔본을 기다리는 아이 수(명단 밖 직접 입력 아이 포함, **명단에서 뺀 아이 제외**, 위 쓰기 상태 기준) — 시작 화면 「현재 검사 상황」 블록 */
   scanPending: number
 }> {
-  const roster = await listRoster(classCodeId)
+  // 뺀 아이까지 읽어 번호를 가린다 — 뺀 아이는 교사 결과지의 올리기 대상(표)에 없어 스캔본을 올릴 길이 없다.
+  // 세면 「스캔 대기 N명」이 영영 줄지 않는다(2026-11-07 통합 점검)
+  const all = await listRosterAll(classCodeId)
+  const roster = all.filter(r => !r.removed)
+  const removedNos = new Set(all.filter(r => r.removed).map(r => r.child_no))
   const { data, error } = await sb().from('sessions')
     .select('child_no, started_at, submitted_at, writing_mode, writing_answers(item_code), sentence_scores(item_code), writing_scans(session_id)')
     .eq('class_code_id', classCodeId).order('started_at')
@@ -751,6 +755,7 @@ export async function rosterWithTested(
   // 붙어(올리기 라우트), 8월 말 검사의 스캔 대기는 9월 시작 화면에도 세야 한다. 「검사함」·「검사 완료 N명」만 지금 학기다.
   const submittedAny = new Set<number>()
   for (const s of rows) {
+    if (removedNos.has(s.child_no)) continue
     if (termKeyOf(s.started_at) === term) {
       const cur = state.get(s.child_no)
       if (s.submitted_at) state.set(s.child_no, 'submitted')
@@ -873,6 +878,25 @@ export async function childTestState(
   const rows = (data ?? []).filter(r => termKeyOf(r.started_at) === term)
   if (rows.length === 0) return null
   return rows.some(r => r.submitted_at) ? 'submitted' : 'inProgress'
+}
+
+/**
+ * 그 번호가 **명단에서 뺀 아이** 자리인가 — 아니면(명단에 있음·명단에 없는 번호·명단 없는 학급) null, 뺀 자리면 그 번호로 이
+ * 학급에 남은 검사가 있는지(`hasTests`, 학기 무관). 사용자 확정(2026-11-07, 담당자 회신 아님): 결과는 (학급, 번호)로 묶이므로
+ * 전학 온 아이를 뺀 번호로 직접 입력하면 뺀 아이의 검사와 섞이고, 명단에 넣지 않으면 뺀 번호라 결과지 표에서 숨는다 —
+ * 세션 생성(app/api/sessions)이 이것으로 막고, 시작 화면 확인 창(verify-code `removedNo`)이 미리 알린다.
+ */
+export async function removedRosterState(
+  classCodeId: string, childNo: number,
+): Promise<{ hasTests: boolean } | null> {
+  const { data, error } = await sb().from('class_roster').select('removed_at')
+    .eq('class_code_id', classCodeId).eq('child_no', childNo).maybeSingle()
+  fail(error)
+  if (!data || data.removed_at == null) return null
+  const { count, error: e2 } = await sb().from('sessions')
+    .select('id', { count: 'exact', head: true }).eq('class_code_id', classCodeId).eq('child_no', childNo)
+  fail(e2)
+  return { hasTests: (count ?? 0) > 0 }
 }
 
 // ---------- 관리자 로그인 레이트리밋 (DB 공유 저장소 — 서버리스에서도 유효) ----------

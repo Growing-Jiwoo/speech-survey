@@ -635,4 +635,17 @@ describe('scanTargetsAcross · termSessionLabel — 학기를 넘는 스캔본 �
     const terms = [{ children: [kid([sess('t2', '2026-09-20T01:00:00Z', false)])] }, { children: [kid([T1])] }]
     expect(scanTargetsAcross(terms)[0].sessionId).toBe('t1')
   })
+  it('[REGRESSION] 요약도 표 배지와 같은 값으로 센다 — 「다음 학기 검사로 대체」는 스캔 대기가 아니라 읽기 채점 상태(2026-11-07 통합 점검)', async () => {
+    const { summarize, scanTargetIdsAcross } = await import('@/lib/results-view')
+    const T2 = sess('t2', '2026-09-20T01:00:00Z')
+    const T1scored: S = { ...T1, status: 'scored', verdict: 'risk' }
+    const terms = [{ children: [kid([T2])] }, { children: [kid([T1scored])] }]
+    const across = scanTargetIdsAcross(terms)
+    // 1학기 표: 대표 검사 t1은 기록지가 t2로 간다 — 스캔 대기로 세면 배지(「다음 학기 검사로 대체」)와 숫자가 어긋난다
+    expect(summarize(terms[1].children, across)).toMatchObject({ scanWait: 0, scored: 1, risk: 1, scoring: 0 })
+    expect(summarize([kid([T1])], across)).toMatchObject({ scanWait: 0, scoring: 1 })
+    // 2학기 표의 t2는 여전히 스캔 대기 · 대상 id를 안 주면 종전대로
+    expect(summarize(terms[0].children, across)).toMatchObject({ scanWait: 1 })
+    expect(summarize(terms[1].children)).toMatchObject({ scanWait: 1, scored: 0 })
+  })
 })

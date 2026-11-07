@@ -123,6 +123,10 @@ interface Confirmed {
   /** 직접 입력한 아이를 명단에 넣을 수 있다 — 명단이 있는 학급이고 그 번호가 명단에 없을 때. 확인 창이 「명단에 추가」 체크를
    *  보인다(사용자 확정 2026-11-05 — 담당자 회신 아님. 직접 입력한 아이는 다음 검사 때 드롭다운에 없어 매번 다시 쳐야 했다) */
   canAddToRoster?: boolean
+  /** 직접 입력한 번호가 **명단에서 뺀 아이** 자리면 그 번호에 검사가 남았는지(verify-code `removedNo`). 사용자 확정(2026-11-07 —
+   *  담당자 회신 아님): 결과는 (학급, 번호)로 묶여, 뺀 번호로 전학 온 아이를 넣으면 기록이 섞이거나 결과지 표에서 숨는다.
+   *  검사가 남았으면 시작을 막고, 없으면 「명단에 추가」를 켜야 시작할 수 있다 — 세션 생성이 같은 규칙으로 막는 것이 실제 관문이다 */
+  removedNo?: { hasTests: boolean } | null
 }
 
 export default function StartPage() {
@@ -342,7 +346,7 @@ export default function StartPage() {
       setSheet(look.data.sheet ?? null); setScanPending(look.data.scanPending ?? 0)
       rosterNow = look.data.roster
     }
-    const r = await postJson<ClassInfo & { alreadyTested: Confirmed['tested'] }>(
+    const r = await postJson<ClassInfo & { alreadyTested: Confirmed['tested']; removedNo?: Confirmed['removedNo'] }>(
       '/api/sessions/verify-code',
       { code: cleanCode, childNo: childNoNum }, '코드를 확인하지 못했어요. 다시 시도해 주세요.')
     if (stale()) return
@@ -361,7 +365,12 @@ export default function StartPage() {
       cls: r.data, code: cleanCode, mode: 'direct', childNo: childNoNum, name: cleanName, rosterClash: clash?.name ?? null,
       identity: null, tested: r.data.alreadyTested,
       idemKey: crypto.randomUUID(),
-      canAddToRoster: rosterNow.length > 0 && !rosterNow.some(c => c.childNo === childNoNum),
+      // 뺀 번호는 rosterNow(명단에 있는 아이)에 없다 — 검사가 없는 뺀 번호는 명단을 모두 뺀 반이라도 「명단에 추가」로 되살릴 수 있고,
+      // 검사가 남은 뺀 번호는 추가해도 기록이 섞이므로 체크를 내지 않는다
+      canAddToRoster: r.data.removedNo
+        ? !r.data.removedNo.hasTests
+        : rosterNow.length > 0 && !rosterNow.some(c => c.childNo === childNoNum),
+      removedNo: r.data.removedNo ?? null,
     })
     setAddToRoster(false)
   }
@@ -700,6 +709,8 @@ export default function StartPage() {
             ? (isResumeChild(confirm) ? '그래도 새로 검사' : '네, 다시 검사할게요')
             : '맞아요, 시작하기'}
           cancelLabel="아니에요"
+          // 뺀 번호는 서버가 409로 막는다 — 누르기 전에 끈다(검사가 남았으면 항상, 없으면 「명단에 추가」를 켤 때까지)
+          confirmDisabled={!!confirm.removedNo && (confirm.removedNo.hasTests || !addToRoster)}
           onConfirm={() => void begin(confirm)} onClose={() => { setConfirm(null); setConfirmErr('') }}>
           <div className="mt-3 text-center text-sm leading-relaxed text-ink-soft">
             {/* 학급·담임(코드가 가리키는 것)과 아동(지금 검사할 사람)은 확인해야 할 대상이
@@ -768,6 +779,14 @@ export default function StartPage() {
                   <span className="text-[12px] text-ink-mute">다음 검사부터 목록에서 고를 수 있어요. 전학 온 학생이라면 켜 주세요.</span>
                 </span>
               </label>
+            )}
+            {confirm.removedNo && (
+              <p className="mt-2 text-[12.5px] leading-relaxed text-rec-deep">
+                {confirm.childNo}번은 <b>명단에서 뺀 학생</b>의 번호예요.<br />
+                {confirm.removedNo.hasTests
+                  ? '검사 기록이 섞이지 않게 다른 번호로 입력해 주세요.'
+                  : <>다른 번호로 입력하거나 위의 <b>「명단에 추가」</b>를 켜 주세요.</>}
+              </p>
             )}
             {confirm.rosterClash && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
