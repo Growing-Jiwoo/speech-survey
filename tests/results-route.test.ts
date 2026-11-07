@@ -5,6 +5,8 @@ vi.mock('@/lib/db', () => ({
   findClassCodeById: vi.fn(),
   classResults: vi.fn(),
   listRoster: vi.fn(),
+  listRosterAll: vi.fn(),
+  setRosterRemoved: vi.fn(),
 }))
 vi.mock('@/lib/mail', () => ({
   resultsLinkMail: vi.fn((v: { resultsUrl: string }) => ({ to: '', subject: '결과지', html: `<a href="${v.resultsUrl}">x</a>` })),
@@ -33,6 +35,7 @@ vi.mock('pdf-lib', async () => {
 
 import { POST as REQUEST } from '@/app/api/results/request/route'
 import { GET as LIST } from '@/app/api/results/[token]/route'
+import { POST as ROSTER } from '@/app/api/results/[token]/roster/route'
 import { GET as SHEETS } from '@/app/api/results/[token]/sheets.pdf/route'
 import { GET as ADMIN_SHEETS } from '@/app/api/admin/codes/[id]/sheets.pdf/route'
 import { createResultsToken } from '@/lib/auth'
@@ -63,6 +66,7 @@ beforeEach(() => {
   vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
   vi.mocked(db.classResults).mockResolvedValue([])
   vi.mocked(db.listRoster).mockResolvedValue([])
+  vi.mocked(db.listRosterAll).mockResolvedValue([])
   vi.mocked(mail.sendMail).mockResolvedValue({ ok: true, id: 'mail-1' })
 })
 
@@ -195,9 +199,9 @@ describe('GET /api/results/[token]', () => {
   }
   beforeEach(() => {
     vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
-    vi.mocked(db.listRoster).mockResolvedValue([
-      { child_no: 1, child_name: '김가나', gender: '여', birth_ymd: '190312' },
-      { child_no: 2, child_name: '김가나', gender: '남', birth_ymd: '190527' },
+    vi.mocked(db.listRosterAll).mockResolvedValue([
+      { child_no: 1, child_name: '김가나', gender: '여', birth_ymd: '190312', consented_at: null, removed: false },
+      { child_no: 2, child_name: '김가나', gender: '남', birth_ymd: '190527', consented_at: null, removed: false },
     ])
     vi.mocked(db.classResults).mockResolvedValue([SESSION])
   })
@@ -420,5 +424,42 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(input.times.rs01).toBe(20)   // 녹음 없는 문장의 읽은 시간 = 제한 시간 — 관리자 PDF와 같은 기본값
     expect(input.session).toMatchObject({ school_name: '대구가창초등학교', grade: 1, child_name: '아이3',
       birth_ymd: '190312', checklist: ['none'] })   // 관리자 PDF와 같은 문서 — 머리글·체크리스트도 찍힌다
+  })
+})
+
+describe('명단에서 뺀 아이 (사용자 확정 2026-11-05)', () => {
+  const S = (id: string, childNo: number) => ({
+    id, child_no: childNo, child_name: `아이${childNo}`, gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
+    started_at: '2026-09-22T01:00:00.000Z', submitted_at: null,
+    recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+    writing_mode: 'screen' as const, writing_scan: null,
+  })
+  beforeEach(() => {
+    vi.mocked(db.findClassCodeById).mockResolvedValue(CODE_ROW)
+    vi.mocked(db.listRosterAll).mockResolvedValue([
+      { child_no: 1, child_name: '아이1', gender: '여', birth_ymd: '190312', consented_at: null, removed: false },
+      { child_no: 2, child_name: '아이2', gender: '남', birth_ymd: '190527', consented_at: null, removed: true },
+    ])
+    vi.mocked(db.classResults).mockResolvedValue([S('s1', 1), S('s2', 2), S('s3', 2)])
+  })
+  it('목록: 뺀 아이는 표에서 빠지고 removed에 검사 수와 함께 온다(생년월일 없음)', async () => {
+    const token = await createResultsToken(CID, 'test-secret')
+    const json = await (await LIST(new Request('http://x'), { params: Promise.resolve({ token }) })).json()
+    expect(json.children.map((c: { childNo: number }) => c.childNo)).toEqual([1])
+    expect(json.children[0].inRoster).toBe(true)
+    expect(json.removed).toEqual([{ childNo: 2, name: '아이2', gender: '남', tests: 2 }])
+  })
+  it('빼기·되살리기 라우트: 토큰의 학급으로만, 없는 번호 404, 만료 토큰 401', async () => {
+    const token = await createResultsToken(CID, 'test-secret')
+    const post = (t: string, body: unknown) => ROSTER(new Request('http://x', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }), { params: Promise.resolve({ token: t }) })
+    vi.mocked(db.setRosterRemoved).mockResolvedValue('ok')
+    expect((await post(token, { childNo: 2, removed: false })).status).toBe(200)
+    expect(db.setRosterRemoved).toHaveBeenCalledWith(CID, 2, false)
+    vi.mocked(db.setRosterRemoved).mockResolvedValue('missing')
+    expect((await post(token, { childNo: 9, removed: true })).status).toBe(404)
+    expect((await post('bad.token', { childNo: 2, removed: true })).status).toBe(401)
+    expect((await post(token, { childNo: 2 })).status).toBe(400)
   })
 })

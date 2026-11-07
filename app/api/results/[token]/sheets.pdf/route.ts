@@ -19,5 +19,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   // 빠진다**(전수 점검 2026-09-22). 값이 아예 없는 것과 빈 값은 다르게 본다: `?ids=`는 「아무도
   // 고르지 않음」이지 「전체」가 아니다 — 같게 보면 선택 0명인 요청이 반 전체를 내려받는다.
   const sp = new URL(req.url).searchParams
-  return classSheetsResponse(classCodeId, sp.has('ids') ? sp.getAll('ids').join(',') : null, 'results/:token/sheets.pdf')
+  return classSheetsResponse(classCodeId, sp.has('ids') ? sp.getAll('ids').join(',') : null, 'results/:token/sheets.pdf', { excludeRemoved: true })
 }

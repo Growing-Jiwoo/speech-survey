@@ -2,7 +2,7 @@
 'use client'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '@/lib/http'
-import type { MarkRow, RosterRow, SentenceScoreRow, SentenceTimeRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
+import type { ManagedRosterRow, MarkRow, SentenceScoreRow, SentenceTimeRow, SessionListRow, SessionRow, WritingRow } from '@/lib/db'
 import type { SurveyForm } from '@/lib/forms'
 
 /** 관리자 쿼리 키 — 무효화/제거 호출부가 리터럴을 복사하다 어긋나지 않도록 한 곳에 정의. */
@@ -99,7 +99,7 @@ export function useClassCodesQuery() {
 export function useRosterQuery(id: string | null) {
   return useQuery({
     queryKey: adminKeys.roster(id ?? ''),
-    queryFn: () => fetchJson<{ roster: RosterRow[] }>(`/api/admin/codes/${id}/roster`).then(d => d.roster),
+    queryFn: () => fetchJson<{ roster: ManagedRosterRow[] }>(`/api/admin/codes/${id}/roster`).then(d => d.roster),
     enabled: !!id,
   })
 }

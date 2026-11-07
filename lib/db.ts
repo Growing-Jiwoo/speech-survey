@@ -622,20 +622,87 @@ export async function approveClassCode(
   return { row, already: true }
 }
 
-/** 승인 화면이 검토하는 신청 명단 1줄. 읽기 전용 — 이 앱에서 명단을 고치는 경로는 없다
- *  (교사가 올린 원문 그대로 관리자가 확인하고, 틀렸으면 반려 = 삭제 후 재신청이다). */
+/** 명단 1줄. 신청 때 올라온 값은 고치지 않는다(틀렸으면 반려 = 삭제 후 재신청) — 바뀌는 것은 **빼기·되살리기**와
+ *  검사 중 **추가**뿐이다(migration 009). 전학 간 아이를 명단에서 빼고 검사 기록은 남기는 것은 담당자 확정(2026-11-06, 답장에 대한 회신 원문 「오케이 고마워!!」).
+ *  담임·관리자 둘 다·되살리기·검사 중 추가는 사용자 확정(2026-11-05) — 담당자 회신 아님. */
 export interface RosterRow {
   child_no: number; child_name: string; gender: '남' | '여'; birth_ymd: string
+  /** 검사 중 추가한 아이의 법정대리인 동의 확인 시각. null = 신청 때 함께 올라온 아이(확인은 학급의 `applied_at`) */
+  consented_at: string | null
 }
 
-/** 학급 신청 명단 조회. **번호 순**으로 고정한다 — 관리자는 이 표를 교사가 보낸 명렬표와
- *  줄을 맞춰 보며 검토하므로, 순서가 흔들리면 같은 명단인지 눈으로 확인할 수 없다. */
+/** 관리 화면(관리자 명단·교사 결과지)용 — 뺀 아이까지. `removed`면 명단에서 뺀 아이다. */
+export type ManagedRosterRow = RosterRow & { removed: boolean }
+
+/** **명단에 있는** 아이만(뺀 아이 제외) — 시작 화면 드롭다운·명단 모드 세션 생성·결과지 표가 쓴다. **번호 순**으로
+ *  고정한다 — 관리자는 이 표를 교사가 보낸 명렬표와 줄을 맞춰 보며 검토하므로, 순서가 흔들리면 같은 명단인지 눈으로
+ *  확인할 수 없다. */
 export async function listRoster(classCodeId: string): Promise<RosterRow[]> {
   const { data, error } = await sb().from('class_roster')
-    .select('child_no, child_name, gender, birth_ymd')
-    .eq('class_code_id', classCodeId).order('child_no')
+    .select('child_no, child_name, gender, birth_ymd, consented_at')
+    .eq('class_code_id', classCodeId).is('removed_at', null).order('child_no')
   fail(error)
   return (data ?? []) as unknown as RosterRow[]
+}
+
+/** 뺀 아이까지 전부(번호 순) — 빼기·되살리기 화면이 쓴다. */
+export async function listRosterAll(classCodeId: string): Promise<ManagedRosterRow[]> {
+  const { data, error } = await sb().from('class_roster')
+    .select('child_no, child_name, gender, birth_ymd, consented_at, removed_at')
+    .eq('class_code_id', classCodeId).order('child_no')
+  fail(error)
+  return ((data ?? []) as unknown as (RosterRow & { removed_at: string | null })[])
+    .map(({ removed_at, ...r }) => ({ ...r, removed: removed_at !== null }))
+}
+
+/** 명단 행이 하나라도 있는 학급인가(뺀 아이 포함) — 명단 없이 운영하는 학급(관리자 직접 발급)에는 검사 중 추가를 하지
+ *  않는다. 그 학급은 처음부터 직접 입력으로 검사하는 곳이라, 몇 명만 명단에 생기면 드롭다운과 직접 입력이 섞인다. */
+export async function hasRoster(classCodeId: string): Promise<boolean> {
+  const { count, error } = await sb().from('class_roster')
+    .select('child_no', { count: 'exact', head: true }).eq('class_code_id', classCodeId)
+  fail(error)
+  return (count ?? 0) > 0
+}
+
+/** 명단에서 빼기(`removed: true`) · 되살리기(`false`). 검사 기록은 건드리지 않는다 — 세션은 명단이 아니라 학급 코드에
+ *  붙어 있다. 그 번호의 행이 없으면 'missing'. 같은 상태로 다시 불러도 'ok'(두 화면이 같은 아이를 동시에 눌러도 된다). */
+export async function setRosterRemoved(
+  classCodeId: string, childNo: number, removed: boolean,
+): Promise<'ok' | 'missing'> {
+  const { data, error } = await sb().from('class_roster')
+    .update({ removed_at: removed ? new Date().toISOString() : null })
+    .eq('class_code_id', classCodeId).eq('child_no', childNo).select('child_no')
+  fail(error)
+  return (data ?? []).length > 0 ? 'ok' : 'missing'
+}
+
+/**
+ * 검사 중 명단에 추가(시작 화면 「명단에 없는 학생이에요」 + 「명단에 추가」 체크). 사용자 확정(2026-11-05) — 직접
+ * 입력한 아이는 다음 검사(재검사·다음 학기) 때 드롭다운에 없어 매번 다시 쳐야 했고, 오타가 나면 같은 아이로 이어지지 않았다.
+ * - 그 번호가 명단에 **있으면** 'exists' — 덮어쓰지 않는다(시작 화면이 「N번은 명단의 ○○ 학생 번호예요」로 미리 알린다).
+ * - 그 번호가 **뺀 아이** 자리면 그 행을 새 값으로 덮어 되살린다(번호는 학급 안에서 unique — 전학 간 아이의 번호를 받은 경우).
+ * - 없으면 새로 넣는다. 동시에 두 기기가 같은 번호를 넣으면 unique 충돌(23505)이 나고 뒤의 것이 'exists'다.
+ */
+export async function addRosterChild(
+  classCodeId: string,
+  child: { childNo: number; name: string; gender: '남' | '여'; birthYmd: string },
+  consentedAt: string,
+): Promise<'added' | 'exists'> {
+  const values = {
+    child_name: child.name, gender: child.gender, birth_ymd: child.birthYmd,
+    removed_at: null, consented_at: consentedAt,
+  }
+  // 뺀 자리 되살리기 — removed_at이 있는 행만 바꾼다(명단에 있는 아이는 이 조건에 걸리지 않아 덮이지 않는다)
+  const { data: revived, error: e1 } = await sb().from('class_roster').update(values)
+    .eq('class_code_id', classCodeId).eq('child_no', child.childNo).not('removed_at', 'is', null)
+    .select('child_no')
+  fail(e1)
+  if ((revived ?? []).length > 0) return 'added'
+  const { error: e2 } = await sb().from('class_roster')
+    .insert({ class_code_id: classCodeId, child_no: child.childNo, ...values })
+  if ((e2 as { code?: string } | null)?.code === '23505') return 'exists'
+  fail(e2)
+  return 'added'
 }
 
 /** 명단 + 각 아동의 검사 상태. 드롭다운이 "검사함"을 표시하기 위한 것 —

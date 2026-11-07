@@ -82,7 +82,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import {
-  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, exportSessions, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, listSessions, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording,
+  approveClassCode, childTestState, classResults, countSessionRecordings, createSession, deleteClassCode, deleteSession, exportSessions, findClassCode, findClassCodeById, insertApplication, insertClassCode, isLoginLocked, listClassCodes, listRoster, listSessions, rosterWithTested, saveScores, sessionDetail, sessionState, submitSession, updateClassCodeEmail, updateSessionIdentity, uploadRecording, addRosterChild, setRosterRemoved, listRosterAll,
   saveWriting, scanUploadTarget, latestSubmittedSessionId, uploadScanObject, upsertWritingScan, removeScanObjects, signedScanUrl, unlinkWritingScan,
   restoreWritingScan, scanUploadedAt,
   type ClassCodeRow,
@@ -514,6 +514,48 @@ describe('listRoster', () => {
   it('명단이 없으면 빈 배열', async () => {
     enqueue('class_roster', { data: null, error: null })
     expect(await listRoster(CLASS_CODE.id)).toEqual([])
+  })
+})
+
+describe('명단 빼기·되살리기·추가 (migration 009, 사용자 확정 2026-11-05)', () => {
+  it('listRosterAll: removed_at을 removed 불리언으로 펴고 원본 키는 내리지 않는다', async () => {
+    enqueue('class_roster', { data: [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304', consented_at: null, removed_at: null },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712', consented_at: null, removed_at: '2026-11-05T00:00:00Z' },
+    ], error: null })
+    const rows = await listRosterAll(CLASS_CODE.id)
+    expect(rows.map(r => r.removed)).toEqual([false, true])
+    expect(rows[0]).not.toHaveProperty('removed_at')
+  })
+  it('setRosterRemoved: 빼면 시각, 되살리면 null — 행이 없으면 missing', async () => {
+    enqueue('class_roster', { data: [{ child_no: 3 }], error: null })
+    expect(await setRosterRemoved(CLASS_CODE.id, 3, true)).toBe('ok')
+    expect((updateCallsByTable.get('class_roster')![0] as { removed_at: string | null }).removed_at).toEqual(expect.any(String))
+    enqueue('class_roster', { data: [{ child_no: 3 }], error: null })
+    await setRosterRemoved(CLASS_CODE.id, 3, false)
+    expect((updateCallsByTable.get('class_roster')![1] as { removed_at: string | null }).removed_at).toBeNull()
+    enqueue('class_roster', { data: [], error: null })
+    expect(await setRosterRemoved(CLASS_CODE.id, 40, true)).toBe('missing')
+  })
+  const KID = { childNo: 12, name: '새친구', gender: '여' as const, birthYmd: '190901' }
+  it('addRosterChild: 뺀 자리면 그 행을 덮어 되살린다(insert 없음)', async () => {
+    enqueue('class_roster', { data: [{ child_no: 12 }], error: null })
+    expect(await addRosterChild(CLASS_CODE.id, KID, '2026-11-05T01:00:00Z')).toBe('added')
+    expect(updateCallsByTable.get('class_roster')).toEqual([{
+      child_name: '새친구', gender: '여', birth_ymd: '190901', removed_at: null, consented_at: '2026-11-05T01:00:00Z',
+    }])
+    expect(insertCallsByTable.get('class_roster')).toBeUndefined()
+  })
+  it('addRosterChild: 빈 번호면 새로 넣는다', async () => {
+    enqueue('class_roster', { data: [], error: null })
+    enqueue('class_roster', { data: null, error: null })
+    expect(await addRosterChild(CLASS_CODE.id, KID, '2026-11-05T01:00:00Z')).toBe('added')
+    expect(insertCallsByTable.get('class_roster')).toEqual([expect.objectContaining({ class_code_id: CLASS_CODE.id, child_no: 12 })])
+  })
+  it('addRosterChild: 명단에 있는 번호(unique 충돌)는 덮지 않고 exists', async () => {
+    enqueue('class_roster', { data: [], error: null })
+    enqueue('class_roster', { data: null, error: { code: '23505', message: 'dup' } })
+    expect(await addRosterChild(CLASS_CODE.id, KID, '2026-11-05T01:00:00Z')).toBe('exists')
   })
 })
 
