@@ -92,7 +92,7 @@ export const fluencyLabel = (v: number): string => v.toFixed(FLUENCY_DECIMALS)
 
 /** 10초당 어절 = 어절 ÷ (tenths ÷ 10) × 10 = 어절 × 100 ÷ tenths. 시간은 0.1초 단위 정수(tenths)로 받는다 — 초를
  *  소수로 더하면 17.000000000000004 같은 부동소수 오차가 생겨 반올림 경계에서 한 자리가 뒤집힐 수 있다. 시간이 0이면 0. */
-function fluencyOf(words: number, tenths: number): number {
+export function fluencyOf(words: number, tenths: number): number {
   if (tenths <= 0) return 0
   const scale = 10 ** FLUENCY_DECIMALS
   return Math.round((words * 100 * scale) / tenths) / scale

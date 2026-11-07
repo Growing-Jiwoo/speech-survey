@@ -6,6 +6,10 @@
 //   (신청 순번 + 출석 번호, `017-03`). 이름·생년월일은 DB에서 읽지도 않는다(lib/db `exportSessions`).
 // - 「문항별 OX가 필요해요! 그리고 유창성은 문항별 정확하게 읽은 어절 수, 초, 원점수!」 → 낱말 해독·낱말 쓰기는 문항마다 O/X,
 //   문장 읽기유창성은 문장마다 정확 어절 수와 읽은 시간(초).
+// - 「원점수」가 무엇인지 물었더니(2026-11-07 회신 원문) 「1. 각 문항별 정확하게 읽은 어절 수, 2. 각 문항별 시간, 3. 각 문항별 원점수
+//   (예: 1번 문항에서 정확어절수÷시간×10) 4.그리고 5개 문항에 대한 원점수(너가 말한 거에서 2번)」 → 문장마다 어절·초·원점수(그 문장의
+//   10초당 어절)와 전체 원점수(문장 읽기유창성 총점, 10초당 어절)를 싣는다. **담당자 확정(2026-11-07).** 원문의 「5개 문항」은 문장
+//   읽기유창성의 문장 전부(양식마다 4문장)로 읽었다 — ⚠️ 담당자 확인 대기 — 확정 아님: 5가 오타인지(문장은 4개다).
 // - (재검사한 아이는 마지막 검사만?) 「응응 그렇게 하자! 재검사한 경우에는 내가 미리 채점할 때 최종버전만 남겨두고 다 삭제하려고!」
 //   → 같은 아이(학급 + 출석 번호)의 **같은 학기** 제출 검사 가운데 마지막 것 한 줄(`latestPerTerm`).
 //
@@ -31,7 +35,7 @@ import { pad2, semesterOf } from './format'
 import { kstDateKey } from './adminStats'
 import { childCode } from './child-code'
 import {
-  TASK_KEYS, VERDICT_LABEL, clampWords, finalVerdict, scoreSession, type ScoreInput, type ScoreResult, type TaskKey,
+  TASK_KEYS, VERDICT_LABEL, clampWords, finalVerdict, fluencyOf, scoreSession, type ScoreInput, type ScoreResult, type TaskKey,
 } from './scoring'
 import { scoreInputFor, type ScoreSource } from './results'
 import type { Cell, SheetData } from './xlsx-write'
@@ -109,18 +113,28 @@ export function exportColumns(form: SurveyForm): Column[] {
     // 문항별 O/X — 담당자 확정(2026-11-06) 「문항별 OX가 필요해요!」. 머리글은 번호 + 실제 문항(사용자 확정 2026-11-06, 머리 주석)
     ...f.readItems.map((it, i): Column => ({ header: `낱말${pad2(i + 1)} · ${it.text}`, value: c => ox(c.input.marks[it.code]) })),
 
-    // 유창성은 문항별 정확 어절 수와 초 — 담당자 확정(2026-11-06) 「유창성은 문항별 정확하게 읽은 어절 수, 초, 원점수!」
-    ...f.sentenceItems.flatMap((it, i): Column[] => [
-      { header: `문장${i + 1} 어절 · ${it.text}`, value: c => {
+    // 유창성은 문장마다 정확 어절 수·초·원점수 — 담당자 확정(2026-11-06 「유창성은 문항별 정확하게 읽은 어절 수, 초, 원점수!」,
+    // 원점수의 뜻은 2026-11-07 「각 문항별 원점수(예: 1번 문항에서 정확어절수÷시간×10)」)
+    ...f.sentenceItems.flatMap((it, i): Column[] => {
+      const words = (c: Ctx) => {
         const v = c.input.sentences[it.code]
         return v === undefined ? null : clampWords(f, it.code, v)
-      } },
-      { header: `문장${i + 1} 초`, value: c => {
+      }
+      // 0초·음수·NaN은 입력이 없는 것(lib/scoring scoreSession의 tenthsOf와 같은 규칙) · 0.1초 단위 정수로 맞춘다
+      const tenths = (c: Ctx) => {
         const v = c.input.times[it.code]
-        // 0초·음수·NaN은 입력이 없는 것(lib/scoring scoreSession의 tenthsOf와 같은 규칙) · 0.1초 단위로 맞춘다
-        return v !== undefined && Number.isFinite(v) && v > 0 ? Math.round(v * 10) / 10 : null
-      } },
-    ]),
+        return v !== undefined && Number.isFinite(v) && v > 0 ? Math.round(v * 10) : null
+      }
+      return [
+        { header: `문장${i + 1} 어절 · ${it.text}`, value: words },
+        { header: `문장${i + 1} 초`, value: c => { const t = tenths(c); return t === null ? null : t / 10 } },
+        // 문장 원점수 = 그 문장의 정확 어절 ÷ 시간 × 10 — 총점과 같은 함수·같은 자리 반올림(lib/scoring fluencyOf). 어절·초가 다 있어야 낸다
+        { header: `문장${i + 1} 원점수(어절/10초)`, value: c => {
+          const w = words(c), t = tenths(c)
+          return w === null || t === null ? null : fluencyOf(w, t)
+        } },
+      ]
+    }),
 
     // 쓰기 — 1학년 낱말 쓰기는 O/X, 2학년 문장 쓰기는 문항 점수 0·1·2(개발 판단: 어절당 1점이라 O/X가 맞지 않는다)
     ...f.writingItems.map((it, i): Column => ({
@@ -134,12 +148,9 @@ export function exportColumns(form: SurveyForm): Column[] {
 
     { header: '낱말 해독 합', value: whenDone('wordReading', c => c.result.wordReading) },
     { header: '낱말 해독 판정', value: verdictCol('wordReading') },
-    // ⚠️ 담당자 확인 대기 — 확정 아님: 「원점수」가 어느 값인지. 검사지 인쇄 문구로는 정확 어절 합이 원점수(「정확하게 읽은 어절
-    // 수로 채점」)이고, 앱의 총점은 10초당 어절(정확 어절 합 ÷ 읽은 시간 합 × 10 — 담당자 확정 2026-09-29·2026-10-20)이다.
-    // 회신이 올 때까지 둘 다 따로 싣는다(개발 판단 2026-11-06). 하나로 정해지면 나머지 열을 뺄지 물을 것.
-    { header: '문장 정확 어절 합', value: whenDone('sentenceReading', c => c.result.sentenceWords) },
-    { header: '문장 읽은 시간 합(초)', value: whenDone('sentenceReading', c => c.result.sentenceSec) },
-    { header: '문장 읽기유창성(어절/10초)', value: whenDone('sentenceReading', c => c.result.sentenceReading) },
+    // 전체 원점수 = 문장 읽기유창성 총점(정확 어절 합 ÷ 읽은 시간 합 × 10 — 담당자 확정 2026-09-29·2026-10-20). 「원점수」가 이 값이라는 것은
+    // 담당자 확정(2026-11-07 「5개 문항에 대한 원점수(너가 말한 거에서 2번)」). 정확 어절 합·시간 합 열은 묻지 않아 두지 않는다
+    { header: '문장 읽기유창성 원점수(어절/10초)', value: whenDone('sentenceReading', c => c.result.sentenceReading) },
     { header: '문장 읽기유창성 판정', value: verdictCol('sentenceReading') },
     { header: '쓰기 합', value: whenDone('writing', c => c.result.writing) },
     { header: '쓰기 판정', value: verdictCol('writing') },

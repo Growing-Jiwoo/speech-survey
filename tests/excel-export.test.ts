@@ -75,15 +75,17 @@ describe('latestPerTerm — 아이·학기마다 마지막 제출 검사(담당�
 })
 
 describe('exportColumns — 머리글', () => {
-  it('아동 코드만(이름·생년월일·학교 없음) · 「임시 기준」 열 없음 · 체크리스트는 영역마다', () => {
+  it('아동 코드만(이름·생년월일·학교 없음) · 「임시 기준」 열 없음 · 원점수는 문장마다와 전체 · 체크리스트는 영역마다', () => {
     const h = exportColumns(G1S2).map(c => c.header)
     expect(h.slice(0, 6)).toEqual(['아동 코드', '학년', '학기', '성별', '검사일', '양식'])
     expect(h).not.toContain('이름')
     expect(h).not.toContain('임시 기준')
     expect(h).toContain(`문장${f1.sentenceItems.length} 초`)
+    expect(h.filter(x => /^문장\d 원점수/.test(x))).toHaveLength(f1.sentenceItems.length)
+    expect(h).not.toContain('문장 정확 어절 합')   // 묻지 않은 합계 열은 두지 않는다(담당자 확정 2026-11-07의 네 가지만)
     expect(h.filter(x => /^쓰기\d\d · /.test(x))).toHaveLength(f1.writingItems.length)
     expect(h).toEqual(expect.arrayContaining([
-      '낱말 해독 합', '낱말 해독 판정', '문장 정확 어절 합', '문장 읽은 시간 합(초)', '문장 읽기유창성(어절/10초)',
+      '낱말 해독 합', '낱말 해독 판정', '문장 읽기유창성 원점수(어절/10초)',
       '문장 읽기유창성 판정', '쓰기 합', '쓰기 판정', '최종 판정', '체크리스트 특이사항 없음', '체크리스트 주의력',
     ]))
   })
@@ -111,14 +113,16 @@ describe('buildExportSheets — 값', () => {
     expect(v[`낱말${p2(f1.readItems.length)}`]).toBe('X')
     expect(v['문장1 어절']).toBe(f1.sentenceItems[0].text.trim().split(/\s+/).length)
     expect(v['문장1 초']).toBe(10)
+    // 문장 원점수 = 그 문장의 정확 어절 ÷ 초 × 10, 소수 둘째 자리(담당자 확정 2026-11-07 「정확어절수÷시간×10」)
+    const w1 = f1.sentenceItems[0].text.trim().split(/\s+/).length
+    expect(v['문장1 원점수(어절/10초)']).toBe(Math.round((w1 / 10) * 10 * 100) / 100)
     expect(v['쓰기01']).toBe('O')
     expect(v[`쓰기${p2(f1.writingItems.length)}`]).toBe('X')
 
     const { form, input } = scoreInputFor(r)
     const res = scoreSession(form, input)
     expect(v).toMatchObject({
-      '낱말 해독 합': 10, '문장 정확 어절 합': res.sentenceWords, '문장 읽은 시간 합(초)': 40,
-      '문장 읽기유창성(어절/10초)': res.sentenceReading, '쓰기 합': 8,
+      '낱말 해독 합': 10, '문장 읽기유창성 원점수(어절/10초)': res.sentenceReading, '쓰기 합': 8,
     })
     expect(v['최종 판정']).toMatch(/^(양호|주의|위험)$/)
     expect(v['체크리스트 언어 (이해/표현)']).toBe(1)
@@ -133,8 +137,9 @@ describe('buildExportSheets — 값', () => {
     expect(v['낱말02']).toBeNull()
     expect(v['문장1 어절']).toBeNull()
     expect(v['문장1 초']).toBeNull()
+    expect(v['문장1 원점수(어절/10초)']).toBeNull()
     expect(v['쓰기01']).toBeNull()
-    for (const k of ['낱말 해독 합', '낱말 해독 판정', '문장 정확 어절 합', '문장 읽기유창성(어절/10초)', '쓰기 합', '쓰기 판정', '최종 판정'])
+    for (const k of ['낱말 해독 합', '낱말 해독 판정', '문장 읽기유창성 원점수(어절/10초)', '쓰기 합', '쓰기 판정', '최종 판정'])
       expect(v[k], k).toBeNull()
   })
 
@@ -155,6 +160,7 @@ describe('buildExportSheets — 값', () => {
     expect(v[`낱말${p2(firstNonsense)}`]).toBe('X')
     expect(v['문장4 어절']).toBe(0)
     expect(v['문장4 초']).toBe(G1S2.limits.sentenceSec[3])
+    expect(v['문장4 원점수(어절/10초)']).toBe(0)   // 미녹음 문장의 원점수는 0어절 ÷ 제한 시간 = 0
     expect(v['문장3 초']).toBe(10)   // 녹음이 있는 문장은 넣은 값 그대로
   })
 
