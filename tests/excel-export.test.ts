@@ -5,7 +5,7 @@ import { FORMS } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { scoreSession } from '@/lib/scoring'
 import { scoreInputFor } from '@/lib/results'
-import { buildExportSheets, exportColumns, exportFileName, latestPerTerm, type ExportSessionRow } from '@/lib/excel-export'
+import { buildExportSheets, exportColumns, exportFileName, latestPerTerm, oneLine, type ExportSessionRow } from '@/lib/excel-export'
 import { termOf } from '@/lib/format'
 
 const formById = (id: string) => FORMS.find(f => f.id === id)!
@@ -75,6 +75,13 @@ describe('latestPerTerm — 아이·학기마다 마지막 제출 검사(담당�
   })
 })
 
+describe('oneLine — 머리글 문항은 한 줄로', () => {
+  it('줄바꿈·연속 공백을 띄어쓰기 하나로, 앞뒤 공백은 지운다', () => {
+    expect(oneLine('가나다.\n라마바.')).toBe('가나다. 라마바.')
+    expect(oneLine('  가  나 \r\n 다 ')).toBe('가 나 다')
+  })
+})
+
 describe('exportColumns — 머리글', () => {
   it('아동 코드만(이름·생년월일·학교 없음) · 「임시 기준」 열 없음 · 원점수는 문장마다와 전체 · 체크리스트는 영역마다', () => {
     const h = exportColumns(G1S2).map(c => c.header)
@@ -95,9 +102,10 @@ describe('exportColumns — 머리글', () => {
     for (const form of FORMS) {
       const f = itemsFor(form)
       const h = exportColumns(form).map(c => c.header)
-      expect(h.filter(x => /^낱말\d\d · /.test(x))).toEqual(f.readItems.map((it, i) => `낱말${p2(i + 1)} · ${it.text}`))
-      expect(h.filter(x => /^문장\d 어절 · /.test(x))).toEqual(f.sentenceItems.map((it, i) => `문장${i + 1} 어절 · ${it.text}`))
-      expect(h.filter(x => /^쓰기\d\d · /.test(x))).toEqual(f.writingItems.map((it, i) => `쓰기${p2(i + 1)} · ${it.text}`))
+      expect(h.filter(x => /^낱말\d\d · /.test(x))).toEqual(f.readItems.map((it, i) => `낱말${p2(i + 1)} · ${oneLine(it.text)}`))
+      expect(h.filter(x => /^문장\d 어절 · /.test(x))).toEqual(f.sentenceItems.map((it, i) => `문장${i + 1} 어절 · ${oneLine(it.text)}`))
+      expect(h.filter(x => /^쓰기\d\d · /.test(x))).toEqual(f.writingItems.map((it, i) => `쓰기${p2(i + 1)} · ${oneLine(it.text)}`))
+      for (const x of h) expect(x, x).not.toMatch(/\n/)   // 머리글에 줄바꿈 없음(2026-11-07)
     }
   })
 

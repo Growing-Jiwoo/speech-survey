@@ -86,6 +86,10 @@ const whenDone = (k: TaskKey, v: (c: Ctx) => Cell) => (c: Ctx): Cell => (c.resul
 const verdictCol = (k: TaskKey) => whenDone(k, c => VERDICT_LABEL[c.result.verdict[k]])
 
 /** 양식 한 장의 열 — 머리글과 값을 한 목록에서 만들어 둘이 어긋나지 않게 한다. */
+/** 머리글에 붙이는 문항은 한 줄로 — 두 문장짜리 문항(2학기 문장 3·4번)은 문항 안에 줄바꿈이 있어, 그대로 넣으면 Excel 머리글 칸이
+ *  두 줄이 되고 칸 높이가 들쭉날쭉했다(2026-11-07 운영 파일 점검, 사용자 확정 — 담당자 회신 아님). 문항 글자는 바꾸지 않고 줄바꿈만 띄어쓰기로 */
+export const oneLine = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
 export function exportColumns(form: SurveyForm): Column[] {
   const f = itemsFor(form)
   return [
@@ -98,7 +102,7 @@ export function exportColumns(form: SurveyForm): Column[] {
     { header: '양식', value: c => c.form.id },
 
     // 문항별 O/X — 담당자 확정(2026-11-06) 「문항별 OX가 필요해요!」. 머리글은 번호 + 실제 문항(사용자 확정 2026-11-06, 머리 주석)
-    ...f.readItems.map((it, i): Column => ({ header: `낱말${pad2(i + 1)} · ${it.text}`, value: c => ox(c.input.marks[it.code]) })),
+    ...f.readItems.map((it, i): Column => ({ header: `낱말${pad2(i + 1)} · ${oneLine(it.text)}`, value: c => ox(c.input.marks[it.code]) })),
 
     // 유창성은 문장마다 정확 어절 수·초·원점수 — 담당자 확정(2026-11-06 「유창성은 문항별 정확하게 읽은 어절 수, 초, 원점수!」,
     // 원점수의 뜻은 2026-11-07 「각 문항별 원점수(예: 1번 문항에서 정확어절수÷시간×10)」)
@@ -113,7 +117,7 @@ export function exportColumns(form: SurveyForm): Column[] {
         return v !== undefined && Number.isFinite(v) && v > 0 ? Math.round(v * 10) : null
       }
       return [
-        { header: `문장${i + 1} 어절 · ${it.text}`, value: words },
+        { header: `문장${i + 1} 어절 · ${oneLine(it.text)}`, value: words },
         { header: `문장${i + 1} 초`, value: c => { const t = tenths(c); return t === null ? null : t / 10 } },
         // 문장 원점수 = 그 문장의 정확 어절 ÷ 시간 × 10 — 총점과 같은 함수·같은 자리 반올림(lib/scoring fluencyOf). 어절·초가 다 있어야 낸다
         { header: `문장${i + 1} 원점수(어절/10초)`, value: c => {
@@ -125,7 +129,7 @@ export function exportColumns(form: SurveyForm): Column[] {
 
     // 쓰기 — 1학년 낱말 쓰기는 O/X, 2학년 문장 쓰기는 문항 점수 0·1·2(개발 판단: 어절당 1점이라 O/X가 맞지 않는다)
     ...f.writingItems.map((it, i): Column => ({
-      header: `쓰기${pad2(i + 1)} · ${it.text}`,
+      header: `쓰기${pad2(i + 1)} · ${oneLine(it.text)}`,
       value: c => {
         const v = c.input.writing[it.code]
         if (v === undefined) return null
