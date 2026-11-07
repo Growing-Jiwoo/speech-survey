@@ -702,10 +702,14 @@ export default function StartPage() {
           명단 모드와 직접 입력 모드가 이 모달을 공유하므로 중복 검사 경고 문구도 한 벌뿐이다. */}
       {confirm && (
         <ConfirmDialog open busy={busy} error={confirmErr}
-          title={confirm.tested === 'inProgress'
-            ? `${confirm.childNo}번은 진행 중인 검사가 있어요`
-            : confirm.tested ? `${confirm.childNo}번은 이미 검사했어요` : '이 정보가 맞나요?'}
-          confirmLabel={confirm.tested
+          // 명단에서 뺀 아이의 번호면 그 상황을 제목으로 — 「진행 중·이미 검사」는 뺀 아이의 검사를 가리켜 새 아이에게는 틀린 말이다
+          // (2026-11-07 로컬 시험 스택 화면 점검)
+          title={confirm.removedNo
+            ? `${confirm.childNo}번은 명단에서 뺀 학생의 번호예요`
+            : confirm.tested === 'inProgress'
+              ? `${confirm.childNo}번은 진행 중인 검사가 있어요`
+              : confirm.tested ? `${confirm.childNo}번은 이미 검사했어요` : '이 정보가 맞나요?'}
+          confirmLabel={confirm.tested && !confirm.removedNo
             ? (isResumeChild(confirm) ? '그래도 새로 검사' : '네, 다시 검사할게요')
             : '맞아요, 시작하기'}
           cancelLabel="아니에요"
@@ -735,7 +739,7 @@ export default function StartPage() {
             </div>
             <p className="mt-3.5">
               <b className="text-blue">{confirm.childNo}번 {confirm.name}</b> 학생의 검사를
-              {confirm.tested ? ' 다시' : ''} 시작할까요?
+              {confirm.tested && !confirm.removedNo ? ' 다시' : ''} 시작할까요?
             </p>
             {/* 명단에서 고른 경우에만 — 검사자가 타이핑하지 않은 값이므로 시작 전에 한 번은
                 눈으로 대조할 기회를 준다(생년월일은 읽는 형 YYYY-MM-DD — 위 identity 주석 참고). */}
@@ -751,7 +755,7 @@ export default function StartPage() {
                 새로 시작하면 지금까지 진행한 내용은 이어갈 수 없어요.
               </p>
             )}
-            {confirm.tested === 'inProgress' && !isResumeChild(confirm) && (
+            {confirm.tested === 'inProgress' && !confirm.removedNo && !isResumeChild(confirm) && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 진행 중인(제출 전) 검사가 있어요.<br />
                 다른 기기에서 검사 중일 수 있어요.
@@ -764,7 +768,7 @@ export default function StartPage() {
                 이어갈 수 없게 돼요.
               </p>
             )}
-            {confirm.tested === 'submitted' && (
+            {confirm.tested === 'submitted' && !confirm.removedNo && (
               <p className="mt-2 text-[12.5px] leading-relaxed text-amber">
                 이 번호로 제출까지 끝난 검사가 있어요.<br />
                 다시 검사하면 새 결과가 추가로 남아요.
