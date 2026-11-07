@@ -5,7 +5,8 @@ import { FORMS } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
 import { scoreSession } from '@/lib/scoring'
 import { scoreInputFor } from '@/lib/results'
-import { buildExportSheets, exportColumns, exportFileName, exportTermOf, latestPerTerm, type ExportSessionRow } from '@/lib/excel-export'
+import { buildExportSheets, exportColumns, exportFileName, latestPerTerm, type ExportSessionRow } from '@/lib/excel-export'
+import { termOf } from '@/lib/format'
 
 const formById = (id: string) => FORMS.find(f => f.id === id)!
 const G1S2 = formById('KODYS-G1-S2')
@@ -37,14 +38,14 @@ const SCORED: Partial<ExportSessionRow> = {
 const asRecord = (sheet: { rows: unknown[][] }, i: number) =>
   Object.fromEntries((sheet.rows[0] as string[]).map((h, k) => [h.split(' · ')[0], sheet.rows[i][k] ?? null]))
 
-describe('exportTermOf — 학년도·학기(KST)', () => {
+describe('학기 열은 lib/format termOf — 학년도·학기(KST)', () => {
   it('3~8월 1학기 · 9~2월 2학기 · 1·2월은 앞 해 학년도', () => {
-    expect(exportTermOf('2026-03-02T00:00:00Z')).toEqual({ year: 2026, semester: 1 })
-    expect(exportTermOf('2026-09-01T00:00:00Z')).toEqual({ year: 2026, semester: 2 })
-    expect(exportTermOf('2027-02-10T00:00:00Z')).toEqual({ year: 2026, semester: 2 })
+    expect(termOf('2026-03-02T00:00:00Z')).toEqual({ year: 2026, semester: 1 })
+    expect(termOf('2026-09-01T00:00:00Z')).toEqual({ year: 2026, semester: 2 })
+    expect(termOf('2027-02-10T00:00:00Z')).toEqual({ year: 2026, semester: 2 })
   })
   it('KST로 자른다 — 2월 28일 23시(UTC) = 3월 1일 아침(KST)은 새 학년도 1학기', () => {
-    expect(exportTermOf('2027-02-28T23:00:00Z')).toEqual({ year: 2027, semester: 1 })
+    expect(termOf('2027-02-28T23:00:00Z')).toEqual({ year: 2027, semester: 1 })
   })
 })
 

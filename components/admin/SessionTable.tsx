@@ -12,7 +12,7 @@ import type { SessionListRow } from '@/lib/db'
 import {
   awaitsScanScoring, checklistSummary, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals,
 } from '@/lib/adminStats'
-import { gradeClassLabel } from '@/lib/format'
+import { gradeClassLabel, termLabel, termOf } from '@/lib/format'
 import { SECTION_LABEL, areaLabel } from '@/lib/items'
 import { Badge } from '@/components/Badge'
 import { Tip } from '@/components/Tip'
@@ -54,7 +54,7 @@ const features = tableFeatures({})
 /** 관리자 세션 목록 — 필터/정렬 상태는 부모(AdminDashboard)가 보유, 여기는 표시와 콜백만.
  * react-table은 컬럼/가상 렌더 골격으로만 쓰고, 정렬·필터는 기존 URL 동기화 로직을 그대로 사용한다
  * (내장 sorting/filtering 모델은 사용하지 않음 — 이중 정렬/충돌 상태를 피하기 위함). */
-export function SessionTable({ rows, all, total, filters, sort, schools, grades, onFilters, onSort, onReset }: {
+export function SessionTable({ rows, all, total, filters, sort, schools, grades, terms, onFilters, onSort, onReset }: {
   rows: SessionListRow[]           // 필터·정렬 적용 완료본
   /** 필터 이전의 전체 목록 — 재검사 회차를 세는 데 쓴다. 필터된 rows로 세면 걸러진
    *  앞선 검사가 없는 것처럼 보여 회차가 거짓이 된다(retestOrdinals 호출부 주석 참고). */
@@ -64,6 +64,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
   sort: Sort
   schools: string[]
   grades: number[]
+  terms: string[]
   onFilters: (patch: Partial<Filters>) => void
   onSort: (key: SortKey) => void
   onReset: () => void
@@ -122,6 +123,13 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         id: 'gradeClass', header: '학년/반',
         meta: { sortKey: 'grade', thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3' },
         cell: ({ row }) => gradeClassLabel(row.original.grade, row.original.class_no),
+      }),
+      // 학기 — 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다. 이름·학교·번호가 같은 두 행이 어느 학기
+      // 검사인지 보이게 한다(사용자 확정 2026-11-05, 담당자 회신 아님. 회차 꼬리표도 학기 안에서 센다 — retestOrdinals)
+      col.display({
+        id: 'term', header: '학기',
+        meta: { thClassName: 'whitespace-nowrap px-3', tdClassName: 'whitespace-nowrap px-3 tabular-nums text-ink-soft' },
+        cell: ({ row }) => termLabel(termOf(row.original.started_at), { short: true }),
       }),
       col.accessor('child_no', {
         id: 'childNo', header: '번호',
@@ -295,7 +303,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
           lg 미만에서는 아래 래퍼가 가로 스크롤 컨테이너가 되어 sticky 기준이 뷰포트가
           아니게 되므로, 그 폭에서는 둘 다 붙이지 않는다(래퍼 주석 참고). */}
       <div ref={toolbarRef} className="bg-white lg:sticky lg:top-0 lg:z-20">
-        <FilterToolbar filters={filters} schools={schools} grades={grades}
+        <FilterToolbar filters={filters} schools={schools} grades={grades} terms={terms}
           shownCount={rows.length} scanReadyCount={scanReadyCount} onFilters={onFilters} onReset={onReset} />
       </div>
       {/* 세로 스크롤은 페이지가 맡는다(위 주석) — 여기서는 좁은 화면의 가로 넘침만 처리한다.

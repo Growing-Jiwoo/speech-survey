@@ -5,10 +5,11 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   DEFAULT_FILTERS, DEFAULT_SORT, computeKpis, computeSchoolStats, filterSessions, filtersToQuery,
-  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions,
+  gradeOptions, kstDateKey, parseFilters, schoolOptions, sortSessions, termOptions,
   type Filters, type Sort, type SortKey,
 } from '@/lib/adminStats'
 import { adminKeys, useClassCodesQuery, useSessionsQuery } from '@/hooks/useAdminQueries'
+import { termKeyOf } from '@/lib/format'
 import { NETWORK_ERR_MSG, postJson } from '@/lib/http'
 import { fetchFile, saveBlobAs } from '@/lib/download'
 import { Blip } from '@/components/Blip'
@@ -52,6 +53,7 @@ export function AdminDashboard() {
   const schoolStats = useMemo(() => computeSchoolStats(list), [list])
   const schools = useMemo(() => schoolOptions(list), [list])
   const grades = useMemo(() => gradeOptions(list), [list])
+  const terms = useMemo(() => termOptions(list), [list])
   // 진행률 분모는 행마다 다르다(학년별 검사지) — 서버가 행마다 계산해 싣는다(`progress`, lib/session-progress).
   const rows = useMemo(
     () => sortSessions(filterSessions(list, filters, todayKey), sort),
@@ -136,7 +138,9 @@ export function AdminDashboard() {
         {/* 머리 버튼은 한 묶음으로 오른쪽에 둔다 — 버튼이 다섯 개가 되자 1024px에서 「로그아웃」 하나만 아랫줄 왼쪽으로 떨어졌다
             (2026-11-07 로컬 시험 스택 점검). 묶음이면 줄이 바뀌어도 오른쪽 정렬로 함께 접힌다 */}
         <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-        {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다 */}
+        {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다.
+            학기는 학기 필터가 걸려 있으면 그 학기, 아니면 검사가 있는 가장 최근 학기(보통 지금 학기 — 교사 결과지가 처음
+            보이는 학기와 같은 규칙, lib/results-view defaultTerm. 2026-11-05 학기 구분) */}
         <button type="button" onClick={() => setSheetsOpen(true)}
           className="rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
           결과지 받기
@@ -190,10 +194,11 @@ export function AdminDashboard() {
       <SchoolBreakdown stats={schoolStats} activeSchool={filters.school}
         onSelect={school => patchFilters({ school: filters.school === school ? null : school })} />
       <SessionTable rows={rows} all={sessions} total={sessions.length} filters={filters} sort={sort}
-        schools={schools} grades={grades}
+        schools={schools} grades={grades} terms={terms}
         onFilters={patchFilters} onSort={onSort} onReset={() => apply(DEFAULT_FILTERS, DEFAULT_SORT)} />
       {sheetsOpen && (
-        <SheetsDialog sessions={sessions} initialSchool={filters.school} loginHref={loginHref} onClose={() => setSheetsOpen(false)} />
+        <SheetsDialog sessions={sessions} initialSchool={filters.school} term={filters.term ?? terms[0] ?? termKeyOf(now.toISOString())}
+          loginHref={loginHref} onClose={() => setSheetsOpen(false)} />
       )}
     </div>
   )

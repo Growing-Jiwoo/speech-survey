@@ -112,6 +112,39 @@ export function semesterOf(iso: string): 1 | 2 {
   return month >= 3 && month <= 8 ? 1 : 2
 }
 
+/** 학기 — 학년도(3월~다음 해 2월)와 학기. 1·2월은 **앞 해** 학년도의 2학기다(2027년 2월 = 2026학년도 2학기). */
+export interface Term { year: number; semester: 1 | 2 }
+
+/**
+ * 검사(시작 시각, KST)가 속한 학기. 사용자 확정(2026-11-05) — 담당자 회신 아님: 담당자가 「1학기에 참여한 교사가 2학기에도
+ * 같은 학급 코드로 해도 되나, 관리자가 알 방법은?」을 물었고 사용자가 「관리자 페이지 포함해서 학기 구분되게 고쳐둘게」로
+ * 답했다. 학기 경계는 양식을 고르는 `semesterOf`(3~8월 1학기 · 9~2월 2학기 — 담당자 확정 2026-10-20) 그대로라, 같은 검사의
+ * 양식과 학기가 갈리지 않는다. 학년도는 한국 학교 학년도(3월 시작)다.
+ * 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다 — 그래서 재검사 차수·대표 검사·시작 화면의 「검사함」·
+ * 스캔본이 붙을 검사는 **같은 학기 안에서만** 센다(lib/results termGroups · lib/db rosterWithTested · lib/adminStats retestOrdinals).
+ */
+export function termOf(iso: string): Term {
+  const [y, m] = kstYmd(iso)
+  return { year: m <= 2 ? y - 1 : y, semester: semesterOf(iso) }
+}
+
+/** 학기 열쇠 `2026-2` — URL·API에 싣는 값. 연도가 네 자리라 글자 순서가 곧 시간 순서다. */
+export const termKey = (t: Term) => `${t.year}-${t.semester}`
+export const termKeyOf = (iso: string) => termKey(termOf(iso))
+
+/** `2026-2` → 학기. 형식이 아니면 null(URL에서 온 값을 그대로 믿지 않는다) */
+export function parseTermKey(key: string): Term | null {
+  const m = /^(\d{4})-([12])$/.exec(key)
+  return m ? { year: Number(m[1]), semester: Number(m[2]) as 1 | 2 } : null
+}
+
+/** 학기 표기 — `2026학년도 2학기`(교사 결과지·결과지 받기 창), 좁은 칸과 파일 이름은 `short`로 `2026-2학기` */
+export function termLabel(t: Term | string, { short = false } = {}): string {
+  const v = typeof t === 'string' ? parseTermKey(t) : t
+  if (!v) return String(t)
+  return short ? `${v.year}-${v.semester}학기` : `${v.year}학년도 ${v.semester}학기`
+}
+
 /**
  * 승인 안내의 「결과지 받는 방법」 — 3채널(approvedMail HTML · approvalNoticeText 평문 · 관리자
  * [안내 문구 복사])이 **이 배열 하나**를 쓴다. 한쪽에만 문구가 살아나면 채널에 따라 안내가 갈리므로

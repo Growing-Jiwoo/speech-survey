@@ -19,9 +19,10 @@ const SID = '11111111-1111-4111-8111-111111111111'
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3])
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0])
 
-/** 올릴 수 있는 검사 — 이 학급 · 제출됨 · 스캔본 방식 · 담당자 채점 전 · 아직 안 올림 */
+/** 올릴 수 있는 검사 — 이 학급 · 제출됨 · 스캔본 방식 · 담당자 채점 전 · 아직 안 올림 · 지금 학기(방금 시작) */
 const TARGET = {
-  class_code_id: CID, child_no: 5, grade: 1, form_id: null, submitted_at: '2026-09-30T01:00:00Z', writing_mode: 'scan' as const,
+  class_code_id: CID, child_no: 5, grade: 1, form_id: null, started_at: new Date().toISOString(),
+  submitted_at: '2026-09-30T01:00:00Z', writing_mode: 'scan' as const,
   writing_answers: [] as { item_code: string }[], sentence_scores: [] as { item_code: string }[],
   scan: null as null | { session_id: string; path: string; content_type: string; bytes: number; uploaded_at: string },
 }
@@ -151,6 +152,14 @@ describe('POST /api/results/[token]/scans — 쓰기 기록지 스캔본 한 장
       const [path] = vi.mocked(db.uploadScanObject).mock.calls[0]
       expect(db.removeScanObjects).toHaveBeenCalledWith([path])          // 방금 올린 새 파일만 지운다
       expect(db.removeScanObjects).not.toHaveBeenCalledWith([prev.path])  // 옛 파일은 그대로(행이 다시 가리킨다)
+    })
+    it('[REGRESSION] 지난 학기 검사라도 그 아이의 가장 최근 제출 검사면 올린다 — 8월 말 검사의 기록지를 9월에 올린다(2026-11-07)', async () => {
+      // 1년 전이면 학기가 반드시 다르다(학년도가 다르다)
+      const lastYear = new Date(Date.now() - 366 * 24 * 3600_000).toISOString()
+      vi.mocked(db.scanUploadTarget).mockResolvedValueOnce({ ...TARGET, started_at: lastYear })
+      const res = await post({ sessionId: SID, file: JPEG })
+      expect(res.status).not.toBe(409)
+      expect(db.uploadScanObject).toHaveBeenCalled()
     })
     it('[REGRESSION] 그 아이의 가장 최근 제출 검사가 아니면 409 — 오래 열어 둔 탭이 새 기록지를 앞 차수에 붙이지 않게', async () => {
       vi.mocked(db.latestSubmittedSessionId).mockResolvedValueOnce('22222222-2222-4222-8222-222222222222')

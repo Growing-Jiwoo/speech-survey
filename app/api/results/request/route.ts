@@ -15,7 +15,7 @@ import { createResultsToken } from '@/lib/auth'
 import { classResults, findClassCode } from '@/lib/db'
 import { env } from '@/lib/env'
 import { resultsLinkMail, sendMail } from '@/lib/mail'
-import { buildChildren, maskEmail, summarize } from '@/lib/results'
+import { buildChildren, defaultTerm, maskEmail, summarize, termGroups } from '@/lib/results'
 import { clientIp, createRateLimiter, jsonError, VERIFY_CODE_RATE_LIMIT, VERIFY_CODE_RATE_WINDOW_MS } from '@/lib/request'
 import { resultsRequestSchema } from '@/lib/schema'
 
@@ -75,7 +75,10 @@ export async function POST(req: Request) {
     // 받을 수 있는 결과지 수 — 화면이 「아직 채점된 학생이 없어요」를 낼 근거. 명단은 여기서 필요 없다
     // (세션만으로 센다 — 미실시는 채점 수와 무관). 「채점 완료」 칸이 아니라 받을 수 있는 수를 쓴다 — 스캔본
     // 쓰기만 남은 아이는 채점 완료가 아니어도 링크에서 읽기 점수를 볼 수 있다(lib/results-view summarize).
-    const scoredCount = summarize(buildChildren([], rows)).downloadable
+    // 링크가 처음 보이는 학기(`defaultTerm` — 지금 학기, 검사가 없으면 검사가 있는 최근 학기)의 수다. 학기를 섞어 세면
+    // 1학기 결과지만 있는 반이 2학기에 「받을 수 있어요」를 듣고 빈 표를 연다(학기 구분 — 사용자 확정 2026-11-05).
+    const shown = defaultTerm(termGroups(rows).map(g => ({ current: g.current, children: buildChildren([], g.rows) })))
+    const scoredCount = shown ? summarize(shown.children).downloadable : 0
     return NextResponse.json({ sent: true, maskedEmail: maskEmail(row.teacher_email), scoredCount })
   } catch (e) {
     console.error('[results/request] 실패', e)

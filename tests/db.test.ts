@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // 라우트 테스트는 lib/db를 통째로 모킹하므로, 여기서는 supabase 클라이언트만 스텁해
 // db.ts의 분기 로직(제출 상태 구분·업로드 재시도·삭제 페이지네이션·잠금 판정)을 실제로 실행한다.
@@ -118,6 +118,17 @@ beforeEach(() => {
   storage.remove.mockResolvedValue({ error: null })
   storage.list.mockResolvedValue({ data: [], error: null })
 })
+
+
+/** 학기 구분 테스트의 「지금」(2026학년도 2학기)과 같은 학기·지난 학기의 검사 시각 */
+const NOW = '2026-11-05T03:00:00Z'
+const NOW_TERM = '2026-10-01T01:00:00Z'
+const LAST_TERM = '2026-05-01T01:00:00Z'
+/** 「지금」을 NOW로 고정하고 부른다 */
+async function atNow<T>(fn: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(NOW))
+  try { return await fn() } finally { vi.useRealTimers() }
+}
 
 describe('submitSession — 쓰기 답을 먼저 넣고 submitted_at을 마지막에 확정한다', () => {
   /** 선행 상태 조회(sessionState) 응답 — 모든 케이스가 이걸 먼저 소비한다 */
@@ -374,12 +385,19 @@ describe('class_codes', () => {
     expect(await deleteClassCode('11111111-1111-1111-1111-111111111111')).toBe('in_use')
   })
   it('childTestState: 제출본이 있으면 submitted가 미제출보다 우선', async () => {
-    enqueue('sessions', { data: [{ submitted_at: null }, { submitted_at: '2026-08-13T00:00:00Z' }], error: null })
-    expect(await childTestState('cc-1', 3)).toBe('submitted')
+    enqueue('sessions', { data: [{ started_at: NOW_TERM, submitted_at: null }, { started_at: NOW_TERM, submitted_at: NOW_TERM }], error: null })
+    expect(await atNow(() => childTestState('cc-1', 3))).toBe('submitted')
   })
   it('childTestState: 미제출만 있으면 inProgress', async () => {
-    enqueue('sessions', { data: [{ submitted_at: null }], error: null })
-    expect(await childTestState('cc-1', 3)).toBe('inProgress')
+    enqueue('sessions', { data: [{ started_at: NOW_TERM, submitted_at: null }], error: null })
+    expect(await atNow(() => childTestState('cc-1', 3))).toBe('inProgress')
+  })
+  it('[REGRESSION] childTestState: 지난 학기 검사는 세지 않는다 — 1학기에 검사한 아이를 2학기에 검사하는 것은 재검사가 아니다(2026-11-05)', async () => {
+    enqueue('sessions', { data: [{ started_at: LAST_TERM, submitted_at: LAST_TERM }], error: null })
+    expect(await atNow(() => childTestState('cc-1', 3))).toBeNull()
+    enqueue('sessions', { data: [{ started_at: LAST_TERM, submitted_at: LAST_TERM }, { started_at: NOW_TERM, submitted_at: null }], error: null })
+    expect(await atNow(() => childTestState('cc-1', 3))).toBe('inProgress')
+    expect(selectCallsByTable.get('sessions')).toContainEqual(['started_at, submitted_at'])
   })
   it('childTestState: 행이 없으면 null', async () => {
     enqueue('sessions', { data: [], error: null })
@@ -563,6 +581,10 @@ describe('명단 빼기·되살리기·추가 (migration 009, 사용자 확정 2
 const isWw = (c: string) => c.startsWith('ww')
 
 describe('rosterWithTested', () => {
+  // 지금 학기 검사만 센다(2026-11-05) — 「지금」을 2026학년도 2학기로 고정한다
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(NOW)) })
+  afterEach(() => { vi.useRealTimers() })
+
   it('submitted가 있으면 행 순서와 무관하게 submitted가 이긴다 — childTestState와 같은 판정', async () => {
     const rows = [
       { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
@@ -572,10 +594,10 @@ describe('rosterWithTested', () => {
     // 1번: submitted 행이 먼저 온다 / 2번: submitted 행이 나중에 온다 — 어느 쪽이든 submitted가 이겨야 한다.
     enqueue('sessions', {
       data: [
-        { child_no: 1, submitted_at: '2026-08-13T00:00:00Z' },
-        { child_no: 1, submitted_at: null },
-        { child_no: 2, submitted_at: null },
-        { child_no: 2, submitted_at: '2026-08-13T00:00:00Z' },
+        { child_no: 1, started_at: NOW_TERM, submitted_at: NOW_TERM },
+        { child_no: 1, started_at: NOW_TERM, submitted_at: null },
+        { child_no: 2, started_at: NOW_TERM, submitted_at: null },
+        { child_no: 2, started_at: NOW_TERM, submitted_at: NOW_TERM },
       ],
       error: null,
     })
@@ -592,12 +614,35 @@ describe('rosterWithTested', () => {
       { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
     ]
     enqueue('class_roster', { data: rows, error: null })
-    enqueue('sessions', { data: [{ child_no: 1, submitted_at: null }], error: null })
+    enqueue('sessions', { data: [{ child_no: 1, started_at: NOW_TERM, submitted_at: null }], error: null })
 
     expect((await rosterWithTested(CLASS_CODE.id, isWw)).roster).toEqual([
       { childNo: 1, name: '김서아', gender: '여', birthYmd: '190304', tested: 'inProgress', writing: 'unsubmitted' },
       { childNo: 2, name: '박도윤', gender: '남', birthYmd: '190712', tested: null, writing: null },
     ])
+  })
+
+  // 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다 — 「검사함」·「검사 완료 N명」·스캔 대기는 지금 학기만(2026-11-05)
+  // 「검사함」은 지금 학기만, 쓰기 상태·스캔 대기는 학기를 가리지 않는다(사용자 확정 2026-11-07 — 8월 말 검사의 기록지를 9월에 올린다)
+  it('[REGRESSION] 지난 학기 검사는 「검사함」에 세지 않지만 스캔 대기는 센다(기록지는 가장 최근 제출 검사에 붙는다)', async () => {
+    const rows = [
+      { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
+      { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
+    ]
+    enqueue('class_roster', { data: rows, error: null })
+    const scanWait = { writing_mode: 'scan', writing_answers: [], sentence_scores: [], writing_scans: null }
+    enqueue('sessions', {
+      data: [
+        { child_no: 1, started_at: LAST_TERM, submitted_at: LAST_TERM, ...scanWait },   // 1학기에만 검사(스캔 대기로 남음)
+        { child_no: 2, started_at: LAST_TERM, submitted_at: LAST_TERM, ...scanWait },
+        { child_no: 2, started_at: NOW_TERM, submitted_at: null, ...scanWait },          // 2학기 검사 진행 중
+      ],
+      error: null,
+    })
+    const r = await rosterWithTested(CLASS_CODE.id, isWw)
+    // 2번은 2학기 검사가 진행 중이지만 제출 전이라, 기록지는 여전히 1학기 제출 검사로 간다
+    expect(r.roster.map(c => [c.tested, c.writing])).toEqual([[null, 'wait'], ['inProgress', 'wait']])
+    expect(r.scanPending).toBe(2)
   })
 
   // 쓰기 기록지 스캔본(2026-09-30) — 인쇄 창의 배지와 시작 화면 「스캔 대기 N명」의 근거
@@ -1163,11 +1208,12 @@ describe('scanUploadTarget — 올릴 수 있는지 판단할 재료', () => {
   it('스캔본 관계가 배열로 와도 한 장으로 맞추고, 쓰기 채점 행을 함께 싣는다', async () => {
     const scan = { session_id: SID, path: `${SID}/1.jpg`, content_type: 'image/jpeg', bytes: 3, uploaded_at: 'T' }
     enqueue('sessions', { data: {
-      class_code_id: 'c1', child_no: 5, grade: 1, submitted_at: 'T', writing_mode: 'scan',
+      class_code_id: 'c1', child_no: 5, grade: 1, started_at: 'S', submitted_at: 'T', writing_mode: 'scan',
       writing_answers: [{ item_code: 'ww01' }], sentence_scores: null, writing_scans: [scan],
     }, error: null })
-    expect(await scanUploadTarget(SID)).toEqual({
-      class_code_id: 'c1', child_no: 5, grade: 1, form_id: null, submitted_at: 'T', writing_mode: 'scan',
+    // started_at — 올리기 라우트가 지금 학기 검사인지 가린다(2026-11-05)
+    expect(await scanUploadTarget(SID)).toStrictEqual({
+      class_code_id: 'c1', child_no: 5, grade: 1, form_id: null, started_at: 'S', submitted_at: 'T', writing_mode: 'scan',
       writing_answers: [{ item_code: 'ww01' }], sentence_scores: [], scan,
     })
   })

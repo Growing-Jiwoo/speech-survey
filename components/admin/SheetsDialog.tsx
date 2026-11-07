@@ -6,19 +6,20 @@
 // 알았다(사용자 요청 2026-10-24 「개편」). 이 창 방식은 담당자 확정(2026-10-24 — 두 안의 비교 이미지에서 2안을 골랐다, 사용자 전달).
 // 학교는 한 줄로 접어 둔다. 학교가 30~40곳이면 반까지 다 펼친 목록은 한 화면에 네댓 곳만 보여 아홉 화면을 넘겨야 했다
 // (사용자 확인 2026-10-24). 학교 줄에 요약과 받기 버튼을 두고, 누르면 반이 펼쳐진다.
+// 한 학기의 결과지만 다룬다(`term` — 목록의 학기 필터, 없으면 검사가 있는 가장 최근 학기). 학급 코드는 만료가 없어 같은 반이
+// 1·2학기를 같은 코드로 검사하므로, 학기를 섞으면 아이당 최신 1장에 지난 학기 결과지가 끼어든다(사용자 확정 2026-11-05).
 'use client'
 import { useEffect, useId, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { classSheetSummaries, kstDateKey, type ClassSheetSummary } from '@/lib/adminStats'
 import type { SessionListRow } from '@/lib/db'
 import { fetchFile, fetchMergedPdf, saveBlobAs } from '@/lib/download'
-import { gradeClassLabel } from '@/lib/format'
+import { gradeClassLabel, termLabel } from '@/lib/format'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 const FAIL = '결과지를 받지 못했어요. 다시 시도해 주세요.'
 /** 찾기로 이만큼 이하가 남으면 접지 않고 펼쳐 보인다 */
 const AUTO_OPEN = 3
-const url = (c: ClassSheetSummary) => `/api/admin/codes/${c.classCodeId}/sheets.pdf`
 const label = (c: ClassSheetSummary) => `${gradeClassLabel(c.grade, c.classNo)} ${c.teacher}`
 
 /** 현황 한 줄 — 항목 사이에서만 줄을 바꾼다(항목마다 nowrap) */
@@ -34,8 +35,10 @@ function Status({ ready, children, writingPending, prefix }: { ready: number; ch
 }
 
 /** 열 때만 그린다(부모가 조건부로 둔다) — 그래서 열 때마다 찾기 칸과 안내가 새로 시작한다 */
-export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
+export function SheetsDialog({ sessions, initialSchool, term, loginHref, onClose }: {
   sessions: SessionListRow[]
+  /** 받을 학기(`2026-2`) — 현황도 파일도 이 학기 검사만 */
+  term: string
   /** 목록에 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다 */
   initialSchool: string | null
   loginHref: string
@@ -59,7 +62,8 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
     return () => { document.body.style.overflow = prev }
   }, [])
 
-  const schools = useMemo(() => classSheetSummaries(sessions), [sessions])
+  const schools = useMemo(() => classSheetSummaries(sessions, term), [sessions, term])
+  const url = (c: ClassSheetSummary) => `/api/admin/codes/${c.classCodeId}/sheets.pdf?term=${term}`
   const shown = schools.filter(s => s.school.includes(q.trim()))
   const classCount = schools.reduce((n, s) => n + s.classes.length, 0)
   // 찾기로 몇 곳만 남으면 펼쳐 둔다. 펼친 목록에 넣으므로 눌러서 다시 접을 수 있다
@@ -87,8 +91,8 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
     const res = await fetchMergedPdf(classes.map(c => ({ url: url(c), label: label(c) })), FAIL, setDone)
     setBusy(null)
     if (!res.ok) { setMsg({ key, text: res.error, tone: 'err', login: res.status === 401 }); return }
-    // 반별 파일 이름(학교_1-2_결과지_전체_날짜)과 같은 꼴
-    saveBlobAs(res.blob, `${school}_결과지_전체_${kstDateKey(new Date())}.pdf`)
+    // 반별 파일 이름(학교_1-2_2026-2학기_결과지_전체_날짜)과 같은 꼴
+    saveBlobAs(res.blob, `${school}_${termLabel(term, { short: true })}_결과지_전체_${kstDateKey(new Date())}.pdf`)
     if (res.skipped.length > 0) setMsg({ key, text: `결과지가 없는 반은 빼고 받았어요: ${res.skipped.join(', ')}`, tone: 'warn' })
   }
   const note = (key: string) => msg?.key === key && (
@@ -108,7 +112,9 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
         <div className="flex items-center gap-3 border-b border-line px-5 py-4">
           <div>
             <h2 id={titleId} className="text-lg font-bold">결과지 받기</h2>
-            {schools.length > 0 && <p className="text-[12px] text-ink-mute">학교 {schools.length}곳 · 반 {classCount}개</p>}
+            <p className="text-[12px] text-ink-mute">
+              {termLabel(term)}{schools.length > 0 && ` · 학교 ${schools.length}곳 · 반 ${classCount}개`}
+            </p>
           </div>
           <input type="search" aria-label="학교 찾기" value={q} onChange={e => search(e.target.value)} placeholder="학교 찾기"
             className="ml-auto h-9 w-40 rounded-xl border-[1.5px] border-line bg-well px-3 text-sm outline-none transition focus:border-blue sm:w-52" />
@@ -118,7 +124,7 @@ export function SheetsDialog({ sessions, initialSchool, loginHref, onClose }: {
 
         <div className="overflow-y-auto overscroll-contain px-3 py-2">
           {shown.length === 0 && (
-            <p className="py-8 text-center text-sm text-ink-mute">{schools.length === 0 ? '아직 검사한 학급이 없어요.' : '찾는 학교가 없어요.'}</p>
+            <p className="py-8 text-center text-sm text-ink-mute">{schools.length === 0 ? '이 학기에 검사한 학급이 없어요.' : '찾는 학교가 없어요.'}</p>
           )}
           {shown.map(({ school, classes }) => {
             const readyClasses = classes.filter(c => c.ready > 0)

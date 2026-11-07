@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('@/lib/db', () => ({
   findClassCode: vi.fn(),
@@ -61,7 +61,13 @@ const reqFor = (body: unknown, ip = `10.9.0.${++ipSeq}`) => new Request('http://
   body: JSON.stringify(body),
 })
 
+// 결과는 학기별로 묶이고(lib/results termGroups) 「지금 학기」가 기본이다 — 「지금」을 2026학년도 2학기로 고정한다.
+// 아래 픽스처의 2026-09 검사는 지금 학기, 2026-05 검사는 지난 학기다.
+const NOW = '2026-11-05T03:00:00.000Z'
+afterEach(() => { vi.useRealTimers() })
+
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(NOW))
   vi.clearAllMocks()
   vi.mocked(db.findClassCode).mockResolvedValue(CODE_ROW)
   vi.mocked(db.classResults).mockResolvedValue([])
@@ -187,6 +193,20 @@ describe('POST /api/results/request', () => {
     const json = await (await REQUEST(reqFor({ code: fresh() }))).json()
     expect(json.scoredCount).toBe(1)
   })
+  it('채점 수는 링크가 처음 보이는 학기의 수다 — 지금 학기에 검사가 있으면 지금 학기, 없으면 검사가 있는 최근 학기(2026-11-05)', async () => {
+    const row = (id: string, started_at: string, submitted = true) => ({
+      id, child_no: 1, child_name: '가', gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
+      started_at, submitted_at: submitted ? started_at : null,
+      recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
+      writing_mode: 'screen' as const, writing_scan: null,
+    })
+    // 지난 학기에만 채점된 검사 → 링크는 지난 학기를 보인다 → 1
+    vi.mocked(db.classResults).mockResolvedValueOnce([row('s1', '2026-05-01T01:00:00.000Z')])
+    expect((await (await REQUEST(reqFor({ code: fresh() }))).json()).scoredCount).toBe(1)
+    // 지금 학기에 진행 중인 검사가 있으면 지금 학기를 보인다 → 지난 학기 결과지는 세지 않는다
+    vi.mocked(db.classResults).mockResolvedValueOnce([row('s1', '2026-05-01T01:00:00.000Z'), row('s2', '2026-10-01T01:00:00.000Z', false)])
+    expect((await (await REQUEST(reqFor({ code: fresh() }))).json()).scoredCount).toBe(0)
+  })
 })
 
 describe('GET /api/results/[token]', () => {
@@ -212,9 +232,13 @@ describe('GET /api/results/[token]', () => {
     expect(json.cls).toEqual({ schoolName: '대구가창초등학교', grade: 1, classNo: 2, teacherName: '김서연' })
     // 문장 읽기는 만점이 없는 비율(어절/10초)이라 taskMax에 없다(lib/scoring CountTaskKey)
     expect(json.taskMax).toEqual({ wordReading: 14, writing: 10 })
-    expect(typeof json.provisional).toBe('boolean')
-    expect(json.children).toHaveLength(2)
-    const [tested, untested] = json.children
+    // 검사가 한 학기(지금 학기)에만 있으면 학기도 하나다
+    expect(json.terms).toHaveLength(1)
+    const [term] = json.terms
+    expect(term).toMatchObject({ key: '2026-2', label: '2026학년도 2학기', current: true })
+    expect(typeof term.provisional).toBe('boolean')
+    expect(term.children).toHaveLength(2)
+    const [tested, untested] = term.children
     expect(tested.childNo).toBe(1)
     expect(tested.sessions[0]).toMatchObject({ id: 's1', attemptNo: 1, status: 'scored',
       scores: { wordReading: 0, sentenceReading: 0, writing: 0 } })
@@ -228,7 +252,7 @@ describe('GET /api/results/[token]', () => {
     }])
     const json = await (await listReq(await createResultsToken(CID, 'test-secret'))).json()
     expect(json.sheetTag).toBe(await classSheetTag(CID))
-    expect(json.children[0].sessions[0]).toMatchObject({ writingMode: 'scan', scanState: 'uploaded' })
+    expect(json.terms[0].children[0].sessions[0]).toMatchObject({ writingMode: 'scan', scanState: 'uploaded' })
     const text = JSON.stringify(json)
     expect(text).not.toContain('uploaded_at')
     expect(text).not.toContain('writing_scan')
@@ -246,9 +270,30 @@ describe('GET /api/results/[token]', () => {
   it('[REGRESSION] 전부 미녹음인 세션은 verdict가 null이고 complete.writing이 false다 — 치르지도 않은 쓰기의 0점으로 아동을 낙제시키지 않는다(A안, 사용자 확정 2026-09-22)', async () => {
     const res = await listReq(await createResultsToken(CID, 'test-secret'))
     const json = await res.json()
-    const session = json.children[0].sessions[0]
+    const session = json.terms[0].children[0].sessions[0]
     expect(session.verdict).toBeNull()
     expect(session.complete.writing).toBe(false)
+  })
+  // 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다(2026-11-05 학기 구분, 사용자 확정)
+  it('[REGRESSION] 학기마다 따로 묶는다 — 2학기 검사는 1학기 검사의 2차 재검사가 아니다. 최근 학기 먼저, 명단은 학기마다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([
+      { ...SESSION, id: 'spring', started_at: '2026-05-01T01:00:00.000Z', submitted_at: '2026-05-01T01:20:00.000Z' },
+      { ...SESSION, id: 'fall' },
+    ])
+    const json = await (await listReq(await createResultsToken(CID, 'test-secret'))).json()
+    expect(json.terms.map((t: { key: string; current: boolean }) => [t.key, t.current])).toEqual([['2026-2', true], ['2026-1', false]])
+    for (const [t, id] of [[json.terms[0], 'fall'], [json.terms[1], 'spring']] as const) {
+      expect(t.children.map((c: { childNo: number }) => c.childNo)).toEqual([1, 2])
+      expect(t.children[0].sessions).toEqual([expect.objectContaining({ id, attemptNo: 1 })])
+    }
+  })
+  it('지금 학기에 검사가 없어도 지금 학기 칸은 있다(명단만) — 새 학기에 검사할 반이다', async () => {
+    vi.mocked(db.classResults).mockResolvedValueOnce([
+      { ...SESSION, started_at: '2026-05-01T01:00:00.000Z', submitted_at: '2026-05-01T01:20:00.000Z' },
+    ])
+    const json = await (await listReq(await createResultsToken(CID, 'test-secret'))).json()
+    expect(json.terms.map((t: { key: string }) => t.key)).toEqual(['2026-2', '2026-1'])
+    expect(json.terms[0].children.every((c: { sessions: unknown[] }) => c.sessions.length === 0)).toBe(true)
   })
   it('만료·변조·형식 오류는 전부 401 한 가지', async () => {
     expect((await listReq(await createResultsToken(CID, 'test-secret', -1))).status).toBe(401)
@@ -288,12 +333,12 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     vi.mocked(db.classResults).mockResolvedValue(ROWS)
     vi.mocked(pdf.renderReport).mockResolvedValue(new Uint8Array([1]))
   })
-  it('ids 없음 → 채점 완료 전부, 아이당 최신 1장, 번호순. 파일명 「1-2_결과지_전체_날짜.pdf」', async () => {
+  it('ids 없음 → 지금 학기 채점 완료 전부, 아이당 최신 1장, 번호순. 파일명 「1-2_2026-2학기_결과지_전체_날짜.pdf」', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'))
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('application/pdf')
     expect(res.headers.get('cache-control')).toBe('no-store')
-    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_결과지_전체_\d{4}-\d{2}-\d{2}\.pdf/)
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_2026-2학기_결과지_전체_\d{4}-\d{2}-\d{2}\.pdf/)
     // a2(1번 최신)·b1(3번) 두 장 — a1(옛 차수)·c1(미제출)은 빠진다
     const printed = vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.child_name)
     expect(printed).toEqual(['아이1', '아이3'])
@@ -304,7 +349,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect(res.status).toBe(200)
     expect(vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.started_at))
       .toEqual(['2026-09-21T01:00:00.000Z', '2026-09-22T02:00:00.000Z'])
-    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_결과지_2명_')
+    expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('1-2_2026-2학기_결과지_2명_')
   })
   it('[REGRESSION] 같은 아이의 1·2차를 고르면 「2명」이 아니라 그 아이 이름 + 2장(2026-10-12 점검)', async () => {
     const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=a1,a2')
@@ -356,7 +401,7 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     // 여러 학교의 「1-2_결과지_전체」가 관리자 폴더 하나에 섞이지 않게
     const fileName = (r: Response) => decodeURIComponent(r.headers.get('content-disposition')!.split("''")[1])
     expect(fileName(admin)).toBe(`대구가창초등학교_${fileName(teacher)}`)
-    expect(fileName(teacher)).toMatch(/^1-2_결과지_전체_/)
+    expect(fileName(teacher)).toMatch(/^1-2_2026-2학기_결과지_전체_/)
     expect(admin.headers.get('cache-control')).toBe('no-store')
   })
   it('관리자 학급별 받기 — 잘못된 id는 400이고 DB를 읽지 않는다(가드 순서) · 채점된 아이가 없으면 400 · 코드가 없으면 404', async () => {
@@ -368,6 +413,40 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
     expect((await none.json()).error).toContain('내려받을 수 있는 결과지가 없어요')
     vi.mocked(db.findClassCodeById).mockResolvedValueOnce(null)
     expect((await adminReq(CID)).status).toBe(404)
+  })
+  // 학기 구분(2026-11-05, 사용자 확정 — 담당자 회신 아님)
+  describe('학기', () => {
+    const SPRING = [scored('p1', 1, '2026-05-01T01:00:00.000Z'), scored('p7', 7, '2026-05-02T01:00:00.000Z')]
+    it('전체는 고른 학기 안에서만 — 기본은 지금 학기, ?term=으로 지난 학기', async () => {
+      vi.mocked(db.classResults).mockResolvedValue([...SPRING, ...ROWS])
+      const token = await createResultsToken(CID, 'test-secret')
+      const kids = () => vi.mocked(pdf.renderReport).mock.calls.map(c => c[0].session.child_name)
+      await sheetsReq(token)
+      expect(kids()).toEqual(['아이1', '아이3'])            // 1학기의 7번은 섞이지 않는다
+      vi.mocked(pdf.renderReport).mockClear()
+      const res = await sheetsReq(token, '?term=2026-1')
+      expect(kids()).toEqual(['아이1', '아이7'])
+      expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_2026-1학기_결과지_전체_/)
+      // 관리자 학급별 받기도 같은 학기 규칙
+      vi.mocked(pdf.renderReport).mockClear()
+      await adminReq(CID, '?term=2026-1')
+      expect(kids()).toEqual(['아이1', '아이7'])
+    })
+    it('형식이 아닌 학기는 400이고 DB를 읽지 않는다', async () => {
+      expect((await sheetsReq(await createResultsToken(CID, 'test-secret'), '?term=2026-3')).status).toBe(400)
+      expect((await adminReq(CID, '?term=x')).status).toBe(400)
+      expect(db.classResults).not.toHaveBeenCalled()
+    })
+    it('[REGRESSION] 차수는 학기 안에서 센다 — 1학기·2학기에 한 번씩 검사한 아이의 한 장에는 「_N차」가 붙지 않는다', async () => {
+      vi.mocked(db.classResults).mockResolvedValue([scored('p3', 3, '2026-05-01T01:00:00.000Z'), ...ROWS])
+      const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=b1')
+      expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toContain('03_아이3_2026-09-22.pdf')
+    })
+    it('고른 검사가 여러 학기면 파일 이름에 학기를 붙이지 않는다', async () => {
+      vi.mocked(db.classResults).mockResolvedValue([...SPRING, ...ROWS])
+      const res = await sheetsReq(await createResultsToken(CID, 'test-secret'), '?ids=p7,b1')
+      expect(decodeURIComponent(res.headers.get('content-disposition') ?? '')).toMatch(/1-2_결과지_2명_/)
+    })
   })
   // 아래 넷은 전수 점검(2026-09-22)에서 나온 것들이다.
   it('[REGRESSION] 최신이 중단된 재검사인 아이도 전체에 포함된다 — 채점된 앞 차수를 내보낸다', async () => {
@@ -428,9 +507,9 @@ describe('GET /api/results/[token]/sheets.pdf', () => {
 })
 
 describe('명단에서 뺀 아이 (사용자 확정 2026-11-05)', () => {
-  const S = (id: string, childNo: number) => ({
+  const S = (id: string, childNo: number, started_at = '2026-09-22T01:00:00.000Z') => ({
     id, child_no: childNo, child_name: `아이${childNo}`, gender: '여', grade: 1, form_id: null, birth_ymd: '190312', checklist: [],
-    started_at: '2026-09-22T01:00:00.000Z', submitted_at: null,
+    started_at, submitted_at: null,
     recordings: [], reading_marks: [], sentence_scores: [], sentence_times: [], writing_answers: [],
     writing_mode: 'screen' as const, writing_scan: null,
   })
@@ -445,9 +524,27 @@ describe('명단에서 뺀 아이 (사용자 확정 2026-11-05)', () => {
   it('목록: 뺀 아이는 표에서 빠지고 removed에 검사 수와 함께 온다(생년월일 없음)', async () => {
     const token = await createResultsToken(CID, 'test-secret')
     const json = await (await LIST(new Request('http://x'), { params: Promise.resolve({ token }) })).json()
-    expect(json.children.map((c: { childNo: number }) => c.childNo)).toEqual([1])
-    expect(json.children[0].inRoster).toBe(true)
+    expect(json.terms).toHaveLength(1)
+    const children = json.terms[0].children
+    expect(children.map((c: { childNo: number }) => c.childNo)).toEqual([1])
+    expect(children[0].inRoster).toBe(true)
     expect(json.removed).toEqual([{ childNo: 2, name: '아이2', gender: '남', tests: 2 }])
+    expect(json.children).toBeUndefined()   // 표는 학기마다(terms)만 — 학기를 섞은 children은 싣지 않는다
+  })
+  it('학기가 여럿이어도: 뺀 아이는 어느 학기의 표에도 없고 removed에 한 번만(검사 수는 모든 학기 합)', async () => {
+    vi.mocked(db.classResults).mockResolvedValue([
+      S('s1', 1), S('s2', 2), S('p1', 1, '2026-05-12T01:00:00.000Z'), S('p2', 2, '2026-05-12T01:00:00.000Z'),
+      // 뺀 아이 검사만 있던 학기(2025-2)는 빈 칸으로 생기지 않는다
+      S('o2', 2, '2025-10-01T01:00:00.000Z'),
+    ])
+    const token = await createResultsToken(CID, 'test-secret')
+    const json = await (await LIST(new Request('http://x'), { params: Promise.resolve({ token }) })).json()
+    expect(json.terms.map((t: { key: string }) => t.key)).toEqual(['2026-2', '2026-1'])
+    for (const t of json.terms as { children: { childNo: number; sessions: unknown[] }[] }[]) {
+      expect(t.children.map(c => c.childNo)).toEqual([1])
+      expect(t.children[0].sessions).toHaveLength(1)
+    }
+    expect(json.removed).toEqual([{ childNo: 2, name: '아이2', gender: '남', tests: 3 }])
   })
   it('빼기·되살리기 라우트: 토큰의 학급으로만, 없는 번호 404, 만료 토큰 401', async () => {
     const token = await createResultsToken(CID, 'test-secret')

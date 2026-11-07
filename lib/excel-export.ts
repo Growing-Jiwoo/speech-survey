@@ -31,7 +31,7 @@
 // 제한 시간·0어절로 나온다. 여기서 채점 규칙을 새로 만들지 않는다.
 import { FORMS, type SurveyForm } from './forms'
 import { CHECKLIST_AREAS, itemsFor } from './items'
-import { pad2, semesterOf } from './format'
+import { pad2, termKeyOf, termLabel, termOf } from './format'
 import { kstDateKey } from './adminStats'
 import { childCode } from './child-code'
 import {
@@ -52,19 +52,6 @@ export interface ExportSessionRow extends ScoreSource {
   started_at: string
 }
 
-/**
- * 검사(시작 시각, KST)의 학기 — 학년도(3월~다음 해 2월, 1·2월은 앞 해)와 학기(`semesterOf`, 3~8월 1학기 · 9~2월 2학기 —
- * 담당자 확정 2026-10-20). 양식을 고르는 규칙과 같아 같은 검사의 양식과 학기가 갈리지 않는다.
- * TODO: feat/semester-split(PR #143)이 병합되면 lib/format `termOf`·`termLabel(…, { short: true })`로 바꾼다 — 같은 규칙을
- * 그 브랜치에 기대지 않으려고 여기 따로 둔 것이다.
- */
-export function exportTermOf(iso: string): { year: number; semester: 1 | 2 } {
-  const [y, m] = kstDateKey(new Date(iso)).split('-').map(Number)
-  return { year: m <= 2 ? y - 1 : y, semester: semesterOf(iso) }
-}
-
-/** `2026-2학기` */
-const termText = (t: { year: number; semester: 1 | 2 }) => `${t.year}-${t.semester}학기`
 
 /**
  * 아이(학급 + 출석 번호)·학기마다 **마지막 제출 검사** 하나. 담당자 확정(2026-11-06) 「응응 그렇게 하자!」(재검사는 마지막 검사만).
@@ -75,8 +62,8 @@ export function latestPerTerm(rows: ExportSessionRow[]): ExportSessionRow[] {
   const last = new Map<string, ExportSessionRow>()
   for (const r of rows) {
     if (!r.submitted_at) continue
-    const t = exportTermOf(r.started_at)
-    const key = `${r.class_code_id}:${r.child_no}:${t.year}-${t.semester}`
+    // 학기는 lib/format termOf(KST 학년도 + semesterOf) — 교사 결과지·관리자 목록과 같은 학기
+    const key = `${r.class_code_id}:${r.child_no}:${termKeyOf(r.started_at)}`
     const prev = last.get(key)
     if (!prev || r.started_at > prev.started_at || (r.started_at === prev.started_at && r.id > prev.id)) last.set(key, r)
   }
@@ -105,7 +92,7 @@ export function exportColumns(form: SurveyForm): Column[] {
     // 아동 코드만 — 담당자 확정(2026-11-06) 「엑셀에서는 아동 코드만 있어야 할 것 같아!」
     { header: '아동 코드', value: c => childCode(c.row.apply_seq, c.row.child_no) },
     { header: '학년', value: c => c.row.grade },
-    { header: '학기', value: c => termText(exportTermOf(c.row.started_at)) },
+    { header: '학기', value: c => termLabel(termOf(c.row.started_at), { short: true }) },
     { header: '성별', value: c => c.row.gender },
     { header: '검사일', value: c => kstDateKey(new Date(c.row.started_at)) },
     { header: '양식', value: c => c.form.id },
@@ -177,7 +164,7 @@ export function buildExportSheets(rows: ExportSessionRow[]): SheetData[] {
     list.push({ row, form, input, result: scoreSession(form, input) })
     byForm.set(form, list)
   }
-  const termSort = (r: ExportSessionRow) => { const t = exportTermOf(r.started_at); return t.year * 10 + t.semester }
+  const termSort = (r: ExportSessionRow) => { const t = termOf(r.started_at); return t.year * 10 + t.semester }
   return FORMS.filter(form => byForm.has(form)).map(form => {
     const cols = exportColumns(form)
     const ctxs = byForm.get(form)!.sort((a, b) =>

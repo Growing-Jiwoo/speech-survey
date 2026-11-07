@@ -1,10 +1,11 @@
 // components/admin/FilterToolbar.tsx — 관리자 목록 상단 필터 툴바.
-// 검색(디바운스)·상태 탭·학교/학년 Select·필터 초기화를 담당한다.
+// 검색(디바운스)·상태 탭·학교/학년/학기 Select·필터 초기화를 담당한다.
 // 필터 상태의 단일 소스는 URL(부모 AdminDashboard) — 여기는 표시와 콜백만.
 'use client'
 import { useEffect, useState } from 'react'
 import { type Filters, type StatusFilter } from '@/lib/adminStats'
 import { Select } from '@/components/Select'
+import { termLabel } from '@/lib/format'
 
 const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'all', label: '전체' },
@@ -12,12 +13,14 @@ const STATUS_TABS: { key: StatusFilter; label: string }[] = [
   { key: 'inProgress', label: '진행 중' },
 ]
 
-export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyCount, onFilters, onReset }: {
+export function FilterToolbar({ filters, schools, grades, terms, shownCount, scanReadyCount, onFilters, onReset }: {
   filters: Filters
   /** 쓰기 채점이 남은 스캔본 검사 수(필터 이전 전체 기준). 0이면 탭을 숨긴다 — 스캔본을 안 쓰는 동안은 화면이 그대로다 */
   scanReadyCount: number
   schools: string[]
   grades: number[]
+  /** 검사가 있는 학기(`2026-2`), 최근 학기 먼저 */
+  terms: string[]
   /** 현재 필터를 통과해 표에 보이는 행 수(필터 활성일 때 "N건 표시"로 노출) */
   shownCount: number
   onFilters: (patch: Partial<Filters>) => void
@@ -40,7 +43,7 @@ export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyC
   }, [qLocal, filters.q, onFilters])
 
   const hasFilter = filters.q !== '' || filters.status !== 'all'
-    || filters.school !== null || filters.grade !== null || filters.today
+    || filters.school !== null || filters.grade !== null || filters.term !== null || filters.today
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-3">
@@ -65,6 +68,10 @@ export function FilterToolbar({ filters, schools, grades, shownCount, scanReadyC
         value={filters.grade !== null ? String(filters.grade) : ''}
         onChange={v => onFilters({ grade: v ? Number(v) : null })}
         options={[{ value: '', label: '학년 전체' }, ...grades.map(g => ({ value: String(g), label: `${g}학년` }))]} />
+      {/* 학기 — 같은 학급 코드로 1·2학기를 검사한 반을 나눠 본다(사용자 확정 2026-11-05, 담당자 회신 아님) */}
+      <Select size="sm" ariaLabel="학기 필터" placeholder="학기 전체" className="w-32"
+        value={filters.term ?? ''} onChange={v => onFilters({ term: v || null })}
+        options={[{ value: '', label: '학기 전체' }, ...terms.map(t => ({ value: t, label: termLabel(t, { short: true }) }))]} />
       {/* 학교·학년은 Select가 현재 값을 나타내므로 중복 Chip 제거. Select가 없는 'today'만 Chip 유지. */}
       {filters.today && <Chip label="오늘 참여" onRemove={() => onFilters({ today: false })} />}
       <div className="ml-auto flex items-center gap-2">

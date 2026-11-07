@@ -4,7 +4,7 @@
 // 여기서 규칙을 새로 만들지 않는다: 관리자와 교사가 다른 점수를 보면 그 자체가 사고다.
 import { formOfSession, type SurveyForm } from './forms'
 import { itemsFor } from './items'
-import { pad2 } from './format'
+import { pad2, termKeyOf } from './format'
 import {
   TASK_KEYS, finalVerdict, scoreInputFrom, scoreSession, sheetPdfGate, withUnrecordedFixed,
   type ScoreInput, type Verdict,
@@ -149,7 +149,28 @@ export function listResultOf(r: ResultsSessionRow): { final: Verdict | 'unscored
 }
 
 /**
- * 명단 ∪ 세션 → 아이당 한 줄. 정렬은 **위험 → 주의 → 나머지, 그 안에서 번호순**(사용자 확정 ④ 「Fail 먼저」를
+ * 세션 행을 **학기별로** 나눈다(lib/format termKeyOf — 검사 시작 시각의 KST 학년도·학기). 지금 학기는 검사가 없어도 넣는다
+ * (명단만 있는 빈 칸 — 새 학기의 시작 화면에서 검사할 반이다). 최근 학기 먼저.
+ * 사용자 확정(2026-11-05) — 담당자 회신 아님: 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다. 학기를 섞어
+ * `buildChildren`에 넘기면 2학기 검사가 1학기 검사의 2차 재검사가 되고, 대표 검사·「N차 미제출」·스캔본이 붙을 검사가 학기를
+ * 넘나든다. 교사 결과 목록·병합 PDF·결과지 링크 요청이 모두 이것으로 나눈 뒤 학기마다 `buildChildren`을 부른다.
+ */
+export function termGroups<T extends Pick<ResultsSessionRow, 'started_at'>>(
+  rows: T[], nowIso = new Date().toISOString(),
+): { key: string; current: boolean; rows: T[] }[] {
+  const current = termKeyOf(nowIso)
+  const byTerm = new Map<string, T[]>([[current, []]])
+  for (const r of rows) {
+    const k = termKeyOf(r.started_at)
+    const list = byTerm.get(k)
+    if (list) list.push(r)
+    else byTerm.set(k, [r])
+  }
+  return [...byTerm.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([key, rs]) => ({ key, current: key === current, rows: rs }))
+}
+
+/**
+ * 명단 ∪ 세션 → 아이당 한 줄. **`rows`는 한 학기의 세션이어야 한다**(`termGroups`) — 재검사 차수가 rows 안에서 매겨진다. 정렬은 **위험 → 주의 → 나머지, 그 안에서 번호순**(사용자 확정 ④ 「Fail 먼저」를
  * 3단계로 옮긴 것, 2026-10-20). 판정은 대표 검사의 판정(`childVerdict` — 가장 최근에 제출된 검사)이다. 화면의 접힌 행·요약과
  * 같은 검사를 봐야 한다 — 1차 위험 뒤 2차를 중단한 아이가 위로 올라가지 않았다(2026-10-12 점검).
  * - 명단에만 있음 → sessions 빈 행(미실시)
@@ -185,15 +206,19 @@ const classTag = (grade: number, classNo: number) => (classNo === 0 ? `${grade}�
  * 그 아이에 재검사가 있으면 `_2차`를 붙여 같은 이름으로 덮어써지지 않게 한다.
  * 여러 장이면 「명」은 **서로 다른 아이 수**이고, 장 수가 그보다 많을 때만 `_N장`을 붙인다 — 한 아이의 1·2차를
  * 받았는데 `_2명_`이 찍혔다(2026-10-12 점검). 한 아이의 여러 장은 관리자 규약을 따라 `03_이름_N장_오늘.pdf`.
+ * 반 단위 이름(전체·여러 아이)에는 학기(`term`, 예 `2026-2학기`)를 학급 뒤에 붙인다 — 같은 반의 1·2학기 「결과지_전체」가 같은
+ * 날 받으면 같은 이름이 된다(2026-11-05 학기 구분). 한 아이의 이름은 검사일이 학기를 말한다.
  */
 export function sheetsFileName(a: {
   grade: number; classNo: number
   /** 병합 파일의 날짜(오늘, KST) */
   date: string
   all: boolean
+  /** 학기 표기(`termLabel(…, { short: true })`). 고른 검사가 여러 학기면 호출부가 비운다 */
+  term?: string
   picked: { childNo: number; name: string; attemptNo: number; attemptCount: number; startedDate: string }[]
 }): string {
-  const tag = classTag(a.grade, a.classNo)
+  const tag = classTag(a.grade, a.classNo) + (a.term ? `_${a.term}` : '')
   if (a.all) return `${tag}_결과지_전체_${a.date}.pdf`
   const sheets = a.picked.length
   const kids = new Set(a.picked.map(p => p.childNo)).size
