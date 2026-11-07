@@ -133,9 +133,12 @@ export function AdminDashboard() {
           <p className="text-[15px] font-bold">읽기 검사 · 관리자</p>
           <p className="text-[12px] text-ink-mute">행을 누르면 결과지가 열려요 · 카드와 학교를 누르면 목록을 걸러 볼 수 있어요</p>
         </div>
+        {/* 머리 버튼은 한 묶음으로 오른쪽에 둔다 — 버튼이 다섯 개가 되자 1024px에서 「로그아웃」 하나만 아랫줄 왼쪽으로 떨어졌다
+            (2026-11-07 로컬 시험 스택 점검). 묶음이면 줄이 바뀌어도 오른쪽 정렬로 함께 접힌다 */}
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
         {/* 학교·반별 결과지 받기 — 담당자 요청(2026-10-24). 학교 필터가 걸려 있으면 그 학교로 찾은 채 연다 */}
         <button type="button" onClick={() => setSheetsOpen(true)}
-          className="ml-auto rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
+          className="rounded-lg border-[1.5px] border-blue bg-blue/5 px-3 py-1.5 text-xs font-bold text-blue transition hover:bg-blue/10">
           결과지 받기
         </button>
         {/* 전체 데이터 엑셀(아동 코드만 — 이름 없음). 필터와 상관없이 제출된 검사 전부다 */}
@@ -160,6 +163,7 @@ export function AdminDashboard() {
           className="rounded-lg border-[1.5px] border-line bg-well px-3 py-1.5 text-xs font-bold text-ink-soft transition hover:border-blue disabled:opacity-50">
           {loggingOut ? '로그아웃 중…' : '로그아웃'}
         </button>
+        </div>
         {logoutErr && <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">{logoutErr}</p>}
         {exportErr && (
           <p role="alert" className="w-full text-right text-[13px] font-bold text-rec-deep">
