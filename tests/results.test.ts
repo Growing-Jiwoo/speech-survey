@@ -607,3 +607,32 @@ describe('sessionLabel — 재검사로 대체(스캔 대기인데 대상 검사
   })
 })
 
+
+// 스캔본은 학기와 무관하게 그 아이의 가장 최근 제출 검사에 붙는다(사용자 확정 2026-11-07 — 8월 말 검사의 기록지를 9월에 올린다)
+describe('scanTargetsAcross · termSessionLabel — 학기를 넘는 스캔본 대상', async () => {
+  const { scanTargetsAcross, termSessionLabel } = await import('@/lib/results-view')
+  type S = import('@/lib/results-view').ResultsSession
+  const sess = (id: string, startedAt: string, submitted = true): S => ({
+    id, attemptNo: 1, startedAt, submittedAt: submitted ? startedAt : null, status: submitted ? 'scoring' : 'unsubmitted',
+    scores: null, verdict: null, complete: null, taskVerdict: null, writingMode: 'scan', scanState: submitted ? 'wait' : 'unsubmitted',
+  })
+  const kid = (sessions: S[]) => ({ childNo: 3, name: '가나', gender: '여', inRoster: true, sessions })
+  const T1 = sess('t1', '2026-08-28T01:00:00Z')
+
+  it('2학기 검사가 없으면 1학기 검사가 대상 — 9월에 올려도 막히지 않는다', () => {
+    const terms = [{ children: [kid([])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms).map(t => [t.sessionId, t.retest])).toEqual([['t1', false]])
+    expect(termSessionLabel(T1, 't1', 't1')).toBe('scanWait')
+  })
+  it('2학기에 제출한 검사가 있으면 그것이 대상이고, 1학기 스캔 대기는 「다음 학기 검사로 대체」 · 확인 창이 한 번 더 묻는다', () => {
+    const T2 = sess('t2', '2026-09-20T01:00:00Z')
+    const terms = [{ children: [kid([T2])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms).map(t => [t.sessionId, t.retest])).toEqual([['t2', true]])
+    expect(termSessionLabel(T1, 't1', 't2')).toBe('laterTerm')
+    expect(termSessionLabel(T2, 't2', 't2')).toBe('scanWait')
+  })
+  it('2학기 검사가 제출 전이면 기록지는 여전히 1학기 검사로', () => {
+    const terms = [{ children: [kid([sess('t2', '2026-09-20T01:00:00Z', false)])] }, { children: [kid([T1])] }]
+    expect(scanTargetsAcross(terms)[0].sessionId).toBe('t1')
+  })
+})

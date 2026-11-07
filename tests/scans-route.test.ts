@@ -153,14 +153,13 @@ describe('POST /api/results/[token]/scans — 쓰기 기록지 스캔본 한 장
       expect(db.removeScanObjects).toHaveBeenCalledWith([path])          // 방금 올린 새 파일만 지운다
       expect(db.removeScanObjects).not.toHaveBeenCalledWith([prev.path])  // 옛 파일은 그대로(행이 다시 가리킨다)
     })
-    it('지난 학기 검사면 409 — 같은 학급 코드로 1·2학기를 검사한 반에서 이번 학기 기록지가 지난 학기 검사에 붙지 않게(2026-11-05)', async () => {
+    it('[REGRESSION] 지난 학기 검사라도 그 아이의 가장 최근 제출 검사면 올린다 — 8월 말 검사의 기록지를 9월에 올린다(2026-11-07)', async () => {
       // 1년 전이면 학기가 반드시 다르다(학년도가 다르다)
       const lastYear = new Date(Date.now() - 366 * 24 * 3600_000).toISOString()
       vi.mocked(db.scanUploadTarget).mockResolvedValueOnce({ ...TARGET, started_at: lastYear })
       const res = await post({ sessionId: SID, file: JPEG })
-      expect(res.status).toBe(409)
-      expect((await res.json()).error).toMatch(/지난 학기/)
-      expect(db.uploadScanObject).not.toHaveBeenCalled()
+      expect(res.status).not.toBe(409)
+      expect(db.uploadScanObject).toHaveBeenCalled()
     })
     it('[REGRESSION] 그 아이의 가장 최근 제출 검사가 아니면 409 — 오래 열어 둔 탭이 새 기록지를 앞 차수에 붙이지 않게', async () => {
       vi.mocked(db.latestSubmittedSessionId).mockResolvedValueOnce('22222222-2222-4222-8222-222222222222')

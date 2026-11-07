@@ -581,7 +581,8 @@ describe('rosterWithTested', () => {
   })
 
   // 학급 코드는 만료가 없어 같은 반이 1학기 코드로 2학기에도 검사한다 — 「검사함」·「검사 완료 N명」·스캔 대기는 지금 학기만(2026-11-05)
-  it('[REGRESSION] 지난 학기 검사는 「검사함」·쓰기 상태·스캔 대기에 세지 않는다', async () => {
+  // 「검사함」은 지금 학기만, 쓰기 상태·스캔 대기는 학기를 가리지 않는다(사용자 확정 2026-11-07 — 8월 말 검사의 기록지를 9월에 올린다)
+  it('[REGRESSION] 지난 학기 검사는 「검사함」에 세지 않지만 스캔 대기는 센다(기록지는 가장 최근 제출 검사에 붙는다)', async () => {
     const rows = [
       { child_no: 1, child_name: '김서아', gender: '여', birth_ymd: '190304' },
       { child_no: 2, child_name: '박도윤', gender: '남', birth_ymd: '190712' },
@@ -597,8 +598,9 @@ describe('rosterWithTested', () => {
       error: null,
     })
     const r = await rosterWithTested(CLASS_CODE.id, isWw)
-    expect(r.roster.map(c => [c.tested, c.writing])).toEqual([[null, null], ['inProgress', 'unsubmitted']])
-    expect(r.scanPending).toBe(0)
+    // 2번은 2학기 검사가 진행 중이지만 제출 전이라, 기록지는 여전히 1학기 제출 검사로 간다
+    expect(r.roster.map(c => [c.tested, c.writing])).toEqual([[null, 'wait'], ['inProgress', 'wait']])
+    expect(r.scanPending).toBe(2)
   })
 
   // 쓰기 기록지 스캔본(2026-09-30) — 인쇄 창의 배지와 시작 화면 「스캔 대기 N명」의 근거

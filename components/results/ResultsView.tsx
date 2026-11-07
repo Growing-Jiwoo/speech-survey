@@ -6,9 +6,11 @@
 // 받을 때 「쓰기 채점 전」 경고를 이 화면이 맡는다.
 // 아이 행(접힌 행)은 **대표 검사**(가장 최근에 제출된 검사 — lib/results-view representativeSession)를 그린다.
 // 판정·정렬·요약도 같은 검사를 본다(2026-10-12 점검).
-// 학기(사용자 확정 2026-11-05 — 담당자 회신 아님): 표·요약·받기·스캔본 올리기는 **고른 학기 안에서** 돈다. 학급 코드는 만료가
+// 학기(사용자 확정 2026-11-05 — 담당자 회신 아님): 표·요약·받기는 **고른 학기 안에서** 돈다. 학급 코드는 만료가
 // 없어 같은 반이 1학기 코드로 2학기에도 검사한다. 처음에는 지금 학기(검사가 없으면 검사가 있는 최근 학기 — lib/results-view
-// defaultTerm)를 보이고, 학기가 둘 이상일 때만 고르는 단추를 둔다. 스캔본은 지금 학기 검사에만 올린다.
+// defaultTerm)를 보이고, 학기가 둘 이상일 때만 고르는 단추를 둔다. 스캔본은 학기와 무관하게 그 아이의 **가장 최근 제출 검사**에
+// 붙는다(사용자 확정 2026-11-07 — 8월 말 검사의 기록지를 9월에 올릴 수 있어야 한다, lib/results-view scanTargetsAcross) —
+// 그래서 올리기 카드는 어느 학기를 보든 있고, 기록지가 다음 학기 검사로 가는 앞 학기 검사는 「다음 학기 검사로 대체」다.
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -24,7 +26,8 @@ import { gradeClassLabel } from '@/lib/format'
 import { dispositionFilename, saveBlobAs } from '@/lib/download'
 import { requestJson } from '@/lib/http'
 import {
-  awaitsScanWriting, defaultTerm, latestScored, latestSession, representativeSession, scanTargetSession, scanTargets, sessionLabel,
+  awaitsScanWriting, defaultTerm, latestScored, latestSession, representativeSession, scanTargetIdsAcross, scanTargetSession,
+  scanTargetsAcross, sessionLabel, termSessionLabel,
   summarize, type ResultsChild, type ResultsSession, type ResultsTerm, type SessionLabel,
 } from '@/lib/results-view'
 import { FLUENCY_UNIT, VERDICT_LABEL, fluencyLabel, type CountTaskKey, type TaskKey, type Verdict } from '@/lib/scoring'
@@ -55,6 +58,8 @@ const STATUS_BADGE: Record<SessionLabel, { tone: 'blue' | 'amber' | 'rec' | 'mut
   scanWait: { tone: 'amber', label: '스캔 대기' },
   // 더 최근에 제출된 재검사가 있어 이 검사에는 스캔본을 올릴 수 없다(lib/results-view sessionLabel)
   replaced: { tone: 'mute', label: '재검사로 대체' },
+  // 기록지는 다음 학기에 제출된 검사로 간다 — 이 검사에는 올릴 수 없다(lib/results-view termSessionLabel, 2026-11-07)
+  laterTerm: { tone: 'mute', label: '다음 학기 검사로 대체' },
   unsubmitted: { tone: 'rec', label: '미제출' },
 }
 
@@ -153,8 +158,8 @@ export function ResultsView({ token, scanLink = false }: {
    *  25장 병합은 서버가 몇 초를 쓰는 일이라, 잘못 눌린 클릭 하나로 시작되면 안 된다(사용자 확정 2026-09-22). */
   const [confirmMode, setConfirmMode] = useState<'all' | 'picked' | null>(null)
   const [dlErr, setDlErr] = useState('')
-  /** 선생님이 고른 학기. null이면 처음 보일 학기 — 메일의 [쓰기 스캔본 올리기] 링크로 왔으면 지금 학기(스캔본은 지금 학기에만
-   *  올린다), 아니면 `defaultTerm` */
+  /** 선생님이 고른 학기. null이면 처음 보일 학기 — 메일의 [쓰기 스캔본 올리기] 링크로 왔으면 지금 학기(대개 올릴 기록지가 있는
+   *  학기다 — 올리기 카드는 어느 학기에서든 있다), 아니면 `defaultTerm` */
   const [termPick, setTermPick] = useState<string | null>(null)
   // 스캔 카드 밖(카드가 없는 반이면 화면 어디든)에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 결과지 화면을
   // 떠난다 — 확인 중이던 스캔본 창도 함께 사라진다. 카드 유무와 무관하게 이 화면 전체에서 막는다(2026-10-12 점검).
@@ -272,12 +277,15 @@ export function ResultsView({ token, scanLink = false }: {
     const r = await requestJson<Payload>(`/api/results/${token}`, { method: 'GET' })
     if (!r.ok) return null
     queryClient.setQueryData(['results', token], r.data)
-    // 스캔본은 지금 학기 검사에만 붙는다(올리기 라우트가 다시 확인한다)
-    return scanTargets(r.data.terms.find(t => t.current)?.children ?? [])
+    // 스캔본은 학기와 무관하게 그 아이의 가장 최근 제출 검사에 붙는다(올리기 라우트가 다시 확인한다)
+    return scanTargetsAcross(r.data.terms)
   }
-  const targets = scanTargets(children)
+  const targets = scanTargetsAcross(terms)
+  const acrossIds = scanTargetIdsAcross(terms)
   // 이 반에 스캔본 방식 검사가 하나라도 있으면 표 아래 안내에 스캔 설명을 붙인다(범례는 2026-10-22에 뺐다)
   const hasScan = children.some(c => c.sessions.some(x => x.writingMode === 'scan'))
+  // 올리기 카드는 어느 학기에서든 — 다른 학기에 스캔본 방식 검사가 있어도 낸다
+  const hasScanAny = terms.some(t => t.children.some(c => c.sessions.some(x => x.writingMode === 'scan')))
 
   return (
     // 휴대폰(640px 미만)은 좌우 여백을 16px로 — 24px이면 375px에서 표(번호·이름·판정·상태)가 겨우 들어가, 재검사 행을
@@ -348,8 +356,8 @@ export function ResultsView({ token, scanLink = false }: {
 
           {/* 스캔본 방식 검사가 있는 반만. 입구 카드는 올릴 수 있는 아이(스캔 대기·이미 올림)가 있을 때만 보인다 —
               조건을 여기서 걸면 확인 중에 다시 받은 목록에서 대상이 사라질 때 창이 통째로 닫힌다(고른 것이 사라진다). */}
-          {/* 지난 학기를 보고 있으면 두지 않는다 — 스캔본은 지금 학기 검사에만 올린다(app/api/results/[token]/scans) */}
-          {view.current && (hasScan || scanLink) && (
+          {/* 어느 학기를 보든 둔다 — 기록지는 학기와 무관하게 그 아이의 가장 최근 제출 검사에 붙는다(2026-11-07, app/api/results/[token]/scans) */}
+          {(hasScanAny || scanLink) && (
             <ScanUpload token={token} sheetTag={sheetTag} targets={targets} onUploaded={() => void refetch()}
               // 파일을 고르면 목록을 다시 받아 짝짓는다 — 열어 둔 지 오래된 탭은 그사이 제출·재검사된 아이를 모른다
               refreshTargets={refreshTargets} emptyNotice={scanLink} />
@@ -441,7 +449,7 @@ export function ResultsView({ token, scanLink = false }: {
                         <td className="px-1 py-2 sm:px-2"><VerdictPill v={s?.status === 'scored' ? s.verdict : null} /></td>
                         <td className="whitespace-nowrap px-1 py-2 sm:px-2">
                           {/* 대표 검사가 곧 스캔 대상이다 — 그보다 앞 차수의 스캔 대기는 「재검사로 대체」로 갈린다 */}
-                          {s ? <Badge tone={STATUS_BADGE[sessionLabel(s, rep?.id)].tone} size="sm">{STATUS_BADGE[sessionLabel(s, rep?.id)].label}</Badge>
+                          {s ? <Badge tone={STATUS_BADGE[termSessionLabel(s, rep?.id, acrossIds.get(c.childNo))].tone} size="sm">{STATUS_BADGE[termSessionLabel(s, rep?.id, acrossIds.get(c.childNo))].label}</Badge>
                             : <Badge tone="mute" size="sm">미실시</Badge>}
                           {/* 대표 검사 뒤에 그만둔 재검사가 있으면 접힌 행에도 알린다 — 줄을 바꿔 붙여 좁은 화면에서 칸이
                               넓어지지 않게 한다 */}

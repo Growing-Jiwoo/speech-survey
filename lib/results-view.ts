@@ -60,7 +60,7 @@ export interface ResultsSession {
  * 받기는 두 방식 모두 A안 그대로 `status === 'scored'`면 된다 — 스캔 대기인 아이도 읽기 채점이 끝났으면
  * 결과지를 받을 수 있다(쓰기·최종결과 칸이 빈 채로. 받을 때 경고가 알린다).
  */
-export type SessionLabel = SessionStatus | 'scanWait' | 'replaced'
+export type SessionLabel = SessionStatus | 'scanWait' | 'replaced' | 'laterTerm'
 
 /**
  * @param scanTargetId 그 아이의 스캔본이 붙을 검사(`scanTargetSession`)의 id. 주면 스캔 대기인데 대상이 아닌
@@ -99,7 +99,7 @@ export interface ResultsTerm {
   key: string
   /** `2026학년도 2학기` */
   label: string
-  /** 지금 학기 — 스캔본은 지금 학기 검사에만 올린다(app/api/results/[token]/scans) */
+  /** 지금 학기 — 처음 보일 학기를 가른다(`defaultTerm`). 스캔본은 학기와 무관하게 가장 최근 제출 검사에 붙는다(`scanTargetsAcross`) */
   current: boolean
   /** 그 학기 검사에 임시 판정 기준이 있는지(검사가 없으면 지금 시작할 양식 기준) */
   provisional: boolean
@@ -162,6 +162,39 @@ export const scanTargetSession = representativeSession
 export function childVerdict(c: ResultsChild): Verdict | null {
   const s = representativeSession(c)
   return s?.status === 'scored' ? s.verdict : null
+}
+
+/**
+ * 학기를 가로질러 아이마다 하나로 모은다 — 스캔본이 붙을 검사는 학기와 무관하게 **그 아이의 가장 최근 제출 검사**다
+ * (사용자 확정 2026-11-07 — 담당자 회신 아님: 8월 말 검사의 기록지를 9월에 올릴 수 있어야 한다. QR에는 반과 번호만 있다).
+ * 학기마다 나눈 표(lib/results termGroups)를 받아 같은 번호의 검사를 시작 시각 순으로 잇는다. 학기를 넘는 아이는 검사가 둘
+ * 이상이라 올리기 확인 창이 재검사처럼 선생님에게 한 번 더 묻는다(`retest`) — 남은 앞 학기 기록지가 섞여도 조용히 붙지 않게.
+ */
+export function scanTargetsAcross(terms: { children: ResultsChild[] }[]): ScanTarget[] {
+  return scanTargets(childrenAcross(terms))
+}
+
+function childrenAcross(terms: { children: ResultsChild[] }[]): ResultsChild[] {
+  const by = new Map<number, ResultsChild>()
+  for (const t of terms) for (const c of t.children) {
+    const cur = by.get(c.childNo)
+    if (!cur) by.set(c.childNo, { ...c, sessions: [...c.sessions] })
+    else cur.sessions.push(...c.sessions)
+  }
+  for (const c of by.values()) c.sessions.sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+  return [...by.values()]
+}
+
+/** 학기를 가로지른 스캔 대상 검사 id(번호 → id) — 학기 표의 「다음 학기 검사로 대체」를 가른다(`termSessionLabel`) */
+export function scanTargetIdsAcross(terms: { children: ResultsChild[] }[]): Map<number, string> {
+  return new Map(scanTargetsAcross(terms).map(t => [t.childNo, t.sessionId]))
+}
+
+/** 학기 표의 화면 상태 — `sessionLabel`에 더해, 스캔 대기인데 기록지가 **다음 학기 검사**로 가는 검사는 「다음 학기 검사로 대체」.
+ *  그 아이의 학기 안 대표 검사(`termTargetId`)라도 더 뒤 학기에 제출된 검사가 있으면 거기에 붙는다(`scanTargetsAcross`). */
+export function termSessionLabel(s: ResultsSession, termTargetId: string | undefined, acrossTargetId: string | undefined): SessionLabel {
+  const label = sessionLabel(s, termTargetId)
+  return label === 'scanWait' && acrossTargetId !== undefined && acrossTargetId !== s.id ? 'laterTerm' : label
 }
 
 /** 올리기 확인 화면의 대상 — 아이마다 스캔본이 붙을 검사 하나. 검사가 없는 아이(미실시)는 없다. */

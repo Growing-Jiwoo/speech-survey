@@ -355,7 +355,7 @@ export interface WritingScanRow {
 /** 스캔본을 올릴 수 있는지 판단할 재료 — 한 번의 조회로 가져온다(라우트가 판정한다). */
 export interface ScanUploadTarget {
   class_code_id: string; child_no: number; grade: number; form_id: string | null
-  /** 검사 학기를 가린다 — 스캔본은 지금 학기 검사에만 붙는다(올리기 라우트) */
+  /** 검사 시작 시각 — 학기 구분용(스캔본 대상은 학기를 가리지 않는다 — 올리기 라우트, 2026-11-07) */
   started_at: string
   submitted_at: string | null; writing_mode: WritingMode
   writing_answers: { item_code: string }[]; sentence_scores: { item_code: string }[]
@@ -670,17 +670,23 @@ export async function rosterWithTested(
     .eq('class_code_id', classCodeId).order('started_at')
   fail(error)
   const term = termKeyOf(new Date().toISOString())
-  const rows = ((data ?? []) as unknown as ClassWritingRow[]).filter(s => termKeyOf(s.started_at) === term)
+  const rows = (data ?? []) as unknown as ClassWritingRow[]
   const state = new Map<number, 'submitted' | 'inProgress'>()
   // 쓰기 상태는 스캔본이 붙을 검사 기준 — **가장 최근에 제출된 검사**, 없으면 가장 최근 검사
   // (lib/results-view scanTargetSession과 같은 규칙: 그만둔 재검사가 앞 차수의 스캔 대기를 가리지 않게).
   // started_at 오름차순이라 뒤에 오는 값이 더 최근이다.
   const writing = new Map<number, ScanTargetState>()
+  // 쓰기 상태·스캔 대기는 **학기를 가리지 않는다**(사용자 확정 2026-11-07) — 기록지는 학기와 무관하게 그 아이의 가장 최근 제출 검사에
+  // 붙어(올리기 라우트), 8월 말 검사의 스캔 대기는 9월 시작 화면에도 세야 한다. 「검사함」·「검사 완료 N명」만 지금 학기다.
+  const submittedAny = new Set<number>()
   for (const s of rows) {
-    const cur = state.get(s.child_no)
-    if (s.submitted_at) state.set(s.child_no, 'submitted')
-    else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
-    if (!s.submitted_at && cur === 'submitted') continue
+    if (termKeyOf(s.started_at) === term) {
+      const cur = state.get(s.child_no)
+      if (s.submitted_at) state.set(s.child_no, 'submitted')
+      else if (cur !== 'submitted') state.set(s.child_no, 'inProgress')
+    }
+    if (!s.submitted_at && submittedAny.has(s.child_no)) continue
+    if (s.submitted_at) submittedAny.add(s.child_no)
     writing.set(s.child_no, scanTargetState({
       // 컬럼은 not null default 'screen'이다 — 그래도 scan이 아닌 값은 전부 화면 방식으로 읽는다(스캔 대기로 잘못 세지 않게)
       submitted: !!s.submitted_at, mode: s.writing_mode === 'scan' ? 'scan' : 'screen', hasScan: one(s.writing_scans) !== null,
