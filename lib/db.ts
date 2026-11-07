@@ -1,5 +1,6 @@
 import { formFor, formOfSession } from './forms'
 import { semesterOf } from './format'
+import type { ExportSessionRow } from './excel-export'
 import { listResultOf } from './results'
 import type { RosterChild } from './roster'
 import { criteriaProvisional, type Verdict } from './scoring'
@@ -927,6 +928,46 @@ export async function listSessions(): Promise<SessionListRow[]> {
       provisional: criteriaProvisional(formOfSession(r), r.grade),
     }
   })
+}
+
+/** 내보내기가 한 번에 받는 행 수와 전체 상한 — 상한은 고장 난 페이지 넘기기가 끝없이 돌지 않게 하는 안전띠다(운영 규모의 수십 배) */
+const EXPORT_PAGE = 1000
+const MAX_EXPORT_ROWS = 50_000
+
+/**
+ * 엑셀 내보내기(GET /api/admin/export.xlsx)의 재료 — **제출된** 검사 전부와 채점 행, 학급 신청 순번(아동 코드 앞자리).
+ * 담당자 확정(2026-11-06) 「엑셀에서는 아동 코드만 있어야 할 것 같아!」 — 그래서 이름·생년월일·학교·담임은 **읽지도 않는다**.
+ * 목록(`listSessions`)처럼 페이지를 넘기며 받는다(Supabase Max Rows가 나머지를 오류 없이 자른다 — 같은 주석). 줄 고르기(아이·학기마다
+ * 마지막 검사)와 채점은 lib/excel-export가 한다.
+ */
+export async function exportSessions(): Promise<ExportSessionRow[]> {
+  const rows: ExportSessionRow[] = []
+  const seen = new Set<string>()
+  while (rows.length < MAX_EXPORT_ROWS) {
+    const from = rows.length
+    const { data, error } = await sb().from('sessions')
+      .select('id, class_code_id, child_no, gender, grade, form_id, checklist, started_at, submitted_at, '
+        + 'recordings(item_code), reading_marks(item_code, correct), sentence_scores(item_code, words), '
+        + 'sentence_times(item_code, seconds), writing_answers(item_code, can_write), class_codes(apply_seq)')
+      .not('submitted_at', 'is', null)
+      .order('started_at').order('id')
+      .range(from, from + EXPORT_PAGE - 1)
+    fail(error)
+    const page = (data ?? []) as unknown as (Omit<ExportSessionRow, 'apply_seq'> & {
+      class_codes: { apply_seq: number } | { apply_seq: number }[] | null
+    })[]
+    const fresh = page.filter(r => !seen.has(r.id))
+    if (fresh.length === 0) break
+    for (const { class_codes, ...r } of fresh) {
+      const cc = one(class_codes)
+      // 세션은 학급 코드를 on delete restrict로 참조하므로 없을 수 없다 — 있으면 아동 코드를 만들 수 없어 던진다(라우트 500)
+      if (!cc) throw new Error(`학급 신청 순번이 없다: ${r.id}`)
+      seen.add(r.id)
+      rows.push({ ...r, apply_seq: cc.apply_seq })
+    }
+  }
+  if (rows.length >= MAX_EXPORT_ROWS) throw new Error(`내보내기 상한(${MAX_EXPORT_ROWS}) 도달 — 나눠 받는 기능 필요`)
+  return rows
 }
 
 /**
