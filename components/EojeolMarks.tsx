@@ -7,7 +7,7 @@
 // 위에서 받은 값이 숫자(어절별 기록이 없는 옛 기록)면 어느 어절인지 모르므로 아무것도 눌리지 않은 것으로 보인다.
 'use client'
 import { useState } from 'react'
-import type { WriteValue } from '@/lib/scoring'
+import { marksWords, type WriteValue } from '@/lib/scoring'
 
 export function EojeolMarks({ text, value, onChange, wordClass }: {
   text: string
@@ -19,6 +19,8 @@ export function EojeolMarks({ text, value, onChange, wordClass }: {
   const words = text.trim().split(/\s+/)
   const [draft, setDraft] = useState<string | null>(null)
   const shown = draft ?? (typeof value === 'string' ? value : '-'.repeat(words.length))
+  // 문장 점수(시안 2026-11-09 「= 1점」) — 어절을 다 눌렀을 때만. 숫자 값(어절별 기록이 없는 옛 문장)은 그 점수 그대로
+  const score = shown.includes('-') ? (typeof value === 'number' && draft === null ? value : undefined) : marksWords(shown)
 
   const press = (k: number, c: 'O' | 'X') => {
     const next = shown.slice(0, k) + c + shown.slice(k + 1)
@@ -46,6 +48,8 @@ export function EojeolMarks({ text, value, onChange, wordClass }: {
           </span>
         </span>
       ))}
+      <span className="self-center whitespace-nowrap text-[15px] font-bold tabular-nums text-ink-soft"
+        aria-live="polite">{score === undefined ? '' : `= ${score}점`}</span>
     </span>
   )
 }
