@@ -16,7 +16,6 @@
 // 아래는 **개발 판단(2026-11-06) — 담당자 회신 아님**:
 // - **양식마다 시트 하나**(탭 이름 = 양식 id). 학년·학기마다 문항 수와 문장의 어절 수가 달라 한 시트에 섞으면 같은 열이 다른
 //   문항을 가리킨다.
-// - 2학년 **문장 쓰기는 문항마다 0·1·2 점수**를 숫자로 싣는다 — 어절당 1점이라 O/X로 나타낼 수 없다(1학년 낱말 쓰기만 O/X).
 //
 // 사용자 확정(2026-11-06) — 담당자 회신 아님:
 // - 문항 열 머리글은 **문항 번호 + 실제 문항**(`낱말01 · <낱말>`·`문장1 어절 · <문장>`·`쓰기01 · <낱말·문장>`)이다. 번호만 두면
@@ -127,15 +126,22 @@ export function exportColumns(form: SurveyForm): Column[] {
       ]
     }),
 
-    // 쓰기 — 1학년 낱말 쓰기는 O/X, 2학년 문장 쓰기는 문항 점수 0·1·2(개발 판단: 어절당 1점이라 O/X가 맞지 않는다)
-    ...f.writingItems.map((it, i): Column => ({
-      header: `쓰기${pad2(i + 1)} · ${oneLine(it.text)}`,
-      value: c => {
-        const v = c.input.writing[it.code]
-        if (v === undefined) return null
-        return form.writing.kind === 'word' ? ox(v > 0) : clampWords(f, it.code, v)
-      },
-    })),
+    // 쓰기 — 1학년 낱말 쓰기는 낱말마다 O/X. 2학년 문장 쓰기는 **어절마다 O/X + 문장 합**(담당자 확정 2026-11-09 — 어느 어절이 틀렸는지
+    // 보려고. 열 모양은 시안을 보고 정했다). 어절별 기록이 없는 옛 문장(화면 방식의 1점 문장)은 어절 칸을 비우고 합만 싣는다.
+    ...f.writingItems.flatMap((it, i): Column[] => {
+      const n = pad2(i + 1)
+      if (form.writing.kind === 'word') return [{
+        header: `쓰기${n} · ${oneLine(it.text)}`,
+        value: c => { const v = c.input.writing[it.code]; return v === undefined ? null : ox(Number(v) > 0) },
+      }]
+      return [
+        ...it.text.trim().split(/\s+/).map((w, k): Column => ({
+          header: `쓰기${n}-${k + 1} · ${w}`,
+          value: c => { const v = c.input.writing[it.code]; return typeof v === 'string' ? ox(v[k] === 'O') : null },
+        })),
+        { header: `쓰기${n} 합`, value: c => { const v = c.input.writing[it.code]; return v === undefined ? null : clampWords(f, it.code, v) } },
+      ]
+    }),
 
     { header: '낱말 해독 합', value: whenDone('wordReading', c => c.result.wordReading) },
     { header: '낱말 해독 판정', value: verdictCol('wordReading') },

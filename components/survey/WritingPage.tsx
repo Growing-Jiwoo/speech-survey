@@ -4,13 +4,14 @@
 // — 문장 쓰기(G2)와 채점 규칙이 같아 저장 모양을 공유한다(lib/scoring.ts의 itemMaxWords).
 'use client'
 import { KIND_LABEL, type SurveyItem } from '@/lib/items'
+import type { WriteValue } from '@/lib/scoring'
 
 export function WritingPage({ items, value, onChange, onSetAll, toggle }: {
   items: SurveyItem[]
   /** 쓰기 방식 고르기(WritingModeToggle) — 카드 맨 위에 둔다 */
   toggle?: React.ReactNode
   /** itemCode → 정확히 쓴 어절 수(1=예 / 0=아니오 / 미선택은 키 없음) */
-  value: Record<string, number>
+  value: Record<string, WriteValue>
   onChange: (code: string, v: number) => void
   /** 남은 칸 일괄 선택 — 문항 수가 10개라 하나씩 누르는 부담을 덜어 준다. **고르지 않은 칸만** 채운다:
    *  하나씩 고른 뒤 잘못 누르면 확인 없이 전부 덮였고, 검토 화면은 개수만 보여 잡을 수 없었다(2026-10-08 야간 점검).

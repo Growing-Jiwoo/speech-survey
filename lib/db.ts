@@ -83,7 +83,11 @@ export interface WritingAnswer { itemCode: string; canWrite: boolean }
 export interface ReadingMark { itemCode: string; correct: boolean }
 
 /** 어절 수 점수 — 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 같은 테이블을 쓴다 */
-export interface SentenceScore { itemCode: string; words: number }
+export interface SentenceScore {
+  itemCode: string; words: number
+  /** 문장 쓰기(sw..)의 어절별 O/X(migration 011) — words는 그 O 개수. 옛 화면이 낸 제출·문장 읽기(rs..)는 없다 */
+  marks?: string
+}
 
 /** 문장 읽기유창성(rs..)의 읽은 시간(초, 0.1초 단위) — 관리자 채점(saveScores)이 쓴다 */
 export interface SentenceTime { itemCode: string; seconds: number }
@@ -142,7 +146,7 @@ export async function submitSession(input: SubmitInput): Promise<SubmitResult> {
     fail(e2)
   }
   if (sentenceWriting.length > 0) {
-    const rows = sentenceWriting.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words }))
+    const rows = sentenceWriting.map(s => ({ session_id: sessionId, item_code: s.itemCode, words: s.words, marks: s.marks ?? null }))
     const { error: e4 } = await sb().from('sentence_scores').upsert(rows, { onConflict: 'session_id,item_code' })
     fail(e4)
   }
@@ -217,7 +221,7 @@ export async function saveScores(
 export async function scoreRows(sessionId: string): Promise<ScoreRows> {
   const [{ data: mk, error: e1 }, { data: ss, error: e2 }, { data: st, error: e3 }, { data: wa, error: e4 }] = await Promise.all([
     sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
-    sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
+    sb().from('sentence_scores').select('item_code, words, marks').eq('session_id', sessionId),
     sb().from('sentence_times').select('item_code, seconds').eq('session_id', sessionId),
     sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
   ])
@@ -243,7 +247,8 @@ export async function saveWriting(
       entries.map(e => ({ session_id: sessionId, item_code: e.itemCode, can_write: e.words >= 1 })), ownedCodes)
   else
     await replaceOwnedRows('sentence_scores', sessionId,
-      entries.map(e => ({ session_id: sessionId, item_code: e.itemCode, words: e.words })), ownedCodes)
+      // marks를 늘 싣는다 — 빼면 upsert가 옛 O/X를 남겨 words와 어긋난다(migration 011 check가 막지만 저장이 실패한다)
+      entries.map(e => ({ session_id: sessionId, item_code: e.itemCode, words: e.words, marks: e.marks ?? null })), ownedCodes)
 }
 
 /**
@@ -828,7 +833,7 @@ export type ClassResultsRow = Pick<SessionRow,
   | 'writing_mode'> & {
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
-  sentence_scores: { item_code: string; words: number }[]
+  sentence_scores: { item_code: string; words: number; marks?: string | null }[]
   sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 스캔본이 올라왔으면 그 시각 — 1:1이라 행 하나 또는 null(select가 배열로 줄 때도 맞춘다) */
@@ -844,7 +849,7 @@ export async function classResults(classCodeId: string): Promise<ClassResultsRow
   const { data, error } = await sb().from('sessions')
     .select('id, child_no, child_name, gender, grade, form_id, birth_ymd, checklist, started_at, submitted_at, writing_mode, '
       + 'recordings(item_code), reading_marks(item_code, correct), '
-      + 'sentence_scores(item_code, words), sentence_times(item_code, seconds), '
+      + 'sentence_scores(item_code, words, marks), sentence_times(item_code, seconds), '
       + 'writing_answers(item_code, can_write), writing_scans(uploaded_at)')
     .eq('class_code_id', classCodeId)
     .order('started_at')
@@ -982,7 +987,7 @@ export type SessionProgressSource = SessionRow & {
   /** 진행률 분자(응답 존재 여부)에 값이 필요해 can_write까지 싣는다 */
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있다 — 진행률은 쓰기 코드만 센다 */
-  sentence_scores: { item_code: string; words: number }[]
+  sentence_scores: { item_code: string; words: number; marks?: string | null }[]
   /** 낱말 해독 O/X와 문장 읽은 시간은 최종결과만 쓴다 */
   reading_marks: { item_code: string; correct: boolean }[]
   sentence_times: { item_code: string; seconds: number }[]
@@ -1019,7 +1024,7 @@ export async function listSessions(): Promise<SessionListRow[]> {
   while (rows.length < MAX_LIST_ROWS) {
     const from = rows.length
     const { data, error } = await sb().from('sessions')
-      .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words), `
+      .select(`${SESSION_COLS}, recordings(item_code), writing_answers(item_code, can_write), sentence_scores(item_code, words, marks), `
         + 'reading_marks(item_code, correct), sentence_times(item_code, seconds), writing_scans(uploaded_at)')
       .order('started_at', { ascending: false }).order('id')
       .range(from, MAX_LIST_ROWS - 1)
@@ -1058,7 +1063,7 @@ export async function exportSessions(): Promise<ExportSessionRow[]> {
     const from = rows.length
     const { data, error } = await sb().from('sessions')
       .select('id, class_code_id, child_no, gender, grade, form_id, checklist, started_at, submitted_at, '
-        + 'recordings(item_code), reading_marks(item_code, correct), sentence_scores(item_code, words), '
+        + 'recordings(item_code), reading_marks(item_code, correct), sentence_scores(item_code, words, marks), '
         + 'sentence_times(item_code, seconds), writing_answers(item_code, can_write), class_codes(apply_seq)')
       .not('submitted_at', 'is', null)
       .order('started_at').order('id')
@@ -1096,7 +1101,7 @@ export async function childSessions(
 
 export interface MarkRow { item_code: string; correct: boolean }
 
-export interface SentenceScoreRow { item_code: string; words: number }
+export interface SentenceScoreRow { item_code: string; words: number; marks?: string | null }
 
 export interface SentenceTimeRow { item_code: string; seconds: number }
 
@@ -1116,7 +1121,7 @@ export async function sessionDetail(sessionId: string): Promise<{
         .eq('session_id', sessionId).order('item_code').order('attempt_no'),
       sb().from('writing_answers').select('item_code, can_write').eq('session_id', sessionId),
       sb().from('reading_marks').select('item_code, correct').eq('session_id', sessionId),
-      sb().from('sentence_scores').select('item_code, words').eq('session_id', sessionId),
+      sb().from('sentence_scores').select('item_code, words, marks').eq('session_id', sessionId),
       sb().from('sentence_times').select('item_code, seconds').eq('session_id', sessionId),
       sb().from('writing_scans').select('session_id, path, content_type, bytes, uploaded_at').eq('session_id', sessionId).maybeSingle(),
     ])

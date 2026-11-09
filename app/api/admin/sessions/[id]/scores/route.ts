@@ -30,7 +30,7 @@ import {
 } from '@/lib/db'
 import { formOfSession, type SurveyForm } from '@/lib/forms'
 import { itemsFor } from '@/lib/items'
-import { isValidReadSec, itemMaxWords, readSecMax } from '@/lib/scoring'
+import { isValidReadSec, itemMaxWords, parseWriteValue, readSecMax } from '@/lib/scoring'
 import { scoresVersion } from '@/lib/score-version'
 import { UUID_RE, jsonError } from '@/lib/request'
 
@@ -96,16 +96,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
 
-  // 쓰기 값은 제출 라우트와 같은 뜻 — 「정확히 쓴 어절 수」. 낱말 쓰기(G1)는 문항 만점이 1이라 0/1만 유효하다.
+  // 쓰기 값은 제출 라우트와 같다 — 낱말 쓰기는 0/1, 문장 쓰기는 어절별 O/X 글자(lib/scoring parseWriteValue).
   let writing: SentenceScore[] | undefined
   if (rawWriting) {
     writing = []
-    for (const [itemCode, words] of Object.entries(rawWriting)) {
+    for (const [itemCode, raw] of Object.entries(rawWriting)) {
       const item = f.byCode.get(itemCode)
-      if (!item || item.section !== f.writingSection || typeof words !== 'number' || !Number.isInteger(words)
-        || words < 0 || words > itemMaxWords(item))
-        return bad('쓰기')
-      writing.push({ itemCode, words })
+      const v = item && item.section === f.writingSection ? parseWriteValue(item, raw) : null
+      if (!v) return bad('쓰기')
+      writing.push({ itemCode, ...v })
     }
   }
 

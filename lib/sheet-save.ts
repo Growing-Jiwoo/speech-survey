@@ -11,7 +11,7 @@
 // 자동 저장·[채점 저장]·「저장하고 이동」(lib/sheet-leave)·떠날 때 저장(keepalive)이 모두 이 함수를 거친다.
 import type { ScoreRows } from './score-version'
 import { NETWORK_ERR_MSG } from './http'
-import { parseReadSec } from './scoring'
+import { parseReadSec, type WriteValue } from './scoring'
 
 export type { ScoreRows }
 
@@ -24,7 +24,7 @@ export interface SheetScores {
   sentences: Cells<number>
   times: Cells<number>
   /** 쓰기 — 스캔본 방식 검사에서만 이 화면의 채점 상태다(화면 방식은 검사 중 기록이라 보내지 않는다) */
-  writing: Cells<number>
+  writing: Cells<WriteValue>
 }
 
 /** 같은 칸·같은 값인지 — **키 순서와 무관하게.** 병합한 객체는 키 순서가 달라져, JSON 문자열로 비교하면 같은 채점도
@@ -59,7 +59,7 @@ export interface SaveBody {
   marks: Cells<boolean>
   sentences: Cells<number>
   times: Cells<number>
-  writing?: Cells<number>
+  writing?: Cells<WriteValue>
   scanUploadedAt?: string | null
   baseVersion?: string
 }

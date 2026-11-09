@@ -13,9 +13,10 @@
 //     같은 경로였다). 원문이 필요해지면 사용자에게 요청할 것.
 // ⚠️ 검사지에 인쇄된 중단 규칙 문구는 적용하지 않는다 — 시행 절차는 담당자 회신이 우선한다.
 import { isRecordingPage, type FormItems, type SurveyPage } from './items'
+import type { WriteValue } from './scoring'
 
 export interface FlowState {
-  writing: Partial<Record<string, number>>
+  writing: Partial<Record<string, WriteValue>>
   /** 쓰기 방식(호출부가 기기 기본값까지 반영해 넘긴다). scan이면 쓰기 화면은 표시 없이 넘어간다 —
    *  아이가 기록지에 쓰고 담당자가 스캔본을 보고 채점한다. 없으면 screen으로 본다. */
   writingMode?: 'screen' | 'scan'

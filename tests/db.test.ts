@@ -1100,7 +1100,7 @@ describe('findClassCodeById · classResults · updateClassCodeEmail (교사 결�
     expect(sel[0]).toContain('birth_ymd, checklist')   // PDF 머리글·체크리스트를 찍어야 관리자 PDF와 같은 문서다
     expect(sel[0]).toContain('recordings(item_code)')
     expect(sel[0]).toContain('reading_marks(item_code, correct)')
-    expect(sel[0]).toContain('sentence_scores(item_code, words)')
+    expect(sel[0]).toContain('sentence_scores(item_code, words, marks)')
     expect(sel[0]).toContain('sentence_times(item_code, seconds)')
     expect(sel[0]).toContain('writing_answers(item_code, can_write)')
     expect(sel[0]).toContain('writing_mode')
@@ -1191,10 +1191,13 @@ describe('saveWriting — 담당자의 스캔본 쓰기 채점', () => {
     expect(deleteCallsByTable.get('writing_answers')).toHaveLength(1)
     expect(inCallsByTable.get('writing_answers')).toEqual([['item_code', WW]])
   })
-  it('문장 쓰기(G2)는 sentence_scores.words로 넣고, 지우는 범위는 **쓰기 코드만**이다(문장 읽기 점수는 남는다)', async () => {
+  it('문장 쓰기(G2)는 sentence_scores.words·marks로 넣고, 지우는 범위는 **쓰기 코드만**이다(문장 읽기 점수는 남는다)', async () => {
     const SW = ['sw01', 'sw02']
-    await saveWriting(SID, 'sentence', [{ itemCode: 'sw01', words: 2 }], SW)
-    expect(upsertCallsByTable.get('sentence_scores')).toEqual([[{ session_id: SID, item_code: 'sw01', words: 2 }]])
+    // marks가 없는 값도 marks: null을 실어 옛 O/X를 지운다 — 빼면 upsert가 옛 O/X를 남겨 words와 어긋난다
+    await saveWriting(SID, 'sentence', [{ itemCode: 'sw01', words: 1, marks: 'XO' }, { itemCode: 'sw02', words: 2 }], SW)
+    expect(upsertCallsByTable.get('sentence_scores')).toEqual([[
+      { session_id: SID, item_code: 'sw01', words: 1, marks: 'XO' }, { session_id: SID, item_code: 'sw02', words: 2, marks: null },
+    ]])
     expect(inCallsByTable.get('sentence_scores')).toEqual([['item_code', SW]])
   })
   it('빈 목록이면 쓰기 칸을 지우기만 한다(연결 해제)', async () => {

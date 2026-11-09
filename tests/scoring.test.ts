@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  criteriaProvisional, fluencyLabel, isValidReadSec, itemMaxWords, parseReadSec, readSecLabel, readSecMax,
+  clampWords, criteriaProvisional, fluencyLabel, parseWriteValue, isValidReadSec, itemMaxWords, parseReadSec, readSecLabel, readSecMax,
   scoreInputFrom, scoreSession, scoringFor, sheetPdfGate, unrecordedItemCodes, unrecordedTimes, withUnrecordedFixed,
   type ScoreInput,
 } from '@/lib/scoring'
@@ -277,6 +277,25 @@ describe('scoreInputFrom — 저장된 행을 채점 입력으로', () => {
     })
     expect(input.sentences).toEqual({ rs01: 6 })
     expect(input.writing).toEqual({ sw01: 2, sw02: 0 })
+  })
+
+  it('G2: 문장 쓰기에 어절별 O/X가 있으면 그 글자를 담고, 점수는 O 개수다(옛 문장은 어절 수 그대로)', () => {
+    const input = scoreInputFrom(g2, {
+      marks: [], times: [], writing: [],
+      sentences: [{ item_code: 'sw01', words: 1, marks: 'XO' }, { item_code: 'sw02', words: 1, marks: null }],
+    })
+    expect(input.writing).toEqual({ sw01: 'XO', sw02: 1 })
+    expect(clampWords(g2, 'sw01', 'XO')).toBe(1)
+    expect(clampWords(g2, 'sw01', 'OO')).toBe(2)
+  })
+
+  it('parseWriteValue — 문장 쓰기는 완성된 어절별 O/X 또는 어절 수, 낱말 쓰기는 0/1만', () => {
+    const sw = g2.byCode.get('sw01')!, ww = g1.byCode.get('ww01')!
+    expect(parseWriteValue(sw, 'XO')).toEqual({ words: 1, marks: 'XO' })
+    expect(parseWriteValue(sw, 2)).toEqual({ words: 2 })
+    for (const bad of ['O', 'O-', 'OXO', 3, 1.5, null]) expect(parseWriteValue(sw, bad), String(bad)).toBeNull()
+    expect(parseWriteValue(ww, 1)).toEqual({ words: 1 })
+    expect(parseWriteValue(ww, 'O')).toBeNull()
   })
 
   it('다른 양식의 코드는 버린다 (학년을 바꿔 조회해도 점수가 섞이지 않는다)', () => {

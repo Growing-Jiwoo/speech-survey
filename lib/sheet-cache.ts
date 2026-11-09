@@ -18,12 +18,14 @@ interface Rows {
   writing: { item_code: string; can_write: boolean }[]
 }
 
+import { marksWords, type WriteValue } from './scoring'
+
 export interface SavedScores {
   marks: Partial<Record<string, boolean>>
   sentences: Partial<Record<string, number>>
   times: Partial<Record<string, number>>
   /** 쓰기를 보냈을 때만(스캔본 방식) */
-  writing?: Partial<Record<string, number>>
+  writing?: Partial<Record<string, WriteValue>>
 }
 
 const entries = <V,>(r: Partial<Record<string, V>>) =>
@@ -53,9 +55,10 @@ export function patchDetail<T extends Rows>(old: T, saved: SavedScores, f: {
   if (saved.writing) {
     const w = entries(saved.writing)
     if (f.writingSection === 'word_writing')
-      writing = [...old.writing.filter(x => !writeCodes.has(x.item_code)), ...w.map(([item_code, v]) => ({ item_code, can_write: v >= 1 }))]
+      writing = [...old.writing.filter(x => !writeCodes.has(x.item_code)), ...w.map(([item_code, v]) => ({ item_code, can_write: Number(v) >= 1 }))]
     else
-      sentences = [...sentences.filter(x => !writeCodes.has(x.item_code)), ...w.map(([item_code, words]) => ({ item_code, words }))]
+      sentences = [...sentences.filter(x => !writeCodes.has(x.item_code)), ...w.map(([item_code, v]) =>
+        typeof v === 'string' ? { item_code, words: marksWords(v), marks: v } : { item_code, words: v })]
   }
   return { ...old, marks, sentences, times, writing }
 }

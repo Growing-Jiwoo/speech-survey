@@ -2,11 +2,12 @@
 // 읽기 전용 정보에 채점 행과 같은 높이(10행)를 쓸 이유가 없다 — 낱말+O/X 칩을 줄바꿈으로
 // 흘려 한두 줄에 담는다. 가로 스크롤 없음.
 import { KIND_LABEL, type SurveyItem } from '@/lib/items'
+import type { WriteValue } from '@/lib/scoring'
 
 export function WritingChips({ items, writing }: {
   items: SurveyItem[]
-  /** itemCode → 정확히 쓴 어절 수(낱말 쓰기는 0/1). 미응답은 키 없음 */
-  writing: Partial<Record<string, number>>
+  /** itemCode → 낱말 쓰기 0/1. 미응답은 키 없음 */
+  writing: Partial<Record<string, WriteValue>>
 }) {
   const groups = (['meaning', 'nonsense'] as const)
     .map(kind => ({ kind, items: items.filter(i => i.kind === kind) }))
@@ -21,7 +22,7 @@ export function WritingChips({ items, writing }: {
           </span>
           {g.items.map(item => {
             const v = writing[item.code]
-            const ok = v === undefined ? undefined : v >= 1
+            const ok = v === undefined ? undefined : Number(v) >= 1
             return (
               <span key={item.code}
                 aria-label={`${item.text} ${ok === undefined ? '미응답' : ok ? '정반응' : '오반응'}`}

@@ -166,8 +166,32 @@ export interface ScoreInput {
   sentences: Partial<Record<string, number>>
   /** 문장 읽기유창성 itemCode(rs..) → 읽은 시간(초, 0.1초 단위). 관리자가 녹음을 듣고 넣는다 */
   times: Partial<Record<string, number>>
-  /** 쓰기 과제 itemCode(ww../sw..) → 정확히 쓴 어절 수 (검사 중 수집) */
-  writing: Partial<Record<string, number>>
+  /** 쓰기 과제 itemCode(ww../sw..) → 정확히 쓴 어절 수, 또는 문장 쓰기의 어절별 O/X(`WriteValue`) */
+  writing: Partial<Record<string, WriteValue>>
+}
+
+/**
+ * 쓰기 칸 값. 숫자 = 정확히 쓴 어절 수(낱말 쓰기 0/1 · 어절 기록이 없는 옛 문장 쓰기),
+ * 글자 = 문장 쓰기의 **어절별 O/X**를 어절 순서대로 이은 것(예 'XO' = 앞 어절 틀림) — 점수는 O의 개수다
+ * (담당자 확정 2026-11-09, migration 011). 문장 쓰기를 어절마다 채점한 뒤로는 화면·저장·엑셀이 이 글자를 그대로 들고 다닌다.
+ */
+export type WriteValue = number | string
+
+/** 어절별 O/X 글자의 점수(O 개수) */
+export const marksWords = (m: string) => m.replace(/X/g, '').length
+
+/** 어절 n개짜리 문장의 완성된 어절별 O/X인지 — 저장 라우트가 받는 모양 */
+export const isMarks = (v: unknown, n: number): v is string => typeof v === 'string' && v.length === n && /^[OX]+$/.test(v)
+
+/**
+ * 저장 라우트(제출·관리자 채점)가 받은 쓰기 값 → 어절 수(+문장 쓰기면 어절별 O/X). 형식이 틀리면 null.
+ * 숫자 어절 수도 받는다 — 낱말 쓰기(0/1)의 모양이고, 문장 쓰기에서는 어절별 채점 전 화면(배포 순간 열려 있던 탭)이 보내는 모양이다.
+ */
+export function parseWriteValue(item: SurveyItem, v: unknown): { words: number; marks?: string } | null {
+  const max = itemMaxWords(item)
+  if (item.section === 'sentence_writing' && isMarks(v, max)) return { words: marksWords(v), marks: v }
+  if (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max) return { words: v }
+  return null
 }
 
 export interface ScoreResult {
@@ -229,14 +253,14 @@ export function sheetPdfGate(r: ScoreResult, dirty: boolean): PdfGate | null {
  * 저장된 행들(sessionDetail) → 채점 입력.
  *
  * 쓰기 답은 과제 종류에 따라 저장 위치가 다르다 — 낱말 쓰기는 `writing_answers.can_write`
- * (boolean), 문장 쓰기는 `sentence_scores.words`(정수)다. 그 사실을 아는 곳을 여기 하나로
+ * (boolean), 문장 쓰기는 `sentence_scores.marks`(어절별 O/X, 없으면 `words` 정수)다. 그 사실을 아는 곳을 여기 하나로
  * 모아, 결과지 화면과 인쇄 라우트가 같은 방식으로 읽게 한다.
  * `sentence_scores`에는 문장 읽기유창성(rs..)과 문장 쓰기(sw..)가 섞여 있으므로
  * 양식의 문항 코드로 갈라 담는다. 문장 읽기의 읽은 시간은 `sentence_times`에 따로 있다.
  */
 export function scoreInputFrom(f: FormItems, rows: {
   marks: { item_code: string; correct: boolean }[]
-  sentences: { item_code: string; words: number }[]
+  sentences: { item_code: string; words: number; marks?: string | null }[]
   times: { item_code: string; seconds: number }[]
   writing: { item_code: string; can_write: boolean }[]
 }): ScoreInput {
@@ -258,7 +282,8 @@ export function scoreInputFrom(f: FormItems, rows: {
         rows.writing.filter(w => writingCodes.has(w.item_code)).map(w => [w.item_code, w.can_write ? 1 : 0]),
       ),
       ...Object.fromEntries(
-        rows.sentences.filter(s => writingCodes.has(s.item_code)).map(s => [s.item_code, s.words]),
+        // 어절별 O/X가 있으면 그것을 — 없으면(옛 화면 방식의 1점 문장 등) 어절 수만
+        rows.sentences.filter(s => writingCodes.has(s.item_code)).map(s => [s.item_code, s.marks ?? s.words]),
       ),
     },
   }
@@ -329,8 +354,9 @@ const countTrue = (codes: string[], m: Partial<Record<string, boolean>>) =>
 
 /** 문항 만점을 넘거나 음수인 입력은 잘라낸다 — 오입력이 총점을 왜곡하지 않도록.
  *  총점만이 아니라 **개별 문항을 표시·인쇄할 때도** 이 값을 써야 행의 합과 총점이 어긋나지 않는다. */
-export function clampWords(f: FormItems, code: string, raw: number | undefined): number {
+export function clampWords(f: FormItems, code: string, value: WriteValue | undefined): number {
   const item = f.byCode.get(code)
+  const raw = typeof value === 'string' ? marksWords(value) : value
   if (!item || raw == null || !Number.isFinite(raw)) return 0
   return Math.max(0, Math.min(Math.floor(raw), itemMaxWords(item)))
 }

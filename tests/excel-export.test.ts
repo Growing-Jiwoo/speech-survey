@@ -104,7 +104,11 @@ describe('exportColumns — 머리글', () => {
       const h = exportColumns(form).map(c => c.header)
       expect(h.filter(x => /^낱말\d\d · /.test(x))).toEqual(f.readItems.map((it, i) => `낱말${p2(i + 1)} · ${oneLine(it.text)}`))
       expect(h.filter(x => /^문장\d 어절 · /.test(x))).toEqual(f.sentenceItems.map((it, i) => `문장${i + 1} 어절 · ${oneLine(it.text)}`))
-      expect(h.filter(x => /^쓰기\d\d · /.test(x))).toEqual(f.writingItems.map((it, i) => `쓰기${p2(i + 1)} · ${oneLine(it.text)}`))
+      // 문장 쓰기는 어절마다 한 칸(`쓰기01-2 · <어절>`) + 문장 합(담당자 확정 2026-11-09)
+      expect(h.filter(x => /^쓰기\d\d(-\d)? · /.test(x))).toEqual(form.writing.kind === 'word'
+        ? f.writingItems.map((it, i) => `쓰기${p2(i + 1)} · ${oneLine(it.text)}`)
+        : f.writingItems.flatMap((it, i) => it.text.trim().split(/\s+/).map((w, k) => `쓰기${p2(i + 1)}-${k + 1} · ${w}`)))
+      if (form.writing.kind === 'sentence') expect(h).toContain('쓰기01 합')
       for (const x of h) expect(x, x).not.toMatch(/\n/)   // 머리글에 줄바꿈 없음(2026-11-07)
     }
   })
@@ -173,14 +177,17 @@ describe('buildExportSheets — 값', () => {
     expect(v['문장3 초']).toBe(10)   // 녹음이 있는 문장은 넣은 값 그대로
   })
 
-  it('2학년 문장 쓰기는 문항 점수(0·1·2)를 숫자로', () => {
+  it('2학년 문장 쓰기는 어절마다 O/X + 문장 합 — 어절별 기록이 없는 옛 문장은 어절 칸을 비우고 합만', () => {
     const f2 = itemsFor(G2S2)
+    const [a, b] = f2.writingItems
     const r = row({ id: 's', child_no: 1, grade: 2, form_id: 'KODYS-G2-S2',
-      sentence_scores: f2.writingItems.map((it, i) => ({ item_code: it.code, words: i % 3 })) })
+      sentence_scores: [{ item_code: a.code, words: 1, marks: 'XO' }, { item_code: b.code, words: 1 }] })
     const sheet = buildExportSheets([r])[0]
     expect(sheet.name).toBe('KODYS-G2-S2')
     const v = asRecord(sheet, 1)
-    expect(f2.writingItems.map((_, i) => v[`쓰기${p2(i + 1)}`])).toEqual(f2.writingItems.map((_, i) => i % 3))
+    expect([v['쓰기01-1'], v['쓰기01-2'], v['쓰기01 합']]).toEqual(['X', 'O', 1])
+    expect([v['쓰기02-1'], v['쓰기02-2'], v['쓰기02 합']]).toEqual([null, null, 1])
+    expect(v['쓰기03 합']).toBeNull()
   })
 
   it('양식마다 시트 하나(레지스트리 순서) · 줄은 아동 코드 순 · 줄 없는 양식은 시트가 없다', () => {

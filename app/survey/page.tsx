@@ -35,6 +35,7 @@ import { SectionIntro } from '@/components/survey/SectionIntro'
 import { SentenceWritingPage } from '@/components/survey/SentenceWritingPage'
 import { WritingPage } from '@/components/survey/WritingPage'
 import { ScanWritingPanel, WritingModeToggle } from '@/components/survey/WritingMode'
+import type { WriteValue } from '@/lib/scoring'
 
 
 /** 다시 보낼 녹음이 없을 때의 빈 값 — useSyncExternalStore 스냅숏은 같은 객체여야 한다 */
@@ -398,7 +399,7 @@ function SurveyInner() {
     goNext()
   }
 
-  function changeWriting(code: string, v: number) {
+  function changeWriting(code: string, v: WriteValue) {
     patch(prev => ({ writing: { ...prev.writing, [code]: v } }))
   }
 
