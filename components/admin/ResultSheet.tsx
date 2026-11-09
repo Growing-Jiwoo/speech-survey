@@ -9,7 +9,7 @@ import { KIND_LABEL, SECTION_LABEL, areaLabel, itemsFor } from '@/lib/items'
 import type { SurveyForm } from '@/lib/forms'
 import {
   FLUENCY_UNIT, criteriaProvisional, cutoffLabel, fluencyLabel, readSecLabel, scoreInputFrom, scoreSession, scoringFor,
-  sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey,
+  sheetPdfGate, unrecordedItemCodes, withUnrecordedFixed, type TaskKey, type WriteValue,
 } from '@/lib/scoring'
 import { birthLabel, classLabel, contactLabel, reportDateLabel, sheetDateLabel } from '@/lib/format'
 import { requestJson } from '@/lib/http'
@@ -47,7 +47,7 @@ export interface SheetSaved {
   marks: Partial<Record<string, boolean>>; sentences: Partial<Record<string, number>>
   times: Partial<Record<string, number>>
   /** 쓰기를 보냈을 때만(스캔본 방식) */
-  writing?: Partial<Record<string, number>>
+  writing?: Partial<Record<string, WriteValue>>
   /** 저장 뒤 판 — null이면 서버가 못 만들었다(캐시의 판을 그대로 둔다) */
   version: string | null
   /** 판 충돌로 병합해 저장했으면 그때 받은 서버 행 — 캐시를 이 행 위에서 고친다 */
@@ -70,9 +70,9 @@ export function ResultSheet({
   incomplete: boolean
   /** 세션 학년의 검사지 — 상세 API 응답에서 온다(이 화면이 lib/forms를 import하지 않도록) */
   form: SurveyForm
-  /** 쓰기 답 — 값은 정확히 쓴 어절 수. 화면 방식 검사는 검사 중 수집분이라 여기서 다시 채점하지 않고,
+  /** 쓰기 답 — 낱말 쓰기는 0/1, 문장 쓰기는 어절별 O/X 글자(lib/scoring `WriteValue`). 화면 방식 검사는 검사 중 수집분이라 여기서 다시 채점하지 않고,
    *  스캔본 방식 검사(session.writing_mode === 'scan')만 담당자가 이 화면에서 채점한다(처음 값으로만 쓴다). */
-  writing: Partial<Record<string, number>>
+  writing: Partial<Record<string, WriteValue>>
   initialMarks: Partial<Record<string, boolean>>
   /** 문장 읽기유창성 점수만 (문장 쓰기는 writing으로 들어온다) */
   initialSentences: Partial<Record<string, number>>
@@ -407,7 +407,7 @@ export function ResultSheet({
     })
   }
 
-  const setWrite = (code: string, v: number) => {
+  const setWrite = (code: string, v: WriteValue) => {
     setMsg(''); setScanNotice(''); setAutoFailed(false); setWritten(w => ({ ...w, [code]: v }))
   }
 

@@ -5,6 +5,7 @@ import { itemsFor, type FormItems, type Totals } from './items'
 import { formOfSession } from './forms'
 import { scoreInputFrom } from './scoring'
 import type { SessionProgressSource } from './db'
+import type { WriteValue } from './scoring'
 
 export interface SessionProgress {
   recorded: number; written: number; expected: Totals; incomplete: boolean
@@ -21,7 +22,7 @@ type ProgressInput = Pick<SessionProgressSource, 'grade' | 'recordings' | 'writi
  *  scoreInputFrom만 안다 — 목록 행도 같은 경로로 읽는다. */
 function writingOf(
   f: FormItems, s: Pick<ProgressInput, 'writing_answers' | 'sentence_scores'>,
-): Partial<Record<string, number>> {
+): Partial<Record<string, WriteValue>> {
   return scoreInputFrom(f, { marks: [], sentences: s.sentence_scores, times: [], writing: s.writing_answers }).writing
 }
 

@@ -13,7 +13,7 @@ import { verifySessionToken } from '@/lib/auth'
 import { env } from '@/lib/env'
 import { formOfSession, type SurveyForm } from '@/lib/forms'
 import { AREA_CODES, isRecordingPage, itemsFor } from '@/lib/items'
-import { itemMaxWords } from '@/lib/scoring'
+import { parseWriteValue } from '@/lib/scoring'
 import { jsonError } from '@/lib/request'
 
 export const runtime = 'nodejs'
@@ -62,23 +62,22 @@ export async function POST(req: Request) {
     return !!p && isRecordingPage(p) && !p.practice
   })
 
-  // 쓰기 답: 값은 "정확히 쓴 어절 수". 낱말 쓰기는 문항 만점이 1이라 0/1만 유효하다.
-  const validWriting: Record<string, number> = {}
-  for (const [itemCode, words] of Object.entries(rawWriting)) {
+  // 쓰기 답: 낱말 쓰기는 0/1, 문장 쓰기는 어절별 O/X 글자(lib/scoring parseWriteValue — 어절별 채점 전 화면의 숫자도 받는다).
+  const validWriting: Record<string, { words: number; marks?: string }> = {}
+  for (const [itemCode, raw] of Object.entries(rawWriting)) {
     const item = f.byCode.get(itemCode)
-    if (!item || item.section !== f.writingSection) return bad('쓰기 답 형식이 올바르지 않아요.')
-    if (typeof words !== 'number' || !Number.isInteger(words) || words < 0 || words > itemMaxWords(item))
-      return bad('쓰기 답 형식이 올바르지 않아요.')
-    validWriting[itemCode] = words
+    const v = item && item.section === f.writingSection ? parseWriteValue(item, raw) : null
+    if (!v) return bad('쓰기 답 형식이 올바르지 않아요.')
+    validWriting[itemCode] = v
   }
 
   // 스캔본 방식이면 쓰기 답을 저장하지 않는다 — 담당자가 스캔본을 보고 채점한다(검사 화면도 보내지 않지만
   // 옛 탭·조작된 요청이 보내도 여기서 버린다: 두 출처의 점수가 한 검사에 섞이면 누가 채점했는지 모른다).
   const writing: WritingAnswer[] = []
   const sentenceWriting: SentenceScore[] = []
-  for (const [itemCode, words] of Object.entries(writingMode === 'scan' ? {} : validWriting)) {
-    if (f.writingSection === 'word_writing') writing.push({ itemCode, canWrite: words >= 1 })
-    else sentenceWriting.push({ itemCode, words })
+  for (const [itemCode, v] of Object.entries(writingMode === 'scan' ? {} : validWriting)) {
+    if (f.writingSection === 'word_writing') writing.push({ itemCode, canWrite: v.words >= 1 })
+    else sentenceWriting.push({ itemCode, ...v })
   }
 
   try {

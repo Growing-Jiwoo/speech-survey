@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto'
 export interface ScoreRows {
   marks: { item_code: string; correct: boolean }[]
   /** 문장 읽기(rs..)와 문장 쓰기(sw..)가 섞여 있다 — 둘 다 판에 든다 */
-  sentences: { item_code: string; words: number }[]
+  sentences: { item_code: string; words: number; marks?: string | null }[]
   times: { item_code: string; seconds: number }[]
   writing: { item_code: string; can_write: boolean }[]
 }
@@ -26,7 +26,7 @@ export function scoresVersion(r: ScoreRows): string {
   const part = (tag: string, cells: string[]) => `${tag}:${[...cells].sort().join(',')}`
   const text = [
     part('m', r.marks.map(x => `${x.item_code}=${x.correct ? 1 : 0}`)),
-    part('s', r.sentences.map(x => `${x.item_code}=${Number(x.words)}`)),
+    part('s', r.sentences.map(x => `${x.item_code}=${Number(x.words)}${x.marks ? `:${x.marks}` : ''}`)),
     part('t', r.times.map(x => `${x.item_code}=${Number(x.seconds)}`)),
     part('w', r.writing.map(x => `${x.item_code}=${x.can_write ? 1 : 0}`)),
   ].join('|')

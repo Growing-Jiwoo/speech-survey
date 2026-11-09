@@ -145,6 +145,17 @@ describe('유효한 문항 코드는 세션의 학년(검사지)이 정한다', 
     })
   })
 
+  it('문장 쓰기 어절별 O/X(담당자 확정 2026-11-09)는 O 개수를 점수로, 글자를 marks로 넘긴다', async () => {
+    expect((await POST(g2Req({ sw01: 'XO', sw02: 'OO' }))).status).toBe(200)
+    expect(submitArg()).toMatchObject({
+      sentenceWriting: [{ itemCode: 'sw01', words: 1, marks: 'XO' }, { itemCode: 'sw02', words: 2, marks: 'OO' }],
+    })
+  })
+
+  it('어절 수가 맞지 않거나 O/X가 아닌 글자는 400 — 덜 누른 문장이 저장되지 않는다', async () => {
+    for (const bad of ['O', 'OXO', 'O-', 'ox']) expect((await POST(g2Req({ sw01: bad }))).status, bad).toBe(400)
+  })
+
   it('G2 세션에 G1 문항 코드(ww01)를 보내면 400 — 다른 학년 문항이 섞여 저장되지 않는다', async () => {
     expect((await POST(g2Req({ ww01: 1 }))).status).toBe(400)
     expect(db.submitSession).not.toHaveBeenCalled()

@@ -3,44 +3,30 @@
 // 채점 경로라서다. 이 부품은 **쓰기 방식이 scan일 때만** 쓴다(사용자 확정 2026-09-30).
 //
 // 번호는 기록지 칸 번호다(lib/writing-sheet sheetBoxNo — 받아쓰기 목록·기록지와 같은 번호).
-// 낱말 쓰기(G1)는 O/X, 문장 쓰기(G2)는 정확히 쓴 어절 수(0~문항 어절 수). 점수 버튼에는 색을 쓰지 않는다 —
-// 0점은 판정이 아니라 받은 점수다(sheet/README 「색은 판정에만」).
+// 낱말 쓰기(G1)는 낱말마다 O/X, 문장 쓰기(G2)는 **어절마다 O/X**(담당자 확정 2026-11-09 — components/EojeolMarks).
+// 어절별 채점 전에 받은 1점 문장은 migration 011이 지웠다 — 담당자가 스캔본을 보고 다시 누른다.
 import { KIND_LABEL, type SurveyItem } from '@/lib/items'
-import { itemMaxWords } from '@/lib/scoring'
+import { EojeolMarks } from '@/components/EojeolMarks'
+import type { WriteValue } from '@/lib/scoring'
 import { sheetBoxNo } from '@/lib/writing-sheet'
 
 export function ScanWritingRows({ items, kind, writing, onChange }: {
   items: SurveyItem[]
   kind: 'word' | 'sentence'
-  /** itemCode → 정확히 쓴 어절 수(낱말은 0/1). 아직 안 찍은 칸은 키 없음 */
-  writing: Partial<Record<string, number>>
-  onChange: (code: string, v: number) => void
+  /** itemCode → 낱말은 0/1, 문장은 어절별 O/X 글자. 아직 안 찍은 칸은 키 없음 */
+  writing: Partial<Record<string, WriteValue>>
+  onChange: (code: string, v: WriteValue) => void
 }) {
   const no = sheetBoxNo(items)   // 기록지 칸 번호(받아쓰기 목록·기록지와 같은 번호)
   if (kind === 'sentence') return (
     <ul className="px-4 py-2">
-      {items.map(item => {
-        const v = writing[item.code]
-        return (
-          <li key={item.code} className="flex flex-wrap items-center gap-3 border-b border-line/60 py-2 last:border-b-0">
-            <span className="w-5 flex-none text-right text-xs font-bold text-ink-mute">{no.get(item.code)}</span>
-            <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-              {item.text.trim().split(/\s+/).map((w, k) => (
-                <span key={k} className="font-read rounded bg-well px-1.5 py-0.5 text-[16px]">{w}</span>
-              ))}
-            </span>
-            <span role="group" aria-label={`${item.text} 정확히 쓴 어절 수`} className="flex flex-none gap-1.5">
-              {Array.from({ length: itemMaxWords(item) + 1 }, (_, n) => (
-                <button key={n} type="button" aria-pressed={v === n} onClick={() => onChange(item.code, n)}
-                  className={`h-11 w-11 rounded-lg border-[1.5px] font-read text-lg font-bold tabular-nums transition ${
-                    v === n ? 'border-blue bg-blue/10 text-blue' : 'border-line bg-well text-ink-mute'}`}>
-                  {n}
-                </button>
-              ))}
-            </span>
-          </li>
-        )
-      })}
+      {items.map(item => (
+        <li key={item.code} className="flex items-start gap-3 border-b border-line/60 py-2 last:border-b-0">
+          <span className="w-5 flex-none pt-1 text-right text-xs font-bold text-ink-mute">{no.get(item.code)}</span>
+          <EojeolMarks text={item.text} value={writing[item.code]} onChange={m => onChange(item.code, m)}
+            wordClass="text-[16px]" />
+        </li>
+      ))}
     </ul>
   )
   const groups = (['meaning', 'nonsense'] as const)
@@ -59,7 +45,7 @@ export function ScanWritingRows({ items, kind, writing, onChange }: {
             <ul>
               {g.items.map(item => {
                 const v = writing[item.code]
-                const ok = v === undefined ? undefined : v >= 1
+                const ok = v === undefined ? undefined : Number(v) >= 1
                 return (
                   <li key={item.code} className="flex items-center gap-3 border-b border-line/60 py-1.5 last:border-b-0">
                     <span className="w-5 flex-none text-right text-xs font-bold text-ink-mute">{no.get(item.code)}</span>

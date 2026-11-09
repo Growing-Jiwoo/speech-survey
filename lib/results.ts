@@ -33,7 +33,7 @@ export interface ResultsSessionRow {
   checklist: string[]
   recordings: { item_code: string }[]
   reading_marks: { item_code: string; correct: boolean }[]
-  sentence_scores: { item_code: string; words: number }[]
+  sentence_scores: { item_code: string; words: number; marks?: string | null }[]
   sentence_times: { item_code: string; seconds: number }[]
   writing_answers: { item_code: string; can_write: boolean }[]
   /** 쓰기 방식(migration 006) */
