@@ -88,9 +88,9 @@ describe('itemsFor — 양식별 문항', () => {
     expect(areaLabel('unknown-code')).toBe('unknown-code')
   })
 
-  it('체크리스트 영역 5개 (PDF 순서)', () => {
+  it('체크리스트 칸 6개 (PDF 순서)', () => {
     expect(CHECKLIST_AREAS.map(a => a.label)).toEqual(
-      ['특이사항 없음', '인지', '언어 (이해/표현)', '말 (조음/유창성)', '주의력'])
+      ['특이사항 없음', '인지', '언어 (이해/표현)', '말 (조음/유창성)', '주의력', '관찰하지 못함'])
   })
 })
 
@@ -109,6 +109,15 @@ describe('toggleChecklistArea (배타 선택)', () => {
   })
   it('영역 추가는 기존 유지 + append', () => {
     expect(toggleChecklistArea(['cognition'], 'speech')).toEqual(['cognition', 'speech'])
+  })
+  it('관찰하지 못함도 혼자만 — 고르면 나머지 해제, 다시 누르면 해제', () => {
+    expect(toggleChecklistArea(['cognition', 'speech'], 'unobserved')).toEqual(['unobserved'])
+    expect(toggleChecklistArea(['none'], 'unobserved')).toEqual(['unobserved'])
+    expect(toggleChecklistArea(['unobserved'], 'unobserved')).toEqual([])
+  })
+  it('관찰하지 못함 다음에 다른 칸을 고르면 관찰하지 못함이 풀린다', () => {
+    expect(toggleChecklistArea(['unobserved'], 'attention')).toEqual(['attention'])
+    expect(toggleChecklistArea(['unobserved'], 'none')).toEqual(['none'])
   })
 })
 

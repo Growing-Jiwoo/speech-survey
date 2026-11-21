@@ -1,5 +1,5 @@
 // components/survey/ChecklistItem.tsx — 검사자 체크리스트 문항(발달 영역 다중 선택).
-// '특이사항 없음'과 실제 영역은 상호 배타(토글 규칙은 lib/items.toggleChecklistArea).
+// '특이사항 없음'·'관찰하지 못함'은 혼자만 고른다(토글 규칙은 lib/items.toggleChecklistArea).
 'use client'
 import { CHECKLIST_AREAS } from '@/lib/items'
 

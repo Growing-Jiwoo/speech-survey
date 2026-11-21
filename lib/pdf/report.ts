@@ -132,6 +132,8 @@ const OBSERVATIONS: { code: string; label: string; desc: string; plain?: boolean
   { code: 'language', label: '언어 (이해 / 표현)', desc: '말을 이해하거나 자신의 생각을 표현하는 데 어려움이 있음' },
   { code: 'speech', label: '말 (조음 / 유창성)', desc: '발음이 부정확하거나 말을 자주 더듬음' },
   { code: 'attention', label: '주의력', desc: '수업에 집중하거나 과제를 끝까지 수행하는 데 어려움이 있음' },
+  // 양식에 없던 행 — 담당자 확정(2026-11-21)으로 맨 아래에 더한다. 서식은 위 행들(9.5pt·검정)을 따른다
+  { code: 'unobserved', label: '관찰하지 못함', desc: '학생을 관찰할 기회가 없거나 충분히 관찰하지 못함' },
 ]
 
 // ── 텍스트 모델 ──────────────────────────────────────────────────────────────

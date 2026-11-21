@@ -197,6 +197,15 @@ describe.each(FORMS.map(f => [f.id, f] as const))('renderReport — %s', (_id, f
     const b = await renderReport({ form, session: { ...session, checklist: ['cognition', 'attention'] }, ...blank })
     expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).not.toBe(0)
   })
+
+  it('「관찰하지 못함」 행이 설명과 함께 있고, 고르면 출력이 다르다 (담당자 확정 2026-11-21)', async () => {
+    const text = await textOf(await renderReport({ form, session, ...blank }))
+    expect(text).toContain('관찰하지 못함')
+    expect(text).toContain('학생을 관찰할 기회가 없거나 충분히 관찰하지 못함')
+    const a = await renderReport({ form, session: { ...session, checklist: ['none'] }, ...blank })
+    const b = await renderReport({ form, session: { ...session, checklist: ['unobserved'] }, ...blank })
+    expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).not.toBe(0)
+  })
 })
 
 describe('renderReport — 학년별 서식 차이는 담당자 파일 그대로다', () => {
