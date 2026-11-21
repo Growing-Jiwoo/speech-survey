@@ -13,7 +13,7 @@ import {
   awaitsScanScoring, checklistSummary, filtersToQuery, retestOrdinals, type Filters, type Sort, type SortKey, type Totals,
 } from '@/lib/adminStats'
 import { gradeClassLabel, termLabel, termOf } from '@/lib/format'
-import { SECTION_LABEL, areaLabel } from '@/lib/items'
+import { SECTION_LABEL, SOLO_AREAS, areaLabel } from '@/lib/items'
 import { Badge } from '@/components/Badge'
 import { Tip } from '@/components/Tip'
 import { VerdictBadge } from '@/components/VerdictBadge'
@@ -167,12 +167,12 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
         id: 'checklist', header: '체크리스트',
         meta: { thClassName: 'hidden whitespace-nowrap px-3 xl:table-cell', tdClassName: 'hidden whitespace-nowrap px-3 xl:table-cell' },
         cell: ({ row }) => {
-          // 「특이사항 없음」(none)은 영역이 아니다 — 세면 none만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11)
+          // 「특이사항 없음」·「관찰하지 못함」은 영역이 아니다 — 세면 그것만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11)
           const c = checklistSummary(row.original.checklist)
           // 체크리스트 선택은 경고가 아니다 — amber는 '제출 · 미완료 있음'에만 남긴다.
           // 「N개 영역」 수만으로는 어느 영역인지 몰라 결과지를 열어야 했다 — 마우스를 올리면(태블릿은 누르면) 고른 영역을
           // 말풍선으로 보인다(사용자 확정 2026-10-27). 차례는 저장된 차례(검사자가 누른 차례)다 — 결과지 체크리스트 칸과 같다
-          const areas = row.original.checklist.filter(a => a !== 'none')
+          const areas = row.original.checklist.filter(a => !SOLO_AREAS.includes(a))
           return c.areas > 0 ? (
             <Tip tabbable={false} tip={<>
               <span className="block font-bold text-ink">{SECTION_LABEL.checklist}</span>
@@ -180,7 +180,7 @@ export function SessionTable({ rows, all, total, filters, sort, schools, grades,
             </>}>
               <Badge tone="mute" size="sm">{c.areas}개 영역</Badge>
             </Tip>
-          ) : c.none ? <span className="text-xs text-ink-mute">특이사항 없음</span>
+          ) : c.solo ? <span className="text-xs text-ink-mute">{areaLabel(c.solo)}</span>
             : <span className="text-xs text-ink-mute">—</span>
         },
       }),

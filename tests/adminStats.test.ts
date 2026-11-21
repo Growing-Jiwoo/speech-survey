@@ -467,14 +467,15 @@ describe('hasActiveFilters', () => {
   })
 })
 
-// 목록 체크리스트 칸 — 「특이사항 없음」(none)은 영역이 아니다(2026-10-12 점검 L11: none만 고른 아이가 「1개 영역」이었다)
+// 목록 체크리스트 칸 — 「특이사항 없음」·「관찰하지 못함」은 영역이 아니다(2026-10-12 점검 L11: none만 고른 아이가 「1개 영역」이었다)
 describe('checklistSummary', () => {
   it('[REGRESSION] none만 있으면 영역 0 · 특이사항 없음', () => {
-    expect(checklistSummary(['none'])).toEqual({ areas: 0, none: true })
+    expect(checklistSummary(['none'])).toEqual({ areas: 0, solo: 'none' })
   })
   it('영역은 none을 빼고 센다 · 아무것도 없으면 둘 다 아님', () => {
-    expect(checklistSummary(['language', 'attention'])).toEqual({ areas: 2, none: false })
-    expect(checklistSummary([])).toEqual({ areas: 0, none: false })
+    expect(checklistSummary(['language', 'attention'])).toEqual({ areas: 2, solo: null })
+    expect(checklistSummary([])).toEqual({ areas: 0, solo: null })
+    expect(checklistSummary(['unobserved'])).toEqual({ areas: 0, solo: 'unobserved' })
   })
 })
 

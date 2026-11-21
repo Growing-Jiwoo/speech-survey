@@ -28,16 +28,24 @@ export const CHECKLIST_AREAS = [
   { code: 'language', label: '언어 (이해/표현)', hint: '문장 표현이 서툴거나 대화 상황에 맞지 않는 말을 함' },
   { code: 'speech', label: '말 (조음/유창성)', hint: '발음이 부정확하거나 말을 심하게 더듬음' },
   { code: 'attention', label: '주의력', hint: '수업에 집중하지 못하고 과제를 끝내기 어려워함' },
+  // 담임이 아닌 기초학력 전담교사가 검사하면 아이를 잘 모른다 — 교사연수 의견(2026-11-21). 이름·설명·다른 칸과 함께 못
+  // 고름·결과보고서 PDF에도 행을 둠·맨 아래 자리는 담당자 확정(2026-11-21, 보낸 그림 그대로). 화면 설명(hint)은 담당자가
+  // PDF 설명란으로 준 문구를 그대로 쓴다 — 화면용 문구를 따로 받지 않았다(사용자 확정 2026-11-21)
+  { code: 'unobserved', label: '관찰하지 못함', hint: '학생을 관찰할 기회가 없거나 충분히 관찰하지 못함' },
 ] as const
 
 export const AREA_CODES: string[] = CHECKLIST_AREAS.map(a => a.code)
 export const areaLabel = (code: string) =>
   CHECKLIST_AREAS.find(a => a.code === code)?.label ?? code
 
-/** 체크리스트 배타 토글: 'none'(특이사항 없음)과 실제 영역은 상호 배타. */
+/** 혼자만 고르는 칸 — 고르면 나머지가 풀리고, 다른 칸을 고르면 이것이 풀린다. 발달 영역이 아니라 영역 수로 세지 않는다
+ *  (「관찰하지 못함」 혼자만: 담당자 확정 2026-11-21). */
+export const SOLO_AREAS: readonly string[] = ['none', 'unobserved']
+
+/** 체크리스트 배타 토글: 혼자만 고르는 칸(SOLO_AREAS)과 다른 모든 칸은 상호 배타. */
 export function toggleChecklistArea(current: string[], code: string): string[] {
-  if (code === 'none') return current.includes('none') ? [] : ['none']
-  const base = current.filter(c => c !== 'none')
+  if (SOLO_AREAS.includes(code)) return current.includes(code) ? [] : [code]
+  const base = current.filter(c => !SOLO_AREAS.includes(c))
   return base.includes(code) ? base.filter(c => c !== code) : [...base, code]
 }
 

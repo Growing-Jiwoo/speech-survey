@@ -1,7 +1,7 @@
 // 관리자 목록 화면(클라이언트)이 쓰는 필터·정렬·집계. **lib/forms를 값으로 import하지 말 것** —
 // 검사지 문항이 공개 JS에 실린다(scripts/check-client-bundle.ts가 막는다). 양식이 필요한 진행률은
 // 서버가 계산해 행에 싣는다(lib/session-progress.ts → listSessions).
-import type { Totals } from '@/lib/items'
+import { SOLO_AREAS, type Totals } from '@/lib/items'
 import type { SessionListRow } from '@/lib/db'
 import { parseTermKey, termKeyOf } from '@/lib/format'
 
@@ -37,10 +37,14 @@ export function hasActiveFilters(f: Filters): boolean {
   return f.q.trim() !== '' || f.status !== 'all' || f.school !== null || f.grade !== null || f.term !== null || f.today
 }
 
-/** 목록 체크리스트 칸 — 표시한 발달 영역 수와 「특이사항 없음」(none)을 가른다. none은 영역이 아니다 — 세면 「특이사항
- *  없음」만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11). */
-export function checklistSummary(checklist: readonly string[]): { areas: number; none: boolean } {
-  return { areas: checklist.filter(c => c !== 'none').length, none: checklist.includes('none') }
+/** 목록 체크리스트 칸 — 표시한 발달 영역 수와 혼자만 고르는 칸(「특이사항 없음」·「관찰하지 못함」)을 가른다. 혼자만
+ *  고르는 칸은 영역이 아니다 — 세면 「특이사항 없음」만 고른 아이가 「1개 영역」으로 보였다(2026-10-12 점검 L11).
+ *  `solo`는 고른 그 칸의 코드(없으면 null)다. */
+export function checklistSummary(checklist: readonly string[]): { areas: number; solo: string | null } {
+  return {
+    areas: checklist.filter(c => !SOLO_AREAS.includes(c)).length,
+    solo: checklist.find(c => SOLO_AREAS.includes(c)) ?? null,
+  }
 }
 
 // ---------- 날짜(KST) ----------
